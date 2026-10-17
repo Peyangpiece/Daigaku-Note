@@ -32,9 +32,14 @@ export async function ensureChromium(browsersPath, {onStatus = () => {}, log = (
   if (chromiumReady(browsersPath)) return 'ready';
   mkdirSync(browsersPath, {recursive: true});
   onStatus('LMS を読むためのブラウザを準備しています（初回とアプリの更新後だけ。数分かかります）…');
+  // playwright の package.json は exports で cli.js を公開していないので、パッケージの場所からたどる（bin の "playwright": "cli.js"）
   let cli;
   try {
-    cli = require.resolve('playwright/cli.js');
+    const pkgPath = require.resolve('playwright/package.json');
+    const pkg = require(pkgPath);
+    const bin = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.playwright || 'cli.js';
+    cli = path.join(path.dirname(pkgPath), bin);
+    if (!existsSync(cli)) throw new Error(`${cli} がありません`);
   } catch (e) {
     throw new Error(`Playwright が見つかりません（npm ci は済んでいますか）: ${e.message}`);
   }
