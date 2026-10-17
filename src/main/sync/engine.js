@@ -212,6 +212,80 @@ export class SyncEngine {
     return result;
   }
 
+  /**
+   * 同じ LMS への接続が 2 つ以上あるとき（セットアップをやり直すと増えていた）、1 つにまとめる。同じ授業が 2 つずつ並ぶのを直す。
+   * 残す接続：いちばん新しく作ったもの（自動ログインなど、本人が最後に設定したもの）。
+   * 同じ授業（LMS の ID が同じ）が両方にあれば、資料の多いほう（同じならフォルダ名が元のままの古いほう）を残し、
+   * もう一方の記録を消してフォルダを OS のゴミ箱へ（戻せる）。消すほうにしかない資料があれば、残すほうを次の同期で全部の回から見直す。
+   * 戻りは {merged: まとめた接続の数, removedCourses: 消した授業の数}
+   */
+  async mergeDuplicateConnections() {
+    const groups = new Map();
+    for (const c of this.repo.listConnections()) {
+      const key = `${c.kind}|${c.connector_id}|${(c.university_host ?? '').toLowerCase()}`;
+      groups.set(key, [...(groups.get(key) ?? []), c]);
+    }
+    let merged = 0;
+    let removedCourses = 0;
+    for (const conns of groups.values()) {
+      if (conns.length < 2) continue;
+      const keep = conns.at(-1); // listConnections は作った順
+      const hosts = new Set();
+      for (const c of conns) for (const h of JSON.parse(c.allowed_hosts_json ?? '[]')) hosts.add(h);
+      for (const other of conns.slice(0, -1)) {
+        for (const course of this.repo.listCourses({connectionId: other.id})) {
+          const twin = this.repo.findCourseByLms(keep.id, course.lms_id);
+          if (!twin) {
+            this.repo.updateCourse(course.id, {connection_id: keep.id});
+            continue;
+          }
+          const okCount = (c) => this.repo.listMaterials(c.id).filter((m) => m.status === 'ok').length;
+          const [survivor, loser] = okCount(course) > okCount(twin) || (okCount(course) === okCount(twin) && course.created_at <= twin.created_at) ? [course, twin] : [twin, course];
+          await this.removeDuplicateCourse(loser, survivor);
+          removedCourses++;
+          if (survivor.connection_id !== keep.id) this.repo.updateCourse(survivor.id, {connection_id: keep.id});
+          await this.restoreCourseFolderName(survivor.id);
+        }
+        this.repo.remove('connection', other.id);
+        this.log(`[merge] 同じ LMS の接続をまとめました: ${other.label}（${other.id}）→ ${keep.id}`);
+        merged++;
+      }
+      if (hosts.size) this.repo.updateConnection(keep.id, {allowed_hosts_json: JSON.stringify([...hosts])});
+    }
+    return {merged, removedCourses};
+  }
+
+  /** 重なった授業の片方を消す。記録を消し、フォルダを OS のゴミ箱へ。残すほうにない資料があれば、残すほうを全部の回から見直す印に */
+  async removeDuplicateCourse(loser, survivor) {
+    const have = new Set(this.repo.listMaterials(survivor.id).map((m) => m.sha256));
+    const missing = this.repo.listMaterials(loser.id).filter((m) => m.status === 'ok' && !have.has(m.sha256));
+    const term = this.repo.get('term', loser.term_id);
+    const dir = term ? this.files.courseDir(term, loser) : null;
+    const db = this.repo.db;
+    this.repo.transaction(() => {
+      db.prepare('DELETE FROM round_note WHERE round_id IN (SELECT id FROM round WHERE course_id = ?)').run(loser.id);
+      db.prepare('DELETE FROM material WHERE course_id = ?').run(loser.id);
+      db.prepare('DELETE FROM round WHERE course_id = ?').run(loser.id);
+      db.prepare('DELETE FROM course WHERE id = ?').run(loser.id);
+      if (missing.length) db.prepare('UPDATE course SET full_synced_at = NULL WHERE id = ?').run(survivor.id);
+    });
+    if (dir && dir !== (term && this.files.courseDir(term, survivor))) await this.files.trash(dir).catch((e) => this.log(`[merge] フォルダをゴミ箱へ移せませんでした: ${dir}（${e.message}）`));
+    this.log(`[merge] 重なった授業を 1 つにしました: ${loser.name}（${loser.folder_name} をゴミ箱へ${missing.length ? `。残すほうにない資料 ${missing.length} 件は次の同期で取り直します` : ''}）`);
+  }
+
+  /** 「名前 (2)」になっていた授業フォルダを、空いていれば元の名前に戻す（記録のパスも書き換える） */
+  async restoreCourseFolderName(courseId) {
+    const row = this.repo.get('course', courseId);
+    const term = this.repo.get('term', row.term_id);
+    const base = courseFolderName(row.name);
+    if (!term || row.folder_name === base || this.repo.courseFolderNames(term.id).includes(base)) return;
+    const from = this.files.courseDir(term, row),
+      to = this.files.courseDir(term, {...row, folder_name: base});
+    await this.files.renameDir(from, to);
+    this.repo.db.prepare('UPDATE material SET path = ? || substr(path, ?) WHERE course_id = ? AND substr(path, 1, ?) = ?').run(to, from.length + 1, row.id, from.length, from);
+    this.repo.updateCourse(row.id, {folder_name: base});
+  }
+
   uniqueCourseFolder(termId, name, keep = null) {
     const taken = this.repo.courseFolderNames(termId).filter((f) => f !== keep);
     const base = courseFolderName(name);

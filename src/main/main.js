@@ -203,6 +203,11 @@ app.whenReady().then(async () => {
       log: (m) => log.info(m),
       onProgress: (p) => win?.webContents.send('sync.progress', p)
     });
+    // 同じ LMS の接続が 2 つ以上あれば 1 つにまとめる（セットアップのやり直しで増え、授業が 2 つずつ並んでいた）
+    await ctx.engine
+      .mergeDuplicateConnections()
+      .then((r) => r.merged && log.info(`同じ LMS の接続を ${r.merged} 件まとめ、重なった授業 ${r.removedCourses} 件を 1 つにしました`))
+      .catch((e) => log.error(`接続をまとめられませんでした: ${e.message}`));
     ctx.jobs = new JobRunner(ctx, {notify: (ch, payload) => win?.webContents.send(ch, payload)});
     ctx.scheduler = new Scheduler(ctx);
     registerIpc(ctx, {openWindow, getWindow: () => win});

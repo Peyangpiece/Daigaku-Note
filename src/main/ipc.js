@@ -81,6 +81,10 @@ export function registerIpc(ctx, {openWindow}) {
     if (!['api', 'recipe', 'generic', 'manual'].includes(kind)) bad('接続の種類が不正です');
     const base = kind === 'manual' ? null : httpsUrl(baseUrl) ?? bad('URL が不正です');
     const recipe = registry.recipes.find((r) => r.id === cid);
+    // 同じ LMS への接続がもうあれば、それを使う（作り直すと授業が 2 つずつできてしまう）
+    const host = base ? new URL(base).hostname.toLowerCase() : null;
+    const same = repo.listConnections().find((c) => c.connector_id === cid && c.kind === kind && (c.university_host ?? '').toLowerCase() === (host ?? ''));
+    if (same) return {connectionId: same.id, reused: true};
     const conn = repo.createConnection({
       kind,
       connector_id: cid,
