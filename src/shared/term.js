@@ -64,12 +64,15 @@ export function roundDates({start, end, weekday, rounds = 15, holidays = [], inc
   return out;
 }
 
-/** 今日を含む学期を返す（なければ null）。terms は {start,end} を持つ配列 */
+const startOf = (t) => t.start ?? t.start_date;
+const endOf = (t) => t.end ?? t.end_date;
+
+/** 今日を含む学期を返す（なければ null）。terms は {start,end} か DB の行 {start_date,end_date} */
 export function currentTerm(terms, today) {
-  return terms.find((t) => t.start <= today && today <= t.end) ?? null;
+  return terms.find((t) => startOf(t) <= today && today <= endOf(t)) ?? null;
 }
 
 /** 学期の終わり 30 日前からは「次の学期の設定」を促す */
 export function termEndingSoon(term, today, days = 30) {
-  return !!term && addDays(term.end, -days) <= today && today <= term.end;
+  return !!term && addDays(endOf(term), -days) <= today && today <= endOf(term);
 }

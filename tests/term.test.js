@@ -49,3 +49,9 @@ test('今日の学期と終わりの判定', () => {
   assert.equal(termEndingSoon(terms[1], '2027-03-05'), true);
   assert.equal(termEndingSoon(terms[1], '2027-02-01'), false);
 });
+
+test('DB の行（start_date/end_date）でも今日の学期を選べる', () => {
+  const rows = [{id: 'a', start_date: '2026-04-01', end_date: '2026-09-30'}, {id: 'b', start_date: '2026-10-01', end_date: '2027-03-31'}];
+  assert.equal(currentTerm(rows, '2026-10-17').id, 'b');
+  assert.equal(termEndingSoon(rows[1], '2027-03-10'), true);
+});
