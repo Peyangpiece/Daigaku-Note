@@ -9,7 +9,7 @@ export default [
         console: 'readonly', process: 'readonly', Buffer: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly',
         setInterval: 'readonly', clearInterval: 'readonly', queueMicrotask: 'readonly', structuredClone: 'readonly',
         fetch: 'readonly', URL: 'readonly', URLSearchParams: 'readonly', AbortSignal: 'readonly', TextEncoder: 'readonly',
-        Intl: 'readonly', window: 'readonly', document: 'readonly', location: 'readonly', CustomEvent: 'readonly', require: 'readonly'
+        Intl: 'readonly', confirm: 'readonly', window: 'readonly', document: 'readonly', location: 'readonly', CustomEvent: 'readonly', require: 'readonly'
       }
     },
     rules: {

@@ -1,0 +1,35 @@
+# 配布物の設定（SPEC §14.5、DESIGN-M0 §1）。Chromium は同梱せず初回起動時に取り込む
+appId: jp.daigakunote.app
+productName: 大学ノート
+artifactName: daigaku-note-${version}-${os}-${arch}.${ext}
+directories:
+  output: release
+files:
+  - src/**
+  - recipes/**
+  - package.json
+  - '!src/**/*.test.js'
+asarUnpack:
+  - node_modules/playwright/**
+  - node_modules/playwright-core/**
+publish:
+  provider: github
+  owner: Peyangpiece
+  repo: Daigaku-Note
+mac:
+  category: public.app-category.education
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  hardenedRuntime: false
+  extendInfo:
+    NSDesktopFolderUsageDescription: 授業資料をデスクトップの「大学ノート」フォルダに保存するために使います。
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  runAfterFinish: true

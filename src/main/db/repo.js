@@ -4,7 +4,7 @@ import {ulid} from '../../shared/ids.js';
 const COLUMNS = {
   connection: [
     'id', 'kind', 'connector_id', 'label', 'base_url', 'university_host', 'recipe_version', 'save_password',
-    'session_json', 'status', 'last_sync_at', 'created_at', 'updated_at'
+    'session_json', 'status', 'last_sync_at', 'allowed_hosts_json', 'created_at', 'updated_at'
   ],
   term: ['id', 'label', 'year', 'folder', 'start_date', 'end_date', 'rounds', 'holidays_json', 'periods_json', 'source'],
   course: [

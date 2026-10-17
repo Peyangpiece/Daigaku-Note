@@ -105,21 +105,40 @@ export function registerIpc(ctx, {openWindow}) {
     return {ok: true};
   });
 
-  handle('connection.login', async ({connectionId}) => {
+  handle('connection.login', async ({connectionId, mode}) => {
     const cid = id(connectionId) ?? bad('接続が不正です');
     const conn = repo.get('connection', cid) ?? bad('接続がありません');
     const connector = registry.forConnection(conn);
     const c = await connector.createContext(conn);
+    const wantVisible = mode === 'visible' || !conn.save_password;
     try {
       if (conn.kind === 'api' && conn.connector_id === 'moodle') {
-        // M0：保存した ID・パスワードでの取得。launch.php の流れは browser/session.js（M0 後半）
-        await connector.login(c, 'headless');
-      } else {
-        bad('この接続のログイン窓はまだ用意できていません（M0 後半で実装）');
-      }
+        if (!wantVisible) await connector.login(c, 'headless');
+        else {
+          // Moodle 公式アプリと同じ流れ：launch.php を見えるブラウザ窓で開き、ログイン後の転送先からトークンを取る
+          const passport = Math.random().toString(36).slice(2) + Date.now().toString(36);
+          const {captured, visitedHosts} = await ctx.session.loginVisible(conn, {
+            url: connector.launchUrl(c, passport),
+            isLoggedIn: () => false,
+            capture: {
+              urlPattern: /\/admin\/tool\/mobile\/launch\.php/,
+              extract: ({headers, body}) => connector.parseLaunchToken(headers?.location ?? '') ?? connector.parseLaunchToken(body)
+            }
+          });
+          await connector.login(c, 'visible', {tokenFromBrowser: captured});
+          repo.updateConnection(cid, {allowed_hosts_json: JSON.stringify(visitedHosts)});
+        }
+      } else if (conn.kind === 'recipe') {
+        if (!wantVisible) await connector.login(c, 'headless');
+        else {
+          const r = await connector.login(c, 'visible');
+          if (r.visitedHosts?.length) repo.updateConnection(cid, {allowed_hosts_json: JSON.stringify(r.visitedHosts)});
+        }
+      } else bad('この接続はログインを使いません');
       repo.updateConnection(cid, {status: 'ok'});
       return {ok: true};
     } catch (e) {
+      log.warn(`login ${conn.label}: ${e.code ?? ''} ${e.message}`);
       return {ok: false, reason: e.code ?? 'login-required', message: e.message};
     } finally {
       await connector.releaseContext?.(c);

@@ -2,8 +2,9 @@
 
 | 項目 | 内容 |
 |---|---|
-| 版 | 0.1 |
+| 版 | 0.2 |
 | 作成日 | 2026-10-17 |
+| 実装の状態 | §13 の 1〜7 と 8〜10 の骨格まで実装済み（テスト 62 件）。残りは実機での確認と配布物の作成 |
 | 元になる仕様 | [SPEC.md](SPEC.md) 0.4 |
 | 範囲 | §16 の M0：Electron の常駐・SQLite・コネクタの枠・汎用ログイン・Moodle（API）・レシピ実行器＋レシピ 1 本・学期の設定・保存先・回フォルダ・1up・複製整理・初回セットアップ・デザイントークンの土台 |
 
@@ -398,21 +399,23 @@ Playwright を使うテスト（レシピ実行器・ログイン窓）は `npm 
 
 ---
 
-## 13. M0 の作業の順番
+## 13. M0 の作業の順番と状態
 
-| # | 作業 | 依存 | 確認 |
-|---|---|---|---|
-| 1 | `shared/` の純粋モジュールとテスト | — | `npm test` が通る |
-| 2 | DB（マイグレーション・repo） | 1 | `tests/db.test.js` |
-| 3 | ファイル管理 | 1・2 | `tests/files.test.js` |
-| 4 | 同期エンジン | 2・3 | `tests/engine.test.js` |
-| 5 | Moodle コネクタ | 4 | `tests/moodle.test.js`。本物の Moodle（デモサイト `school.moodledemo.net` など）で手動確認 |
-| 6 | Playwright の文脈・ログイン窓 | — | 手動 |
-| 7 | レシピ実行器＋manabo レシピ | 1・6 | 模擬 HTML の e2e。実物で確認 |
-| 8 | Electron の入口・トレイ・IPC・preload | 2〜7 | `npm start` で起動 |
-| 9 | 画面の土台（トークン・部品・セットアップ・ホーム・授業・設定） | 8 | 目で確認。コントラストの検査 |
-| 10 | スケジューラ・秘密・ログ | 8 | 手動（時刻を変えて） |
-| 11 | 配布物（electron-builder）・更新確認 | 8 | Mac・Windows で入れて起動 |
+| # | 作業 | 依存 | 確認 | 状態 |
+|---|---|---|---|---|
+| 1 | `shared/` の純粋モジュールとテスト | — | `npm test` が通る | 済 |
+| 2 | DB（マイグレーション・repo） | 1 | `tests/db.test.js` | 済 |
+| 3 | ファイル管理 | 1・2 | `tests/files.test.js` | 済（検疫属性は `sync/quarantine.js`。Mac・Windows の実機で確認が要る） |
+| 4 | 同期エンジン | 2・3 | `tests/engine.test.js` | 済 |
+| 5 | Moodle コネクタ | 4 | `tests/moodle.test.js`。本物の Moodle（デモサイト `school.moodledemo.net` など）で手動確認 | 済（模擬サーバーで検証。実物は未） |
+| 6 | Playwright の文脈・ログイン窓 | — | 手動 | 済（`browser/session.js`。見えるログイン窓は実機で確認が要る） |
+| 7 | レシピ実行器＋manabo レシピ | 1・6 | 模擬 HTML の e2e（`tests/e2e/`）。実物で確認 | 済（e2e 2 件。manabo の実物は未検証 `verified: false`） |
+| 8 | Electron の入口・トレイ・IPC・preload | 2〜7 | `npm start` で起動 | 骨格済（起動確認は実機） |
+| 9 | 画面の土台（トークン・部品・セットアップ・ホーム・授業・設定） | 8 | 目で確認。コントラストの検査 | 骨格済（ドラッグでの回の移動は M1） |
+| 10 | スケジューラ・秘密・ログ・Chromium の取り込み | 8 | 手動（時刻を変えて） | 骨格済 |
+| 11 | 配布物（electron-builder）・更新確認 | 8 | Mac・Windows で入れて起動 | 設定ファイルのみ（`electron-builder.yml`）。更新確認は未 |
+
+実機での確認手順（Mac／Windows）：`npm ci` → `npm test`（e2e は `PLAYWRIGHT_BROWSERS_PATH` か `DAIGAKU_CHROMIUM` で Chromium を指す）→ `npm start` → セットアップ 6 手順 → デスクトップ `大学ノート/<学期>/<授業>/<回>/` に資料が入ることを確かめる。Moodle はデモサイト、manabo は在学中の大学のアカウントで。
 
 ---
 

@@ -14,6 +14,10 @@ import {Scheduler} from './scheduler.js';
 import {FileManager} from './sync/files.js';
 import {SyncEngine} from './sync/engine.js';
 import {createRegistry, loadRecipes} from './connectors/index.js';
+import {createRecipeExecutor} from './connectors/recipe-executor.js';
+import {createBrowserSession} from './browser/session.js';
+import {ensureChromium} from './browser/install.js';
+import {createQuarantine} from './sync/quarantine.js';
 import {defaultRoot} from '../shared/paths.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -97,10 +101,17 @@ app.whenReady().then(async () => {
       repo,
       root: ctx.rootDir,
       trash: (f) => shell.trashItem(f),
-      quarantine: async () => {}, // M0 では OS の検疫属性は付けない（M1 で xattr / Zone.Identifier）
+      quarantine: createQuarantine(),
       log: (m) => log.info(m)
     });
-    ctx.registry = createRegistry({secrets: ctx.secrets, log: (m) => log.info(m), recipes: loadRecipes([path.join(here, '..', '..', 'recipes'), path.join(userData, 'recipes')])});
+    // Playwright：Chromium は userData/pw-browsers に初回起動時に取り込む（§8.5）。取り込みは M0 後半の browser/install.js
+    ctx.session = createBrowserSession({secrets: ctx.secrets, log: (m) => log.info(m), browsersPath: path.join(userData, 'pw-browsers')});
+    ctx.registry = createRegistry({
+      secrets: ctx.secrets,
+      log: (m) => log.info(m),
+      recipes: loadRecipes([path.join(here, '..', '..', 'recipes'), path.join(userData, 'recipes')]),
+      recipeExecutorFactory: (recipe) => createRecipeExecutor(recipe, {session: ctx.session, secrets: ctx.secrets, log: (m) => log.info(m)})
+    });
     ctx.engine = new SyncEngine({
       repo,
       files: ctx.files,
@@ -114,7 +125,17 @@ app.whenReady().then(async () => {
     const connections = repo.listConnections();
     openWindow(connections.length ? null : '/setup');
     ctx.scheduler.start();
-    ctx.jobs.start();
+    // Chromium の取り込みが終わるまでジョブは待つ（画面操作型の接続がなくても、あとで追加できるよう先に用意する）
+    ensureChromium(path.join(userData, 'pw-browsers'), {
+      onStatus: (s) => {
+        ctx.status = s;
+        ctx.refreshTray?.();
+        win?.webContents.send('state.changed', {status: s});
+      }
+    })
+      .then(() => log.info('Chromium の用意ができました'))
+      .catch((e) => log.error(`Chromium の取り込みに失敗: ${e.message}`))
+      .finally(() => ctx.jobs.start());
     log.info(`起動 ${app.getVersion()}`);
   } catch (e) {
     log.error(`起動に失敗: ${e.stack || e.message}`);
@@ -143,6 +164,7 @@ app.on('before-quit', (e) => {
   }
   ctx.scheduler?.stop();
   ctx.jobs?.stop();
+  ctx.session?.shutdown();
 });
 
 export const __test = {existsSync};
