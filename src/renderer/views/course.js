@@ -1,10 +1,10 @@
-// 授業画面（SPEC §8.2）：回ごとのクリップボードに、資料がイラスト付きの紙で留めてある。M0 は一覧と開くだけ（ドラッグ・クイズは M1・M3）。
+// 授業画面（SPEC §8.2）：回ごとの付箋に、資料がイラスト付きの紙で貼ってある。M0 は一覧と開くだけ（ドラッグ・クイズは M1・M3）。
 import {esc} from '../app.js';
 import {fileArt} from './file-art.js';
 
 const fmtDate = (d) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}（${'日月火水木金土'[new Date(d + 'T00:00:00').getDay()]}）` : '');
 
-// shared/ids.js の hash32 と同じ（レンダラは main のモジュールを読まないので写す）。クリップボードごとの小さな傾き
+// shared/ids.js の hash32 と同じ（レンダラは main のモジュールを読まないので写す）。付箋ごとの小さな傾き
 function hash32(str) {
   let h = 0x811c9dc5;
   for (const b of new TextEncoder().encode(str)) {
@@ -29,18 +29,18 @@ function fileCard(m, course) {
   </div>`;
 }
 
-function clipboard(round, list, course, today) {
+function roundNote(round, list, course, today) {
   const isToday = round.date === today;
   const head = round.number === 0 ? 'その他' : `第${round.number}回`;
   const title = round.title_user || round.title || '';
-  return `<section class="clipboard${list.length ? '' : ' clipboard--empty'}${isToday ? ' clipboard--today' : ''}" style="--tilt: ${tilt(round.id)}deg" aria-label="${esc(head)} ${esc(title)}">
-    <span class="clipboard__clip" aria-hidden="true"></span>
-    <header class="clipboard__head">
-      <span class="clipboard__round" style="--round-color: var(--c${course.color})">${esc(head)}</span>
-      <span class="clipboard__title">${esc(title)}</span>
-      <span class="clipboard__date muted">${esc(fmtDate(round.date))}</span>
+  return `<section class="round-note${list.length ? '' : ' round-note--empty'}${isToday ? ' round-note--today' : ''}" style="--tilt: ${tilt(round.id)}deg; --note-color: var(--c${course.color})" aria-label="${esc(head)} ${esc(title)}">
+    <header class="round-note__head">
+      <span class="round-note__round">${esc(head)}</span>
+      <span class="round-note__title">${esc(title)}</span>
+      ${isToday ? '<span class="round-note__today">今日</span>' : ''}
+      <span class="round-note__date">${esc(fmtDate(round.date))}</span>
     </header>
-    ${list.length ? `<div class="clipboard__files">${list.map((m) => fileCard(m, course)).join('')}</div>` : `<p class="clipboard__none">まだ資料はありません</p>`}
+    ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course)).join('')}</div>` : `<p class="round-note__none">まだ資料はありません</p>`}
   </section>`;
 }
 
@@ -52,7 +52,7 @@ export function renderCourse({data}, courseId) {
   const byRound = new Map(rounds.map((r) => [r.id, materials.filter((m) => m.round_id === r.id)]));
   const today = new Date().toLocaleDateString('sv-SE');
   const slot = course.weekday ? `（${course.weekday}曜${course.period ? ` ${course.period}限` : ''}）` : '';
-  // 「その他」は資料があるときだけ出す。回は資料の有無にかかわらず全部出す（空のボードも並ぶ）
+  // 「その他」は資料があるときだけ出す。回は資料の有無にかかわらず全部出す（空の付箋も並ぶ）
   const shown = rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length);
   const syncing = (data.jobs ?? []).some((j) => j.kind === 'sync');
   return `
@@ -66,7 +66,7 @@ export function renderCourse({data}, courseId) {
     </nav>
     ${
       shown.length
-        ? `<div class="clipboards">${shown.map((r) => clipboard(r, byRound.get(r.id) ?? [], course, today)).join('')}</div>`
-        : `<div class="empty"><p>まだ回がありません。同期すると、回ごとのクリップボードがここに並びます。</p></div>`
+        ? `<div class="round-notes">${shown.map((r) => roundNote(r, byRound.get(r.id) ?? [], course, today)).join('')}</div>`
+        : `<div class="empty"><p>まだ回がありません。同期すると、回ごとの付箋がここに並びます。</p></div>`
     }`;
 }

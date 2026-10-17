@@ -11,10 +11,6 @@
   --card-shadow: 0 2px 6px rgba(43, 43, 43, 0.08);
   --card-shadow-hover: 0 6px 14px rgba(43, 43, 43, 0.12);
   --tape-alpha: 0.72;
-  --board: #e9d6b4; /* クリップボードの板（薄いクラフト色） */
-  --board-ink: #4a3b25;
-  --clip: #9aa3ad; /* 金具 */
-  --clip-light: #d6dce2;
   --c1: #f6c445;
   --c2: #f28b82;
   --c3: #7fd1ae;
@@ -49,10 +45,6 @@
   --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
   --tape-alpha: 0.55;
-  --board: #4a4030;
-  --board-ink: #f1e6d2;
-  --clip: #6b737d;
-  --clip-light: #9aa3ad;
   --focus: #eceff4;
 }
 @media (prefers-color-scheme: dark) {
@@ -66,10 +58,6 @@
     --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
     --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
     --tape-alpha: 0.55;
-    --board: #4a4030;
-    --board-ink: #f1e6d2;
-    --clip: #6b737d;
-    --clip-light: #9aa3ad;
     --focus: #eceff4;
   }
 }
