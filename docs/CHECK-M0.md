@@ -14,15 +14,18 @@
 
 ### 0.1 取得と依存の導入
 
+コマンドは **1 行ずつ** 貼り付けてください。Mac の zsh では `#` から後ろがコメントになりません（`npm ci # 説明` と貼ると `# 説明` が引数として渡され、npm がヘルプを出して止まります）。本書のコードブロックには説明を入れていません。
+
 ```bash
 git clone https://github.com/Peyangpiece/Daigaku-Note.git
 cd Daigaku-Note
 git checkout claude/modest-carson-rtg2dt
-node --version        # v22.13.0 以上であること（node:sqlite を使う）
-npm ci                # package-lock.json どおりに入れる。Electron（約 100 MB）もここで落ちる
+node --version
+npm ci
 ```
 
-- `npm ci` は 2〜5 分。Electron のダウンロードで止まるように見えても待つ
+- `node --version` は v22.13.0 以上であること（v24 でもよい）
+- `npm ci` は 2〜5 分。Electron のダウンロードで止まるように見えても待つ。終わりに `added 390 packages` のような行が出れば成功。`npm error` とヘルプが出たら、行末に余計な文字が付いていないか確かめる
 - 社内／学内ネットワークでプロキシが要るときは `npm config set proxy …` と、Electron 用に環境変数 `ELECTRON_GET_USE_PROXY=1`・`GLOBAL_AGENT_HTTPS_PROXY=…` を設定する
 
 ### 0.2 テストが通ることを確かめる
@@ -31,10 +34,10 @@ npm ci                # package-lock.json どおりに入れる。Electron（約
 npm test
 ```
 
-- 期待：`# pass 62` / `# fail 0`。e2e（`tests/e2e/`）は Playwright の Chromium が要る。入っていなければその 2 件は `skipped` になるので、次で入れてからもう一度：
+- 期待：最後に `pass 62` / `fail 0`。e2e（`tests/e2e/`）は Playwright の Chromium が要る。入っていなければその 2 件は `skipped` になるので、次で入れてからもう一度（約 150 MB。テスト用。アプリ本体は別の場所に自分で取り込む）：
 
 ```bash
-npx playwright install chromium     # 約 150 MB。テスト用（アプリ本体は別の場所に自分で取り込む）
+npx playwright install chromium
 npm test
 ```
 
@@ -182,10 +185,8 @@ Moodle を統合認証で使う大学の場合：接続の「ログインし直�
 複製の整理は「`名前 (2).pdf` の形の記録で、中身が記録のハッシュと同じで、元の名前のファイルも残っているもの」をゴミ箱へ移す。ふだんの同期では起きにくいので、作って確かめる：
 
 ```bash
-# 1. 同期済みの資料を 1 つ選ぶ（例：第03回_原価企画/資料.pdf）
 cd ~/Desktop/大学ノート/2026_秋学期/<授業>/<回>
 cp "資料.pdf" "資料 (2).pdf"
-# 2. その複製を記録に足す（DB を直接触る。sha256 は元と同じ値）
 sqlite3 ~/Library/Application\ Support/daigaku-note/daigaku-note.sqlite \
   "insert into material (id, course_id, round_id, round_from, url, name, path, sha256, size, source, status, downloaded_at)
    select 'TESTDUP00000000000000000000', course_id, round_id, 'lms', 'https://test/dup', '資料 (2).pdf', replace(path,'資料.pdf','資料 (2).pdf'), sha256 || '', size, 'lms', 'ok', downloaded_at
@@ -195,8 +196,7 @@ sqlite3 ~/Library/Application\ Support/daigaku-note/daigaku-note.sqlite \
 `sha256 || ''` は UNIQUE(course_id, sha256) に当たるので、実際には **元の記録を一時的に消すか、別の授業で試す**。簡単なのは「元の記録は残し、複製の記録の sha256 を `'x' || sha256` にする」ことだが、それだと中身が一致せず移動されない（本人が編集したとみなす経路の確認になる）。確実な手順：
 
 ```bash
-sqlite3 … "update material set sha256 = 'moved-' || sha256 where name='資料.pdf'"   # 元の記録のハッシュを一時的にずらす
-# 上の insert（sha256 || '' のまま）を実行
+sqlite3 … "update material set sha256 = 'moved-' || sha256 where name='資料.pdf'"
 ```
 
 3. アプリで「同期」（または再起動）。期待：`資料 (2).pdf` が **OS のゴミ箱** に移り、ホームのお知らせ（M1 で表示）／ログに `trashed`。DB では `status='trashed'`。
@@ -220,8 +220,8 @@ Windows は `Get-Content … -Stream` の代わりに `sqlite3` を https://sqli
 配布物はその OS の上で作る（Mac の .dmg は Mac で、Windows の .exe は Windows で）。
 
 ```bash
-npm run build          # electron-builder --publish never
-ls release/            # Mac: daigaku-note-0.1.0-mac-arm64.dmg（Intel Mac なら x64）  Windows: daigaku-note-0.1.0-win-x64.exe
+npm run build
+ls release/
 ```
 
 | 確認 | 期待 |
