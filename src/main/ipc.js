@@ -98,12 +98,19 @@ export function registerIpc(ctx, {openWindow}) {
     const u = str(user, 200),
       p = str(password, 500);
     if (!u || !p) bad('ID とパスワードを入れてください');
-    if (conn.kind === 'recipe') {
-      const recipe = registry.recipes.find((r) => r.id === conn.connector_id);
-      if (!recipe?.login?.form) bad('この LMS は統合認証のため、パスワードは保存できません。ブラウザ窓でログインしてください');
-    }
+    if (!['api', 'recipe'].includes(conn.kind)) bad('この接続ではパスワードを使いません');
+    if (!(await secrets.available())) bad('このパソコンでは暗号化して保存できないため、パスワードは保存しません');
     await secrets.set(`conn:${cid}:password`, {user: u, password: p});
     repo.updateConnection(cid, {save_password: 1});
+    return {ok: true};
+  });
+
+  // 自動ログインをやめる：保存した ID・パスワードを消す（Cookie は残すので、期限まではそのまま入れる）
+  handle('connection.forgetPassword', async ({connectionId}) => {
+    const cid = id(connectionId) ?? bad('接続が不正です');
+    repo.get('connection', cid) ?? bad('接続がありません');
+    await secrets.remove(`conn:${cid}:password`);
+    repo.updateConnection(cid, {save_password: 0});
     return {ok: true};
   });
 
@@ -141,6 +148,7 @@ export function registerIpc(ctx, {openWindow}) {
       return {ok: true};
     } catch (e) {
       log.warn(`login ${conn.label}: ${e.code ?? ''} ${e.message}`);
+      if (e.code === 'login-bad-credentials') repo.updateConnection(cid, {save_password: 0}); // 何度も送ってロックさせない
       return {ok: false, reason: e.code ?? 'login-required', message: e.message};
     } finally {
       await connector.releaseContext?.(c);

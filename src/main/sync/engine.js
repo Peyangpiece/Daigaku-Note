@@ -94,10 +94,14 @@ export class SyncEngine {
       // セッション
       let session = await connector.ensureSession(ctx);
       if (session === 'login-required') {
-        const ok = await connector.login(ctx, 'headless').then(() => true, () => false);
-        if (!ok) {
-          this.repo.updateConnection(connection.id, {status: 'login-required'});
-          event('error', null, 'login-required', `${connection.label} へのログインが必要です`);
+        // 保存した ID・パスワードで自動ログイン（SPEC §6.4）。パスワードが通らなければ自動ログインを止める（何度も送ってロックさせない）
+        const failure = await connector.login(ctx, 'headless').then(() => null, (e) => e);
+        if (failure) {
+          const badCredentials = failure.code === 'login-bad-credentials';
+          this.repo.updateConnection(connection.id, {status: 'login-required', ...(badCredentials ? {save_password: 0} : {})});
+          // 自動ログインを試したときだけ理由を添える（試していなければ「ログインが必要」だけで足りる）
+          const code = failure.code?.startsWith('login') ? failure.code : 'login-required';
+          event('error', null, code, `${connection.label} へのログインが必要です${connection.save_password ? `（${failure.message}）` : ''}`);
           this.repo.finishSyncRun(run.id, {...summary, timing: {total: Date.now() - started}});
           return {...summary, status: 'login-required'};
         }

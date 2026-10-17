@@ -8,6 +8,27 @@ const fmtDate = (iso) =>
     ? new Date(iso).toLocaleString('ja-JP', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})
     : 'まだ';
 
+/** 自動ログイン（SPEC §6.4）：オンなら「やめる」、オフなら ID とパスワードの欄 */
+function autoLogin(c) {
+  // 統合認証のページ（別のホスト）には、見えるログイン窓で一度通ったところにだけ入力する。まだ通っていなければ案内する
+  const learned = (() => {
+    try {
+      return JSON.parse(c.allowed_hosts_json ?? '[]').length > 0;
+    } catch {
+      return false;
+    }
+  })();
+  if (c.save_password)
+    return `<div class="muted" style="margin-top: 6px">自動ログイン：オン（保存した ID とパスワードで入ります）${learned ? '' : '。<strong>最初に一度「ログインし直す」で窓からログインしてください</strong>（通るページを覚えて、次から自動で入ります）'} <button class="btn btn--small" data-forget-pass="${esc(c.id)}">自動ログインをやめる</button></div>`;
+  return `<details style="margin-top: 6px"><summary class="muted">自動ログイン：オフ — ID とパスワードを保存して自動でログインする</summary>
+    <div data-form="${esc(c.id)}" style="display:grid; gap: var(--space-1); max-width: 360px; margin-top: var(--space-1)">
+      <label class="sr-only" for="st-user-${esc(c.id)}">ID</label><input class="input" id="st-user-${esc(c.id)}" placeholder="ID（学籍番号など）" autocomplete="username">
+      <label class="sr-only" for="st-pass-${esc(c.id)}">パスワード</label><input class="input" id="st-pass-${esc(c.id)}" type="password" placeholder="パスワード" autocomplete="current-password">
+      <p class="muted" style="margin:0">このパソコンの中だけに暗号化して保存します。メールの認証コードを聞かれたときは、要確認からログイン窓を開いてコードを入れてください。</p>
+      <div><button class="btn btn--small" data-save-pass="${esc(c.id)}">保存してオンにする</button></div>
+    </div></details>`;
+}
+
 /** ブラウザの準備の状態。技術的な文言は「くわしく」の中へ */
 export function browserState(b) {
   if (b?.state === 'ready') return '用意できています';
@@ -35,7 +56,7 @@ export function renderSettings({data}) {
                     <span style="display:inline-flex; gap: 6px; margin-left: 8px">
                       ${c.kind !== 'manual' ? `<button class="btn" data-login="${esc(c.id)}">ログインし直す</button>` : ''}
                       <button class="btn" data-remove-conn="${esc(c.id)}">削除</button>
-                    </span></li>`
+                    </span>${c.kind === 'recipe' ? autoLogin(c) : ''}</li>`
                 )
                 .join('')}</ul>`
             : '<p class="muted">接続がありません。</p>'
@@ -119,6 +140,28 @@ function bind() {
       });
       if (r?.error) toast(r.error, {error: true});
       else reload();
+    })
+  );
+  document.querySelectorAll('[data-save-pass]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      const cid = b.dataset.savePass;
+      const r = await api['connection.savePassword']({
+        connectionId: cid,
+        user: $(`st-user-${cid}`).value,
+        password: $(`st-pass-${cid}`).value
+      });
+      if (r?.error) return toast(r.error, {error: true});
+      $(`st-pass-${cid}`).value = '';
+      toast('自動ログインをオンにしました。次の同期から使います');
+      reload();
+    })
+  );
+  document.querySelectorAll('[data-forget-pass]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      const r = await api['connection.forgetPassword']({connectionId: b.dataset.forgetPass});
+      if (r?.error) return toast(r.error, {error: true});
+      toast('自動ログインをやめ、保存した ID とパスワードを消しました');
+      reload();
     })
   );
   document.querySelectorAll('[data-remove-conn]').forEach((b) =>

@@ -23,6 +23,7 @@ function fakeConnector(data, opts = {}) {
       return opts.session ?? 'ok';
     },
     async login() {
+      if (opts.loginError) throw Object.assign(new Error(opts.loginError.message), {code: opts.loginError.code});
       if (!opts.loginOk) throw Object.assign(new Error('no'), {code: 'login-required'});
     },
     async listCourses() {
@@ -166,6 +167,24 @@ test('セットアップで外した授業は非表示で作られ、同期し�
   assert.equal(c2.hidden, 1);
   assert.equal(repo.listMaterials(c2.id).length, 0);
   assert.equal(repo.findCourseByLms(connection.id, '1').hidden, 0);
+});
+
+test('自動ログイン：パスワードが通らなければ自動ログインを止め、理由を残す。認証コードなら止めない', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  repo.updateConnection(connection.id, {save_password: 1});
+  const bad = await engine.run({connection: repo.get('connection', connection.id), connector: fakeConnector(data(), {session: 'login-required', loginError: {code: 'login-bad-credentials', message: 'パスワード違い'}}), term});
+  assert.equal(bad.status, 'login-required');
+  assert.equal(repo.get('connection', connection.id).save_password, 0, '次の同期でまた送らない');
+  assert.equal(bad.events[0].code, 'login-bad-credentials');
+  assert.match(bad.events[0].message, /パスワード違い/);
+
+  repo.updateConnection(connection.id, {save_password: 1});
+  const otp = await engine.run({connection: repo.get('connection', connection.id), connector: fakeConnector(data(), {session: 'login-required', loginError: {code: 'login-needs-user', message: '認証コード'}}), term});
+  assert.equal(otp.events[0].code, 'login-needs-user');
+  assert.equal(repo.get('connection', connection.id).save_password, 1, '認証コードのときは自動ログインを残す（次はまた ID・パスワードで入れる）');
+
+  const ok = await engine.run({connection: repo.get('connection', connection.id), connector: fakeConnector(data(), {session: 'login-required', loginOk: true}), term});
+  assert.equal(ok.status, 'ok', '自動ログインできれば同期を続ける');
 });
 
 test('ログインが必要・授業一覧の失敗・1 授業の失敗はほかを止めない', async (t) => {

@@ -42,7 +42,7 @@ export function renderHome({data, progress}) {
     .filter((c) => c.status === 'login-required')
     .map(
       (c) =>
-        `<li>${esc(c.label)} へのログインが必要です。<button class="btn btn--small" data-action="nav" data-route="/settings">設定 → 接続へ</button></li>`
+        `<li>${esc(c.label)} へのログインが必要です。<button class="btn btn--small" data-action="login" data-id="${esc(c.id)}">ログイン窓を開く</button></li>`
     );
   if (data.browser?.state === 'failed')
     attention.push(

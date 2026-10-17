@@ -132,7 +132,8 @@ api.on('sync.progress', (p) => {
 });
 api.on('sync.finished', (r) => {
   state.progress = null;
-  if (r.status === 'login-required') toast('LMS へのログインが必要です（設定 → 接続 → ログインし直す）', {error: true});
+  if (r.status === 'login-required')
+    toast(r.message || 'LMS へのログインが必要です（設定 → 接続 → ログインし直す）', {error: true});
   else if (r.status === 'failed' || r.status === 'browser-not-ready')
     toast(r.message || '同期に失敗しました', {error: true});
   else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 学期）', {error: true});
@@ -166,6 +167,16 @@ document.addEventListener('click', async (e) => {
     } else if (action === 'reveal-material') {
       const r = await api['material.reveal']({materialId: el.dataset.id});
       if (r?.error) toast(r.error, {error: true});
+    } else if (action === 'login') {
+      // 要確認の「ログイン窓を開く」。自動ログインがオンなら ID とパスワードは窓に入れてある。ログインできたらそのまま同期する
+      el.disabled = true;
+      toast('ログインの窓を開きます。窓でログインしてください');
+      const r = await api['connection.login']({connectionId: el.dataset.id, mode: 'visible'});
+      toast(r?.ok ? 'ログインしました。同期を始めます' : r?.message || r?.error || 'ログインできませんでした', {
+        error: !r?.ok
+      });
+      if (r?.ok) await api['sync.run']({connectionId: el.dataset.id});
+      reload();
     } else if (action === 'open-external') await api['shell.openExternal']({url: el.dataset.url});
     else if (action === 'open-root') await api['shell.openRoot']();
     else if (action === 'pick-dir') {

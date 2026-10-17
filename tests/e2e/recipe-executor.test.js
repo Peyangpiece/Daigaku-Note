@@ -202,3 +202,246 @@ test('レシピ実行器：loggedIn のセレクタが合わなくても「ロ�
     await connector.releaseContext(ctx);
   }
 });
+
+/**
+ * 模擬の統合認証：LMS（127.0.0.1）に未ログインで来ると IdP（localhost。別のホスト）へ転送。
+ * IdP は ID のページ → パスワードのページ →（code: true なら）認証コードのページ → LMS の /sso?ticket=… に戻して Cookie を付ける
+ */
+async function mockSso({code = false} = {}) {
+  const page = (body) => `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
+  const send = (res, b, status = 200, headers = {}) => {
+    res.writeHead(status, {'Content-Type': 'text/html; charset=utf-8', ...headers});
+    res.end(page(b));
+  };
+  const form = (req) =>
+    new Promise((resolve) => {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => resolve(new URLSearchParams(body)));
+    });
+  const seen = {users: [], passwords: 0, codes: []};
+  let lmsBase = '';
+  const idp = createServer(async (req, res) => {
+    const url = new URL(req.url, 'http://x');
+    if (url.pathname === '/idp/login' && req.method === 'GET')
+      return send(
+        res,
+        `<form method="post" action="/idp/user"><label>ユーザID<input type="text" id="j_username" name="j_username"></label><input type="text" name="q" placeholder="サイト内検索"><button type="submit">次へ</button></form>`
+      );
+    if (url.pathname === '/idp/user') {
+      const p = await form(req);
+      seen.users.push(p.get('j_username'));
+      if (p.get('j_username') !== 'stu')
+        return send(
+          res,
+          `<p>ユーザが見つかりません</p><form method="post" action="/idp/user"><input type="text" id="j_username" name="j_username"><button type="submit">次へ</button></form>`
+        );
+      return send(
+        res,
+        `<form method="post" action="/idp/pass"><input type="hidden" name="u" value="stu"><input type="password" id="j_password" name="j_password"><button type="submit">ログイン</button></form>`
+      );
+    }
+    if (url.pathname === '/idp/pass') {
+      const p = await form(req);
+      seen.passwords++;
+      if (p.get('j_password') !== 'pw')
+        return send(
+          res,
+          `<p>パスワードが違います</p><form method="post" action="/idp/pass"><input type="password" id="j_password" name="j_password"><button type="submit">ログイン</button></form>`
+        );
+      if (code)
+        return send(
+          res,
+          `<form method="post" action="/idp/code"><p>メールに届いた認証コードを入れてください</p><input type="text" name="otp_code" autocomplete="one-time-code"><button type="submit">送信</button></form>`
+        );
+      // SAML のように、自動で送信されるフォームで LMS へ戻る
+      return send(
+        res,
+        `<form id="f" method="get" action="${lmsBase}/sso"><input type="hidden" name="ticket" value="t1"></form><script>document.getElementById('f').submit()</script>`
+      );
+    }
+    if (url.pathname === '/idp/code') {
+      const p = await form(req);
+      seen.codes.push(p.get('otp_code'));
+      return send(res, 'ng');
+    }
+    send(res, 'not found', 404);
+  });
+  const lms = createServer((req, res) => {
+    const url = new URL(req.url, 'http://x');
+    if (url.pathname === '/sso' && url.searchParams.get('ticket') === 't1') {
+      res.writeHead(302, {'Set-Cookie': 'sid=ok; Path=/', Location: '/'});
+      return res.end();
+    }
+    if (!/sid=ok/.test(req.headers.cookie ?? '')) {
+      res.writeHead(302, {Location: `${idpBase}/idp/login`});
+      return res.end();
+    }
+    send(res, '<a id="button-logout" href="/logout">ログアウト</a><a href="/class/101/">管理会計Ⅱ（金曜／2限）</a>');
+  });
+  await new Promise((r) => idp.listen(0, '127.0.0.1', r));
+  await new Promise((r) => lms.listen(0, '127.0.0.1', r));
+  const idpBase = `http://localhost:${idp.address().port}`;
+  lmsBase = `http://127.0.0.1:${lms.address().port}`;
+  return {base: lmsBase, seen, close: () => (idp.close(), lms.close())};
+}
+
+test(
+  '自動ログイン：統合認証（ID → パスワードの 2 段階・別のホスト）にレシピのセレクタなしで入る',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const sso = await mockSso();
+    t.after(sso.close);
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor(recipeBase, {session, secrets}); // 同梱の manabo レシピ（login.form は null）
+    const cred = {credentials: {user: 'stu', password: 'pw'}};
+
+    // 見えるログイン窓で一度も通っていない（IdP のホストを知らない）なら、入力せずに止まる
+    const unknown = await connector.createContext({id: 's0', base_url: sso.base, university_host: '127.0.0.1'});
+    try {
+      await assert.rejects(
+        connector.login(unknown, 'headless', cred),
+        (e) => e.code === 'login-required' && /一度ブラウザ窓でログイン/.test(e.message)
+      );
+      assert.deepEqual(sso.seen.users, [], 'IdP に ID を送っていない');
+    } finally {
+      await connector.releaseContext(unknown);
+    }
+
+    const conn = {id: 's1', base_url: sso.base, university_host: '127.0.0.1', allowed_hosts_json: '["localhost"]'};
+    const ctx = await connector.createContext(conn);
+    try {
+      assert.equal(await connector.ensureSession(ctx), 'login-required');
+      assert.deepEqual(await connector.login(ctx, 'headless', cred), {ok: true});
+      assert.deepEqual(sso.seen.users, ['stu'], 'ID の欄に入れた（検索欄には入れない）');
+      assert.ok(secrets.map.get('conn:s1:cookies'), 'Cookie を保存した');
+      assert.equal(await connector.ensureSession(ctx), 'ok');
+    } finally {
+      await connector.releaseContext(ctx);
+    }
+
+    // 保存したパスワードを使うのは save_password が 1 のときだけ
+    await secrets.set('conn:s2:password', {user: 'stu', password: 'pw'});
+    const off = await connector.createContext({...conn, id: 's2', save_password: 0});
+    try {
+      await assert.rejects(connector.login(off, 'headless'), (e) => e.code === 'login-required');
+    } finally {
+      await connector.releaseContext(off);
+    }
+    const on = await connector.createContext({...conn, id: 's2', save_password: 1});
+    try {
+      assert.deepEqual(await connector.login(on, 'headless'), {ok: true});
+    } finally {
+      await connector.releaseContext(on);
+    }
+  }
+);
+
+test(
+  '自動ログイン：パスワード違いは login-bad-credentials（1 回だけ送る）、認証コードは login-needs-user（ID を入れない）',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor(recipeBase, {session, secrets});
+
+    const sso = await mockSso();
+    t.after(sso.close);
+    const bad = await connector.createContext({
+      id: 'b1',
+      base_url: sso.base,
+      university_host: '127.0.0.1',
+      allowed_hosts_json: '["localhost"]'
+    });
+    try {
+      await assert.rejects(
+        connector.login(bad, 'headless', {credentials: {user: 'stu', password: 'nope'}}),
+        (e) => e.code === 'login-bad-credentials'
+      );
+      assert.equal(sso.seen.passwords, 1, 'パスワードは 1 回だけ送る（ロックさせない）');
+    } finally {
+      await connector.releaseContext(bad);
+    }
+
+    const sso2 = await mockSso({code: true});
+    t.after(sso2.close);
+    const otp = await connector.createContext({
+      id: 'b2',
+      base_url: sso2.base,
+      university_host: '127.0.0.1',
+      allowed_hosts_json: '["localhost"]'
+    });
+    try {
+      await assert.rejects(
+        connector.login(otp, 'headless', {credentials: {user: 'stu', password: 'pw'}}),
+        (e) => e.code === 'login-needs-user' && /認証コード/.test(e.message)
+      );
+      assert.deepEqual(sso2.seen.codes, [], '認証コードの欄には何も送らない');
+    } finally {
+      await connector.releaseContext(otp);
+    }
+  }
+);
+
+test('ログインの欄を探す：1 ページのフォーム・ID だけのページ・認証コードのページ・検索欄', {skip: !playwright && 'Playwright が入っていません'}, async (t) => {
+  const {markLoginForm} = await import('../../src/main/browser/login-form.js');
+  const browser = await playwright.chromium.launch({headless: true, ...(executablePath ? {executablePath} : {})});
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const look = async (html) => {
+    await page.setContent(`<!doctype html><meta charset="utf-8"><body>${html}</body>`);
+    const f = await page.evaluate(markLoginForm);
+    const marked = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-dn-login]')].map((e) => [e.dataset.dnLogin, e.name || e.textContent])));
+    return {...f, marked};
+  };
+  // Shibboleth の形：ID・パスワード・ログイン（前に検索欄があっても ID の欄を選ぶ）
+  let f = await look('<input type="text" name="q" placeholder="検索"><form><input name="j_username"><input type="password" name="j_password"><button type="submit">Login</button></form>');
+  assert.deepEqual(f.marked, {user: 'j_username', password: 'j_password', submit: 'Login'});
+  // ID だけを先に聞くページ
+  f = await look('<form><input type="email" name="loginfmt"><input type="submit" name="next" value="次へ"></form>');
+  assert.equal(f.marked.user, 'loginfmt');
+  assert.equal(f.password, false);
+  // 認証コードだけのページ：ID の欄とみなさない
+  f = await look('<form><p>認証コード</p><input type="text" name="otp_code" autocomplete="one-time-code"><button type="submit">送信</button></form>');
+  assert.equal(f.user, false);
+  assert.equal(f.password, false);
+  assert.equal(f.extra, true);
+  // 欄が 1 つだけでも、ID らしい名前でなければ当て推量で入れない
+  f = await look('<form><input type="text" name="keyword"><button type="submit">探す</button></form>');
+  assert.equal(f.user, false);
+  // 隠れた欄は使わない
+  f = await look('<form><input name="username" style="display:none"><input name="login_id"><input type="password" name="pw"><input type="submit" value="ログイン"></form>');
+  assert.equal(f.marked.user, 'login_id');
+});
+
+test('見えるログイン窓：保存した ID とパスワードを欄に入れておく（送信は本人）', {skip: (!playwright && 'Playwright が入っていません') || (process.platform === 'linux' && !process.env.DISPLAY && '画面がありません（xvfb-run で動かす）')}, async (t) => {
+  const sso = await mockSso();
+  t.after(sso.close);
+  // 起動した見えるブラウザをテストから操作するため、launch を包む
+  let headed = null;
+  const wrapped = {...playwright, chromium: {...playwright.chromium, launch: async (o) => (o.headless === false ? (headed = await playwright.chromium.launch(o)) : playwright.chromium.launch(o))}};
+  const secrets = memSecrets();
+  const session = createBrowserSession({secrets, playwright: wrapped, executablePath});
+  t.after(() => session.shutdown());
+  const connector = createRecipeExecutor(recipeBase, {session, secrets});
+  await secrets.set('conn:v1:password', {user: 'stu', password: 'pw'});
+  const ctx = await connector.createContext({id: 'v1', base_url: sso.base, university_host: '127.0.0.1', save_password: 1});
+  const done = connector.login(ctx, 'visible');
+  const pageOf = async () => {
+    for (let i = 0; i < 50 && !headed?.contexts()[0]?.pages()[0]; i++) await new Promise((r) => setTimeout(r, 100));
+    return headed.contexts()[0].pages()[0];
+  };
+  const page = await pageOf();
+  await page.waitForFunction(() => document.querySelector('[name=j_username]')?.value === 'stu', null, {timeout: 10000});
+  assert.deepEqual(sso.seen.users, [], '送信はしない');
+  await page.click('button[type=submit]'); // 本人が「次へ」を押す
+  await page.waitForFunction(() => document.querySelector('[name=j_password]')?.value === 'pw', null, {timeout: 10000});
+  await page.click('button[type=submit]'); // 本人が「ログイン」を押す
+  const r = await done;
+  assert.equal(r.ok, true);
+  assert.ok(r.visitedHosts.includes('localhost'), 'IdP のホストを覚える（次から自動ログインに使う）');
+  await connector.releaseContext(ctx);
+});

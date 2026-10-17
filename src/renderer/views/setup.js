@@ -54,7 +54,13 @@ function stepLogin() {
          <label class="sr-only" for="su-user">ID</label><input class="input" id="su-user" placeholder="ID" autocomplete="username">
          <label class="sr-only" for="su-pass">パスワード</label><input class="input" id="su-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top: var(--space-1)">`
       : draft.kind === 'recipe'
-        ? `<p class="muted">この LMS は、ブラウザの窓を開いてログインします。窓でいつもどおりログインすると、窓は自動で閉じます。あとで（設定 → 接続 の「ログインし直す」から）ログインしてもかまいません。</p>`
+        ? `<p class="muted">この LMS は、ブラウザの窓を開いてログインします。窓でいつもどおりログインすると、窓は自動で閉じます。あとで（設定 → 接続 の「ログインし直す」から）ログインしてもかまいません。</p>
+           <label style="display:block; margin: var(--space-2) 0 var(--space-1)"><input type="checkbox" id="su-auto" checked> 次回から自動でログインする（ID とパスワードを、このパソコンの中だけに暗号化して保存します）</label>
+           <div id="su-auto-fields">
+             <label class="sr-only" for="su-user">ID</label><input class="input" id="su-user" placeholder="ID（学籍番号など）" autocomplete="username">
+             <label class="sr-only" for="su-pass">パスワード</label><input class="input" id="su-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top: var(--space-1)">
+             <p class="muted">開いた窓にも ID とパスワードを入れておくので、「ログイン」を押すだけです。大学からメールで届く認証コードを聞かれたときだけ、コードを入れてください（アプリはメールを読みません）。</p>
+           </div>`
         : `<p class="muted">この接続では、ここでのログインはありません。次へ進んでください。</p>`;
   const main = draft.kind === 'api' ? 'ログインして次へ' : draft.kind === 'recipe' ? 'ログイン窓を開く' : '次へ';
   return `<h2>2. ログイン</h2>
@@ -148,6 +154,14 @@ function bind() {
         if (r2.error || !r2.ok) return (msg.textContent = r2.message || r2.error || 'ログインできませんでした');
         await loadCourses();
       } else if (draft.kind === 'recipe') {
+        if ($('su-auto').checked) {
+          const r0 = await api['connection.savePassword']({
+            connectionId: draft.connectionId,
+            user: $('su-user').value,
+            password: $('su-pass').value
+          });
+          if (r0.error) return toast(r0.error, {error: true});
+        }
         msg.textContent = 'ログインの窓を開いています。窓でログインしてください…';
         btn.disabled = true;
         const r = await api['connection.login']({connectionId: draft.connectionId, mode: 'visible'});
@@ -161,6 +175,11 @@ function bind() {
       reload();
     };
   if ($('su-skip')) $('su-skip').onclick = () => ((step = 2), reload());
+  if ($('su-auto')) {
+    const sync = () => ($('su-auto-fields').hidden = !$('su-auto').checked);
+    $('su-auto').onchange = sync;
+    sync();
+  }
   if ($('su-next3'))
     $('su-next3').onclick = async () => {
       const off = [...document.querySelectorAll('#su-courses input[data-lms]')]
