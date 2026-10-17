@@ -1,4 +1,4 @@
-/* 罫線ノート・マスキングテープのフォルダ・付箋・インデックスタブ・バッジ（SPEC §8.0） */
+/* 罫線ノート・マスキングテープのフォルダ・付箋・バッジ（SPEC §8.0） */
 * {
   box-sizing: border-box;
 }
@@ -15,25 +15,34 @@ body {
   background: var(--paper);
 }
 
-/* 紙：横罫（32px ごとの 1px）と左の縦線。内容と一緒にスクロールする */
+/* 紙：横罫（32px ごとの 1px）。内容と一緒にスクロールする。左の縦線はホームと授業画面だけ（.paper--margin） */
 .paper {
+  --rules: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--rule-gap) - 1px),
+    color-mix(in srgb, var(--rule) calc(var(--rule-alpha) * 100%), transparent) calc(var(--rule-gap) - 1px),
+    color-mix(in srgb, var(--rule) calc(var(--rule-alpha) * 100%), transparent) var(--rule-gap)
+  );
   min-height: 100%;
   padding: 96px var(--space-6) var(--space-6);
   background-color: var(--paper);
-  background-image:
-    linear-gradient(to right, transparent 71px, rgba(232, 139, 139, var(--rule-alpha)) 71px, rgba(232, 139, 139, var(--rule-alpha)) 72px, transparent 72px),
-    repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--rule-gap) - 1px), color-mix(in srgb, var(--rule) calc(var(--rule-alpha) * 100%), transparent) calc(var(--rule-gap) - 1px), color-mix(in srgb, var(--rule) calc(var(--rule-alpha) * 100%), transparent) var(--rule-gap));
-  background-position:
-    0 0,
-    0 96px;
+  background-image: var(--rules);
+  background-position: 0 96px;
   background-attachment: local;
 }
 .paper--quiet {
   --rule-alpha: 0.4;
-  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--rule-gap) - 1px), color-mix(in srgb, var(--rule) calc(var(--rule-alpha) * 100%), transparent) calc(var(--rule-gap) - 1px), color-mix(in srgb, var(--rule) calc(var(--rule-alpha) * 100%), transparent) var(--rule-gap));
 }
 .paper--margin {
+  --margin-line: color-mix(in srgb, var(--rule-margin) calc(var(--rule-alpha) * 100%), transparent);
   padding-left: 112px;
+  background-image:
+    linear-gradient(to right, transparent 71px, var(--margin-line) 71px, var(--margin-line) 72px, transparent 72px),
+    var(--rules);
+  background-position:
+    0 0,
+    0 96px;
 }
 
 /* 上余白（ノートの上部）：アプリ名・学期・日付 */
@@ -65,6 +74,14 @@ h2 {
 }
 h3 {
   font-size: var(--fs-h3);
+}
+.ja-wrap {
+  /* 授業名など：app.js の jaWrap が入れた <wbr> の位置でだけ折り返す（「国際ビジネス戦／略」にしない） */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+h2[tabindex='-1']:focus {
+  outline: none; /* 画面が変わったときに見出しへ移すフォーカス（読み上げ用）。枠は出さない */
 }
 .muted {
   color: var(--paper-ink-weak);
@@ -128,6 +145,7 @@ h3 {
 }
 .folder__name {
   font-family: var(--font-head);
+  font-weight: 700;
   font-size: var(--fs-h3);
   line-height: 1.35;
   display: -webkit-box;
@@ -165,10 +183,58 @@ h3 {
   background: var(--tape-color, var(--c1));
   opacity: var(--tape-alpha);
   clip-path: polygon(
-    0 15%, 4% 0, 8% 15%, 12% 0, 16% 15%, 20% 0, 24% 15%, 28% 0, 32% 15%, 36% 0, 40% 15%, 44% 0, 48% 15%, 52% 0, 56% 15%,
-    60% 0, 64% 15%, 68% 0, 72% 15%, 76% 0, 80% 15%, 84% 0, 88% 15%, 92% 0, 96% 15%, 100% 0,
-    100% 85%, 96% 100%, 92% 85%, 88% 100%, 84% 85%, 80% 100%, 76% 85%, 72% 100%, 68% 85%, 64% 100%, 60% 85%, 56% 100%,
-    52% 85%, 48% 100%, 44% 85%, 40% 100%, 36% 85%, 32% 100%, 28% 85%, 24% 100%, 20% 85%, 16% 100%, 12% 85%, 8% 100%, 4% 85%, 0 100%
+    0 15%,
+    4% 0,
+    8% 15%,
+    12% 0,
+    16% 15%,
+    20% 0,
+    24% 15%,
+    28% 0,
+    32% 15%,
+    36% 0,
+    40% 15%,
+    44% 0,
+    48% 15%,
+    52% 0,
+    56% 15%,
+    60% 0,
+    64% 15%,
+    68% 0,
+    72% 15%,
+    76% 0,
+    80% 15%,
+    84% 0,
+    88% 15%,
+    92% 0,
+    96% 15%,
+    100% 0,
+    100% 85%,
+    96% 100%,
+    92% 85%,
+    88% 100%,
+    84% 85%,
+    80% 100%,
+    76% 85%,
+    72% 100%,
+    68% 85%,
+    64% 100%,
+    60% 85%,
+    56% 100%,
+    52% 85%,
+    48% 100%,
+    44% 85%,
+    40% 100%,
+    36% 85%,
+    32% 100%,
+    28% 85%,
+    24% 100%,
+    20% 85%,
+    16% 100%,
+    12% 85%,
+    8% 100%,
+    4% 85%,
+    0 100%
   );
   pointer-events: none;
 }
@@ -272,6 +338,7 @@ h3 {
   outline-offset: 4px;
 }
 .round-note__head {
+  --note-ink-weak: color-mix(in srgb, var(--paper-ink) var(--note-weak), var(--note-bg));
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -294,16 +361,16 @@ h3 {
   white-space: nowrap;
 }
 .round-note__today {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   padding: 1px 8px;
   border-radius: 999px;
-  background: var(--rule-margin);
-  color: #fff;
+  background: var(--paper-ink);
+  color: var(--paper);
 }
 .round-note__date {
   font-size: var(--fs-small);
-  color: var(--paper-ink-weak);
+  color: var(--note-ink-weak);
 }
 .round-note__files {
   display: grid;
@@ -313,11 +380,24 @@ h3 {
 .round-note__none {
   margin: 36px 0 0;
   text-align: center;
-  color: var(--paper-ink-weak);
+  color: color-mix(in srgb, var(--paper-ink) var(--note-weak), var(--note-bg));
   font-size: var(--fs-small);
 }
 .round-note--empty {
   min-height: 150px;
+}
+/* これからの回（資料なし）：見出しだけの小さな付箋 */
+.round-note--upcoming {
+  min-height: 0;
+  padding: 16px 16px 14px;
+}
+.round-note--upcoming .round-note__head {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.round-note--upcoming .round-note__round {
+  font-size: var(--fs-body);
 }
 
 /* 資料の紙：イラスト＋名前。押すと開く。角に小さなフォルダのボタン */
@@ -354,7 +434,7 @@ h3 {
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.18));
 }
 .file__name {
-  font-size: 12px;
+  font-size: var(--fs-small);
   line-height: 1.3;
   text-align: center;
   display: -webkit-box;
@@ -374,29 +454,41 @@ h3 {
   box-shadow: 0 0 0 2px var(--note-bg, var(--card));
 }
 .file__tag {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  padding: 0 8px;
   border-radius: 999px;
   background: var(--card);
-  color: var(--paper-ink-weak);
+  color: var(--paper-ink);
 }
+/* 「フォルダで表示」：ホバーかキーボードで資料を選んだときに出る。文字ラベル付き */
 .file__reveal {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  left: 50%;
+  bottom: -14px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 2px 10px;
   border: 0;
-  background: transparent;
-  font-size: 13px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow);
+  font: inherit;
+  font-size: var(--fs-small);
   cursor: pointer;
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--motion);
+  z-index: 1;
 }
 .file:hover .file__reveal,
-.file__reveal:focus-visible {
+.file:focus-within .file__reveal {
   opacity: 1;
+  pointer-events: auto;
+}
+.file__reveal:focus-visible {
+  outline: 2px solid var(--focus);
 }
 
 /* ボタン・入力 */
@@ -413,8 +505,23 @@ h3 {
   font-weight: 600;
   cursor: pointer;
 }
-.btn:active {
+.btn:active:not(:disabled) {
   transform: translateY(1px);
+}
+.btn:disabled {
+  cursor: default;
+  border-style: dashed;
+  border-color: var(--paper-ink-weak);
+  background: transparent;
+  color: var(--paper-ink-weak);
+}
+.btn--small {
+  padding: 2px 12px;
+  font-size: var(--fs-small);
+}
+.btn--quiet {
+  border-color: var(--paper-ink-weak);
+  font-weight: 500;
 }
 .btn--primary {
   background: var(--paper-ink);
@@ -428,7 +535,7 @@ h3 {
   width: 100%;
   padding: 6px 2px;
   border: 0;
-  border-bottom: 1.5px solid var(--rule);
+  border-bottom: 1.5px solid var(--paper-ink-weak); /* 入力欄の境目はコントラスト 3:1 以上 */
   background: transparent;
   color: inherit;
   font: inherit;
@@ -464,27 +571,150 @@ h3 {
   justify-items: start;
 }
 
-/* トースト：紙片が下に貼られる */
-.toast {
+/* トースト：紙片が下に貼られる。重ねずに積む（新しいものが下）。押すと消える */
+.toasts {
   position: fixed;
   left: 50%;
   bottom: 24px;
   transform: translateX(-50%);
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  width: max-content;
+  max-width: min(640px, calc(100vw - 48px));
+  z-index: 10;
+}
+.toast {
   background: var(--card);
   box-shadow: var(--card-shadow-hover);
   border-radius: 8px;
   padding: 10px 16px;
+  cursor: pointer;
   animation: paste var(--motion) ease-out;
+}
+.toast--error {
+  border-left: 4px solid var(--rule-margin);
 }
 @keyframes paste {
   from {
-    transform: translateX(-50%) translateY(12px) rotate(-1deg);
+    transform: translateY(12px) rotate(-1deg);
     opacity: 0;
   }
   to {
-    transform: translateX(-50%) translateY(0) rotate(0);
+    transform: translateY(0) rotate(0);
     opacity: 1;
   }
+}
+
+/* 画面の上の段（← 戻る・見出し）と、ボタンの並び */
+.page-nav {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+.actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+
+/* ホーム：フォルダと要確認の付箋（流れの中に置く。重ならない） */
+.home--attention {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: var(--space-4);
+  align-items: start;
+}
+.home--attention .attention {
+  order: 2;
+  margin-top: var(--space-3);
+}
+@media (max-width: 1040px) {
+  .home--attention {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home--attention .attention {
+    order: 0;
+    max-width: none;
+    margin-top: 0;
+    transform: rotate(-0.5deg);
+  }
+}
+.attention ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.attention .btn {
+  margin-top: 4px;
+}
+.attention details {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+/* 下の帯：同期と設定。長い画面でも画面の下に見えている */
+.home-foot {
+  position: sticky;
+  bottom: 0;
+  margin-top: var(--space-6);
+  padding: 12px 0;
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--paper);
+  box-shadow: 0 -1px 0 color-mix(in srgb, var(--paper-ink) 12%, transparent);
+  z-index: 5;
+}
+
+/* 授業画面の上：同期のボタンと進み具合 */
+.course-actions {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.course-help {
+  margin: 6px 0 var(--space-3);
+  max-width: 720px;
+}
+
+/* セットアップの手順：付箋が順に貼られる。まだの手順は点線の枠だけ */
+.steps {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+.steps__item {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1.5px dashed var(--paper-ink-weak);
+  color: var(--paper-ink-weak);
+  background: var(--card);
+  font-size: var(--fs-small);
+}
+.steps__item--done,
+.steps__item--current {
+  border: 0;
+  color: var(--paper-ink);
+  background: color-mix(in srgb, var(--sticky-color, var(--c1)) 35%, var(--card));
+  box-shadow: var(--card-shadow);
+  transform: rotate(var(--sticky-angle, -1.5deg));
+}
+.steps__item--done::after {
+  content: ' ✓';
+}
+.steps__item--current {
+  font-weight: 700;
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 2px;
 }
 .sr-only {
   position: absolute;

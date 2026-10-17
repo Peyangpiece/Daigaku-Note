@@ -152,6 +152,8 @@ export class SyncEngine {
   /** 授業一覧の突き合わせ（追加・改名・消えた授業）。改名のときは授業フォルダも改名し、記録のパスを書き換える */
   async reconcileCourses(connection, term, courses, {markMissing}) {
     const seen = new Set();
+    // セットアップの「授業の確認」で外した授業は、非表示で作る（同期しない。設定 → 授業 で戻せる）
+    const excluded = new Set(this.repo.getSetting(`courses.exclude.${connection.id}`, []));
     const result = [];
     for (const c of courses) {
       const lmsId = String(c.lmsId ?? c.url ?? c.name);
@@ -168,7 +170,8 @@ export class SyncEngine {
           folder_name: folder,
           weekday: c.weekday ?? null,
           period: c.period ?? null,
-          weekday_from: c.weekday ? 'lms' : null
+          weekday_from: c.weekday ? 'lms' : null,
+          hidden: excluded.has(lmsId) ? 1 : 0
         });
       } else {
         const patch = {};

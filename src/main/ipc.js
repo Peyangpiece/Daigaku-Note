@@ -167,6 +167,19 @@ export function registerIpc(ctx, {openWindow}) {
     }
   });
 
+  // セットアップの「授業の確認」：外した授業の LMS の ID を覚える。まだ作られていない授業は同期で非表示として作る（engine.reconcileCourses）
+  handle('setup.excludeCourses', ({connectionId, lmsIds}) => {
+    const cid = id(connectionId) ?? bad('接続が不正です');
+    repo.get('connection', cid) ?? bad('接続がありません');
+    const list = (Array.isArray(lmsIds) ? lmsIds : []).map((x) => str(String(x), 200)).filter(Boolean);
+    repo.setSetting(`courses.exclude.${cid}`, list);
+    for (const row of repo.listCourses({connectionId: cid})) {
+      const hide = list.includes(row.lms_id);
+      if (!!row.hidden !== hide) repo.updateCourse(row.id, {hidden: hide ? 1 : 0});
+    }
+    return {ok: true};
+  });
+
   handle('term.save', ({term}) => {
     const label = str(term?.label, 20) ?? bad('学期名を入れてください');
     const year = Number(term?.year);

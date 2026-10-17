@@ -158,6 +158,16 @@ test('授業の改名でフォルダも改名。消えた授業は sync_enabled=
   assert.equal(repo.findCourseByLms(connection.id, '3') !== null, true, '一覧の突き合わせは常に行う');
 });
 
+test('セットアップで外した授業は非表示で作られ、同期しない', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  repo.setSetting(`courses.exclude.${connection.id}`, ['2']);
+  await engine.run({connection, connector: fakeConnector(data()), term, kind: 'initial'});
+  const c2 = repo.findCourseByLms(connection.id, '2');
+  assert.equal(c2.hidden, 1);
+  assert.equal(repo.listMaterials(c2.id).length, 0);
+  assert.equal(repo.findCourseByLms(connection.id, '1').hidden, 0);
+});
+
 test('ログインが必要・授業一覧の失敗・1 授業の失敗はほかを止めない', async (t) => {
   const {repo, term, connection, engine} = await setup(t);
   const need = await engine.run({connection, connector: fakeConnector(data(), {session: 'login-required'}), term});

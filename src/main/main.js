@@ -1,6 +1,6 @@
 // 大学ノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
 // M0 の骨格：DB・設定・ジョブ・スケジューラ・IPC をつなぐ。LMS 操作とファイル操作はここ（メイン）だけで行う。
-import {app, BrowserWindow, Menu, Tray, dialog, nativeImage, shell} from 'electron';
+import {app, BrowserWindow, Menu, Tray, dialog, nativeImage, nativeTheme, shell} from 'electron';
 import {existsSync, mkdirSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -34,6 +34,13 @@ function ensureDirs(userData) {
   for (const d of ['work', 'logs', 'recipes', 'debug', 'backups', 'pw-browsers']) mkdirSync(path.join(userData, d), {recursive: true});
 }
 
+// 読み込み前の窓の色。設定のテーマ（なければ OS）に合わせ、暗い配色で白く光らないようにする（tokens.css の --paper）
+function windowBackground() {
+  const theme = ctx.repo?.getSetting('ui.theme', 'system') ?? 'system';
+  const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors);
+  return dark ? '#1F2430' : '#FBF8F1';
+}
+
 function openWindow(route = null) {
   if (win && !win.isDestroyed()) {
     if (route) win.webContents.send('route', route);
@@ -48,7 +55,7 @@ function openWindow(route = null) {
     minHeight: 640,
     title: '大学ノート',
     autoHideMenuBar: true,
-    backgroundColor: '#FBF8F1',
+    backgroundColor: windowBackground(),
     webPreferences: {preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false}
   });
   win.loadFile(RENDERER, route ? {hash: route} : undefined);
