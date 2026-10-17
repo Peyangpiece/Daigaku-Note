@@ -67,7 +67,85 @@ function openWindow(route = null) {
   win.webContents.on('will-navigate', (e, url) => {
     if (!url.startsWith('file://')) e.preventDefault();
   });
+  // 右クリックのメニュー：入力欄では切り取り・コピー・貼り付け・すべて選択、選んだ文字ではコピー
+  win.webContents.on('context-menu', (_e, params) => {
+    const menu = editContextMenu(params);
+    if (menu) menu.popup({window: win});
+  });
   win.on('closed', () => (win = null));
+}
+
+/** 右クリックのメニュー（Electron は既定では出さない）。出すものがなければ null */
+function editContextMenu({isEditable, selectionText, editFlags}) {
+  if (isEditable)
+    return Menu.buildFromTemplate([
+      {role: 'undo', label: '取り消す', enabled: editFlags.canUndo},
+      {role: 'redo', label: 'やり直す', enabled: editFlags.canRedo},
+      {type: 'separator'},
+      {role: 'cut', label: '切り取り', enabled: editFlags.canCut},
+      {role: 'copy', label: 'コピー', enabled: editFlags.canCopy},
+      {role: 'paste', label: '貼り付け', enabled: editFlags.canPaste},
+      {type: 'separator'},
+      {role: 'selectAll', label: 'すべて選択', enabled: editFlags.canSelectAll}
+    ]);
+  if (selectionText?.trim()) return Menu.buildFromTemplate([{role: 'copy', label: 'コピー'}]);
+  return null;
+}
+
+/**
+ * アプリのメニュー。macOS では、ここに「編集」がないと ⌘C・⌘V・⌘X・⌘A が入力欄で効かない。
+ * Electron の既定のメニューに頼らず、はっきり作る（名前も「Electron」ではなく「大学ノート」に）
+ */
+function buildAppMenu() {
+  const mac = process.platform === 'darwin';
+  const template = [
+    ...(mac
+      ? [
+          {
+            label: '大学ノート',
+            submenu: [
+              {role: 'about', label: '大学ノートについて'},
+              {type: 'separator'},
+              {label: '設定…', accelerator: 'Cmd+,', click: () => openWindow('/settings')},
+              {type: 'separator'},
+              {role: 'hide', label: '大学ノートを隠す'},
+              {role: 'hideOthers', label: 'ほかを隠す'},
+              {role: 'unhide', label: 'すべて表示'},
+              {type: 'separator'},
+              {role: 'quit', label: '大学ノートを終了'}
+            ]
+          }
+        ]
+      : [{label: 'ファイル', submenu: [{label: '設定', accelerator: 'Ctrl+,', click: () => openWindow('/settings')}, {type: 'separator'}, {role: 'quit', label: '終了'}]}]),
+    {
+      label: '編集',
+      submenu: [
+        {role: 'undo', label: '取り消す'},
+        {role: 'redo', label: 'やり直す'},
+        {type: 'separator'},
+        {role: 'cut', label: '切り取り'},
+        {role: 'copy', label: 'コピー'},
+        {role: 'paste', label: '貼り付け'},
+        {role: 'pasteAndMatchStyle', label: 'ペーストしてスタイルを合わせる'},
+        {role: 'selectAll', label: 'すべて選択'}
+      ]
+    },
+    {
+      label: '表示',
+      submenu: [
+        {role: 'reload', label: '再読み込み'},
+        {role: 'toggleDevTools', label: '開発者ツール'},
+        {type: 'separator'},
+        {role: 'resetZoom', label: '実際のサイズ'},
+        {role: 'zoomIn', label: '拡大'},
+        {role: 'zoomOut', label: '縮小'},
+        {type: 'separator'},
+        {role: 'togglefullscreen', label: 'フルスクリーン'}
+      ]
+    },
+    {role: 'windowMenu', label: 'ウインドウ'}
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 function buildTray() {
@@ -128,6 +206,7 @@ app.whenReady().then(async () => {
     ctx.jobs = new JobRunner(ctx, {notify: (ch, payload) => win?.webContents.send(ch, payload)});
     ctx.scheduler = new Scheduler(ctx);
     registerIpc(ctx, {openWindow, getWindow: () => win});
+    buildAppMenu();
     buildTray();
     const connections = repo.listConnections();
     openWindow(connections.length ? null : '/setup');
