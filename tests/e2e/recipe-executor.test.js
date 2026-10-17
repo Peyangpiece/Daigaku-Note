@@ -52,20 +52,24 @@ function mockLms({logout = '<a id="button-logout" href="/logout">ログアウト
         <div id="div-class-directories"><table>
           <tr><td><a class="a-open-contents" directory_id="d1" href="#">第1回 イントロダクション</a></td></tr>
           <tr><td><a class="a-open-contents" directory_id="d3" href="#">第3回 原価企画</a></td></tr>
-          <tr><td><a class="a-open-contents" directory_id="dx" href="#">参考資料</a></td></tr>
+          <tr><td>参考資料</td></tr>
+          <tr><td><a class="a-open-contents" directory_id="dx" href="#"><img alt="開く"></a></td></tr>
         </table></div>
         <div id="div-class-contents"></div>
-        <div id="div-class-news"><ul>
-          <li><a href="#" class="toggle">[+] 【第02回，10/02】休講のお知らせ</a><div class="body" hidden><a href="/file/n2/">補講資料.pdf</a></div></li>
-          <li><a href="#" class="toggle">[+] 事務連絡</a><div class="body" hidden>添付なし</div></li>
-        </ul></div>
+        <div id="div-class-news"></div>
         <script>
+          // お知らせは AJAX で後から入る（manabo と同じ）。見出しは [+] の画像で、押すと本文と添付が出る。項目の作りは li ではなく div
+          setTimeout(() => { document.getElementById('div-class-news').innerHTML =
+            '<div class="n"><div class="h"><a href="javascript:void(0)" class="btn-open"><img src="/img/plus.gif" alt="+"></a> 【第02回，10/02】休講のお知らせ</div><div class="b" style="display:none"><a href="/file/n2/">補講資料.pdf</a></div></div>' +
+            '<div class="n"><div class="h"><a href="javascript:void(0)" class="btn-open"><img src="/img/plus.gif" alt="+"></a> 事務連絡</div><div class="b" style="display:none">添付なし</div></div>' +
+            '<a href="/news/all/">お知らせ一覧</a>';
+            for (const t of document.querySelectorAll('#div-class-news .btn-open')) t.onclick = (e) => { e.preventDefault(); t.closest('.n').querySelector('.b').style.display = 'block'; };
+          }, 500);
           const files = {d1: [['/file/1/', '第1回 資料.pdf']], d3: [['/file/3/', '第3回 資料.pdf'], ['/file/3b/', '第3回 資料 4up.pdf'], ['/other/page', '関連ページ']], dx: []};
           for (const a of document.querySelectorAll('.a-open-contents')) a.onclick = (e) => { e.preventDefault();
             const list = files[a.getAttribute('directory_id')] || [];
             document.getElementById('div-class-contents').innerHTML = '<h3>' + a.textContent + '</h3>' + list.map(([h, t]) => '<p><a href="' + h + '">' + t + '</a></p>').join('');
           };
-          for (const t of document.querySelectorAll('#div-class-news .toggle')) t.onclick = (e) => { e.preventDefault(); t.nextElementSibling.hidden = false; };
         </script>`);
     }
     if (url.pathname.startsWith('/file/')) {
@@ -111,7 +115,7 @@ test('レシピ実行器：ログイン → 授業 → 回 → ファイル → 
     );
     const course = {lms_id: '101', lms_url: courses[0].url};
     const rounds = await connector.listRounds(ctx, course);
-    assert.deepEqual(rounds.map((r) => [r.number, r.title, r.lmsRef]), [[1, '第1回 イントロダクション', 'd1'], [3, '第3回 原価企画', 'd3'], [0, '参考資料', 'dx']]);
+    assert.deepEqual(rounds.map((r) => [r.number, r.title, r.lmsRef]), [[1, '第1回 イントロダクション', 'd1'], [3, '第3回 原価企画', 'd3'], [0, '参考資料', 'dx']], '題名は押す要素の文字、なければ 1 つ前の行');
 
     const files3 = await connector.listFiles(ctx, course, rounds[1]);
     assert.deepEqual(files3.map((f) => f.name), ['第3回 資料.pdf', '第3回 資料 4up.pdf'], 'ファイルでないリンクは除く（1up の選別は同期エンジンが行う）');
@@ -119,9 +123,10 @@ test('レシピ実行器：ログイン → 授業 → 回 → ファイル → 
     assert.deepEqual(await connector.listFiles(ctx, course, rounds[2]), [], '資料のない回は空');
 
     const notices = await connector.listNoticeFiles(ctx, course);
-    assert.equal(notices.length, 1);
+    assert.equal(notices.length, 1, 'AJAX で入った欄の折りたたみを開き、添付だけを拾う（一覧へのリンクは拾わない）');
     assert.equal(notices[0].round, 2);
     assert.equal(notices[0].name, '補講資料.pdf');
+    assert.match(notices[0].noticeTitle, /【第02回，10\/02】休講のお知らせ/);
 
     const got = await connector.fetchFile(ctx, files3[0]);
     assert.equal(got.ok, true);

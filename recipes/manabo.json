@@ -1,9 +1,9 @@
 {
   "id": "manabo",
   "name": "manabo",
-  "version": "2026.10.1",
+  "version": "2026.10.2",
   "verified": false,
-  "note": "SPEC §18.1 の構造を元に書いた。実物の manabo で確かめるまで verified は false。確かめたら true にして version を上げる",
+  "note": "SPEC §18.1 の構造を元に書いた。回の題名は押す要素の文字、なければその行の 1 つ前の行。お知らせは #div-class-news に AJAX で入り [+] で開くので container と auto を使う。実物の manabo で確かめるまで verified は false。確かめたら true にして version を上げる",
   "detect": {
     "urlPatterns": ["manabo\\."],
     "htmlMarkers": ["div-class-directories", "manabo"]
@@ -24,7 +24,7 @@
   "rounds": {
     "url": "{course.url}",
     "items": "#div-class-directories .a-open-contents",
-    "title": "@text",
+    "title": "@text || ^tr<@text",
     "link": "@directory_id",
     "round": "@text:/第\\s*(\\d{1,2})\\s*回|(\\d{1,2})\\s*回目/"
   },
@@ -37,10 +37,12 @@
   },
   "notices": {
     "url": "{course.url}",
-    "items": "#div-class-news .news-item, #div-class-news li",
-    "openBeforeRead": "#div-class-news a[href='#'], #div-class-news [onclick]",
+    "container": "#div-class-news",
+    "openBeforeRead": "auto",
+    "items": "auto",
     "files": "a[href*='/file/']",
-    "round": "@text:/【第\\s*(\\d{1,2})\\s*回/"
+    "title": "@innertext:/^([^\\n]+)/",
+    "round": "@innertext:/【\\s*第\\s*(\\d{1,2})\\s*回|第\\s*(\\d{1,2})\\s*回/"
   },
   "waits": {"afterClick": 800, "pageLoad": "domcontentloaded"},
   "universities": {}

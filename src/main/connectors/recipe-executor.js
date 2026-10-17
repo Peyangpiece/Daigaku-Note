@@ -2,11 +2,11 @@
 // レシピにコードはない。この実行器がセレクタ・属性・正規表現・URL の差し込みだけを解釈する。
 import path from 'node:path';
 import {readdir, unlink, writeFile} from 'node:fs/promises';
-import {applyRegex, applyUniversityOverride, fillTemplate, parseField, resolveHref} from '../../shared/recipe.js';
+import {applyRegex, applyUniversityOverride, fillTemplate, parseFieldList, resolveHref} from '../../shared/recipe.js';
 import {parseRound} from '../../shared/rounds.js';
 import {parseSlot} from './slot.js';
 
-const META = new Set(['url', 'items', 'openBeforeRead', 'files']);
+const META = new Set(['url', 'items', 'openBeforeRead', 'files', 'container']);
 const FILE_LINK = /\.(pdf|pptx?|docx?|xlsx?|csv|txt|zip|png|jpe?g|gif|mp4|mp3|m4a|mov)(\?|#|$)|\/file[s]?\/|\/download|forcedownload|pluginfile|attachment/i;
 
 const err = (code, message) => Object.assign(new Error(message), {code});
@@ -40,22 +40,114 @@ function pageSummary() {
   return {title: document.title, links, ids, anchors: document.querySelectorAll('a[href]').length};
 }
 
-/** ページの中で項目ごとに値を集める関数（Playwright に渡すので、外の変数を使わない） */
+/**
+ * ページの中で項目ごとに値を集める関数（Playwright に渡すので、外の変数を使わない）。
+ * spec.fields = [[key, [[selector, attr], ...（' || ' の候補）]]]。候補ごとの生の値を配列で返し、正規表現と候補の選択は外（_collect）で行う。
+ * selector の先頭の歩き方：'^tr'（closest）、'<'（前の兄弟）、'>'（次の兄弟）。残りは項目（または歩いた先）からの querySelector
+ */
 function pageExtract(els, spec) {
   const val = (root, sel, attr) => {
-    const t = sel ? root.querySelector(sel) : root;
+    let t = root;
+    let s = (sel || '').trim();
+    const up = s.match(/^\^([^\s<>]+)/);
+    if (up) {
+      t = t.closest(up[1]);
+      s = s.slice(up[0].length);
+    }
+    while (t && (s[0] === '<' || s[0] === '>')) {
+      t = s[0] === '<' ? t.previousElementSibling : t.nextElementSibling;
+      s = s.slice(1);
+    }
+    s = s.trim();
+    if (t && s) t = t.querySelector(s);
     if (!t) return '';
     if (attr === 'text') return (t.textContent || '').trim();
+    if (attr === 'innertext') return (t.innerText ?? t.textContent ?? '').trim();
     if (attr === 'html') return t.innerHTML;
     if (attr === 'href') return t.href || t.getAttribute('href') || '';
     return t.getAttribute(attr) ?? '';
   };
   return els.map((el) => {
     const out = {};
-    for (const [key, sel, attr] of spec.fields) out[key] = val(el, sel, attr);
+    for (const [key, alts] of spec.fields) out[key] = alts.map(([sel, attr]) => val(el, sel, attr));
     if (spec.filesSelector) out.__files = [...el.querySelectorAll(spec.filesSelector)].map((a) => ({href: a.href || a.getAttribute('href') || '', text: (a.textContent || '').trim()}));
+    out.__text = (el.innerText ?? el.textContent ?? '').trim().slice(0, 2000);
     return out;
   });
+}
+
+/**
+ * ページの中で、欄（container）の折りたたみを開く（openBeforeRead: 'auto'）。Playwright に渡すので、外の変数を使わない。
+ * 見出しの作りを決め打ちせず、「押すと何かが起きそうな」要素を 1 回ずつ押す：onclick・# や javascript: のリンク・href のないリンク・
+ * [+] らしい画像・toggle/collapse/expand/accordion/open の class・jQuery のクリック処理（直接・委譲）。本物のリンク（ファイル・ページ）は押さない。
+ * 入れ子は内側だけ押す。押した要素に data-daigaku-toggle を付け、押した数を返す
+ */
+function pageExpand(containerSel) {
+  const box = containerSel ? document.querySelector(containerSel) : null;
+  if (!box) return 0;
+  const vis = (e) => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
+  const realLink = (e) => {
+    const a = e.closest('a[href]');
+    return !!a && !/^(#|javascript:)/i.test(a.getAttribute('href') || '');
+  };
+  const found = new Set(
+    box.querySelectorAll(
+      '[onclick],a[href^="#"],a[href^="javascript:"],a:not([href]),summary,[role=button],img[src*="plus" i],img[src*="open" i],img[src*="expand" i],[class*="plus" i],[class*="toggle" i],[class*="collapse" i],[class*="expand" i],[class*="accordion" i],[class*="open" i]'
+    )
+  );
+  const jq = window.jQuery;
+  if (jq && typeof jq._data === 'function') {
+    const events = (n) => {
+      try {
+        return jq._data(n, 'events')?.click || [];
+      } catch {
+        return [];
+      }
+    };
+    const owners = [document, document.documentElement, document.body];
+    for (let n = box; n; n = n.parentElement) owners.push(n);
+    for (const n of owners)
+      for (const h of events(n))
+        if (h.selector)
+          try {
+            for (const e of box.querySelectorAll(h.selector)) found.add(e);
+          } catch {
+            /* 読めないセレクタは飛ばす */
+          }
+    for (const e of box.querySelectorAll('*')) if (events(e).length) found.add(e);
+  }
+  const all = [...found].filter((e) => e !== box && !realLink(e) && vis(e) && !e.closest('input,select,textarea,form[action]'));
+  const leaves = all.filter((e) => !all.some((o) => o !== e && e.contains(o)));
+  let n = 0;
+  for (const e of leaves) {
+    if (n >= 100) break;
+    if (e.dataset.daigakuToggle !== undefined) continue;
+    e.dataset.daigakuToggle = String(n++);
+    e.click();
+  }
+  return n;
+}
+
+/**
+ * ページの中で、欄（container）の項目に data-daigaku-item を付ける（items: 'auto'）。Playwright に渡すので、外の変数を使わない。
+ * 押した見出し（data-daigaku-toggle）ごとに、その見出しだけを含む最大の祖先を項目とする。見出しがなければ欄全体を 1 項目にする
+ */
+function pageMarkItems(containerSel) {
+  const box = containerSel ? document.querySelector(containerSel) : null;
+  if (!box) return 0;
+  for (const e of box.querySelectorAll('[data-daigaku-item]')) delete e.dataset.daigakuItem;
+  delete box.dataset.daigakuItem;
+  let n = 0;
+  for (const t of box.querySelectorAll('[data-daigaku-toggle]')) {
+    let item = t;
+    while (item.parentElement && item.parentElement !== box && item.parentElement.querySelectorAll('[data-daigaku-toggle]').length === 1) item = item.parentElement;
+    if (item.dataset.daigakuItem === undefined) item.dataset.daigakuItem = String(n++);
+  }
+  if (!n) {
+    box.dataset.daigakuItem = '0';
+    n = 1;
+  }
+  return n;
 }
 
 export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}, debug = null}) {
@@ -65,9 +157,9 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
     const regexes = {};
     for (const [k, v] of Object.entries(sec)) {
       if (META.has(k) || typeof v !== 'string') continue;
-      const f = parseField(v);
-      fields.push([k, f.selector, f.attr]);
-      if (f.regex) regexes[k] = f;
+      const alts = parseFieldList(v);
+      fields.push([k, alts.map((f) => [f.selector, f.attr])]);
+      regexes[k] = alts;
     }
     return {...sec, spec: {fields, filesSelector: sec.files ?? null}, regexes};
   };
@@ -222,7 +314,28 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
     },
 
     async _collect(page, ctx, section, vars, {openAll = false} = {}) {
-      if (section.openBeforeRead) {
+      // 欄（container）が AJAX で後から入るときは、中身が入るまで待ってから押す・読む
+      const container = section.container ? fillTemplate(section.container, vars) : null;
+      if (container) {
+        await page.locator(container).first().waitFor({timeout: 8000}).catch(() => {});
+        await page
+          .waitForFunction(
+            (sel) => {
+              const b = document.querySelector(sel);
+              return !b || b.children.length > 0 || b.textContent.trim().length > 0;
+            },
+            container,
+            {timeout: 8000}
+          )
+          .catch(() => {});
+      }
+      if (section.openBeforeRead === 'auto') {
+        const n = await page.evaluate(pageExpand, container).catch(() => 0);
+        if (n) {
+          await page.waitForLoadState('networkidle', {timeout: 5000}).catch(() => {});
+          await page.waitForTimeout(ctx.waits.afterClick);
+        }
+      } else if (section.openBeforeRead) {
         const sel = fillTemplate(section.openBeforeRead, vars);
         const targets = page.locator(sel);
         const n = await targets.count();
@@ -230,20 +343,37 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           await targets.nth(i).click({timeout: 5000}).catch(() => {});
           await page.waitForTimeout(ctx.waits.afterClick);
         }
+        if (n) await page.waitForLoadState('networkidle', {timeout: 5000}).catch(() => {});
       }
-      await page.locator(section.items).first().waitFor({timeout: 8000}).catch(() => {});
-      const raw = await page.$$eval(section.items, pageExtract, section.spec);
+      let itemsSel = section.items;
+      if (itemsSel === 'auto') {
+        await page.evaluate(pageMarkItems, container).catch(() => 0);
+        itemsSel = '[data-daigaku-item]';
+      }
+      await page.locator(itemsSel).first().waitFor({timeout: 8000}).catch(() => {});
+      const raw = await page.$$eval(itemsSel, pageExtract, section.spec);
       if (!raw.length) {
         if (await this._looksLikeLogin(page)) throw err('login-required', 'ログインページに戻されました');
-        await this._dump(page, section.label ?? 'items');
+        // files は「資料のない回」で空になるのがふつうなので、画面の保存は接続ごとに 1 回だけ
+        if (section.label !== 'files' || !ctx.dumpedFiles) {
+          ctx.dumpedFiles = ctx.dumpedFiles || section.label === 'files';
+          await this._dump(page, section.label ?? 'items');
+        }
         throw err('selector-missing', `要素が見つかりません（${section.items}）`);
       }
       const base = page.url();
       return raw.map((item) => {
         const out = {};
         for (const [k] of section.spec.fields) {
-          const f = section.regexes[k];
-          out[k] = f ? applyRegex(item[k], f) : item[k];
+          const alts = section.regexes[k];
+          out[k] = '';
+          for (let i = 0; i < alts.length; i++) {
+            const v = applyRegex(item[k][i], alts[i]);
+            if (v) {
+              out[k] = v;
+              break;
+            }
+          }
         }
         if (out.link && !/^@/.test(section.link ?? '') && /^(https?:)?\/|^[^:]+$/.test(out.link) && /@href/.test(section.link ?? '@href')) out.link = resolveHref(out.link, base) || out.link;
         if (item.__files) out.files = item.__files.map((f) => ({url: resolveHref(f.href, base), name: f.text}));

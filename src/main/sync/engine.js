@@ -259,11 +259,13 @@ export class SyncEngine {
     const {mapped, byNumber, ensure} = await this.reconcileRounds(term, course, lmsRounds);
     await this.files.reconcileFiles({term, course, rounds: [...byNumber.values()]});
 
-    // 対象の回：初回は全部、ふだんは今日の前後 7 日の回と日付の分からない回
+    // 対象の回：初回（接続の初回、またはその授業にまだ資料が 1 つもないとき）は全部、ふだんは今日の前後 7 日の回と日付の分からない回
     const today = this.today();
     const from = addDays(today, -7),
       to = addDays(today, 7);
-    const wanted = fullCrawl ? mapped : mapped.filter(({row}) => !row.date || (row.date >= from && row.date <= to));
+    const crawlAll = fullCrawl || this.repo.listMaterials(course.id).length === 0;
+    const wanted = crawlAll ? mapped : mapped.filter(({row}) => !row.date || (row.date >= from && row.date <= to));
+    if (crawlAll && !fullCrawl) event('info', course, null, 'まだ資料がないので、全部の回を確かめます');
 
     const refs = [];
     for (const {lms, row} of wanted) {

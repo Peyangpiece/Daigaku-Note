@@ -8,6 +8,7 @@ import {
   fillTemplate,
   hostAllowed,
   parseField,
+  parseFieldList,
   resolveHref,
   validateRecipe
 } from '../src/shared/recipe.js';
@@ -26,6 +27,17 @@ test('式の解釈', () => {
   assert.equal(applyRegex('Week 4 slides', h), '4');
   assert.equal(applyRegex('第 03 回', h), '03');
   assert.equal(applyRegex('  trimmed  ', parseField('')), 'trimmed');
+  // 歩き方の接頭辞はセレクタとしてそのまま残す（解釈は実行器）
+  assert.deepEqual(parseField('^tr<@text'), {selector: '^tr<', attr: 'text', regex: null});
+  assert.deepEqual(parseField('>@innertext'), {selector: '>', attr: 'innertext', regex: null});
+  // ' || ' で候補を並べる
+  const alts = parseFieldList('@text || ^tr<@text:/第(\\d+)回/');
+  assert.equal(alts.length, 2);
+  assert.deepEqual(alts[0], {selector: '', attr: 'text', regex: null});
+  assert.equal(alts[1].selector, '^tr<');
+  assert.ok(alts[1].regex instanceof RegExp);
+  assert.equal(parseFieldList('a@href').length, 1);
+  assert.throws(() => parseFieldList('@text || '), /空の式/);
 });
 
 test('URL の差し込みと解決', () => {
@@ -70,6 +82,11 @@ test('レシピの検査', () => {
   assert.ok(errors.some((e) => e.includes('courses.link')));
   assert.ok(errors.some((e) => e.includes('rounds.title')));
   assert.ok(errors.some((e) => e.includes('コード')));
+  const auto = structuredClone(good);
+  auto.notices = {url: '{course.url}', items: 'auto', openBeforeRead: 'auto', files: 'a'};
+  assert.ok(validateRecipe(auto).some((e) => e.includes('container')), 'auto には container が要る');
+  auto.notices.container = '#news';
+  assert.deepEqual(validateRecipe(auto), []);
 });
 
 test('大学別の上書きと判定', () => {

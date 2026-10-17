@@ -289,7 +289,7 @@ URL テンプレート := '{base}' '{course.url}' '{course.lmsId}' '{round.url}'
 **手順**：
 
 ```
-listCourses:  page.goto(fill(recipe.courses.url)); openBeforeRead があれば順に click して waits.afterClick
+listCourses:  page.goto(fill(recipe.courses.url)); container があれば中身が入るまで待つ（8 秒）; openBeforeRead があれば順に click して waits.afterClick（'auto' なら欄の折りたたみを全部開く）; items が 'auto' なら開いた見出しごとに項目を決める
               items = page.$$(recipe.courses.items)
               各 item で name/link/lmsId/weekday/period を式で取る。name か link が空なら飛ばす
 listRounds:   同様に recipe.rounds。round = regex の群 → rounds.parse(title) → 並び順（設定が許せば）→ 0
@@ -306,6 +306,8 @@ login(visible): §8.5
 失敗の分類：セレクタが 1 つも合わない → `selector-missing`（SPEC §6.11 の「レシピの確認が必要」に数える）。ログインページに戻された → `login-required`。タイムアウト → `timeout`。
 
 レシピを直すための手がかり：`selector-missing` のときと、`ensureSession` が `login-required` を返すとき、その画面の HTML を `userData/debug/〈レシピ id〉_〈節〉_〈日時〉.html` に保存し（直近 20 件だけ残す）、URL・タイトル・リンクの経路（上位 12 件と本数）・id の一覧（30 件まで）を `[recipe]` のログに出す。
+
+値の式の候補（` || `）と歩き方（`^sel`・`<`・`>`）は SPEC §6.13。ページの中で候補ごとの生の値を配列で取り、正規表現と候補の選択は実行器側で行う（ページに渡す関数は外の変数を使えないため）。
 
 ログイン済みの判定：`login.loggedIn.selector` が合えば済み。合わないときは予備の判定として「パスワード欄がなく、`a`/`button`/`input[type=submit]` 等の文字・href・onclick に ログアウト／logout／sign out／サインアウト がある」ならログイン済みとみなし、レシピの見直しを促すログを接続ごとに 1 回出す。未検証のレシピや LMS の改修で同期が止まらないようにするための保険で、レシピの修正を代わりにするものではない。
 

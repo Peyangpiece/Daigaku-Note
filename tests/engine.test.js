@@ -111,6 +111,14 @@ test('初回は全回、2 回目は前後 7 日の回だけ。回フォルダ・
   const r2 = await engine.run({connection: repo.get('connection', connection.id), connector: conn, term, kind: 'full'});
   assert.equal(r2.materials, 0);
   assert.equal(conn.calls.listFiles, 3, '管理会計Ⅱ：第4回(10/16)・第5回(10/23)・LMS の「その他の資料」（日付なし）。意思決定論：Week 2 は 10/5 で範囲外');
+
+  // 途中から増えた授業（まだ資料がない）は、接続が初回でなくても全部の回を確かめる
+  const d3 = data();
+  d3.courses.push({lmsId: '3', name: '新しい授業', weekday: '月', period: 1, rounds: [{title: '第1回 ガイダンス', files: [{url: 'https://lms/f/g1', name: 'ガイダンス.pdf', body: 'g1'}]}]});
+  const conn3 = fakeConnector(d3);
+  const r3 = await engine.run({connection: repo.get('connection', connection.id), connector: conn3, term, kind: 'full'});
+  assert.equal(r3.materials, 1, '第1回（9/21）は範囲外だが、資料のない授業なので取り込む');
+  assert.ok(r3.events.some((e) => e.course === '新しい授業' && /全部の回/.test(e.message)));
 });
 
 test('授業の改名でフォルダも改名。消えた授業は sync_enabled=0。授業ごとの同期', async (t) => {

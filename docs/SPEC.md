@@ -515,7 +515,10 @@ interface Connector {
 | `detect` | URL のパターンと HTML の印。初回セットアップの判定に使う |
 | `login.loggedIn` | ログイン済みと判定する要素。`login.form` が `null` なら統合認証とみなし、常に見えるブラウザ窓でログインしてもらう |
 | `courses` / `rounds` / `files` / `notices` | 一覧の URL（`{base}`・`{course.url}` などの差し込み）、項目のセレクタ、各項目から取る値（`セレクタ@属性:/正規表現/`） |
-| `openBeforeRead` | 読む前に押す要素（AJAX で中身が入る欄。manabo のお知らせの [+] など） |
+| `openBeforeRead` | 読む前に押す要素（AJAX で中身が入る欄。manabo のお知らせの [+] など）。`"auto"` なら `container` の中の折りたたみ（onclick・`#`/`javascript:` のリンク・[+] の画像・toggle/collapse/expand の class・jQuery のクリック処理）をすべて開く |
+| `container` | AJAX で後から入る欄のセレクタ。中身が入るまで待ってから押す・読む。`auto` の範囲にもなる |
+| `items: "auto"` | 項目の作りを決め打ちしない。`openBeforeRead: "auto"` で開いた見出しごとに、その見出しだけを含む最大の祖先を項目とする。見出しがなければ `container` 全体を 1 項目にする |
+| 値の式 | `セレクタ@属性:/正規表現/`。セレクタの先頭に歩き方を付けられる：`^tr`（項目から closest）、`<`（前の兄弟）、`>`（次の兄弟）。例 `^tr<@text` は「項目の行の 1 つ前の行の文字」。属性は `text`（既定）・`innertext`（見えている文字。改行あり）・`html`・属性名。式は ` \|\| ` で候補を並べられ、左から順に最初に値のあるものを使う（例 `@text \|\| ^tr<@text`） |
 | `universities` | 大学ごとの上書き（ホスト名で選ぶ）。大学独自のカスタマイズに対応 |
 | `waits` | 待ち時間の既定 |
 

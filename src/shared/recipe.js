@@ -2,9 +2,11 @@
 
 /**
  * 式：  selector ( '@' attr )? ( ':' '/' regex '/' flags? )?
- *   selector … CSS セレクタ。空なら項目そのもの
- *   attr     … 'text'（既定）| 'html' | 属性名（href は絶対 URL に解決）
+ *   selector … CSS セレクタ。空なら項目そのもの。先頭に歩き方を付けられる：
+ *              '^tr' … 項目から closest('tr') へ上がる、'<' … 前の兄弟要素、'>' … 次の兄弟要素（続けて書ける。例 '^tr<' は「項目の行の 1 つ前の行」）
+ *   attr     … 'text'（既定）| 'innertext'（見えている文字。改行あり）| 'html' | 属性名（href は絶対 URL に解決）
  *   regex    … 最初に値を持つキャプチャ群を値にする。合わなければ ''
+ * 式は ' || ' で並べられる（parseFieldList）。左から順に試し、最初に値のあるものを使う。例 '@text || ^tr<@text'
  */
 export function parseField(expr) {
   const s = String(expr ?? '').trim();
@@ -18,6 +20,15 @@ export function parseField(expr) {
     selector = '';
   }
   return {selector, attr: attr || 'text', regex: re ? new RegExp(re, flags || '') : null};
+}
+
+/** ' || ' で並べた式を配列に。1 つなら長さ 1 */
+export function parseFieldList(expr) {
+  const parts = String(expr ?? '')
+    .split(/\s\|\|\s/)
+    .map((p) => p.trim());
+  if (parts.some((p) => !p && parts.length > 1)) throw new Error(`空の式があります: ${expr}`);
+  return parts.map(parseField);
 }
 
 /** 取り出した生の値に正規表現を当てる。regex がなければそのまま。群が複数あれば値のあるもの */
@@ -94,13 +105,27 @@ export function validateRecipe(r) {
     if (!r[sec].url) errors.push(`${sec}.url がありません`);
     for (const f of fields) if (!r[sec][f]) errors.push(`${sec}.${f} がありません`);
     for (const [k, v] of Object.entries(r[sec])) {
-      if (['url', 'openBeforeRead', 'items'].includes(k) || typeof v !== 'string') continue;
+      if (['url', 'openBeforeRead', 'items', 'container'].includes(k) || typeof v !== 'string') continue;
       try {
-        parseField(v);
+        parseFieldList(v);
       } catch (e) {
         errors.push(`${sec}.${k}: ${e.message}`);
       }
     }
+    if ((r[sec].items === 'auto' || r[sec].openBeforeRead === 'auto') && !r[sec].container) errors.push(`${sec}: items や openBeforeRead を auto にするには container が要ります`);
+  }
+  for (const sec of ['notices']) {
+    if (!r[sec] || typeof r[sec] !== 'object') continue;
+    if (!r[sec].url || !r[sec].items) errors.push(`${sec} には url と items が要ります`);
+    for (const [k, v] of Object.entries(r[sec])) {
+      if (['url', 'openBeforeRead', 'items', 'container'].includes(k) || typeof v !== 'string') continue;
+      try {
+        parseFieldList(v);
+      } catch (e) {
+        errors.push(`${sec}.${k}: ${e.message}`);
+      }
+    }
+    if ((r[sec].items === 'auto' || r[sec].openBeforeRead === 'auto') && !r[sec].container) errors.push(`${sec}: items や openBeforeRead を auto にするには container が要ります`);
   }
   for (const k of Object.keys(r)) {
     if (/^(script|code|eval|js)$/i.test(k)) errors.push(`レシピにコードは入れられません: ${k}`);
