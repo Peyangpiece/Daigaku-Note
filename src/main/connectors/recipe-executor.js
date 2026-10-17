@@ -1,5 +1,7 @@
 // 画面操作型コネクタ：レシピ（JSON）を Playwright で実行する（DESIGN-M0 §8.4、SPEC §6.13）。
 // レシピにコードはない。この実行器がセレクタ・属性・正規表現・URL の差し込みだけを解釈する。
+import path from 'node:path';
+import {readdir, unlink, writeFile} from 'node:fs/promises';
 import {applyRegex, applyUniversityOverride, fillTemplate, parseField, resolveHref} from '../../shared/recipe.js';
 import {parseRound} from '../../shared/rounds.js';
 import {parseSlot} from './slot.js';
@@ -8,6 +10,35 @@ const META = new Set(['url', 'items', 'openBeforeRead', 'files']);
 const FILE_LINK = /\.(pdf|pptx?|docx?|xlsx?|csv|txt|zip|png|jpe?g|gif|mp4|mp3|m4a|mov)(\?|#|$)|\/file[s]?\/|\/download|forcedownload|pluginfile|attachment/i;
 
 const err = (code, message) => Object.assign(new Error(message), {code});
+const LOGOUT_RE = /ログアウト|log\s*out|sign\s*out|サインアウト/i;
+const DEBUG_KEEP = 20; // debug フォルダに残す画面の数
+
+/** ページの中で「ログイン済みらしさ」を見る（Playwright に渡すので、外の変数を使わない） */
+function pageLoginHints(re) {
+  const r = new RegExp(re, 'i');
+  const pw = !!document.querySelector('input[type=password]');
+  const logout = [...document.querySelectorAll('a, button, input[type=submit], input[type=button], [role=button], [onclick]')].some((el) =>
+    [el.textContent, el.getAttribute('href'), el.getAttribute('value'), el.getAttribute('onclick'), el.getAttribute('title'), el.getAttribute('aria-label')].some((v) => v && r.test(v))
+  );
+  return {pw, logout};
+}
+
+/** ページの要約（レシピを直すための手がかり）。Playwright に渡すので、外の変数を使わない */
+function pageSummary() {
+  const paths = new Map();
+  for (const a of document.querySelectorAll('a[href]')) {
+    let p;
+    try {
+      p = new URL(a.href).pathname.split('/').slice(0, 3).join('/') || '/';
+    } catch {
+      continue;
+    }
+    paths.set(p, (paths.get(p) ?? 0) + 1);
+  }
+  const ids = [...new Set([...document.querySelectorAll('[id]')].map((e) => '#' + e.id))].slice(0, 30);
+  const links = [...paths].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([p, n]) => `${p}(${n})`);
+  return {title: document.title, links, ids, anchors: document.querySelectorAll('a[href]').length};
+}
 
 /** ページの中で項目ごとに値を集める関数（Playwright に渡すので、外の変数を使わない） */
 function pageExtract(els, spec) {
@@ -40,6 +71,10 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
     }
     return {...sec, spec: {fields, filesSelector: sec.files ?? null}, regexes};
   };
+  const compile = (label, sec) => {
+    const c = compileSection(sec);
+    return c && {...c, label};
+  };
 
   return {
     id: recipeIn.id,
@@ -63,10 +98,10 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         connection,
         recipe,
         sections: {
-          courses: compileSection(recipe.courses),
-          rounds: compileSection(recipe.rounds),
-          files: compileSection(recipe.files),
-          notices: compileSection(recipe.notices)
+          courses: compile('courses', recipe.courses),
+          rounds: compile('rounds', recipe.rounds),
+          files: compile('files', recipe.files),
+          notices: compile('notices', recipe.notices)
         },
         base: String(connection.base_url).replace(/\/+$/, ''),
         allowedHosts,
@@ -107,8 +142,33 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
 
     async _isLoggedIn(page, ctx) {
       const sel = ctx.recipe.login?.loggedIn?.selector;
-      if (!sel) return false;
-      return (await page.locator(sel).count()) > 0;
+      if (sel && (await page.locator(sel).count().catch(() => 0)) > 0) return true;
+      // 予備の判定（未検証のレシピや LMS の改修でセレクタが合わないとき）：
+      // パスワード欄がなく、「ログアウト」にあたるリンク・ボタンがあればログイン済みとみなす
+      const h = await page.evaluate(pageLoginHints, LOGOUT_RE.source).catch(() => ({pw: true, logout: false}));
+      const ok = !h.pw && h.logout;
+      if (ok && !ctx.heuristicLogged) {
+        ctx.heuristicLogged = true;
+        log(`[recipe] ${recipeIn.id}: login.loggedIn のセレクタ（${sel ?? 'なし'}）は一致しませんでしたが、「ログアウト」の表示があるのでログイン済みと判断しました（${page.url()}）。レシピの見直しが要ります`);
+      }
+      return ok;
+    },
+
+    /** レシピが合わなかった画面を debug フォルダに保存し、要約をログに出す（レシピを直すための手がかり） */
+    async _dump(page, label) {
+      if (!debug?.dir) return null;
+      try {
+        const summary = await page.evaluate(pageSummary).catch(() => ({title: '', links: [], ids: [], anchors: 0}));
+        const file = path.join(debug.dir, `${recipeIn.id}_${label}_${new Date().toISOString().replace(/[:.]/g, '-')}.html`);
+        await writeFile(file, `<!-- ${page.url()} -->\n${await page.content()}`);
+        log(`[recipe] ${recipeIn.id} ${label}: ${page.url()} 「${summary.title}」 リンク ${summary.anchors} 本（${summary.links.join(' ')}） id: ${summary.ids.join(' ')} → 画面を保存 ${file}`);
+        const old = (await readdir(debug.dir)).filter((f) => f.endsWith('.html')).sort();
+        for (const f of old.slice(0, Math.max(0, old.length - DEBUG_KEEP))) await unlink(path.join(debug.dir, f)).catch(() => {});
+        return file;
+      } catch (e) {
+        log(`[recipe] 画面の保存に失敗: ${e.message}`);
+        return null;
+      }
     },
     async _looksLikeLogin(page) {
       return (await page.locator('input[type=password]').count()) > 0;
@@ -119,6 +179,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       try {
         await this._goto(page, ctx, ctx.base + '/');
         if (await this._isLoggedIn(page, ctx)) return 'ok';
+        await this._dump(page, 'login-check');
         return 'login-required';
       } finally {
         await this._release(ctx, page);
@@ -174,6 +235,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const raw = await page.$$eval(section.items, pageExtract, section.spec);
       if (!raw.length) {
         if (await this._looksLikeLogin(page)) throw err('login-required', 'ログインページに戻されました');
+        await this._dump(page, section.label ?? 'items');
         throw err('selector-missing', `要素が見つかりません（${section.items}）`);
       }
       const base = page.url();

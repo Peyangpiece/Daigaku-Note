@@ -305,6 +305,10 @@ login(visible): §8.5
 
 失敗の分類：セレクタが 1 つも合わない → `selector-missing`（SPEC §6.11 の「レシピの確認が必要」に数える）。ログインページに戻された → `login-required`。タイムアウト → `timeout`。
 
+レシピを直すための手がかり：`selector-missing` のときと、`ensureSession` が `login-required` を返すとき、その画面の HTML を `userData/debug/〈レシピ id〉_〈節〉_〈日時〉.html` に保存し（直近 20 件だけ残す）、URL・タイトル・リンクの経路（上位 12 件と本数）・id の一覧（30 件まで）を `[recipe]` のログに出す。
+
+ログイン済みの判定：`login.loggedIn.selector` が合えば済み。合わないときは予備の判定として「パスワード欄がなく、`a`/`button`/`input[type=submit]` 等の文字・href・onclick に ログアウト／logout／sign out／サインアウト がある」ならログイン済みとみなし、レシピの見直しを促すログを接続ごとに 1 回出す。未検証のレシピや LMS の改修で同期が止まらないようにするための保険で、レシピの修正を代わりにするものではない。
+
 ### 8.5 ブラウザの文脈とログイン窓（browser/session.js）
 
 - 接続ごとに Playwright の `BrowserContext` を 1 つ。Chromium は `PLAYWRIGHT_BROWSERS_PATH=<userData>/pw-browsers` に初回起動時に取り込む（SaBoRo と同じ流れ。アプリ更新で Playwright の版が変わったら取り込み直す）

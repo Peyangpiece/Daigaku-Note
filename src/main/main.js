@@ -110,7 +110,7 @@ app.whenReady().then(async () => {
       secrets: ctx.secrets,
       log: (m) => log.info(m),
       recipes: loadRecipes([path.join(here, '..', '..', 'recipes'), path.join(userData, 'recipes')]),
-      recipeExecutorFactory: (recipe) => createRecipeExecutor(recipe, {session: ctx.session, secrets: ctx.secrets, log: (m) => log.info(m)})
+      recipeExecutorFactory: (recipe) => createRecipeExecutor(recipe, {session: ctx.session, secrets: ctx.secrets, log: (m) => log.info(m), debug: {dir: path.join(userData, 'debug')}})
     });
     ctx.engine = new SyncEngine({
       repo,

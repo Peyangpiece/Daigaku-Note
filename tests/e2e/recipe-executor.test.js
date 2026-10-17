@@ -3,7 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {readFileSync} from 'node:fs';
+import {mkdtempSync, readdirSync, readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
 import {createBrowserSession} from '../../src/main/browser/session.js';
 import {createRecipeExecutor} from '../../src/main/connectors/recipe-executor.js';
 
@@ -16,7 +18,7 @@ try {
 const executablePath = process.env.DAIGAKU_CHROMIUM || (process.env.PLAYWRIGHT_BROWSERS_PATH ? `${process.env.PLAYWRIGHT_BROWSERS_PATH}/chromium` : undefined);
 
 /** 模擬 LMS：manabo レシピのセレクタに合わせた最小の画面 */
-function mockLms() {
+function mockLms({logout = '<a id="button-logout" href="/logout">ログアウト</a>'} = {}) {
   const page = (body) => `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -41,12 +43,12 @@ function mockLms() {
     }
     if (!loggedIn) return html('<form method="post" action="/login"><input name="userid"><input type="password" name="password"><input type="submit" value="ログイン"></form>');
     if (url.pathname === '/')
-      return html(`<a id="button-logout" href="/logout">ログアウト</a>
+      return html(`${logout}
         <ul><li><a href="/class/101/">管理会計Ⅱ（金曜／2限）</a></li><li><a href="/class/102/">意思決定論（月曜／3限）</a></li><li><a href="/class/101/">管理会計Ⅱ（金曜／2限）</a></li></ul>
         <a href="https://evil.example.com/x">外部</a>`);
     if (/^\/class\/\d+\/$/.test(url.pathname)) {
       const id = url.pathname.split('/')[2];
-      return html(`<a id="button-logout" href="/logout">ログアウト</a><div class="breadcrumb">授業 ${id}</div>
+      return html(`${logout}<div class="breadcrumb">授業 ${id}</div>
         <div id="div-class-directories"><table>
           <tr><td><a class="a-open-contents" directory_id="d1" href="#">第1回 イントロダクション</a></td></tr>
           <tr><td><a class="a-open-contents" directory_id="d3" href="#">第3回 原価企画</a></td></tr>
@@ -148,11 +150,17 @@ test('レシピ実行器：要素が見つからなければ selector-missing、
   const session = createBrowserSession({secrets, playwright, executablePath});
   t.after(() => session.shutdown());
   const broken = {...recipeBase, login: {loggedIn: {selector: '#button-logout'}, form: {user: 'input[name=userid]', password: 'input[name=password]', submit: 'input[type=submit]'}}, courses: {...recipeBase.courses, items: 'table.nothing tr'}};
-  const connector = createRecipeExecutor(broken, {session, secrets});
+  const debugDir = mkdtempSync(path.join(tmpdir(), 'daigaku-debug-'));
+  const logs = [];
+  const connector = createRecipeExecutor(broken, {session, secrets, log: (m) => logs.push(m), debug: {dir: debugDir}});
   const ctx = await connector.createContext({id: 'c2', base_url: base, university_host: '127.0.0.1'});
   try {
     await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}});
     await assert.rejects(connector.listCourses(ctx), (e) => e.code === 'selector-missing');
+    const dumps = readdirSync(debugDir).filter((f) => f.startsWith('manabo_courses_') && f.endsWith('.html'));
+    assert.equal(dumps.length, 1, '合わなかった画面を debug に保存する');
+    assert.match(readFileSync(path.join(debugDir, dumps[0]), 'utf8'), /\/class\/101\//);
+    assert.ok(logs.some((m) => /manabo courses: .*\/class\/101\(2\).*#button-logout.*画面を保存/.test(m)), `要約をログに出す: ${logs.join(' | ')}`);
   } finally {
     await connector.releaseContext(ctx);
   }
@@ -161,5 +169,28 @@ test('レシピ実行器：要素が見つからなければ selector-missing、
     await assert.rejects(connector.listCourses(ctx3), (e) => e.code === 'login-required');
   } finally {
     await connector.releaseContext(ctx3);
+  }
+});
+
+test('レシピ実行器：loggedIn のセレクタが合わなくても「ログアウト」の表示があればログイン済みとみなす', {skip: !playwright && 'Playwright が入っていません'}, async (t) => {
+  const {server, base} = await mockLms({logout: '<form action="/logout" method="post"><button type="submit" class="nav-item">ログアウト</button></form>'});
+  t.after(() => server.close());
+  const secrets = memSecrets();
+  const session = createBrowserSession({secrets, playwright, executablePath});
+  t.after(() => session.shutdown());
+  const logs = [];
+  const recipe = {...recipeBase, login: {loggedIn: {selector: '#button-logout'}, form: {user: 'input[name=userid]', password: 'input[name=password]', submit: 'input[type=submit]'}}};
+  const connector = createRecipeExecutor(recipe, {session, secrets, log: (m) => logs.push(m)});
+  const ctx = await connector.createContext({id: 'c4', base_url: base, university_host: '127.0.0.1'});
+  try {
+    assert.equal(await connector.ensureSession(ctx), 'login-required', 'ログイン前（パスワード欄あり）は予備判定でも未ログイン');
+    assert.deepEqual(await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}}), {ok: true});
+    assert.equal(await connector.ensureSession(ctx), 'ok');
+    assert.ok(logs.some((m) => /login\.loggedIn のセレクタ（#button-logout）は一致しませんでしたが/.test(m)), 'レシピの見直しを促すログを 1 回出す');
+    assert.equal(logs.filter((m) => /一致しませんでしたが/.test(m)).length, 1);
+    const courses = await connector.listCourses(ctx);
+    assert.equal(courses.length, 2);
+  } finally {
+    await connector.releaseContext(ctx);
   }
 });
