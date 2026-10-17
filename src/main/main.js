@@ -1,7 +1,7 @@
 // 大学ノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
 // M0 の骨格：DB・設定・ジョブ・スケジューラ・IPC をつなぐ。LMS 操作とファイル操作はここ（メイン）だけで行う。
 import {app, BrowserWindow, Menu, Tray, dialog, nativeImage, nativeTheme, shell} from 'electron';
-import {existsSync, mkdirSync} from 'node:fs';
+import {existsSync, mkdirSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {openDatabase} from './db/db.js';
@@ -24,7 +24,33 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(here, '..', 'renderer', 'index.html');
 const PRELOAD = path.join(here, '..', 'preload', 'preload.js');
 
-if (!app.requestSingleInstanceLock()) app.quit();
+/**
+ * 開発中（npm start）のコードの版：src の中でいちばん新しい更新時刻。配布物では使わない。
+ * 大学ノートは窓を閉じても常駐するので、git pull のあとに npm start しても古いほうが動き続けていた。
+ * 2 つ目の起動が新しいコードなら、動いているほうを再起動する
+ */
+function devBuild() {
+  if (app.isPackaged) return null;
+  let latest = 0;
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, {withFileTypes: true})) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.(js|html|css|json)$/.test(e.name)) latest = Math.max(latest, statSync(p).mtimeMs);
+    }
+  };
+  try {
+    walk(path.join(here, '..'));
+  } catch {
+    return null;
+  }
+  return String(Math.round(latest));
+}
+const BUILD = devBuild();
+
+// 2 つ目の起動はすぐに終わる（app.quit() は非同期で、そのまま起動の処理が進んでデータベースまで開いていた）
+const primary = app.requestSingleInstanceLock({build: BUILD});
+if (!primary) app.exit(0);
 
 let win = null,
   tray = null;
@@ -172,6 +198,7 @@ function buildTray() {
 }
 
 app.whenReady().then(async () => {
+  if (!primary) return;
   const userData = app.getPath('userData');
   ensureDirs(userData);
   const log = createLogger(path.join(userData, 'logs'));
@@ -248,7 +275,15 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on('second-instance', () => openWindow());
+app.on('second-instance', (_e, _argv, _cwd, data) => {
+  if (BUILD && data?.build && data.build !== BUILD) {
+    ctx.log?.info('新しいコードで起動し直します（npm start のやり直し）');
+    app.relaunch();
+    app.exit(0);
+    return;
+  }
+  openWindow();
+});
 app.on('activate', () => openWindow());
 app.on('window-all-closed', () => {
   /* 常駐するので終了しない */
