@@ -45,10 +45,13 @@ npm test
 
 | OS | userData（DB・秘密・ログ・Chromium） |
 |---|---|
-| Mac | `~/Library/Application Support/daigaku-note/` |
-| Windows | `%APPDATA%\daigaku-note\`（例 `C:\Users\<名前>\AppData\Roaming\daigaku-note\`） |
+| Mac | `~/Library/Application Support/大学ノート/` |
+| Windows | `%APPDATA%\大学ノート\`（例 `C:\Users\<名前>\AppData\Roaming\大学ノート\`） |
+
+（Electron は `productName` をフォルダ名に使うため「大学ノート」。起動ログの `起動 0.1.0（データ: …）` にも出る）
 
 - ログ：`userData/logs/app-YYYY-MM-DD.log`。ターミナルにも出すなら `DAIGAKU_LOG_STDOUT=1 npm start`
+- `sqlite3` などの確認コマンドは、アプリを動かしているターミナルとは **別のタブ** で実行する（同じタブに貼るとアプリの出力に混ざるだけで実行されない）
 - DB：`userData/daigaku-note.sqlite`。確認に `sqlite3` コマンドが使える（Mac は標準で入っている）
 - やり直すときは `userData` を丸ごと消せば初回状態に戻る（資料フォルダは消えない）
 
@@ -66,7 +69,7 @@ DAIGAKU_LOG_STDOUT=1 npm start
 |---|---|
 | 窓が開く | 罫線ノートの背景（オフホワイト・32px の横罫・左に赤線）に「大学ノート」の見出し。接続がないので **セットアップ画面**（付箋 6 枚と 1 枚目のカード） |
 | トレイ／メニューバー | アイコンが出て、右クリック（Mac は左クリック）で「大学ノートを開く／今すぐ同期／資料のフォルダを開く／設定／終了」 |
-| ログ | `起動 0.1.0` のあと `LMS を読むためのブラウザを準備しています…` → 数分後 `Chromium の用意ができました`。準備中はトレイのメニューにも同じ文言 |
+| ログ | `起動 0.1.0（データ: …）` のあと `Chromium を取り込みます: …` → 数分後 `Chromium の用意ができました`。準備中はホームの下部とトレイのメニューにも文言が出て、**同期はその間は待つ**（押しても始まらず、終わると動く） |
 
 起動に失敗する場合の切り分け：
 
@@ -75,6 +78,7 @@ DAIGAKU_LOG_STDOUT=1 npm start
 | 「SQLite が使えません（node:sqlite も better-sqlite3 もない）」 | Electron 44 に同梱の Node で `node:sqlite` が使えない。`npm install better-sqlite3 && npx electron-rebuild -f -w better-sqlite3` を実行してからもう一度 `npm start`。これで動いたら報告してください（依存に加えて既定にします） |
 | 「この環境では秘密を保存できません」 | Mac：キーチェーンがロックされている。Windows：まれに DPAPI が使えないアカウント。OS にログインし直して再起動 |
 | トレイのアイコンが空 | `src/renderer/assets/tray.png` がまだないため（M1 で用意）。動作には影響しない |
+| 「ブラウザの準備に失敗しました（終了コード n）：…」 | Electron から Playwright の取り込みが動かなかった。ホームの要確認か設定の「ブラウザを準備し直す」で再試行。それでもだめなら、ターミナルで手で入れる（Mac）：`PLAYWRIGHT_BROWSERS_PATH="$HOME/Library/Application Support/大学ノート/pw-browsers" npx playwright install chromium` を実行し、終わったら `echo 1.64.1 > "$HOME/Library/Application Support/大学ノート/pw-browsers/.ready"`（1.64.1 は `npm ls playwright-core` の版）。Windows は PowerShell で `$env:PLAYWRIGHT_BROWSERS_PATH="$env:APPDATA\大学ノート\pw-browsers"; npx playwright install chromium` のあと同じ名前の `.ready` を作る。失敗の行（終了コードの後ろ）を報告してください |
 | Mac で「開発元を確認できない」 | `npm start` では出ない。配布物（§5）のときだけ |
 
 ### 1.2 セットアップ：Moodle（デモサイト）で通す
@@ -187,7 +191,7 @@ Moodle を統合認証で使う大学の場合：接続の「ログインし直�
 ```bash
 cd ~/Desktop/大学ノート/2026_秋学期/<授業>/<回>
 cp "資料.pdf" "資料 (2).pdf"
-sqlite3 ~/Library/Application\ Support/daigaku-note/daigaku-note.sqlite \
+sqlite3 ~/Library/Application\ Support/大学ノート/daigaku-note.sqlite \
   "insert into material (id, course_id, round_id, round_from, url, name, path, sha256, size, source, status, downloaded_at)
    select 'TESTDUP00000000000000000000', course_id, round_id, 'lms', 'https://test/dup', '資料 (2).pdf', replace(path,'資料.pdf','資料 (2).pdf'), sha256 || '', size, 'lms', 'ok', downloaded_at
    from material where name='資料.pdf' limit 1"

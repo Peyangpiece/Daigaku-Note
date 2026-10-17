@@ -35,17 +35,20 @@ export function renderHome({data, progress}) {
     : last
       ? `前回の同期 ${new Date(last.finished_at).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'})}（授業 ${last.courses} 件・資料 ${last.materials} 件保存・失敗 ${last.failures} 件）`
       : 'まだ同期していません';
-  const attention = data.connections.filter((c) => c.status === 'login-required');
+  const attention = data.connections.filter((c) => c.status === 'login-required').map((c) => `${esc(c.label)} へのログインが必要です（設定 → 接続）`);
+  if (data.browser?.state === 'failed') attention.push(`ブラウザの準備に失敗しました。<button class="btn" data-action="install-browser">準備し直す</button><br><small>${esc(data.browser.message)}</small>`);
+  const preparing = data.browser?.state === 'pending';
+  const syncing = !!progress || (data.jobs ?? []).some((j) => j.kind === 'sync');
   return `
-    ${attention.length ? `<aside class="sticky" style="position:absolute; right: 48px; top: 112px; --sticky-color: var(--c2)"><strong>要確認</strong><br>${attention.map((c) => `${esc(c.label)} へのログインが必要です`).join('<br>')}</aside>` : ''}
+    ${attention.length ? `<aside class="sticky" style="position:absolute; right: 48px; top: 112px; --sticky-color: var(--c2)"><strong>要確認</strong><br>${attention.join('<br>')}</aside>` : ''}
     ${
       courses.length
         ? `<section class="folders" aria-label="授業">${courses.map(folderCard).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub"></span><span class="folder__badges"></span></button>` : ''}</section>`
         : `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync">同期する</button></div>`
     }
     <footer style="margin-top: var(--space-6); display:flex; gap: var(--space-3); align-items:center">
-      <button class="btn" data-action="sync" ${progress ? 'disabled' : ''}>同期</button>
-      <span class="muted" id="sync-status">${status}</span>
+      <button class="btn" data-action="sync" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : '同期'}</button>
+      <span class="muted" id="sync-status">${preparing ? 'LMS を読むためのブラウザを準備しています（初回だけ。数分かかります）。終わると同期が始まります。' : status}</span>
       <span style="margin-left:auto"></span>
       <button class="btn" data-action="open-root">資料のフォルダ</button>
       <button class="btn" data-action="nav" data-route="/settings" aria-label="設定">⚙ 設定</button>

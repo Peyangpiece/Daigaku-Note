@@ -55,6 +55,8 @@ export function registerIpc(ctx, {openWindow}) {
         rules: repo.getSetting('ui.rules', 'normal')
       },
       lastSync: repo.lastSyncRun(),
+      browser: ctx.browser ?? {state: 'pending', message: ''},
+      status: ctx.status ?? '',
       jobs: repo.pendingJobs().map((j) => ({id: j.id, kind: j.kind, status: j.status})),
       presets: Object.keys(PERIOD_PRESETS),
       version: app.getVersion()
@@ -252,6 +254,13 @@ export function registerIpc(ctx, {openWindow}) {
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
     if (patch.resetRoot === true) repo.setSetting('storage.root', null);
     return {ok: true};
+  });
+
+  handle('browser.install', async () => {
+    if (ctx.browser?.state === 'pending') return {ok: true, message: '準備中です'};
+    ctx.browser = {state: 'pending', message: ''};
+    await ctx.installBrowser?.();
+    return {ok: ctx.browser.state === 'ready', message: ctx.browser.message};
   });
 
   handle('shell.openExternal', ({url}) => {

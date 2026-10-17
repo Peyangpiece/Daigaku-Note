@@ -69,7 +69,10 @@ api.on('sync.progress', (p) => {
 });
 api.on('sync.finished', (r) => {
   state.progress = null;
-  toast(r.status === 'login-required' ? 'LMS へのログインが必要です' : `同期しました：資料 ${r.materials} 件保存${r.failures ? `・失敗 ${r.failures} 件` : ''}`);
+  if (r.status === 'login-required') toast('LMS へのログインが必要です（設定 → 接続 → ログインし直す）');
+  else if (r.status === 'failed' || r.status === 'browser-not-ready') toast(r.message || '同期に失敗しました');
+  else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 学期）');
+  else toast(`同期しました：資料 ${r.materials ?? 0} 件保存${r.failures ? `・失敗 ${r.failures} 件（${r.message ?? ''}）` : ''}`);
 });
 api.on('login.required', ({label}) => toast(`${label} へのログインが必要です`));
 api.on('route', (r) => navigate(r));
@@ -96,6 +99,11 @@ document.addEventListener('click', async (e) => {
       else if (r.dir) reload();
     } else if (action === 'reset-dir') {
       await api['settings.update']({patch: {resetRoot: true}});
+      reload();
+    } else if (action === 'install-browser') {
+      toast('ブラウザを準備しています…（数分かかります）');
+      const r = await api['browser.install']();
+      toast(r?.ok ? 'ブラウザの用意ができました' : r?.message || 'ブラウザの準備に失敗しました');
       reload();
     }
   } catch (err) {

@@ -126,17 +126,30 @@ app.whenReady().then(async () => {
     openWindow(connections.length ? null : '/setup');
     ctx.scheduler.start();
     // Chromium の取り込みが終わるまでジョブは待つ（画面操作型の接続がなくても、あとで追加できるよう先に用意する）
-    ensureChromium(path.join(userData, 'pw-browsers'), {
-      onStatus: (s) => {
-        ctx.status = s;
-        ctx.refreshTray?.();
-        win?.webContents.send('state.changed', {status: s});
-      }
-    })
-      .then(() => log.info('Chromium の用意ができました'))
-      .catch((e) => log.error(`Chromium の取り込みに失敗: ${e.message}`))
-      .finally(() => ctx.jobs.start());
-    log.info(`起動 ${app.getVersion()}`);
+    ctx.browser = {state: 'pending', message: ''};
+    ctx.installBrowser = () =>
+      ensureChromium(path.join(userData, 'pw-browsers'), {
+        onStatus: (s) => {
+          ctx.status = s;
+          ctx.refreshTray?.();
+          win?.webContents.send('state.changed', {status: s});
+        },
+        log: (m) => log.info(m)
+      })
+        .then((r) => {
+          ctx.browser = {state: 'ready', message: ''};
+          log.info(`Chromium の用意ができました（${r}）`);
+        })
+        .catch((e) => {
+          ctx.browser = {state: 'failed', message: e.message};
+          log.error(`Chromium の取り込みに失敗: ${e.message}`);
+        })
+        .finally(() => {
+          ctx.jobs.start();
+          win?.webContents.send('state.changed', {browser: ctx.browser});
+        });
+    ctx.installBrowser();
+    log.info(`起動 ${app.getVersion()}（データ: ${userData}）`);
   } catch (e) {
     log.error(`起動に失敗: ${e.stack || e.message}`);
     dialog.showErrorBox('大学ノート', `起動できませんでした。\n${e.message}`);

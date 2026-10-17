@@ -48,6 +48,10 @@ export function renderSettings({data}) {
           <label>罫線<select class="input" id="st-rules">${[['normal', '標準'], ['light', '薄い'], ['none', 'なし']].map(([v, l]) => `<option value="${v}" ${s.rules === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         </div>
       </section>
+      <section class="card"><h3>ブラウザ（LMS の画面を読むための Chromium）</h3>
+        <p class="muted">状態：${data.browser?.state === 'ready' ? '用意できています' : data.browser?.state === 'pending' ? '準備中…' : `失敗：${esc(data.browser?.message ?? '')}`}</p>
+        <button class="btn" data-action="install-browser" ${data.browser?.state === 'pending' ? 'disabled' : ''}>ブラウザを準備し直す</button>
+      </section>
       <section class="card"><h3>情報</h3><p class="muted">大学ノート ${esc(data.version)}</p></section>
     </div>`;
 }
