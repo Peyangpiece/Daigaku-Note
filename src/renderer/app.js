@@ -85,7 +85,10 @@ document.addEventListener('click', async (e) => {
   try {
     if (action === 'open-course') navigate(`/course/${el.dataset.id}`);
     else if (action === 'nav') navigate(el.dataset.route);
-    else if (action === 'sync') await api['sync.run']({courseId: el.dataset.courseId || undefined});
+    else if (action === 'sync') {
+      await api['sync.run']({courseId: el.dataset.courseId || undefined, full: el.dataset.full === '1' || undefined});
+      toast(el.dataset.full === '1' ? '全部の回を確かめます（数分かかります）' : '同期を始めます');
+    }
     else if (action === 'open-material') {
       const r = await api['material.open']({materialId: el.dataset.id});
       if (r?.error) toast(r.error);

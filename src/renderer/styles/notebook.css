@@ -217,34 +217,182 @@ h3 {
   opacity: 0.9;
 }
 
-/* インデックスタブ（授業画面の回一覧） */
-.index-tabs {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 56px;
+/* 授業画面：回ごとのクリップボード（SPEC §8.2）。板の上に資料の紙が留めてある */
+.clipboards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4) var(--space-3);
+  padding-top: 18px; /* クリップの金具のぶん */
+  align-items: start;
 }
-.index-tab {
-  height: 40px;
-  border: 0;
-  border-radius: 0 8px 8px 0;
-  background: color-mix(in srgb, var(--tab-color, var(--c4)) 35%, var(--card));
-  color: var(--paper-ink);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  opacity: 0.75;
+.clipboard {
+  position: relative;
+  min-height: 200px;
+  padding: 26px 16px 18px;
+  border-radius: 10px;
+  background: var(--board);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06),
+    var(--card-shadow);
+  transform: rotate(var(--tilt, 0deg));
   transition:
     transform var(--motion),
-    opacity var(--motion);
+    box-shadow var(--motion);
 }
-.index-tab[aria-selected='true'] {
-  background: var(--tab-color, var(--c4));
+.clipboard:hover {
+  transform: rotate(0deg) translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06),
+    var(--card-shadow-hover);
+}
+.clipboard--today {
+  outline: 3px solid color-mix(in srgb, var(--c1) 70%, transparent);
+  outline-offset: 2px;
+}
+/* 金具：上の中央。台座＋留め具 */
+.clipboard__clip {
+  position: absolute;
+  top: -14px;
+  left: calc(50% - 36px);
+  width: 72px;
+  height: 26px;
+  border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(var(--clip-light), var(--clip));
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.25);
+}
+.clipboard__clip::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: calc(50% - 16px);
+  width: 32px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--board);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.clipboard__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  color: var(--board-ink);
+}
+.clipboard__round {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--round-color, var(--c1));
+  color: #2b2b2b;
+}
+.clipboard__title {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clipboard__date {
+  color: var(--board-ink);
+  opacity: 0.8;
+}
+.clipboard__files {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 14px 8px;
+}
+.clipboard__none {
+  margin: 36px 0 0;
+  text-align: center;
+  color: var(--board-ink);
+  opacity: 0.7;
+  font-size: var(--fs-small);
+}
+.clipboard--empty {
+  min-height: 150px;
+}
+
+/* 資料の紙：イラスト＋名前。押すと開く。角に小さなフォルダのボタン */
+.file {
+  position: relative;
+}
+.file__open {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 8px 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--board-ink);
+  font: inherit;
+  cursor: pointer;
+  transition: transform var(--motion);
+}
+.file__open:hover:not(:disabled),
+.file__open:focus-visible {
+  transform: translateY(-3px) rotate(-1deg);
+  background: rgba(255, 255, 255, 0.25);
+}
+.file__open:focus-visible {
+  outline: 2px solid var(--focus);
+}
+.file__open:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.file-art {
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.18));
+}
+.file__name {
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.file__dot {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 32px);
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--dot-color, var(--c2));
+  box-shadow: 0 0 0 2px var(--board);
+}
+.file__tag {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--paper-ink-weak);
+}
+.file__reveal {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--motion);
+}
+.file:hover .file__reveal,
+.file__reveal:focus-visible {
   opacity: 1;
-  transform: translateX(6px);
-}
-.index-tab--empty {
-  opacity: 0.4;
 }
 
 /* ボタン・入力 */

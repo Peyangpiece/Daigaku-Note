@@ -117,8 +117,24 @@ test('初回は全回、2 回目は前後 7 日の回だけ。回フォルダ・
   d3.courses.push({lmsId: '3', name: '新しい授業', weekday: '月', period: 1, rounds: [{title: '第1回 ガイダンス', files: [{url: 'https://lms/f/g1', name: 'ガイダンス.pdf', body: 'g1'}]}]});
   const conn3 = fakeConnector(d3);
   const r3 = await engine.run({connection: repo.get('connection', connection.id), connector: conn3, term, kind: 'full'});
-  assert.equal(r3.materials, 1, '第1回（9/21）は範囲外だが、資料のない授業なので取り込む');
+  assert.equal(r3.materials, 1, '第1回（9/21）は範囲外だが、まだ全部の回を確かめていない授業なので取り込む');
   assert.ok(r3.events.some((e) => e.course === '新しい授業' && /全部の回/.test(e.message)));
+  const c3 = repo.listCourses().find((c) => c.name === '新しい授業');
+  assert.ok(c3.full_synced_at, '確かめ終えた印が付く');
+  // 途中で止まった同期（回の一覧が読めなかった）では印が付かず、次も全部の回を見る
+  const d4 = d3; // 授業 3 も含めたまま 4 を足す
+  d4.courses.push({lmsId: '4', name: '途中で止まる授業', weekday: '月', period: 2, throw: 'network down', rounds: []});
+  await engine.run({connection: repo.get('connection', connection.id), connector: fakeConnector(d4), term, kind: 'full'});
+  assert.equal(repo.listCourses().find((c) => c.name === '途中で止まる授業').full_synced_at, null);
+  d4.courses.at(-1).throw = null;
+  d4.courses.at(-1).rounds = [{title: '第2回', files: [{url: 'https://lms/f/s2', name: '第2回.pdf', body: 's2'}]}];
+  const conn4 = fakeConnector(d4);
+  const r4 = await engine.run({connection: repo.get('connection', connection.id), connector: conn4, term, kind: 'full'});
+  assert.equal(r4.materials, 1, '第2回（9/28）は範囲外だが、印がないので全部の回を見て取り込む');
+  // 印の付いた授業は、full: true で全部の回を見直せる
+  conn4.calls.listFiles = 0;
+  await engine.run({connection: repo.get('connection', connection.id), connector: conn4, term, kind: 'course', courseIds: [c3.id], full: true});
+  assert.equal(conn4.calls.listFiles, 1, '新しい授業の第1回を見直す');
 });
 
 test('授業の改名でフォルダも改名。消えた授業は sync_enabled=0。授業ごとの同期', async (t) => {

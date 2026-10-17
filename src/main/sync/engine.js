@@ -270,13 +270,14 @@ export class SyncEngine {
     const {mapped, byNumber, ensure} = await this.reconcileRounds(term, course, lmsRounds);
     await this.files.reconcileFiles({term, course, rounds: [...byNumber.values()]});
 
-    // 対象の回：初回（接続の初回、またはその授業にまだ資料が 1 つもないとき）は全部、ふだんは今日の前後 7 日の回と日付の分からない回
+    // 対象の回：その授業で全部の回を確かめ終えるまで（full_synced_at が付くまで）は全部、ふだんは今日の前後 7 日の回と日付の分からない回。
+    // 「資料があるか」で判断すると、途中で止まった同期で数件だけ入った授業の過去の回が二度と読まれない
     const today = this.today();
     const from = addDays(today, -7),
       to = addDays(today, 7);
-    const crawlAll = fullCrawl || this.repo.listMaterials(course.id).length === 0;
+    const crawlAll = fullCrawl || !course.full_synced_at;
     const wanted = crawlAll ? mapped : mapped.filter(({row}) => !row.date || (row.date >= from && row.date <= to));
-    if (crawlAll && !fullCrawl) event('info', course, null, 'まだ資料がないので、全部の回を確かめます');
+    if (crawlAll && !fullCrawl) event('info', course, null, 'まだ全部の回を確かめていないので、全部の回を確かめます');
 
     const refs = [];
     for (const {lms, row} of wanted) {
@@ -306,6 +307,8 @@ export class SyncEngine {
       else if (r.result === 'failed') event('warn', course, r.reason, `${ref.name ?? ref.url} をダウンロードできませんでした${r.status ? `（${r.status}）` : ''}`);
     }
     await this.files.trashDuplicates(course);
+    // ここまで来れば全部の回の一覧は読めている（読めなければ上で例外になる）。ダウンロードの失敗は次回の窓で拾い直す
+    if (crawlAll) this.repo.updateCourse(course.id, {full_synced_at: new Date().toISOString()});
     return saved;
   }
 }
