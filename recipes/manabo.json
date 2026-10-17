@@ -23,6 +23,7 @@
   },
   "rounds": {
     "url": "{course.url}",
+    "container": "#div-class-directories",
     "items": "#div-class-directories .a-open-contents",
     "title": "@text || ^tr<@text",
     "link": "@directory_id",
@@ -30,6 +31,7 @@
   },
   "files": {
     "url": "{course.url}",
+    "container": "#div-class-contents",
     "openBeforeRead": "#div-class-directories .a-open-contents[directory_id='{round.lmsRef}']",
     "items": "#div-class-contents a[href*='/file/']",
     "name": "@text",

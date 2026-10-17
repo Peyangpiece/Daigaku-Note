@@ -44,7 +44,8 @@ function mockLms({logout = '<a id="button-logout" href="/logout">ログアウト
     if (!loggedIn) return html('<form method="post" action="/login"><input name="userid"><input type="password" name="password"><input type="submit" value="ログイン"></form>');
     if (url.pathname === '/')
       return html(`${logout}
-        <ul><li><a href="/class/101/">管理会計Ⅱ（金曜／2限）</a></li><li><a href="/class/102/">意思決定論（月曜／3限）</a></li><li><a href="/class/101/">管理会計Ⅱ（金曜／2限）</a></li></ul>
+        <ul><li><a href="/class/101/"><span>管理会計Ⅱ（金曜／2限）</span>
+          <span class="teacher">山田　太郎</span></a></li><li><a href="/class/102/">意思決定論（月曜／3限）</a></li><li><a href="/class/101/">管理会計Ⅱ（金曜／2限）</a></li></ul>
         <a href="https://evil.example.com/x">外部</a>`);
     if (/^\/class\/\d+\/$/.test(url.pathname)) {
       const id = url.pathname.split('/')[2];
@@ -68,7 +69,9 @@ function mockLms({logout = '<a id="button-logout" href="/logout">ログアウト
           const files = {d1: [['/file/1/', '第1回 資料.pdf']], d3: [['/file/3/', '第3回 資料.pdf'], ['/file/3b/', '第3回 資料 4up.pdf'], ['/other/page', '関連ページ']], dx: []};
           for (const a of document.querySelectorAll('.a-open-contents')) a.onclick = (e) => { e.preventDefault();
             const list = files[a.getAttribute('directory_id')] || [];
-            document.getElementById('div-class-contents').innerHTML = '<h3>' + a.textContent + '</h3>' + list.map(([h, t]) => '<p><a href="' + h + '">' + t + '</a></p>').join('');
+            const box = document.getElementById('div-class-contents');
+            box.innerHTML = '<div class="loading">読み込み中</div>';
+            setTimeout(() => { box.innerHTML = '<h3>' + a.textContent + '</h3>' + list.map(([h, t]) => '<p><a href="' + h + '">' + t + '</a></p>').join(''); }, 300);
           };
         </script>`);
     }
@@ -111,7 +114,7 @@ test('レシピ実行器：ログイン → 授業 → 回 → ファイル → 
     assert.deepEqual(
       courses.map((c) => [c.lmsId, c.name, c.weekday, c.period]),
       [['101', '管理会計Ⅱ', '金', 2], ['102', '意思決定論', '月', 3]],
-      '重複は 1 つに、曜日・時限を読み、名前から時限の表記を外す'
+      '重複は 1 つに、曜日・時限を読み、名前から時限の表記を外す。2 行目の教員名は入れない'
     );
     const course = {lms_id: '101', lms_url: courses[0].url};
     const rounds = await connector.listRounds(ctx, course);

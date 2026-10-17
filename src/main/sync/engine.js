@@ -33,11 +33,21 @@ export async function parallel(items, n, f) {
   await Promise.all(workers);
 }
 
-/** 1 授業の処理に時間切れを付ける */
-const withTimeout = (p, ms, msg) =>
+/**
+ * 1 授業の処理に時間切れを付ける。ms の間なにも進まなかったら切る（進むたびに touch() で延びる）。
+ * 全部の回を確かめる初回は授業 1 つに数分かかるので、合計ではなく「止まっている時間」で判断する
+ */
+const withIdleTimeout = (start, ms, msg) =>
   new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new SyncError('timeout', msg)), ms);
-    p.then(resolve, reject).finally(() => clearTimeout(t));
+    let last = Date.now();
+    const touch = () => (last = Date.now());
+    const t = setInterval(() => {
+      if (Date.now() - last > ms) {
+        clearInterval(t);
+        reject(new SyncError('timeout', msg));
+      }
+    }, 1000);
+    start(touch).then(resolve, reject).finally(() => clearInterval(t));
   });
 
 export class SyncEngine {
@@ -118,8 +128,8 @@ export class SyncEngine {
       await parallel(targets, connector.parallelism ?? 3, async (course) => {
         this.onProgress({phase: 'course', current: ++done, total: targets.length, courseName: course.name});
         try {
-          const saved = await withTimeout(
-            this.syncCourse({ctx, connector, connection, term, course, fullCrawl, event}),
+          const saved = await withIdleTimeout(
+            (touch) => this.syncCourse({ctx, connector, connection, term, course, fullCrawl, event, touch}),
             this.courseTimeoutMs,
             `${course.name} の読み取りが時間切れになりました`
           );
@@ -254,8 +264,9 @@ export class SyncEngine {
   }
 
   /** 1 授業分：回 → 対象の回のファイル → お知らせの添付 → 取り込み。戻りは保存した件数 */
-  async syncCourse({ctx, connector, connection, term, course, fullCrawl, event}) {
+  async syncCourse({ctx, connector, connection, term, course, fullCrawl, event, touch = () => {}}) {
     const lmsRounds = await connector.listRounds(ctx, course);
+    touch();
     const {mapped, byNumber, ensure} = await this.reconcileRounds(term, course, lmsRounds);
     await this.files.reconcileFiles({term, course, rounds: [...byNumber.values()]});
 
@@ -270,6 +281,7 @@ export class SyncEngine {
     const refs = [];
     for (const {lms, row} of wanted) {
       const files = await connector.listFiles(ctx, course, {...lms, row});
+      touch();
       for (const f of files) refs.push({...f, round: row, roundFrom: 'lms'});
     }
     for (const f of (await connector.listNoticeFiles?.(ctx, course)) ?? []) {
@@ -289,6 +301,7 @@ export class SyncEngine {
         source: ref.noticeTitle ? 'notice' : 'lms',
         fetchFile: (x) => connector.fetchFile(ctx, x)
       });
+      touch();
       if (r.result === 'saved' || r.result === 'updated') saved++;
       else if (r.result === 'failed') event('warn', course, r.reason, `${ref.name ?? ref.url} をダウンロードできませんでした${r.status ? `（${r.status}）` : ''}`);
     }

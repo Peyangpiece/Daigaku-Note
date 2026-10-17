@@ -170,7 +170,9 @@ Moodle を統合認証で使う大学の場合：接続の「ログインし直�
 
 6. **お知らせの添付が入らないとき**：お知らせの欄は `container: "#div-class-news"` が入るまで待ち、`openBeforeRead: "auto"` で [+] を開き、`items: "auto"` で項目を切る。開けなかったときは `debug/manabo_notices_….html` に欄の HTML が残るので、[+] の要素（`a`・`img`・`onclick` の有無）とファイルのリンク（`/file/` を含むか）を見る。
 
-7. **通ったら**：`recipes/manabo.json` の `verified` を `true`、`version` を上げてコミット。
+7. **`timeout 〈授業名〉 の読み取りが時間切れになりました` が出るとき**：2 分のあいだ何も進まなかったということ（回ごとに延びる）。直前の `[recipe]` 行で止まった節が分かる。
+
+8. **通ったら**：`recipes/manabo.json` の `verified` を `true`、`version` を上げてコミット。
 
 ### 3.3 回の判定の確認（共通）
 

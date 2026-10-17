@@ -222,6 +222,26 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       await page.close().catch(() => {});
     },
 
+    /**
+     * 同じ URL のページは開いたまま使い回す（SaBoRo と同じく、授業ページを 1 回開いて回を切り替える）。
+     * 授業ごとに回 → ファイル → お知らせの順に同じページを使うので、授業の数だけ（最大 4 枚）持つ
+     */
+    async _pageAt(ctx, url) {
+      ctx.pageByUrl ??= new Map();
+      const cached = ctx.pageByUrl.get(url);
+      if (cached && !cached.isClosed() && safeHost(cached.url()) === safeHost(url)) return cached;
+      if (cached) ctx.pageByUrl.delete(url);
+      while (ctx.pageByUrl.size >= 4) {
+        const [oldUrl, oldPage] = ctx.pageByUrl.entries().next().value;
+        ctx.pageByUrl.delete(oldUrl);
+        await this._release(ctx, oldPage);
+      }
+      const page = await this._page(ctx);
+      await this._goto(page, ctx, url);
+      ctx.pageByUrl.set(url, page);
+      return page;
+    },
+
     async _goto(page, ctx, url) {
       try {
         await page.goto(url, {waitUntil: ctx.waits.pageLoad});
@@ -329,28 +349,46 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           )
           .catch(() => {});
       }
+      // 押したあとは「欄の中身が入れ替わり、読み込み中の印が消える」まで待つ（通信が落ち着くのを待つと、常に通信のある LMS で毎回数秒を失う）
+      const settled = (before) =>
+        container
+          ? page
+              .waitForFunction(
+                ([sel, prev]) => {
+                  const b = document.querySelector(sel);
+                  return !!b && (prev === null || b.innerHTML !== prev) && !b.querySelector('.loading, [class*="loading" i], [class*="spinner" i]');
+                },
+                [container, before],
+                {timeout: 8000}
+              )
+              .catch(() => {})
+          : Promise.resolve();
+      const snapshot = () => (container ? page.evaluate((sel) => document.querySelector(sel)?.innerHTML ?? '', container).catch(() => '') : Promise.resolve(null));
       if (section.openBeforeRead === 'auto') {
         const n = await page.evaluate(pageExpand, container).catch(() => 0);
         if (n) {
-          await page.waitForLoadState('networkidle', {timeout: 5000}).catch(() => {});
           await page.waitForTimeout(ctx.waits.afterClick);
+          await settled(null);
         }
       } else if (section.openBeforeRead) {
         const sel = fillTemplate(section.openBeforeRead, vars);
         const targets = page.locator(sel);
         const n = await targets.count();
+        if (!n) log(`[recipe] ${recipeIn.id} ${section.label}: 押す要素がありません（${sel}）`);
         for (let i = 0; i < (openAll ? n : Math.min(n, 1)); i++) {
+          const before = await snapshot();
           await targets.nth(i).click({timeout: 5000}).catch(() => {});
+          await settled(before);
           await page.waitForTimeout(ctx.waits.afterClick);
         }
-        if (n) await page.waitForLoadState('networkidle', {timeout: 5000}).catch(() => {});
       }
       let itemsSel = section.items;
       if (itemsSel === 'auto') {
         await page.evaluate(pageMarkItems, container).catch(() => 0);
         itemsSel = '[data-daigaku-item]';
       }
-      await page.locator(itemsSel).first().waitFor({timeout: 8000}).catch(() => {});
+      // 欄が落ち着いたあとなら項目はすぐ出るはず。空の回で毎回 8 秒待たない
+      await page.locator(itemsSel).first().waitFor({timeout: container ? 1500 : 8000}).catch(() => {});
       const raw = await page.$$eval(itemsSel, pageExtract, section.spec);
       if (!raw.length) {
         if (await this._looksLikeLogin(page)) throw err('login-required', 'ログインページに戻されました');
@@ -397,7 +435,9 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           if (seen.has(lmsId)) continue;
           seen.add(lmsId);
           const slot = it.weekday ? {weekday: it.weekday, period: Number(it.period) || undefined} : parseSlot(it.name) ?? {};
-          out.push({lmsId, name: it.name.replace(/\s*[（(][^（()）]*曜[^（()）]*[)）]\s*$/, '').trim() || it.name, url: it.link, weekday: slot.weekday, period: slot.period});
+          // リンクの文字は「授業名（金曜／2限）\n教員名」のように複数行のことがある。授業名は最初の行だけ
+          const firstLine = it.name.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? it.name;
+          out.push({lmsId, name: firstLine.replace(/\s*[（(][^（()）]*曜[^（()）]*[)）]\s*$/, '').trim() || firstLine, url: it.link, weekday: slot.weekday, period: slot.period});
         }
         return out;
       } finally {
@@ -407,61 +447,51 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
 
     async listRounds(ctx, course) {
       const sec = ctx.sections.rounds;
-      const page = await this._page(ctx);
-      try {
-        const vars = {base: ctx.base, course: {url: course.lms_url ?? course.url, lmsId: course.lms_id ?? course.lmsId}};
-        await this._goto(page, ctx, fillTemplate(sec.url, vars));
-        const items = await this._collect(page, ctx, sec, vars);
-        return items
-          .filter((it) => it.title)
-          .map((it) => ({number: Number(it.round) || parseRound(it.title), title: it.title, lmsRef: it.link || it.lmsRef || it.title, url: /^https?:/.test(it.link ?? '') ? it.link : undefined}));
-      } finally {
-        await this._release(ctx, page);
-      }
+      const vars = {base: ctx.base, course: {url: course.lms_url ?? course.url, lmsId: course.lms_id ?? course.lmsId}};
+      const page = await this._pageAt(ctx, fillTemplate(sec.url, vars));
+      const items = await this._collect(page, ctx, sec, vars);
+      return items
+        .filter((it) => it.title)
+        .map((it) => ({number: Number(it.round) || parseRound(it.title), title: it.title, lmsRef: it.link || it.lmsRef || it.title, url: /^https?:/.test(it.link ?? '') ? it.link : undefined}));
     },
 
     async listFiles(ctx, course, round) {
       const sec = ctx.sections.files;
-      const page = await this._page(ctx);
+      const vars = {base: ctx.base, course: {url: course.lms_url ?? course.url, lmsId: course.lms_id ?? course.lmsId}, round: {url: round.url ?? course.lms_url ?? course.url, lmsRef: round.lmsRef}};
+      const page = await this._pageAt(ctx, fillTemplate(sec.url, vars));
+      let items;
       try {
-        const vars = {base: ctx.base, course: {url: course.lms_url ?? course.url, lmsId: course.lms_id ?? course.lmsId}, round: {url: round.url ?? course.lms_url ?? course.url, lmsRef: round.lmsRef}};
-        await this._goto(page, ctx, fillTemplate(sec.url, vars));
-        let items;
-        try {
-          items = await this._collect(page, ctx, sec, vars);
-        } catch (e) {
-          if (e.code === 'selector-missing') return []; // 資料のない回
-          throw e;
-        }
-        return items.filter((it) => it.link && FILE_LINK.test(it.link)).map((it) => ({url: it.link, name: it.name || undefined}));
-      } finally {
-        await this._release(ctx, page);
+        items = await this._collect(page, ctx, sec, vars);
+      } catch (e) {
+        if (e.code === 'selector-missing') return []; // 資料のない回
+        throw e;
       }
+      return items.filter((it) => it.link && FILE_LINK.test(it.link)).map((it) => ({url: it.link, name: it.name || undefined}));
     },
 
     async listNoticeFiles(ctx, course) {
       const sec = ctx.sections.notices;
       if (!sec) return [];
-      const page = await this._page(ctx);
+      const vars = {base: ctx.base, course: {url: course.lms_url ?? course.url, lmsId: course.lms_id ?? course.lmsId}};
+      const url = fillTemplate(sec.url, vars);
+      const page = await this._pageAt(ctx, url);
+      let items;
       try {
-        const vars = {base: ctx.base, course: {url: course.lms_url ?? course.url, lmsId: course.lms_id ?? course.lmsId}};
-        await this._goto(page, ctx, fillTemplate(sec.url, vars));
-        let items;
-        try {
-          items = await this._collect(page, ctx, sec, vars, {openAll: true});
-        } catch (e) {
-          if (e.code === 'selector-missing') return [];
-          throw e;
-        }
-        const out = [];
-        for (const it of items) {
-          const round = Number(it.round) || 0;
-          for (const f of it.files ?? []) if (f.url && FILE_LINK.test(f.url)) out.push({url: f.url, name: f.name || undefined, round: round || undefined, noticeTitle: it.title ?? it.round ?? ''});
-        }
-        return out;
+        items = await this._collect(page, ctx, sec, vars, {openAll: true});
+      } catch (e) {
+        if (e.code === 'selector-missing') return [];
+        throw e;
       } finally {
+        // お知らせは授業の最後の読み取り。この授業のページはもう使わないので閉じる
+        ctx.pageByUrl?.delete(url);
         await this._release(ctx, page);
       }
+      const out = [];
+      for (const it of items) {
+        const round = Number(it.round) || 0;
+        for (const f of it.files ?? []) if (f.url && FILE_LINK.test(f.url)) out.push({url: f.url, name: f.name || undefined, round: round || undefined, noticeTitle: it.title ?? it.round ?? ''});
+      }
+      return out;
     },
 
     async fetchFile(ctx, ref) {

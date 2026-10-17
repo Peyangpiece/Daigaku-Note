@@ -27,10 +27,15 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     context.setDefaultTimeout(20000);
     context.setDefaultNavigationTimeout(30000);
     const hosts = allowedHosts ?? [];
+    const blockedSeen = new Set(); // 同じホストは文脈ごとに 1 回だけログに出す（フォント配信などで何十行も出ないように）
     await context.route('**/*', (route) => {
       const req = route.request();
       if (hosts.length && !hostAllowed(req.url(), hosts)) {
-        log(`許可外のホストへの要求を止めました: ${safeHost(req.url())}`);
+        const h = safeHost(req.url());
+        if (!blockedSeen.has(h)) {
+          blockedSeen.add(h);
+          log(`許可外のホストへの要求を止めました: ${h}`);
+        }
         return route.abort('blockedbyclient');
       }
       if (blockAssets && BLOCK_TYPES.has(req.resourceType())) return route.abort('blockedbyclient');
