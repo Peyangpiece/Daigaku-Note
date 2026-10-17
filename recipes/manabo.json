@@ -1,0 +1,47 @@
+{
+  "id": "manabo",
+  "name": "manabo",
+  "version": "2026.10.1",
+  "verified": false,
+  "note": "SPEC §18.1 の構造を元に書いた。実物の manabo で確かめるまで verified は false。確かめたら true にして version を上げる",
+  "detect": {
+    "urlPatterns": ["manabo\\."],
+    "htmlMarkers": ["div-class-directories", "manabo"]
+  },
+  "login": {
+    "loggedIn": {"selector": "#button-logout, a[href*='logout']"},
+    "form": null
+  },
+  "courses": {
+    "url": "{base}/",
+    "items": "a[href*='/class/']",
+    "name": "@text",
+    "link": "@href",
+    "lmsId": "@href:/\\/class\\/(\\d+)/",
+    "weekday": "@text:/[（(]([月火水木金土日])曜/",
+    "period": "@text:/([1-7])限/"
+  },
+  "rounds": {
+    "url": "{course.url}",
+    "items": "#div-class-directories .a-open-contents",
+    "title": "@text",
+    "link": "@directory_id",
+    "round": "@text:/第\\s*(\\d{1,2})\\s*回|(\\d{1,2})\\s*回目/"
+  },
+  "files": {
+    "url": "{course.url}",
+    "openBeforeRead": "#div-class-directories .a-open-contents[directory_id='{round.lmsRef}']",
+    "items": "#div-class-contents a[href*='/file/']",
+    "name": "@text",
+    "link": "@href"
+  },
+  "notices": {
+    "url": "{course.url}",
+    "items": "#div-class-news .news-item, #div-class-news li",
+    "openBeforeRead": "#div-class-news a[href='#'], #div-class-news [onclick]",
+    "files": "a[href*='/file/']",
+    "round": "@text:/【第\\s*(\\d{1,2})\\s*回/"
+  },
+  "waits": {"afterClick": 800, "pageLoad": "domcontentloaded"},
+  "universities": {}
+}

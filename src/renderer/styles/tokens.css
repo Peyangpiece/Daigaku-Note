@@ -1,0 +1,74 @@
+/* 大学ノート デザイントークン（SPEC §8.0.2）。色はここだけで決める */
+:root {
+  --paper: #fbf8f1;
+  --paper-ink: #2b2b2b;
+  --paper-ink-weak: #6b6f76;
+  --rule: #cfe0ea;
+  --rule-margin: #e88b8b;
+  --rule-gap: 32px;
+  --rule-alpha: 1;
+  --card: #ffffff;
+  --card-shadow: 0 2px 6px rgba(43, 43, 43, 0.08);
+  --card-shadow-hover: 0 6px 14px rgba(43, 43, 43, 0.12);
+  --tape-alpha: 0.72;
+  --c1: #f6c445;
+  --c2: #f28b82;
+  --c3: #7fd1ae;
+  --c4: #8ab4f8;
+  --c5: #c58af9;
+  --c6: #ffab70;
+  --c7: #6fd3e6;
+  --c8: #f7a1c4;
+  --focus: #2b2b2b;
+  --radius: 10px;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --font-body: 'Noto Sans JP', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-head: 'Zen Maru Gothic', 'Noto Sans JP', system-ui, sans-serif;
+  --fs-body: 15px;
+  --fs-small: 13px;
+  --fs-h1: 28px;
+  --fs-h2: 22px;
+  --fs-h3: 18px;
+  --motion: 200ms;
+}
+:root[data-theme='dark'] {
+  --paper: #1f2430;
+  --paper-ink: #eceff4;
+  --paper-ink-weak: #a3aab8;
+  --rule: #2e3647;
+  --rule-margin: #8c4a4a;
+  --card: #2a3040;
+  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
+  --tape-alpha: 0.55;
+  --focus: #eceff4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #1f2430;
+    --paper-ink: #eceff4;
+    --paper-ink-weak: #a3aab8;
+    --rule: #2e3647;
+    --rule-margin: #8c4a4a;
+    --card: #2a3040;
+    --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
+    --tape-alpha: 0.55;
+    --focus: #eceff4;
+  }
+}
+:root[data-rules='light'] {
+  --rule-alpha: 0.4;
+}
+:root[data-rules='none'] {
+  --rule-alpha: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 0ms;
+  }
+}

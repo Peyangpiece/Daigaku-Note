@@ -1,0 +1,51 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {currentTerm, defaultTermDates, roundDates, termEndingSoon, termFolder, termId} from '../src/shared/term.js';
+
+test('学期名からの既定の期間', () => {
+  assert.deepEqual(defaultTermDates('秋学期', 2026), {start: '2026-10-01', end: '2027-03-31'});
+  assert.deepEqual(defaultTermDates('前期', 2026), {start: '2026-04-01', end: '2026-09-30'});
+  assert.deepEqual(defaultTermDates('第3クォーター', 2026), {start: '2026-10-01', end: '2026-11-30'});
+  assert.deepEqual(defaultTermDates('通年', 2026), {start: '2026-04-01', end: '2027-03-31'});
+});
+
+test('学期フォルダ名と ID', () => {
+  assert.equal(termFolder(2026, '秋学期'), '2026_秋学期');
+  assert.equal(termFolder(2026, '後期/A'), '2026_後期_A');
+  assert.equal(termId(2026, '秋学期'), '2026-fall');
+  assert.equal(termId(2026, '第2クォーター'), '2026-q2');
+});
+
+test('回の日付：金曜 15 回、祝日と休講日を飛ばす', () => {
+  const dates = roundDates({
+    start: '2026-09-21',
+    end: '2027-01-31',
+    weekday: '金',
+    rounds: 15,
+    holidays: ['2026-11-06'] // 大学の休講日（学園祭）
+  });
+  assert.equal(dates.length, 15);
+  assert.equal(dates[0], '2026-09-25');
+  assert.ok(!dates.includes('2026-11-06'), '休講日を飛ばす');
+  assert.ok(!dates.includes('2027-01-01'), '元日（金曜）を飛ばす');
+  assert.ok(dates.every((d) => new Date(d + 'T00:00:00Z').getUTCDay() === 5));
+});
+
+test('回の日付：月曜は祝日が多い', () => {
+  const dates = roundDates({start: '2026-09-21', end: '2027-01-31', weekday: '月', rounds: 15});
+  assert.ok(!dates.includes('2026-09-21'), '敬老の日');
+  assert.ok(!dates.includes('2026-10-12'), 'スポーツの日');
+  assert.ok(!dates.includes('2027-01-11'), '成人の日');
+  assert.equal(dates.length, 15);
+});
+
+test('今日の学期と終わりの判定', () => {
+  const terms = [
+    {id: 'a', start: '2026-04-01', end: '2026-09-30'},
+    {id: 'b', start: '2026-10-01', end: '2027-03-31'}
+  ];
+  assert.equal(currentTerm(terms, '2026-10-17').id, 'b');
+  assert.equal(currentTerm(terms, '2027-04-01'), null);
+  assert.equal(termEndingSoon(terms[1], '2027-03-05'), true);
+  assert.equal(termEndingSoon(terms[1], '2027-02-01'), false);
+});

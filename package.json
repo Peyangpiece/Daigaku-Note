@@ -1,0 +1,41 @@
+{
+  "name": "daigaku-note",
+  "productName": "大学ノート",
+  "version": "0.1.0",
+  "description": "大学の LMS の授業資料を授業ごと・回ごとのフォルダにそろえ、PDF に書き込み、資料からクイズを作って復習する電子ノート",
+  "private": true,
+  "type": "module",
+  "main": "src/main/main.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "test:watch": "node --test --watch",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build": "electron-builder --publish never"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.135.0",
+    "electron-updater": "6.8.9",
+    "mammoth": "1.13.0",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.4.299",
+    "playwright": "1.64.1"
+  },
+  "devDependencies": {
+    "electron": "44.8.0",
+    "electron-builder": "26.15.3",
+    "eslint": "9.39.1",
+    "prettier": "3.6.2"
+  },
+  "prettier": {
+    "printWidth": 120,
+    "singleQuote": true,
+    "bracketSpacing": false,
+    "trailingComma": "none"
+  }
+}
