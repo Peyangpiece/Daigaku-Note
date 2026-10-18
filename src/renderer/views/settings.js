@@ -29,6 +29,43 @@ function autoLogin(c) {
     </div></details>`;
 }
 
+/** クイズ（SPEC §11.8・§11.9）：API キー・同意・モデル・問題数と種類・上限・今月の使用量 */
+const TYPE_NAMES = {choice: '選択', tf: '正誤', cloze: '穴埋め', num: '数値', card: '記述カード'};
+function quizSection(q) {
+  if (!q) return '';
+  const key = q.key?.set
+    ? `<p>API キー：<code>••••${esc(q.key.last4)}</code> <button class="btn btn--small" data-quiz-removekey>削除</button></p>`
+    : `<p class="muted">クイズを作るには、自分の Claude API キーが要ります（<a href="#" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">Anthropic Console</a> で作れます。使った分だけ費用がかかります）。</p>
+       <details class="consent"><summary>AI に送るもの・送らないもの</summary>
+         <p><strong>送る</strong>：その回の資料の本文（学籍番号などの ID・メール・電話番号は消してから）、授業名、回のタイトル、その回のメモ。</p>
+         <p><strong>送らない</strong>：大学のアカウント・パスワード・Cookie、資料のファイルそのもの、ほかの回の資料、成績、名前、LMS の URL。</p>
+       </details>
+       <label style="display:block; margin: var(--space-1) 0"><input type="checkbox" id="qz-consent"> 上の内容で、資料の本文を Claude API に送ることに同意します</label>
+       <div style="display:flex; gap: var(--space-1); align-items:end"><label style="flex:1">API キー<input class="input" id="qz-key" type="password" placeholder="sk-ant-…" autocomplete="off" data-keep="off"></label><button class="btn btn--primary" data-quiz-setkey>確かめて保存</button></div>`;
+  const mix = Object.entries(TYPE_NAMES)
+    .map(
+      ([t, label]) =>
+        `<label>${label}<input class="input" type="number" min="0" max="30" id="qz-mix-${t}" value="${q.mix?.[t] ?? 0}"></label>`
+    )
+    .join('');
+  return `<section class="card"><h3>クイズ</h3>
+    ${key}
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2)">
+      <label>AI のモデル<select class="input" id="qz-model">${Object.entries(q.models ?? {})
+        .map(([id, label]) => `<option value="${esc(id)}" ${id === q.model ? 'selected' : ''}>${esc(label)}</option>`)
+        .join('')}</select></label>
+      <div class="muted" style="align-self:end">今月の費用：$${(q.monthUsd ?? 0).toFixed(2)} ／ 上限 $${q.perMonthUsd}・今日の作成 ${q.today} ／ ${q.perDay} 回</div>
+    </div>
+    <p style="margin: var(--space-2) 0 4px">1 回分の問題数と種類（合計 1〜30 問）</p>
+    <div class="qz-mix">${mix}</div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2)">
+      <label>1 日に作れる回数<input class="input" type="number" min="1" max="200" id="qz-perday" value="${q.perDay}"></label>
+      <label>1 か月の費用の上限（ドル）<input class="input" type="number" min="0.5" max="500" step="0.5" id="qz-permonth" value="${q.perMonthUsd}"></label>
+    </div>
+    <div class="actions"><button class="btn" data-quiz-save>クイズの設定を保存</button></div>
+  </section>`;
+}
+
 /** ブラウザの準備の状態。技術的な文言は「くわしく」の中へ */
 export function browserState(b) {
   if (b?.state === 'ready') return '用意できています';
@@ -85,6 +122,7 @@ export function renderSettings({data}) {
         </div>
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-class" ${s.classStart ? 'checked' : ''}> 授業の開始時刻に、その授業を同期する（学期の設定に時限の時刻が要ります）</label>
       </section>
+      ${quizSection(data.quiz)}
       <section class="card"><h3>見た目</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
           <label>テーマ<select class="input" id="st-theme">${[
@@ -113,6 +151,43 @@ export function renderSettings({data}) {
 
 function bind() {
   const $ = (id) => document.getElementById(id);
+  const qset = document.querySelector('[data-quiz-setkey]');
+  if (qset)
+    qset.onclick = async () => {
+      if (!$('qz-consent').checked) return toast('送る内容への同意にチェックを入れてください', {error: true});
+      qset.disabled = true;
+      qset.textContent = '確かめています…';
+      const r = await api['quiz.setKey']({apiKey: $('qz-key').value});
+      qset.disabled = false;
+      qset.textContent = '確かめて保存';
+      if (r?.error) return toast(r.error, {error: true});
+      $('qz-key').value = '';
+      toast('API キーを保存しました。授業画面からクイズを作れます');
+      reload();
+    };
+  const qrm = document.querySelector('[data-quiz-removekey]');
+  if (qrm)
+    qrm.onclick = async () => {
+      if (!confirm('API キーを削除しますか？（作った問題と記録は残ります）')) return;
+      await api['quiz.removeKey']();
+      reload();
+    };
+  const qsave = document.querySelector('[data-quiz-save]');
+  if (qsave)
+    qsave.onclick = async () => {
+      const mix = Object.fromEntries(Object.keys(TYPE_NAMES).map((t) => [t, Number($(`qz-mix-${t}`).value) || 0]));
+      const r = await api['quiz.settings']({
+        patch: {
+          model: $('qz-model').value,
+          mix,
+          perDay: Number($('qz-perday').value),
+          perMonthUsd: Number($('qz-permonth').value)
+        }
+      });
+      if (r?.error) return toast(r.error, {error: true});
+      toast('クイズの設定を保存しました');
+      reload();
+    };
   const save = async (patch) => {
     const r = await api['settings.update']({patch});
     if (r?.error) toast(r.error, {error: true});

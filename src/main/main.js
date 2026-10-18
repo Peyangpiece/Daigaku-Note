@@ -19,6 +19,7 @@ import {createBrowserSession} from './browser/session.js';
 import {ensureChromium} from './browser/install.js';
 import {createQuarantine} from './sync/quarantine.js';
 import {defaultRoot} from '../shared/paths.js';
+import {createQuizService} from './quiz/service.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(here, '..', 'renderer', 'index.html');
@@ -237,6 +238,7 @@ app.whenReady().then(async () => {
       .catch((e) => log.error(`接続をまとめられませんでした: ${e.message}`));
     ctx.jobs = new JobRunner(ctx, {notify: (ch, payload) => win?.webContents.send(ch, payload)});
     ctx.scheduler = new Scheduler(ctx);
+    ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify: (ch, payload) => win?.webContents.send(ch, payload)});
     registerIpc(ctx, {openWindow, getWindow: () => win});
     buildAppMenu();
     buildTray();

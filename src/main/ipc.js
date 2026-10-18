@@ -6,6 +6,7 @@ import {courseFolderName} from '../shared/naming.js';
 import {defaultTermDates, termFolder, termId} from '../shared/term.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
 import {isOpenable} from './sync/files.js';
+import {checkQuestion} from '../shared/quiz.js';
 
 const str = (v, max = 500) => (typeof v === 'string' && v.length <= max ? v : null);
 const id = (v) => (isUlid(v) ? v : null);
@@ -33,7 +34,7 @@ export function registerIpc(ctx, {openWindow}) {
       }
     });
 
-  handle('state.get', () => {
+  handle('state.get', async () => {
     const terms = repo.listTerms();
     const connections = repo.listConnections().map(({session_json, ...c}) => c);
     const courses = repo.listCourses().map((c) => ({...c, unread: repo.countUnread(c.id)}));
@@ -59,6 +60,8 @@ export function registerIpc(ctx, {openWindow}) {
       status: ctx.status ?? '',
       jobs: repo.pendingJobs().map((j) => ({id: j.id, kind: j.kind, status: j.status})),
       presets: Object.keys(PERIOD_PRESETS),
+      quizzes: Object.fromEntries(courses.map((c) => [c.id, repo.listQuizzes(c.id).map(({source_json, ...z}) => ({...z, notes: JSON.parse(source_json ?? '{}').notes ?? []}))])),
+      quiz: ctx.quiz ? {...ctx.quiz.status(), key: await ctx.quiz.keyInfo(), reviewDue: ctx.quiz.review().questions.length} : null,
       version: app.getVersion()
     };
   });
@@ -295,6 +298,65 @@ export function registerIpc(ctx, {openWindow}) {
   });
   handle('shell.openRoot', () => shell.openPath(ctx.rootDir()).then((e) => (e ? {error: e} : {ok: true})));
   handle('app.version', () => ({version: app.getVersion(), recipes: registry.recipes.map((r) => ({id: r.id, version: r.version, verified: r.verified === true}))}));
+  // ---- クイズ（SPEC §11） ----
+  const quiz = ctx.quiz;
+  const ids = (list, max = 50) => (Array.isArray(list) ? list.slice(0, max).map((x) => id(x) ?? bad('ID が不正です')) : bad('ID の一覧が不正です'));
+  const parseQ = ({o_json, tags_json, ...q}) => {
+    const o = JSON.parse(o_json ?? '[]');
+    return {...q, o: Array.isArray(o) ? o : [], unit: Array.isArray(o) ? '' : o.unit ?? '', tags: JSON.parse(tags_json ?? '[]')};
+  };
+  handle('quiz.status', async () => ({...quiz.status(), key: await quiz.keyInfo()}));
+  handle('quiz.setKey', async ({apiKey}) => quiz.setKey(str(apiKey, 300) ?? bad('API キーを入れてください')));
+  handle('quiz.removeKey', async () => (await quiz.removeKey(), {ok: true}));
+  handle('quiz.settings', ({patch}) => {
+    if (patch.model !== undefined) repo.setSetting('quiz.model', str(patch.model, 40) ?? bad('モデルが不正です'));
+    if (patch.mix && typeof patch.mix === 'object') {
+      const mix = {};
+      for (const t of quiz.status().types) mix[t] = Math.max(0, Math.min(30, Number.isInteger(patch.mix[t]) ? patch.mix[t] : 0));
+      const total = Object.values(mix).reduce((a, b) => a + b, 0);
+      if (total < 1 || total > 30) bad('問題数は 1〜30 問にしてください');
+      repo.setSetting('quiz.mix', mix);
+    }
+    if (patch.perDay !== undefined) repo.setSetting('quiz.perDay', Math.max(1, Math.min(200, Number(patch.perDay) || 30)));
+    if (patch.perMonthUsd !== undefined) repo.setSetting('quiz.perMonthUsd', Math.max(0.5, Math.min(500, Number(patch.perMonthUsd) || 5)));
+    return {ok: true};
+  });
+  handle('quiz.generate', ({roundIds}) => ({queued: quiz.generate(ids(roundIds))}));
+  handle('quiz.list', ({courseId}) => repo.listQuizzes(id(courseId) ?? bad('授業が不正です')).map((z) => ({...z, source: JSON.parse(z.source_json ?? '{}'), source_json: undefined})));
+  handle('quiz.questions', ({quizIds, courseId}) =>
+    repo.listQuestions(quizIds ? {quizIds: ids(quizIds)} : {courseId: id(courseId) ?? bad('授業が不正です')}).map(parseQ)
+  );
+  handle('quiz.answer', ({questionId, answer, mode, seconds}) =>
+    quiz.answer({
+      questionId: id(questionId) ?? bad('問題が不正です'),
+      answer: typeof answer === 'boolean' ? answer : str(String(answer ?? ''), 300) ?? '',
+      mode: ['quiz', 'review', 'retry', 'exam', 'card'].includes(mode) ? mode : 'quiz',
+      seconds: Number.isFinite(seconds) ? Math.round(seconds) : null
+    })
+  );
+  handle('quiz.review', () => {
+    const r = quiz.review();
+    return {...r, questions: r.questions.map(parseQ)};
+  });
+  handle('question.update', ({questionId, patch}) => {
+    const qid = id(questionId) ?? bad('問題が不正です');
+    const q = repo.get('question', qid) ?? bad('問題がありません');
+    const allowed = {};
+    for (const k of ['q', 'a', 'n']) if (typeof patch[k] === 'string') allowed[k] = str(patch[k].trim(), k === 'n' ? 400 : k === 'q' ? 300 : 120) ?? bad(`${k} が長すぎます`);
+    if (Array.isArray(patch.o)) allowed.o_json = JSON.stringify(patch.o.slice(0, 3).map((x) => str(String(x).trim(), 120) ?? bad('誤答が長すぎます')));
+    if (patch.reviewed === true) allowed.review = null;
+    if (typeof patch.report === 'string') allowed.report_reason = str(patch.report, 60) || null;
+    if (patch.report === null) allowed.report_reason = null;
+    if (patch.deleted === true) allowed.deleted = 1;
+    const next = {...q, ...allowed, o: allowed.o_json ? JSON.parse(allowed.o_json) : JSON.parse(q.o_json ?? '[]')};
+    if (allowed.q || allowed.a || allowed.o_json) {
+      const errs = checkQuestion({...next, o: Array.isArray(next.o) ? next.o : [], src: {quote: 'x'.repeat(20)}}).filter((e) => !/引用/.test(e));
+      if (errs.length) bad(errs.join('／'));
+      allowed.review = null; // 本人が直した問題は「要確認」を外す
+    }
+    return parseQ(repo.updateQuestion(qid, allowed));
+  });
+
   handle('app.openWindow', ({route}) => (openWindow(str(route, 100)), {ok: true}));
   void courseFolderName;
 }

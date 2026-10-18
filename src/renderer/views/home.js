@@ -60,6 +60,7 @@ export function renderHome({data, progress}) {
       }
     </div>
     <footer class="home-foot">
+      ${data.quiz?.reviewDue ? `<button class="btn btn--primary" data-action="nav" data-route="/review">今日の復習 ${data.quiz.reviewDue} 問</button>` : ''}
       <button class="btn" data-action="sync" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : '同期'}</button>
       <span class="muted" id="sync-status" role="status">${preparing ? 'LMS を読むためのブラウザを準備しています（初回だけ。数分かかります）。終わると同期が始まります。' : status}</span>
       <span style="margin-left:auto"></span>

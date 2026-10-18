@@ -5,6 +5,16 @@ import {renderCourse} from './views/course.js';
 import {renderSettings} from './views/settings.js';
 import {renderSetup, resetSetup} from './views/setup.js';
 import {renderTerm, resetTerm} from './views/term.js';
+import {
+  leaveQuiz,
+  leaveQuizEdit,
+  quizAction,
+  quizEditAction,
+  quizKey,
+  quizSubmitNum,
+  renderQuiz,
+  renderQuizEdit
+} from './views/quiz.js';
 
 const api = window.daigaku;
 export const state = {data: null, progress: null};
@@ -93,6 +103,8 @@ function restore(view, snap) {
 }
 
 let lastRoute = null;
+/** 状態を読み直さずに描き直す（クイズの画面の中の動きなど） */
+export const refresh = () => render();
 function render() {
   if (!state.data) return;
   head();
@@ -105,9 +117,13 @@ function render() {
   const snap = same ? snapshot(view) : null;
   if (route === '/setup' && !same) resetSetup();
   if (route === '/settings/term' && !same) resetTerm();
+  if (!same && !route.startsWith('/quiz') && !route.startsWith('/review')) leaveQuiz();
+  if (!same && !route.startsWith('/quiz-edit/')) leaveQuizEdit();
   if (route === '/setup') view.innerHTML = renderSetup(state);
   else if (route.startsWith('/course/')) view.innerHTML = renderCourse(state, route.slice('/course/'.length));
   else if (route === '/settings/term') view.innerHTML = renderTerm(state);
+  else if (route.startsWith('/quiz-edit/')) view.innerHTML = renderQuizEdit(state, route.slice('/quiz-edit/'.length));
+  else if (route.startsWith('/quiz') || route.startsWith('/review')) view.innerHTML = renderQuiz(state, route);
   else if (route === '/settings') view.innerHTML = renderSettings(state);
   else view.innerHTML = renderHome(state);
   lastRoute = route;
@@ -142,6 +158,21 @@ api.on('sync.finished', (r) => {
       `同期しました：資料 ${r.materials ?? 0} 件保存${r.failures ? `・失敗 ${r.failures} 件（${r.message ?? ''}）` : ''}`
     );
 });
+api.on('quiz.progress', () => reload().catch(console.error));
+api.on('quiz.finished', (r) => {
+  if (r.ok)
+    toast(
+      `クイズができました：${r.count} 問${r.flagged ? `（要確認 ${r.flagged} 問）` : ''}${r.notes?.length ? `。${r.notes.join('。')}` : ''}`
+    );
+  else toast(r.message, {error: true});
+});
+document.addEventListener('keydown', (e) => quizKey(e));
+document.addEventListener('submit', (e) => {
+  if (e.target.matches('[data-quiz-num]')) {
+    e.preventDefault();
+    quizSubmitNum(e.target);
+  }
+});
 api.on('login.required', ({label}) => toast(`${label} へのログインが必要です`, {error: true}));
 api.on('route', (r) => navigate(r));
 
@@ -151,6 +182,8 @@ document.addEventListener('click', async (e) => {
   if (!el) return;
   const {action} = el.dataset;
   try {
+    if (action.startsWith('quiz-') && (await quizAction(action, el))) return;
+    if (action.startsWith('qe-') && (await quizEditAction(action, el))) return;
     if (action === 'open-course') navigate(`/course/${el.dataset.id}`);
     else if (action === 'nav') navigate(el.dataset.route);
     else if (action === 'sync') {
@@ -176,6 +209,21 @@ document.addEventListener('click', async (e) => {
         error: !r?.ok
       });
       if (r?.ok) await api['sync.run']({connectionId: el.dataset.id});
+      reload();
+    } else if (action === 'quiz-range') {
+      const picked = [...document.querySelectorAll('input[name=quiz-range]:checked')].map((x) => x.value);
+      if (!picked.length) return toast('回を 1 つ以上選んでください', {error: true});
+      navigate(`/quiz?course=${el.dataset.courseId}&quizzes=${picked.join(',')}&mode=exam&r=${Date.now()}`);
+    } else if (action === 'quiz-generate') {
+      const roundIds = el.dataset.rounds.split(',').filter(Boolean);
+      const r = await api['quiz.generate']({roundIds});
+      if (r?.error) toast(r.error, {error: true});
+      else
+        toast(
+          roundIds.length > 1
+            ? `${r.queued} 回分のクイズを順に作ります（1 回 1〜2 分）`
+            : 'クイズを作っています（1〜2 分）'
+        );
       reload();
     } else if (action === 'open-external') await api['shell.openExternal']({url: el.dataset.url});
     else if (action === 'open-root') await api['shell.openRoot']();
