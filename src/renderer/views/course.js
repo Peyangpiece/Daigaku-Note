@@ -1,6 +1,6 @@
 // 授業画面（SPEC §8.2）：回ごとのクリップボードに、資料がイラスト付きの紙で留めてある。M0 は一覧と開くだけ（ドラッグ・クイズは M1・M3）。
 import {esc} from '../app.js';
-import {fileArt} from './file-art.js';
+import {extOf, fileArt} from './file-art.js';
 
 const fmtDate = (d) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}（${'日月火水木金土'[new Date(d + 'T00:00:00').getDay()]}）` : '');
 
@@ -17,9 +17,16 @@ const tilt = (id) => ((hash32(id) % 7) - 3) * 0.5; // -1.5 〜 +1.5 度
 
 function fileCard(m, course) {
   const ok = m.status === 'ok';
-  const tag = m.source === 'notice' ? '<span class="file__tag">お知らせ</span>' : '';
+  const tag =
+    m.source === 'notice'
+      ? '<span class="file__tag">お知らせ</span>'
+      : m.source === 'export'
+        ? '<span class="file__tag">書き出し</span>'
+        : '';
+  // PDF はアプリ内のビューアで開いて編集する。書き出した PDF（§9.7：注釈の対象にしない）とほかの種類は OS の既定のアプリで開く
+  const action = extOf(m.name) === 'pdf' && m.source !== 'export' ? 'open-pdf' : 'open-material';
   return `<div class="file${ok ? '' : ' file--missing'}">
-    <button class="file__open" data-action="open-material" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}">
+    <button class="file__open" data-action="${action}" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}">
       ${fileArt(m.name)}
       ${!m.read_at && ok ? `<span class="file__dot" style="--dot-color: var(--c${course.color})" aria-label="未読"></span>` : ''}
       <span class="file__name">${esc(m.name)}</span>

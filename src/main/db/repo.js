@@ -20,7 +20,8 @@ const COLUMNS = {
   ],
   sync_run: ['id', 'connection_id', 'kind', 'course_id', 'started_at', 'finished_at', 'courses', 'materials', 'failures', 'timing_json'],
   sync_event: ['id', 'run_id', 'level', 'course_id', 'code', 'message', 'at'],
-  job: ['id', 'kind', 'payload_json', 'status', 'result_json', 'tries', 'created_at', 'updated_at']
+  job: ['id', 'kind', 'payload_json', 'status', 'result_json', 'tries', 'created_at', 'updated_at'],
+  annotation: ['id', 'sha256', 'page', 'kind', 'rect_json', 'body', 'style_json', 'memorized', 'z', 'created_at', 'updated_at']
 };
 
 const now = () => new Date().toISOString();
@@ -177,6 +178,9 @@ export class Repo {
   findMaterialByHash(courseId, sha256) {
     return this.db.prepare('SELECT * FROM material WHERE course_id = ? AND sha256 = ?').get(courseId, sha256) ?? null;
   }
+  findMaterialByPath(p) {
+    return this.db.prepare('SELECT * FROM material WHERE path = ?').get(p) ?? null;
+  }
   createMaterial(row) {
     return this.insert('material', {id: ulid(), downloaded_at: now(), ...row});
   }
@@ -186,6 +190,26 @@ export class Repo {
   }
   countUnread(courseId) {
     return this.db.prepare("SELECT COUNT(*) c FROM material WHERE course_id = ? AND read_at IS NULL AND status = 'ok'").get(courseId).c;
+  }
+
+  // ---- annotation（SPEC §9.6：ファイルの SHA-256 に結び付ける。パスではない）----
+  listAnnotations(sha256) {
+    return this.db.prepare('SELECT * FROM annotation WHERE sha256 = ? ORDER BY page, z, created_at').all(sha256);
+  }
+  /** 新しい注釈は id なしで渡す。既存の注釈は同じファイルのものだけ書き換える */
+  saveAnnotation(sha256, id, row) {
+    const t = now();
+    if (!id) {
+      const z = this.db.prepare('SELECT COALESCE(MAX(z), 0) m FROM annotation WHERE sha256 = ? AND page = ?').get(sha256, row.page).m;
+      return this.insert('annotation', {id: ulid(), sha256, z: z + 1, created_at: t, updated_at: t, ...row});
+    }
+    const cur = this.get('annotation', id);
+    if (!cur || cur.sha256 !== sha256) throw new Error('注釈がありません');
+    this.update('annotation', id, {...row, updated_at: t});
+    return this.get('annotation', id);
+  }
+  removeAnnotation(sha256, id) {
+    this.db.prepare('DELETE FROM annotation WHERE id = ? AND sha256 = ?').run(id, sha256);
   }
 
   // ---- sync ----

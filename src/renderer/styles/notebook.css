@@ -489,3 +489,373 @@ h3 {
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+
+/* ---- PDF ビューア（SPEC §8.4・§9）：ノートは薄く、PDF が主役。ツールバーは上部の白い帯 ---- */
+.btn--small {
+  padding: 4px 12px;
+  font-size: var(--fs-small);
+}
+.viewer-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: -72px calc(var(--space-6) * -1) var(--space-3);
+  padding: 10px var(--space-6);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  font-size: var(--fs-small);
+}
+.viewer-bar button:not(.btn) {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.viewer-bar button:not(.btn):hover {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.viewer-bar button[aria-pressed='true']:not(.swatch) {
+  border-color: var(--paper-ink);
+  background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
+}
+.viewer-bar button:focus-visible,
+.viewer-bar input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.viewer-bar__name {
+  max-width: 260px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.viewer-bar .seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--paper-ink) 5%, transparent);
+}
+.viewer-bar__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--rule);
+}
+.viewer-bar__group[hidden] {
+  display: none;
+}
+.viewer-bar__font {
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+  color: var(--paper-ink-weak);
+}
+.viewer-bar__size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.viewer-bar__size input {
+  width: 56px;
+  padding: 3px 4px;
+  border: 1.5px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+}
+.viewer-bar__bold {
+  font-weight: 800 !important;
+}
+.swatches {
+  display: inline-flex;
+  gap: 4px;
+}
+.viewer-bar button.swatch {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 30%, transparent);
+  background: var(--swatch);
+}
+.viewer-bar button.swatch:hover {
+  background: var(--swatch);
+  transform: scale(1.1);
+}
+.viewer-bar button.swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 4px var(--paper-ink);
+}
+.viewer-bar input[type='color'] {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.viewer-bar__spacer {
+  flex: 1;
+}
+.viewer-bar__zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.viewer-bar__zoom span {
+  min-width: 44px;
+  text-align: center;
+}
+.viewer-bar__status {
+  min-width: 6em;
+  text-align: right;
+}
+.viewer-bar__status.is-error {
+  color: #d93025;
+}
+
+.viewer-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-6);
+}
+.viewer-pages[data-tool='text'] .pdf-page {
+  cursor: text;
+}
+.viewer-pages[data-tool='note'] .pdf-page {
+  cursor: copy;
+}
+.pdf-page {
+  position: relative;
+  flex: none;
+  background: #fff; /* ダークモードでもページは反転しない（§8.0） */
+  box-shadow: var(--card-shadow-hover);
+  user-select: none;
+}
+.pdf-page__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.pdf-page__layer {
+  position: absolute;
+  inset: 0;
+}
+.pdf-page__num {
+  position: absolute;
+  right: 0;
+  bottom: -22px;
+}
+
+/* 文字入れ：フォントはヒラギノ角ゴのみ（太字は W6）。ヒラギノのない OS では OS のゴシックで代わりに出る */
+.anno-text {
+  position: absolute;
+  min-width: 1em;
+  padding: 0 1px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  width: max-content;
+  cursor: move;
+  outline: none;
+  user-select: none;
+}
+.viewer-pages[data-tool='text'] .anno-text {
+  cursor: text;
+}
+.anno-text.is-selected {
+  box-shadow: 0 0 0 1px var(--c4);
+}
+.anno-text.is-editing {
+  cursor: text;
+  user-select: text;
+  box-shadow: 0 0 0 1.5px var(--c4);
+  background: rgba(255, 255, 255, 0.55);
+}
+.anno-text.is-dragging,
+.anno-note.is-dragging {
+  opacity: 0.75;
+}
+
+/* 付箋：ページの上の小さな紙。押すと吹き出しで本文 */
+.anno-note {
+  position: absolute;
+  z-index: 1;
+}
+.anno-note.is-open {
+  z-index: 5;
+}
+.anno-note__icon {
+  display: block;
+  width: var(--note-size, 26px);
+  height: var(--note-size, 26px);
+  padding: 0;
+  border: 0;
+  border-radius: 2px 2px 2px 30%;
+  background: linear-gradient(225deg, color-mix(in srgb, var(--note) 60%, #000 0%) 0 22%, var(--note) 22%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transform: rotate(-3deg);
+  cursor: move;
+}
+.anno-note__icon::before {
+  content: '';
+  display: block;
+  margin: 28% 20% 0;
+  height: 40%;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0 1.5px, transparent 1.5px 30%);
+}
+.anno-note.is-selected .anno-note__icon {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 2px;
+}
+.anno-note__pop {
+  position: absolute;
+  top: 0;
+  left: calc(var(--note-size, 26px) + 8px);
+  width: 240px;
+  padding: 10px;
+  border-top: 6px solid var(--note);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--note) 22%, #fff);
+  box-shadow: var(--card-shadow-hover);
+  color: #2b2b2b;
+  cursor: auto;
+}
+.anno-note__pop[hidden] {
+  display: none;
+}
+.anno-note__pop textarea {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-small);
+  line-height: 1.6;
+  outline: none;
+}
+.anno-note__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.anno-note__foot .btn {
+  border-color: #2b2b2b;
+  background: transparent;
+  color: #2b2b2b;
+}
+
+/* 文字隠し：水色のマーカー。赤の成分が 0 の色を乗算で重ねるので、下の文字は読め、赤シートの下では黒くなる */
+.anno-mask {
+  position: absolute;
+  background: #00d2ff; /* main/pdf-export.js の MARKER_HEX と同じ */
+  mix-blend-mode: multiply;
+  border-radius: 2px;
+  cursor: move;
+}
+.anno-mask--draft {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.anno-mask.is-selected {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 1px;
+}
+.viewer-pages[data-tool='mask'] .pdf-page {
+  cursor: crosshair;
+}
+
+/* 赤シート：赤を乗算で重ねる（白い紙 → 赤、黒い文字 → 黒、水色のマーカー → 黒）。ツールバーより下 */
+.red-sheet {
+  position: fixed;
+  z-index: 15;
+  min-width: 120px;
+  min-height: 60px;
+  background: #e60000; /* 青の成分も 0 にして、マーカーの下を真っ黒にする */
+  mix-blend-mode: multiply;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+  resize: both;
+  overflow: hidden;
+  touch-action: none;
+}
+.red-sheet:active {
+  cursor: grabbing;
+}
+.red-sheet__label {
+  position: absolute;
+  top: 4px;
+  left: 10px;
+  color: #fff;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+}
+.viewer-bar__sheet[aria-pressed='true'] {
+  color: #e60000 !important;
+  border-color: #e60000 !important;
+}
+.viewer-bar__history {
+  display: inline-flex;
+  gap: 2px;
+}
+.viewer-bar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 書き出しの確認 */
+.export-dialog {
+  max-width: 440px;
+  border: 0;
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow-hover);
+}
+.export-dialog::backdrop {
+  background: rgba(43, 43, 43, 0.35);
+}
+.export-dialog form {
+  display: grid;
+  gap: 12px;
+}
+.export-dialog p {
+  margin: 0;
+}
+.export-dialog fieldset {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+.export-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

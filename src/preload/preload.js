@@ -4,6 +4,7 @@ const {contextBridge, ipcRenderer} = require('electron');
 const INVOKE = [
   'state.get', 'setup.detect', 'setup.createConnection', 'connection.login', 'connection.savePassword', 'connection.remove',
   'term.save', 'courses.list', 'course.update', 'sync.run', 'material.open', 'material.reveal', 'material.move',
+  'pdf.open', 'pdf.asset', 'pdf.export', 'annotation.save', 'annotation.remove',
   'settings.pickDownloadDir', 'settings.update', 'shell.openExternal', 'shell.openRoot', 'app.version', 'app.openWindow', 'browser.install'
 ];
 const ON = ['state.changed', 'sync.progress', 'sync.finished', 'attention.changed', 'login.required', 'route'];
