@@ -385,13 +385,15 @@ class Viewer {
     const [x, top] = p.viewport.convertToPdfPoint(vx, vy);
     if (kind === 'text') {
       const style = {...this.textStyle};
-      const h = style.size * 1.5;
+      // 押した点に文字カーソルが来るように置く：1 行目の高さの真ん中を押した点に、左の余白（1px）ぶん左へずらす
+      const h = style.size * LINE_HEIGHT;
+      const pad = 1 / p.viewport.scale;
       const a = this.addAnno({
         key: `k${this.seq++}`,
         id: null,
         page: p.num,
         kind,
-        rect: {x, y: top - h, w: 0, h},
+        rect: {x: x - pad, y: top - h / 2, w: 0, h},
         body: '',
         style
       });
