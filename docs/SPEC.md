@@ -1439,7 +1439,11 @@ CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
 ### 14.5 更新
 
-- 起動時と 10 分ごとに GitHub Releases を確認。Windows は electron-updater で自動更新。Mac は署名がなければ .dmg をダウンロードして sha512 を照合し入れ替える。署名があれば自動更新
+- 起動時と 1 時間ごと、トレイの「新しい版を確認」で GitHub Releases（`latest.yml`・`latest-mac.yml`）を確認する（`src/main/updater.js`）
+- Windows：electron-updater が裏でダウンロードし、終わったら「今すぐ再起動して更新」を版ごとに 1 回だけ聞く。「あとで」でも、次に終了したときに入れ替わる。トレイに「再起動して <版> に更新」
+- Mac（Apple の署名なし。ad-hoc 署名）：新しい版を版ごとに 1 回だけ知らせ、「今すぐ更新」で .dmg を `userData/updates` に落とす。`latest-mac.yml` の sha512 と照合してから大学ノートを終了し、小さなシェルスクリプトが入れ替えて開き直す（.dmg を作業用フォルダへ写して再照合 → 同じ CFBundleIdentifier の .app を書き出す → 版と署名を確かめる → 入れ替える。失敗したら元のまま開く。`src/main/mac-update.js`）。「アプリケーション」の外など書き込めない場所では .dmg を開いて手順を案内する
+- 入れ替える前に、入れ替え先の版を `update-expected.json` に書く。次の起動で版が変わっていなければ失敗を知らせ、ダウンロードのページと記録（`logs/updater.log`）を案内する
+- 更新のために終了するときは「処理中ですが終了しますか」を出さない
 - レシピは起動時と 1 日 1 回（§6.15）
 
 ### 14.6 アクセシビリティ・表示

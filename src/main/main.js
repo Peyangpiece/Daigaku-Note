@@ -1,6 +1,6 @@
 // 大学ノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
 // M0 の骨格：DB・設定・ジョブ・スケジューラ・IPC をつなぐ。LMS 操作とファイル操作はここ（メイン）だけで行う。
-import {app, BrowserWindow, Menu, Tray, dialog, nativeImage, shell} from 'electron';
+import {app, BrowserWindow, Menu, Tray, dialog, nativeImage, net, shell} from 'electron';
 import {existsSync, mkdirSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -19,6 +19,7 @@ import {createBrowserSession} from './browser/session.js';
 import {ensureChromium} from './browser/install.js';
 import {createQuarantine} from './sync/quarantine.js';
 import {defaultRoot} from '../shared/paths.js';
+import {createUpdater} from './updater.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(here, '..', 'renderer', 'index.html');
@@ -74,6 +75,7 @@ function buildTray() {
         {label: '資料のフォルダを開く', click: () => shell.openPath(ctx.rootDir())},
         {type: 'separator'},
         {label: '設定', click: () => openWindow('/settings')},
+        ...(ctx.updater?.menuItems() ?? []),
         {label: ctx.status ?? '', enabled: false},
         {label: `バージョン ${app.getVersion()}`, enabled: false},
         {type: 'separator'},
@@ -122,6 +124,9 @@ app.whenReady().then(async () => {
     ctx.scheduler = new Scheduler(ctx);
     registerIpc(ctx, {openWindow, getWindow: () => win});
     buildTray();
+    // アプリの自動更新（SPEC §14.5）。更新のために終了するときは「処理中ですが終了しますか」を出さない
+    ctx.updater = createUpdater({app, dialog, shell, net, refreshTray: () => ctx.refreshTray?.(), allowQuit: () => (ctx.quitConfirmed = true)});
+    ctx.updater.start().catch((e) => log.warn(`更新の確認を始められません: ${e.message}`));
     const connections = repo.listConnections();
     openWindow(connections.length ? null : '/setup');
     ctx.scheduler.start();
@@ -176,6 +181,7 @@ app.on('before-quit', (e) => {
     return;
   }
   ctx.scheduler?.stop();
+  ctx.updater?.stop();
   ctx.jobs?.stop();
   ctx.session?.shutdown();
 });

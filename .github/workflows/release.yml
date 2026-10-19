@@ -1,20 +1,25 @@
-# 配布物（DESIGN-M0 §1・SPEC §14.5）：Mac の dmg（Apple シリコン・Intel）と Windows のインストーラーを作る。
-# - タグ v<版>（package.json の version と同じ）を push すると、GitHub Releases の下書きに上げる。
-#   中身を確かめて「Publish release」を押すと公開され、electron-updater の更新確認にも出る
+# 配布物（DESIGN-M0 §1・SPEC §14.5）：Mac（dmg・zip、Apple シリコン・Intel）と Windows（インストーラー）を作る。
+# - タグ v<版>（package.json の version と同じ）を push すると、GitHub Releases に公開する（最新版の印も付ける）。
+#   アプリは起動時と 1 時間ごとに Releases の最新版を確かめ、自動で更新する（src/main/updater.js）
 # - 「Run workflow」から手で動かしたときと、配布の設定を変えるプルリクエストでは、作るだけ
 #   （Releases には上げず、この実行の Artifacts に置く）
-# コード署名・公証はしていない（証明書がない）。Mac は初回「開発元を確認できない」と出る
+# Apple・Windows の証明書はない。Mac は ad-hoc 署名（build/after-pack.cjs）、Windows は署名なし
 name: Release
 
 on:
   push:
     tags: ['v*']
   pull_request:
-    paths: ['.github/workflows/release.yml', 'electron-builder.yml', 'package.json', 'package-lock.json']
+    paths:
+      - '.github/workflows/release.yml'
+      - 'electron-builder.yml'
+      - 'build/**'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -40,23 +45,50 @@ jobs:
         run: |
           v="v$(node -p "require('./package.json').version")"
           if [ "$v" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::タグ $GITHUB_REF_NAME と package.json の版 $v が違います"
+            echo "::error::タグ $GITHUB_REF_NAME と package.json の版 $v が違います。package.json の版を上げてからタグを付けてください"
             exit 1
           fi
-      - name: 作って Releases の下書きに上げる
-        if: startsWith(github.ref, 'refs/tags/')
-        run: npx electron-builder --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: 作るだけ
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-        run: npx electron-builder --publish never
+      # electron-builder の公開機能は使わない（Mac と Windows のジョブがそれぞれ Release を作ろうとするため）。
+      # 作るだけにして、下の publish ジョブで 1 回にまとめて載せる
+      - run: npx electron-builder --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: daigaku-note-${{ runner.os }}
           path: |
             release/*.dmg
+            release/*.zip
             release/*.exe
-            release/*.yml
             release/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Releases に公開する
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -la release
+          test -f release/latest.yml && test -f release/latest-mac.yml || { echo "::error::版の情報（latest.yml・latest-mac.yml）がありません"; exit 1; }
+          # 同じ版が公開済みなら止める（版を上げ忘れて、配った版を作り直さないように）。下書きや作りかけは消してから作る
+          published=$(gh api "repos/$REPO/releases" --paginate --jq ".[] | select(.tag_name==\"$TAG\" and (.draft|not) and (.assets|length)>0) | .id")
+          if [ -n "$published" ]; then echo "::error::$TAG は公開済みです。package.json の版を上げてください"; exit 1; fi
+          gh api "repos/$REPO/releases" --paginate --jq ".[] | select(.tag_name==\"$TAG\") | .id" | while read -r id; do gh api -X DELETE "repos/$REPO/releases/$id"; done
+          # 「最新版」の印は、公開済みのどの版より新しいときだけ付ける（古い版を作り直しても latest にしない）
+          v="${TAG#v}"
+          newest=$(gh api "repos/$REPO/releases" --paginate --jq '.[] | select(.draft|not) | .tag_name' | sed 's/^v//' | sort -V | tail -1)
+          if [ -z "$newest" ] || [ "$(printf '%s\n%s\n' "$newest" "$v" | sort -V | tail -1)" = "$v" ]; then latest=--latest; else latest=--latest=false; fi
+          gh release create "$TAG" --repo "$REPO" --verify-tag $latest --title "大学ノート $TAG" \
+            --notes "Mac は .dmg（Apple シリコンは arm64、Intel は x64）、Windows は .exe を入れてください。Apple・Windows の署名がないため、Mac は初回に止められたら「システム設定 → プライバシーとセキュリティ」の「このまま開く」、Windows は SmartScreen の「詳細情報 → 実行」を押してください。2 回目からはアプリが自動で更新します。" \
+            release/*.dmg release/*.zip release/*.exe release/*.blockmap release/latest*.yml

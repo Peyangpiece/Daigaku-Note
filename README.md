@@ -38,12 +38,12 @@ Node 22.13 以降（SQLite は `node:sqlite` を使う）。
 ### 配布（GitHub Actions）
 
 - `.github/workflows/ci.yml`：push とプルリクエストのたびに lint とテスト
-- `.github/workflows/release.yml`：Mac（dmg、Apple シリコン・Intel）と Windows（インストーラー）を作る
+- `.github/workflows/release.yml`：Mac（dmg・zip、Apple シリコン・Intel）と Windows（インストーラー）を作り、Releases に公開する
   1. `package.json` の `version` を上げてコミットする（例 `0.2.0`）
   2. 同じ版のタグを push する：`git tag v0.2.0 && git push origin v0.2.0`
-  3. GitHub の Releases に下書きができる。中身を確かめて「Publish release」を押すと公開
+  3. 数分で Releases に公開される。入れてある大学ノートは、起動時と 1 時間ごとに新しい版を見つけて自動で更新する（Windows は裏でダウンロードして再起動を聞く。Mac は「今すぐ更新」で入れ替えて開き直す）
   - Actions の画面の「Run workflow」で動かすと、作るだけ（実行結果の Artifacts から取れる）
-  - コード署名・公証はしていない。Mac は初回に「開発元を確認できない」と出るので、右クリック →「開く」で開く
+  - Apple・Windows の証明書はない。Mac は ad-hoc 署名で、初回に止められたら「システム設定 → プライバシーとセキュリティ」の「このまま開く」。Windows は SmartScreen の「詳細情報 → 実行」
 
 ## 状態
 
