@@ -92,3 +92,16 @@ test('書き出し：黒く塗る・付箋を入れないを選べる。画像�
 test('書き出し：読めない PDF はわかる言葉で失敗する', async () => {
   await assert.rejects(() => exportAnnotatedPdf(new Uint8Array([1, 2, 3]), []), /PDF を読めませんでした/);
 });
+
+test('回転したページの文字入れの画像は、画面と同じ向きになる位置と角度で置く', async () => {
+  const {uprightImage} = await import('../src/main/pdf-export.js');
+  const r = {x: 10, y: 20, w: 30, h: 40};
+  assert.deepEqual(uprightImage(0, r), {x: 10, y: 20, width: 30, height: 40});
+  const r90 = uprightImage(90, r);
+  // 反時計回りに 90 度：画像の幅は +y の向き（20〜60）、高さは −x の向き（40〜10）に伸びる
+  assert.deepEqual([r90.x, r90.y, r90.width, r90.height, r90.rotate.angle], [40, 20, 40, 30, 90]);
+  const r180 = uprightImage(180, r);
+  assert.deepEqual([r180.x, r180.y, r180.width, r180.height, r180.rotate.angle], [40, 60, 30, 40, 180]);
+  const r270 = uprightImage(-90, r);
+  assert.deepEqual([r270.x, r270.y, r270.width, r270.height, r270.rotate.angle], [10, 60, 40, 30, 270]);
+});

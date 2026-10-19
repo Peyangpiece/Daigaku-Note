@@ -859,3 +859,13 @@ h3 {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* 赤シートとの重なりだけに見せる黒い覆い（viewer.js の syncCovers が clip-path で切り抜く） */
+.anno-mask__cover {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background: #000;
+  border-radius: inherit;
+  pointer-events: none;
+}

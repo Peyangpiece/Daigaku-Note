@@ -4,7 +4,7 @@
 // - 文字入れ：画面と同じヒラギノ角ゴで描いた画像（レンダラが 288dpi で作る）を貼る。
 //   フォントそのものは埋め込まない（ヒラギノは OS のフォントで、埋め込みの可否と .ttc の扱いが確かめられていないため）
 // - 付箋：PDF の「テキスト注釈」（ほかの PDF アプリでもメモとして開ける）
-import {BlendMode, PDFDocument, PDFHexString, PDFString, rgb} from 'pdf-lib';
+import {BlendMode, PDFDocument, PDFHexString, PDFString, degrees, rgb} from 'pdf-lib';
 
 export const MARKER_HEX = '#00d2ff'; // レンダラの表示と同じ。赤の成分が 0 なので赤シートの下で黒になる
 const hexToRgb = (hex) => {
@@ -12,6 +12,19 @@ const hexToRgb = (hex) => {
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 };
 const ORDER = {mask: 0, text: 1, note: 2}; // マーカーの上に文字、いちばん上に付箋
+
+/**
+ * 回転したページ（/Rotate。時計回り）でも、画面で見たとおりの向きで画像を置く位置と角度。
+ * 画像は画面の向きで描いてあるので、ページの回転と同じ角度だけ（PDF の座標で反時計回りに）回して、
+ * 画面の左下にあたる角を原点にする。rect は PDF の座標の四角（左下と幅・高さ）
+ */
+export function uprightImage(rotation, {x, y, w, h}) {
+  const r = (((Math.round(rotation / 90) * 90) % 360) + 360) % 360;
+  if (r === 90) return {x: x + w, y, width: h, height: w, rotate: degrees(90)};
+  if (r === 180) return {x: x + w, y: y + h, width: w, height: h, rotate: degrees(180)};
+  if (r === 270) return {x, y: y + h, width: h, height: w, rotate: degrees(270)};
+  return {x, y, width: w, height: h};
+}
 
 export const isPng = (b) =>
   b instanceof Uint8Array && b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
@@ -58,7 +71,7 @@ export async function exportAnnotatedPdf(
       const png = images.get(a.id);
       if (!png) continue;
       const img = await doc.embedPng(png);
-      page.drawImage(img, {x, y, width: w, height: h});
+      page.drawImage(img, uprightImage(page.getRotation().angle, a.rect));
     } else if (a.kind === 'note' && notes) {
       const color = /^#[0-9a-f]{6}$/i.test(a.style?.color ?? '') ? hexToRgb(a.style.color) : [0.96, 0.77, 0.27];
       const annot = doc.context.obj({
