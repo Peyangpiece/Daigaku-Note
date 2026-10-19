@@ -118,16 +118,18 @@ function sandbox() {
   };
 }
 
-const hasOpenssl = (() => {
+// 入れ替えのスクリプトは Mac でしか動かない（/bin/sh・openssl を使う）。Windows には /bin/sh がないので、Linux と Mac で確かめる
+const noShell = (() => {
+  if (process.platform === 'win32') return 'Mac 用のシェルスクリプトのため Windows では動かさない';
   try {
     execFileSync('openssl', ['version']);
-    return true;
-  } catch {
     return false;
+  } catch {
+    return 'openssl がない';
   }
 })();
 
-test('入れ替え：sha512 が合えば新しい版に入れ替えて開く', {skip: !hasOpenssl && 'openssl がない'}, () => {
+test('入れ替え：sha512 が合えば新しい版に入れ替えて開く', {skip: noShell}, () => {
   const s = sandbox();
   const {code, log} = s.run(s.sha);
   assert.equal(code, 0);
@@ -137,7 +139,7 @@ test('入れ替え：sha512 が合えば新しい版に入れ替えて開く', {
   assert.ok(!existsSync(`${s.app}.old`) && !existsSync(`${s.app}.new`));
 });
 
-test('入れ替え：sha512 が合わなければ元のまま開き直す', {skip: !hasOpenssl && 'openssl がない'}, () => {
+test('入れ替え：sha512 が合わなければ元のまま開き直す', {skip: noShell}, () => {
   const s = sandbox();
   const {code, log} = s.run(SUM);
   assert.equal(code, 1);
