@@ -35,6 +35,16 @@ npm start     # Electron で起動
 
 Node 22.13 以降（SQLite は `node:sqlite` を使う）。
 
+### 配布（GitHub Actions）
+
+- `.github/workflows/ci.yml`：push とプルリクエストのたびに lint とテスト
+- `.github/workflows/release.yml`：Mac（dmg、Apple シリコン・Intel）と Windows（インストーラー）を作る
+  1. `package.json` の `version` を上げてコミットする（例 `0.2.0`）
+  2. 同じ版のタグを push する：`git tag v0.2.0 && git push origin v0.2.0`
+  3. GitHub の Releases に下書きができる。中身を確かめて「Publish release」を押すと公開
+  - Actions の画面の「Run workflow」で動かすと、作るだけ（実行結果の Artifacts から取れる）
+  - コード署名・公証はしていない。Mac は初回に「開発元を確認できない」と出るので、右クリック →「開く」で開く
+
 ## 状態
 
 仕様 0.4 確定。M0（土台）を実装中：
