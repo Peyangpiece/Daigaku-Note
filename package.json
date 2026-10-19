@@ -16,7 +16,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "build": "electron-builder --publish never"
+    "build": "electron-builder --publish never",
+    "install:mac": "bash scripts/install-mac.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.135.0",

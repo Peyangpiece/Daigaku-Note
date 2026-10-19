@@ -35,6 +35,17 @@ npm start     # Electron で起動
 
 Node 22.13 以降（SQLite は `node:sqlite` を使う）。
 
+## Mac に入れて Dock から開く
+
+```
+npm run install:mac   # アプリを作って /Applications/大学ノート.app に入れ、Dock に置いて開く
+```
+
+- 初回の前に、`npm start` で動いている大学ノートを ⌘Q で終わらせる（スクリプトも終了を試みる）
+- 更新は `git pull` のあとにもう一度 `npm run install:mac`（入れ直したアプリは自動では更新されない）
+- データ（ログイン・授業・クイズ）は `npm start` と同じ `~/Library/Application Support/大学ノート` を使うので、そのまま引き継ぐ
+- 窓を閉じても裏で動き続ける（メニューバーのアイコンから終了）。同期はアプリが動いている間だけ動くので、設定 → 同期 の「パソコンにログインしたら大学ノートを起動する」を入れておくとよい
+
 ## 状態
 
 仕様 0.4 確定。M0（土台）を実装中：

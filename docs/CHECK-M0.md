@@ -80,9 +80,24 @@ DAIGAKU_LOG_STDOUT=1 npm start
 |---|---|
 | 「SQLite が使えません（node:sqlite も better-sqlite3 もない）」 | Electron 44 に同梱の Node で `node:sqlite` が使えない。`npm install better-sqlite3 && npx electron-rebuild -f -w better-sqlite3` を実行してからもう一度 `npm start`。これで動いたら報告してください（依存に加えて既定にします） |
 | 「この環境では秘密を保存できません」 | Mac：キーチェーンがロックされている。Windows：まれに DPAPI が使えないアカウント。OS にログインし直して再起動 |
-| トレイのアイコンが空 | `src/renderer/assets/tray.png` がまだないため（M1 で用意）。動作には影響しない |
+| トレイのアイコンが空 | `src/renderer/assets/trayTemplate.png`（Mac）／`tray.png` が読めていない。`git pull` し直す |
 | 「ブラウザの準備に失敗しました（終了コード n）：…」 | Electron から Playwright の取り込みが動かなかった。ホームの要確認か設定の「ブラウザを準備し直す」で再試行。それでもだめなら、ターミナルで手で入れる（Mac）：`PLAYWRIGHT_BROWSERS_PATH="$HOME/Library/Application Support/大学ノート/pw-browsers" npx playwright install chromium` を実行し、終わったら `echo 1.64.1 > "$HOME/Library/Application Support/大学ノート/pw-browsers/.ready"`（1.64.1 は `npm ls playwright-core` の版）。Windows は PowerShell で `$env:PLAYWRIGHT_BROWSERS_PATH="$env:APPDATA\大学ノート\pw-browsers"; npx playwright install chromium` のあと同じ名前の `.ready` を作る。失敗の行（終了コードの後ろ）を報告してください |
 | Mac で「開発元を確認できない」 | `npm start` では出ない。配布物（§5）のときだけ |
+
+### 1.1.1 アプリとして入れる（Mac・Dock）
+
+```bash
+npm run install:mac
+```
+
+| 確認 | 期待 |
+|---|---|
+| 入る | 最後に「入れました。」と出て、`/Applications/大学ノート.app` ができ、大学ノートが開く。アイコンはノート柄に「大」 |
+| Dock | Dock に大学ノートが常に置かれる。窓を閉じてから Dock のアイコンを押すと窓が開き直す。もう一度実行しても Dock に 2 つ並ばない |
+| データの引き継ぎ | `npm start` で設定した授業・ログインがそのまま見える |
+| キーチェーン | 初めて（と入れ直したあと）に「大学ノート がキーチェーンの機密情報を使おうとしています」と出たら、Mac のログインパスワードを入れて「常に許可」 |
+| ログイン時に起動 | 設定 → 同期 の「パソコンにログインしたら大学ノートを起動する」を入れると、システム設定 → 一般 → ログイン項目 に大学ノートが出る。`npm start` の開発版ではこの項目は押せない（説明が出る） |
+| 開けない | 「開発元を確認できない」「壊れている」と出たら、Finder で /Applications の大学ノートを右クリック →「開く」。それでもだめならターミナルの最後の 20 行を報告 |
 
 ### 1.2 セットアップ：Moodle（デモサイト）で通す
 

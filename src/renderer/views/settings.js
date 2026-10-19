@@ -121,6 +121,8 @@ export function renderSettings({data}) {
           <label>定期の確認<select class="input" id="st-every">${[0, 1, 3, 6].map((h) => `<option value="${h}" ${s.everyHours === h ? 'selected' : ''}>${h ? `${h} 時間ごと` : 'オフ'}</option>`).join('')}</select></label>
         </div>
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-class" ${s.classStart ? 'checked' : ''}> 授業の開始時刻に、その授業を同期する（学期の設定に時限の時刻が要ります）</label>
+        <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-login" ${s.openAtLogin?.on ? 'checked' : ''} ${s.openAtLogin?.available ? '' : 'disabled'}> パソコンにログインしたら大学ノートを起動する（同期はアプリが起動している間だけ動きます）</label>
+        ${s.openAtLogin?.available ? '' : '<p class="muted" style="margin-top: 4px">アプリとして入れたとき（Mac は <code>npm run install:mac</code>）に設定できます。</p>'}
       </section>
       ${quizSection(data.quiz)}
       <section class="card"><h3>見た目</h3>
@@ -196,6 +198,7 @@ function bind() {
   $('st-time')?.addEventListener('change', (e) => save({syncTime: e.target.value}));
   $('st-every')?.addEventListener('change', (e) => save({everyHours: Number(e.target.value)}));
   $('st-class')?.addEventListener('change', (e) => save({classStart: e.target.checked}));
+  $('st-login')?.addEventListener('change', (e) => save({openAtLogin: e.target.checked}));
   $('st-theme')?.addEventListener('change', (e) => save({theme: e.target.value}));
   $('st-rules')?.addEventListener('change', (e) => save({rules: e.target.value}));
   document.querySelectorAll('[data-login]').forEach((b) =>

@@ -18,6 +18,11 @@ const httpsUrl = (v) => {
     return null;
   }
 };
+// ログイン時に起動（Mac・Windows）。npm start の開発版で登録すると Electron 本体が登録されるので、アプリとして入れたときだけ
+const loginItem = () => {
+  const available = app.isPackaged && (process.platform === 'darwin' || process.platform === 'win32');
+  return {available, on: available && app.getLoginItemSettings().openAtLogin === true};
+};
 const bad = (msg) => {
   throw new Error(msg);
 };
@@ -53,7 +58,8 @@ export function registerIpc(ctx, {openWindow}) {
         classStart: repo.getSetting('sync.classStart', true),
         everyHours: repo.getSetting('sync.everyHours', 0),
         theme: repo.getSetting('ui.theme', 'system'),
-        rules: repo.getSetting('ui.rules', 'normal')
+        rules: repo.getSetting('ui.rules', 'normal'),
+        openAtLogin: loginItem()
       },
       lastSync: repo.lastSyncRun(),
       browser: ctx.browser ?? {state: 'pending', message: ''},
@@ -281,6 +287,10 @@ export function registerIpc(ctx, {openWindow}) {
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
     if (patch.resetRoot === true) repo.setSetting('storage.root', null);
+    if (typeof patch.openAtLogin === 'boolean') {
+      if (!loginItem().available) bad('ログイン時の起動は、アプリとして入れた大学ノートでだけ設定できます');
+      app.setLoginItemSettings({openAtLogin: patch.openAtLogin});
+    }
     return {ok: true};
   });
 
