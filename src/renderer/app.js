@@ -1,12 +1,14 @@
-// 画面の土台（DESIGN-M0 §10）。経路：#/setup・#/（ホーム）・#/course/<id>・#/settings
-// M0 はホーム（フォルダのグリッド）・授業（資料一覧）・設定・セットアップの骨格。ビューア・クイズは M2・M3。
+// 画面の土台（DESIGN-M0 §10）。経路：#/setup・#/（ホーム）・#/course/<id>・#/viewer/<資料 id>・#/settings
+// ホーム（フォルダのグリッド）・授業（資料一覧）・PDF ビューア（文字入れ・付箋）・設定・セットアップ。クイズは M3。
 import {renderHome} from './views/home.js';
 import {renderCourse} from './views/course.js';
 import {renderSettings} from './views/settings.js';
 import {renderSetup} from './views/setup.js';
+import {mountViewer} from './views/viewer.js';
 
 const api = window.daigaku;
 export const state = {data: null, progress: null};
+let viewer = null; // 開いている PDF ビューア。状態が変わっても描き直さない
 
 export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
@@ -52,7 +54,19 @@ function render() {
   const route = location.hash.replace(/^#/, '') || '/';
   const app = document.getElementById('app');
   app.classList.toggle('paper--margin', route === '/' || route.startsWith('/course/'));
+  app.classList.toggle('paper--quiet', route.startsWith('/viewer/'));
   if (!state.data.connections.length && route !== '/setup' && route !== '/settings') return navigate('/setup');
+  if (route.startsWith('/viewer/')) {
+    const materialId = route.slice('/viewer/'.length);
+    if (viewer?.materialId === materialId) return;
+    viewer?.unmount();
+    const material = Object.values(state.data.materials).flat().find((m) => m.id === materialId);
+    const course = state.data.courses.find((c) => c.id === material?.course_id);
+    viewer = mountViewer(view, {materialId, course, onBack: () => navigate(course ? `/course/${course.id}` : '/')});
+    return;
+  }
+  viewer?.unmount();
+  viewer = null;
   if (route === '/setup') view.innerHTML = renderSetup(state);
   else if (route.startsWith('/course/')) view.innerHTML = renderCourse(state, route.slice('/course/'.length));
   else if (route === '/settings') view.innerHTML = renderSettings(state);
@@ -89,6 +103,7 @@ document.addEventListener('click', async (e) => {
       await api['sync.run']({courseId: el.dataset.courseId || undefined, full: el.dataset.full === '1' || undefined});
       toast(el.dataset.full === '1' ? '全部の回を確かめます（数分かかります）' : '同期を始めます');
     }
+    else if (action === 'open-pdf') navigate(`/viewer/${el.dataset.id}`);
     else if (action === 'open-material') {
       const r = await api['material.open']({materialId: el.dataset.id});
       if (r?.error) toast(r.error);

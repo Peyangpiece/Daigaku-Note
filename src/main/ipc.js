@@ -5,7 +5,11 @@ import {checkDownloadDir, defaultRoot} from '../shared/paths.js';
 import {courseFolderName} from '../shared/naming.js';
 import {defaultTermDates, termFolder, termId} from '../shared/term.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
+import {promises as fsp} from 'node:fs';
+import {createRequire} from 'node:module';
+import path from 'node:path';
 import {isOpenable} from './sync/files.js';
+import {annotationToClient, normalizeAnnotation} from '../shared/annotation.js';
 
 const str = (v, max = 500) => (typeof v === 'string' && v.length <= max ? v : null);
 const id = (v) => (isUlid(v) ? v : null);
@@ -17,6 +21,9 @@ const httpsUrl = (v) => {
     return null;
   }
 };
+// pdf.js の補助データ（日本語の CMap・標準フォント・wasm）。レンダラは file:// を読まないので、ここから渡す
+const PDFJS_DIR = path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
+const PDFJS_ASSET = {cMapUrl: 'cmaps', standardFontDataUrl: 'standard_fonts', wasmUrl: 'wasm'};
 const bad = (msg) => {
   throw new Error(msg);
 };
@@ -226,6 +233,41 @@ export function registerIpc(ctx, {openWindow}) {
     repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
     const err = await shell.openPath(m.path);
     return err ? {error: err} : {ok: true};
+  });
+  // アプリ内の PDF ビューア（SPEC §9）。編集できるのは PDF だけ。中身はバイト列で渡し、パスはレンダラに出さない
+  const pdfMaterial = (materialId) => {
+    const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
+    if (!/\.pdf$/i.test(m.path)) bad('アプリ内で開けるのは PDF だけです');
+    if (m.status !== 'ok') bad('このファイルは見つかりません');
+    return m;
+  };
+  handle('pdf.open', async ({materialId}) => {
+    const m = pdfMaterial(materialId);
+    const bytes = await fsp.readFile(m.path).catch(() => bad('ファイルを読めませんでした（移動または削除された可能性があります）'));
+    repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
+    return {
+      material: {id: m.id, name: m.name, course_id: m.course_id, round_id: m.round_id},
+      bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+      annotations: repo.listAnnotations(m.sha256).map(annotationToClient)
+    };
+  });
+  handle('pdf.asset', async ({kind, filename}) => {
+    const dir = PDFJS_ASSET[kind] ?? bad('種類が不正です');
+    const name = str(filename, 100);
+    if (!name || !/^[\w.+-]+$/.test(name) || name.startsWith('.')) bad('ファイル名が不正です');
+    const buf = await fsp.readFile(path.join(PDFJS_DIR, dir, name));
+    return {bytes: new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)};
+  });
+  handle('annotation.save', ({materialId, annotation}) => {
+    const m = pdfMaterial(materialId);
+    const aid = annotation?.id == null ? null : id(annotation.id) ?? bad('注釈が不正です');
+    const row = repo.saveAnnotation(m.sha256, aid, normalizeAnnotation(annotation));
+    return {annotation: annotationToClient(row)};
+  });
+  handle('annotation.remove', ({materialId, annotationId}) => {
+    const m = pdfMaterial(materialId);
+    repo.removeAnnotation(m.sha256, id(annotationId) ?? bad('注釈が不正です'));
+    return {ok: true};
   });
   handle('material.reveal', ({materialId}) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
