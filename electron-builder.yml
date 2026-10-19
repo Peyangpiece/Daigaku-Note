@@ -1,4 +1,5 @@
 # 配布物の設定（SPEC §14.5、DESIGN-M0 §1）。Chromium は同梱せず初回起動時に取り込む
+# 自動更新：electron-updater が Releases の latest.yml（Windows）・latest-mac.yml（Mac）を読む。latest-mac.yml を作るには zip も要る
 appId: jp.daigakunote.app
 productName: 大学ノート
 artifactName: daigaku-note-${version}-${os}-${arch}.${ext}
@@ -16,14 +17,20 @@ publish:
   provider: github
   owner: Peyangpiece
   repo: Daigaku-Note
+afterPack: build/after-pack.cjs
 mac:
   category: public.app-category.education
   target:
     - target: dmg
       arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  identity: null # Apple の証明書はない。署名は build/after-pack.cjs の ad-hoc
   hardenedRuntime: false
   extendInfo:
     NSDesktopFolderUsageDescription: 授業資料をデスクトップの「大学ノート」フォルダに保存するために使います。
+dmg:
+  sign: false
 win:
   target:
     - target: nsis
