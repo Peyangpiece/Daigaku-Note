@@ -39,10 +39,10 @@ Node 22.13 以降（SQLite は `node:sqlite` を使う）。
 
 - `.github/workflows/ci.yml`：push とプルリクエストのたびに lint とテスト
 - `.github/workflows/release.yml`：Mac（dmg・zip、Apple シリコン・Intel）と Windows（インストーラー）を作り、Releases に公開する
-  1. `package.json` の `version` を上げてコミットする（例 `0.2.0`）
-  2. 同じ版のタグを push する：`git tag v0.2.0 && git push origin v0.2.0`
+  1. `package.json` の `version` を上げてコミットし、既定のブランチに入れる（例 `0.2.0`）
+  2. Actions の「Release」→「Run workflow」で「Releases に公開する」に印を付けて動かす（タグ `v0.2.0` は GitHub が作る）。または、同じ版のタグを push する：`git tag v0.2.0 && git push origin v0.2.0`
   3. 数分で Releases に公開される。入れてある大学ノートは、起動時と 1 時間ごとに新しい版を見つけて自動で更新する（Windows は裏でダウンロードして再起動を聞く。Mac は「今すぐ更新」で入れ替えて開き直す）
-  - Actions の画面の「Run workflow」で動かすと、作るだけ（実行結果の Artifacts から取れる）
+  - 「Releases に公開する」に印を付けずに動かすと、作るだけ（実行結果の Artifacts から取れる）
   - Apple・Windows の証明書はない。Mac は ad-hoc 署名で、初回に止められたら「システム設定 → プライバシーとセキュリティ」の「このまま開く」。Windows は SmartScreen の「詳細情報 → 実行」
 
 ## 状態
