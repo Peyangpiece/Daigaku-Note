@@ -1,0 +1,62 @@
+# 配布物（DESIGN-M0 §1・SPEC §14.5）：Mac の dmg（Apple シリコン・Intel）と Windows のインストーラーを作る。
+# - タグ v<版>（package.json の version と同じ）を push すると、GitHub Releases の下書きに上げる。
+#   中身を確かめて「Publish release」を押すと公開され、electron-updater の更新確認にも出る
+# - 「Run workflow」から手で動かしたときと、配布の設定を変えるプルリクエストでは、作るだけ
+#   （Releases には上げず、この実行の Artifacts に置く）
+# コード署名・公証はしていない（証明書がない）。Mac は初回「開発元を確認できない」と出る
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths: ['.github/workflows/release.yml', 'electron-builder.yml', 'package.json', 'package-lock.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # 署名の証明書を探さない
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' # Chromium はアプリの初回起動時に取り込む（同梱しない）
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test "tests/*.test.js" # e2e（Chromium が要る）は CI のほうで走らせる
+      - name: タグと package.json の版がそろっているか
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          if [ "$v" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::タグ $GITHUB_REF_NAME と package.json の版 $v が違います"
+            exit 1
+          fi
+      - name: 作って Releases の下書きに上げる
+        if: startsWith(github.ref, 'refs/tags/')
+        run: npx electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 作るだけ
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: npx electron-builder --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daigaku-note-${{ runner.os }}
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.yml
+            release/*.blockmap
+          if-no-files-found: error
