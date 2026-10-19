@@ -77,9 +77,9 @@ const keyOf = (el) =>
 function snapshot(view) {
   // data-form（どの記録の入力欄か）が変わった欄は戻さない（例：学期の編集で別の学期を選び直したとき）
   const form = (el) => el.closest('[data-form]')?.dataset.form ?? '';
-  const fields = [...view.querySelectorAll('input[id], select[id], textarea[id]')].map((el) => [
+  const fields = [...view.querySelectorAll('input[id], select[id], textarea[id], details[id]')].map((el) => [
     el.id,
-    el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value,
+    el.tagName === 'DETAILS' ? el.open : el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value,
     form(el)
   ]);
   const radios = [...view.querySelectorAll('input[type=radio]:checked')].map((el) => [el.name, el.value]);
@@ -90,7 +90,8 @@ function restore(view, snap) {
   for (const [id, v, f] of snap.fields) {
     const el = document.getElementById(id);
     if (!el || el.dataset.keep === 'off' || (el.closest('[data-form]')?.dataset.form ?? '') !== f) continue;
-    if (el.type === 'checkbox') el.checked = v;
+    if (el.tagName === 'DETAILS') el.open = v;
+    else if (el.type === 'checkbox') el.checked = v;
     else if (el.type !== 'radio' && el.type !== 'file') el.value = v;
   }
   for (const [name, value] of snap.radios)
@@ -210,6 +211,36 @@ document.addEventListener('click', async (e) => {
       });
       if (r?.ok) await api['sync.run']({connectionId: el.dataset.id});
       reload();
+    } else if (action === 'upload') {
+      const r = await api['material.upload']({courseId: el.dataset.courseId});
+      if (r?.error) toast(r.error, {error: true});
+      else if (!r.canceled) uploaded(r);
+    } else if (action === 'remove-material') {
+      const r = await api['material.remove']({materialId: el.dataset.id});
+      if (r?.error) toast(r.error, {error: true});
+      else (toast('外しました（ファイルはゴミ箱にあります）'), reload());
+    } else if (action === 'quiz-pick') {
+      for (const x of document.querySelectorAll('input[name=quiz-make]'))
+        x.checked = el.dataset.pick === 'new' ? !x.dataset.hasQuiz : false;
+    } else if (action === 'quiz-make-picked') {
+      const picked = [...document.querySelectorAll('input[name=quiz-make]:checked')];
+      if (!picked.length) return toast('クイズを作る回を 1 つ以上選んでください', {error: true});
+      const redo = picked.filter((x) => x.dataset.hasQuiz).map((x) => x.dataset.label);
+      if (
+        redo.length &&
+        !window.confirm(`${redo.join('・')}はクイズがあります。作り直しますか？（前の版の記録は残ります）`)
+      )
+        return;
+      const roundIds = picked.map((x) => x.value);
+      const r = await api['quiz.generate']({roundIds});
+      if (r?.error) return toast(r.error, {error: true});
+      for (const x of picked) x.checked = false;
+      toast(
+        roundIds.length > 1
+          ? `${r.queued} 回分のクイズを順に作ります（1 回 1〜2 分）`
+          : 'クイズを作っています（1〜2 分）'
+      );
+      reload();
     } else if (action === 'quiz-range') {
       const picked = [...document.querySelectorAll('input[name=quiz-range]:checked')].map((x) => x.value);
       if (!picked.length) return toast('回を 1 つ以上選んでください', {error: true});
@@ -240,6 +271,82 @@ document.addEventListener('click', async (e) => {
       toast(r?.ok ? 'ブラウザの用意ができました' : r?.message || 'ブラウザの準備に失敗しました', {error: !r?.ok});
       reload();
     }
+  } catch (err) {
+    toast(err.message, {error: true});
+  }
+});
+
+// ---- 授業画面：ファイルを入れる・付箋のあいだで移す ----
+function uploaded(r) {
+  const parts = [];
+  if (r.added) parts.push(`${r.added} 件を入れました`);
+  if (r.dup?.length)
+    parts.push(
+      `${r.dup.map((d) => `${d.name}（${d.where}にあります）`).join('、')}は同じものがあるので入れませんでした`
+    );
+  if (r.failed?.length) parts.push(`${r.failed.map((d) => d.name).join('、')}は入れられませんでした`);
+  toast(parts.join('。') || '入れるファイルがありませんでした', {
+    error: !r.added && !!(r.dup?.length || r.failed?.length)
+  });
+  reload();
+}
+async function moveMaterial(materialId, place) {
+  const r = await api['material.move']({materialId, roundId: place === 'own' ? null : place});
+  if (r?.error) toast(r.error, {error: true});
+  reload();
+}
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest?.('[data-move-material]');
+  if (sel && sel.value)
+    moveMaterial(sel.dataset.moveMaterial, sel.value).catch((err) => toast(err.message, {error: true}));
+});
+const MATERIAL_TYPE = 'application/x-daigaku-material';
+document.addEventListener('dragstart', (e) => {
+  const card = e.target.closest?.('[data-drag-material]');
+  if (!card) return;
+  e.dataTransfer.setData(MATERIAL_TYPE, card.dataset.dragMaterial);
+  e.dataTransfer.effectAllowed = 'move';
+});
+// 付箋の外に落としたファイルで画面が開き直さないよう、ドロップは画面全体で止める（Electron は既定でファイルを開いてしまう）
+document.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  const note = e.target.closest?.('[data-drop]');
+  document.querySelectorAll('.round-note--drop').forEach((n) => n !== note && n.classList.remove('round-note--drop'));
+  if (note) {
+    note.classList.add('round-note--drop');
+    e.dataTransfer.dropEffect = e.dataTransfer.types.includes(MATERIAL_TYPE) ? 'move' : 'copy';
+  } else e.dataTransfer.dropEffect = 'none';
+});
+document.addEventListener('dragleave', (e) => {
+  if (!e.relatedTarget)
+    document.querySelectorAll('.round-note--drop').forEach((n) => n.classList.remove('round-note--drop'));
+});
+document.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  document.querySelectorAll('.round-note--drop').forEach((n) => n.classList.remove('round-note--drop'));
+  const note = e.target.closest?.('[data-drop]');
+  if (!note) return;
+  const place = note.dataset.drop;
+  try {
+    const materialId = e.dataTransfer.getData(MATERIAL_TYPE);
+    if (materialId) return await moveMaterial(materialId, place);
+    // フォルダは入れない（ファイルだけ）
+    const list = [...e.dataTransfer.items]
+      .filter((it) => it.kind === 'file' && it.webkitGetAsEntry?.()?.isFile !== false)
+      .map((it) => it.getAsFile())
+      .filter(Boolean);
+    if (!list.length) return toast('フォルダは入れられません。ファイルをドラッグしてください', {error: true});
+    toast(`${list.length} 件を入れています…`);
+    const files = await Promise.all(
+      list.map(async (f) => ({name: f.name, data: new Uint8Array(await f.arrayBuffer())}))
+    );
+    const r = await api['material.uploadData']({
+      courseId: note.dataset.courseId,
+      roundId: place === 'own' ? null : place,
+      files
+    });
+    if (r?.error) toast(r.error, {error: true});
+    else uploaded(r);
   } catch (err) {
     toast(err.message, {error: true});
   }

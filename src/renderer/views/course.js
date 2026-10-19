@@ -1,4 +1,5 @@
-// 授業画面（SPEC §8.2）：回ごとの付箋に、資料がイラスト付きの紙で貼ってある。M0 は一覧と開くだけ（ドラッグ・クイズは M1・M3）。
+// 授業画面（SPEC §8.2）：回ごとの付箋に、資料がイラスト付きの紙で貼ってある。
+// 自分のファイルは「自分の付箋」に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
 import {esc, jaWrap, progressText} from '../app.js';
 import {fileArt} from './file-art.js';
 
@@ -18,54 +19,102 @@ function hash32(str) {
 }
 const tilt = (id) => ((hash32(id) % 7) - 3) * 0.5; // -1.5 〜 +1.5 度
 
-function fileCard(m, course) {
+const EXTRACTABLE = /\.(pdf|docx|pptx|txt|md)$/i;
+const placeName = (r) => (r ? (r.number === 0 ? 'その他' : `第${r.number}回`) : '自分の付箋');
+
+// places：移せる先（自分の付箋と回）。資料の紙はドラッグで別の付箋へ移せる。キーボードでは「移す」の選択で
+function fileCard(m, course, places) {
   const ok = m.status === 'ok';
   const unread = !m.read_at && ok;
-  return `<div class="file${ok ? '' : ' file--missing'}">
+  const here = m.round_id ?? 'own';
+  const move = ok
+    ? `<select class="file__move" data-move-material="${esc(m.id)}" aria-label="${esc(m.name)} を別の付箋へ移す">
+        <option value="">移す…</option>
+        ${places
+          .filter((p) => p.value !== here)
+          .map((p) => `<option value="${esc(p.value)}">${esc(p.label)}へ</option>`)
+          .join('')}
+      </select>`
+    : '';
+  return `<div class="file${ok ? '' : ' file--missing'}"${ok ? ` draggable="true" data-drag-material="${esc(m.id)}"` : ''}>
     <button class="file__open" data-action="open-material" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}">
       ${fileArt(m.name)}
       ${unread ? `<span class="file__dot" style="--dot-color: var(--c${course.color})" aria-hidden="true"></span><span class="sr-only">未読</span>` : ''}
       <span class="file__name">${esc(m.name)}</span>
       ${m.source === 'notice' ? '<span class="file__tag">お知らせ</span>' : ''}
+      ${m.source === 'upload' ? '<span class="file__tag">自分で追加</span>' : ''}
       ${ok ? '' : '<span class="file__tag">見つかりません</span>'}
     </button>
-    <button class="file__reveal" data-action="reveal-material" data-id="${esc(m.id)}" title="${esc(m.name)} をフォルダで表示">📁 フォルダで表示</button>
+    <div class="file__tools">
+      <button class="file__tool" data-action="reveal-material" data-id="${esc(m.id)}" title="${esc(m.name)} をフォルダで表示">📁 フォルダ</button>
+      ${move}
+      ${m.source === 'upload' ? `<button class="file__tool" data-action="remove-material" data-id="${esc(m.id)}" title="${esc(m.name)} を外してゴミ箱へ">外す</button>` : ''}
+    </div>
   </div>`;
+}
+
+// 自分の付箋：授業画面で入れたファイルが最初に置かれる。ここから回の付箋へ振り分ける
+function ownNote(course, list, places) {
+  return `<section class="round-note round-note--own${list.length ? '' : ' round-note--own-empty'}" data-drop="own" data-course-id="${esc(course.id)}" aria-label="自分の付箋">
+    <header class="round-note__head">
+      <span class="round-note__round">自分の付箋</span>
+      <span class="round-note__title muted">${list.length ? 'ドラッグか「移す」で回の付箋へ振り分けると、その回のクイズの資料になります' : 'ファイルをここにドラッグするか「ファイルを追加」で入れます（元のファイルはそのまま残ります）'}</span>
+      <button class="btn btn--small" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
+    </header>
+    ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course, places)).join('')}</div>` : ''}
+  </section>`;
 }
 
 // これからの回で資料がまだないものは、見出しだけの小さな付箋にする（資料のある回を埋もれさせない）
 // 授業のテスト（回をまたいだ試験前のテスト・まちがえた問題・まとめて作る）
-function testPanel(course, quizzes, canMake, hasKey) {
+// クイズを作る回を選ぶ（1 つでも複数でも）。回ごとに 1 つのクイズを作り、テストは「回を選んでテスト」で回をまたいで解く
+function makePicker(makeable, byRound) {
+  if (!makeable.length) return '';
+  return `<details class="test-panel__range test-panel__make" id="qm-box"${byRound.size ? '' : ' open'}><summary>回を選んでクイズを作る</summary>
+    <div class="test-panel__rounds">${makeable
+      .map((r) => {
+        const z = byRound.get(r.id);
+        const title = r.title_user || r.title || '';
+        return `<label><input type="checkbox" name="quiz-make" id="qm-${esc(r.id)}" value="${esc(r.id)}" data-has-quiz="${z ? '1' : ''}" data-label="${esc(placeName(r))}"> ${esc(placeName(r))}${title ? ` <span class="muted">${esc(title)}</span>` : ''}${z ? ' <span class="muted">（作成済み）</span>' : ''}</label>`;
+      })
+      .join('')}</div>
+    <div class="actions">
+      <button class="btn btn--small btn--primary" data-action="quiz-make-picked">選んだ回のクイズを作る</button>
+      <button class="btn btn--small btn--quiet" data-action="quiz-pick" data-pick="new">まだない回を選ぶ</button>
+      <button class="btn btn--small btn--quiet" data-action="quiz-pick" data-pick="none">選ぶのをやめる</button>
+    </div>
+    <p class="muted">回ごとに作ります（1 回 1〜2 分・数円〜十数円）。作成済みの回は作り直しになります（前の版の記録は残ります）。</p>
+  </details>`;
+}
+
+function testPanel(course, quizzes, makeable, byRound, hasKey) {
   const ready = quizzes.filter((z) => z.count > 0);
   const total = ready.reduce((a, z) => a + z.count, 0);
   const tries = ready.reduce((a, z) => a + (z.tries ?? 0), 0);
   const correct = ready.reduce((a, z) => a + (z.correct ?? 0), 0);
   const all = ready.map((z) => z.id).join(',');
   const roundName = (z) => (z.round_number === 0 ? 'その他' : `第${z.round_number}回`);
-  const make =
-    canMake.length && hasKey
-      ? `<button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(canMake.map((r) => r.id).join(','))}">資料のある ${canMake.length} 回分のクイズをまとめて作る</button>`
-      : '';
+  const make = hasKey ? makePicker(makeable, byRound) : '';
   if (!ready.length)
     return `<section class="test-panel"><h3>この授業のテスト</h3>
-      <p class="muted">${hasKey ? '回ごとの付箋の「この回の資料からクイズを作る」か、まとめて作るとテストができます。' : 'クイズを作るには Claude API キーが必要です。<button class="btn btn--small" data-action="nav" data-route="/settings">設定 → クイズ</button>'}</p>${make ? `<div class="actions">${make}</div>` : ''}</section>`;
+      <p class="muted">${hasKey ? (makeable.length ? '下で回を選んでクイズを作ると、テストができます。' : '資料（PDF・Word・PowerPoint・テキスト）のある回ができると、クイズを作れます。') : 'クイズを作るには Claude API キーが必要です。<button class="btn btn--small" data-action="nav" data-route="/settings">設定 → クイズ</button>'}</p>${make}</section>`;
   return `<section class="test-panel"><h3>この授業のテスト</h3>
     <p class="muted">${ready.length} 回分・${total} 問${tries ? `・これまでの正答率 ${Math.round((correct / tries) * 100)}%` : ''}</p>
     <div class="actions">
       <button class="btn btn--primary" data-action="nav" data-route="/quiz?course=${esc(course.id)}&quizzes=${esc(all)}&mode=exam">全部の回からテスト</button>
       <button class="btn" data-action="nav" data-route="/quiz?course=${esc(course.id)}&quizzes=${esc(all)}&mode=retry">まちがえた問題だけ</button>
-      ${make}
     </div>
-    <details class="test-panel__range"><summary>回を選んでテスト</summary>
-      <div class="test-panel__rounds">${ready.map((z) => `<label><input type="checkbox" name="quiz-range" value="${esc(z.id)}" checked> ${esc(roundName(z))} <span class="muted">${z.count} 問</span></label>`).join('')}</div>
+    <details class="test-panel__range" id="qr-box"><summary>回を選んでテスト</summary>
+      <div class="test-panel__rounds">${ready.map((z) => `<label><input type="checkbox" name="quiz-range" id="qr-${esc(z.id)}" value="${esc(z.id)}" checked> ${esc(roundName(z))} <span class="muted">${z.count} 問</span></label>`).join('')}</div>
       <button class="btn btn--small" data-action="quiz-range" data-course-id="${esc(course.id)}">選んだ回でテスト</button>
     </details>
+    ${make}
   </section>`;
 }
 
 // 回のクイズの行（SPEC §8.2「クイズ」）：作った問題の数・正答率・要確認と「解く」「作り直す」「編集」。資料があってクイズがなければ「作る」
 function quizLine(round, list, course, quiz, gen, hasKey) {
-  const extractable = list.some((m) => m.status === 'ok' && /\.(pdf|docx|pptx|txt|md)$/i.test(m.name));
+  const extractable = list.some((m) => m.status === 'ok' && EXTRACTABLE.test(m.name));
   if (gen)
     return `<div class="round-quiz round-quiz--busy" role="status">${gen.state === 'failed' ? `<span>クイズを作れませんでした：${esc(gen.message)}</span> <button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">もう一度</button>` : `<span class="spinner" aria-hidden="true"></span><span>${esc(gen.message)}</span>`}</div>`;
   if (quiz) {
@@ -82,7 +131,7 @@ function quizLine(round, list, course, quiz, gen, hasKey) {
   return `<div class="round-quiz">${hasKey ? `<button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">この回の資料からクイズを作る</button>` : '<span class="muted">クイズを作るには Claude API キーが必要です（設定 → クイズ）</span>'}</div>`;
 }
 
-function roundNote(round, list, course, today, quizzes = {}) {
+function roundNote(round, list, course, today, quizzes = {}, places = []) {
   const isToday = round.date === today;
   const upcoming = !list.length && round.number > 0 && round.date && round.date > today;
   const head = round.number === 0 ? 'その他' : `第${round.number}回`;
@@ -95,14 +144,14 @@ function roundNote(round, list, course, today, quizzes = {}) {
   ]
     .filter(Boolean)
     .join(' ');
-  return `<section class="${cls}" style="--tilt: ${tilt(round.id)}deg; --note-color: var(--c${course.color})" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}"${isToday ? ' data-scroll-into-view' : ''}>
+  return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: var(--c${course.color})" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}"${isToday ? ' data-scroll-into-view' : ''}>
     <header class="round-note__head">
       <span class="round-note__round">${esc(head)}</span>
       <span class="round-note__title">${esc(title)}</span>
       ${isToday ? '<span class="round-note__today">今日</span>' : ''}
       <span class="round-note__date">${esc(fmtDate(round.date))}</span>
     </header>
-    ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course)).join('')}</div>` : upcoming ? '' : `<p class="round-note__none">まだ資料はありません</p>`}
+    ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course, places)).join('')}</div>` : upcoming ? '' : `<p class="round-note__none">まだ資料はありません</p>`}
     ${quizLine(round, list, course, quizzes.byRound?.get(round.id), quizzes.gen?.[round.id], quizzes.hasKey)}
   </section>`;
 }
@@ -128,11 +177,16 @@ export function renderCourse({data, progress}, courseId) {
     gen: data.quiz?.generating ?? {},
     hasKey: !!data.quiz?.key?.set
   };
-  const canMake = shown.filter(
-    (r) =>
-      !quizInfo.byRound.has(r.id) &&
-      (byRound.get(r.id) ?? []).some((m) => m.status === 'ok' && /\.(pdf|docx|pptx|txt|md)$/i.test(m.name))
+  // クイズを作れる回：読める資料（PDF・Word・PowerPoint・テキスト）がある回
+  const makeable = shown.filter((r) =>
+    (byRound.get(r.id) ?? []).some((m) => m.status === 'ok' && EXTRACTABLE.test(m.name))
   );
+  const own = materials.filter((m) => !m.round_id);
+  // 移せる先：自分の付箋・回（「その他」はまだなくても選べるようにはしない。回は資料の有無にかかわらず全部）
+  const places = [
+    {value: 'own', label: '自分の付箋'},
+    ...rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length).map((r) => ({value: r.id, label: placeName(r)}))
+  ];
   const status = progress
     ? progressText(progress)
     : running
@@ -152,10 +206,10 @@ export function renderCourse({data, progress}, courseId) {
       <span class="muted" id="sync-status" role="status">${esc(status)}</span>
     </div>
     <p class="muted course-help" id="full-help">ふだんの同期は今日の前後 7 日の回だけを見ます。前の回の資料が足りないときは「過去の回も全部確かめる」を押してください（数分かかります）。</p>
-    ${testPanel(course, quizzes, canMake, quizInfo.hasKey)}
-    ${
-      shown.length
-        ? `<div class="round-notes">${shown.map((r) => roundNote(r, byRound.get(r.id) ?? [], course, today, quizInfo)).join('')}</div>`
-        : `<div class="empty"><p>まだ回がありません。同期すると、回ごとの付箋がここに並びます。</p></div>`
-    }`;
+    ${testPanel(course, quizzes, makeable, quizInfo.byRound, quizInfo.hasKey)}
+    <div class="round-notes">
+      ${ownNote(course, own, places)}
+      ${shown.map((r) => roundNote(r, byRound.get(r.id) ?? [], course, today, quizInfo, places)).join('')}
+    </div>
+    ${shown.length ? '' : `<div class="empty"><p>まだ回がありません。同期すると、回ごとの付箋がここに並びます。</p></div>`}`;
 }

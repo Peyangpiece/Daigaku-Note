@@ -461,13 +461,28 @@ h2[tabindex='-1']:focus {
   background: var(--card);
   color: var(--paper-ink);
 }
-/* 「フォルダで表示」：ホバーかキーボードで資料を選んだときに出る。文字ラベル付き */
-.file__reveal {
+/* 資料の道具（フォルダで表示・移す・外す）：ホバーかキーボードで資料を選んだときに出る。文字ラベル付き */
+.file__tools {
   position: absolute;
   left: 50%;
-  bottom: -14px;
+  top: 100%;
+  margin-top: 4px;
   transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
   white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion);
+  z-index: 2;
+}
+.file:hover .file__tools,
+.file:focus-within .file__tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+.file__tool,
+.file__move {
   padding: 2px 10px;
   border: 0;
   border-radius: 999px;
@@ -477,18 +492,64 @@ h2[tabindex='-1']:focus {
   font: inherit;
   font-size: var(--fs-small);
   cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--motion);
-  z-index: 1;
 }
-.file:hover .file__reveal,
-.file:focus-within .file__reveal {
-  opacity: 1;
-  pointer-events: auto;
+.file__move {
+  max-width: 7.5em;
 }
-.file__reveal:focus-visible {
+.file__tool:focus-visible,
+.file__move:focus-visible {
   outline: 2px solid var(--focus);
+}
+.file[draggable='true'] {
+  cursor: grab;
+}
+.file[draggable='true']:active {
+  cursor: grabbing;
+}
+
+/* 自分の付箋：自分で入れたファイルが最初に置かれる。行の幅いっぱい。罫線入りの白い付箋に黄色のテープ */
+.round-note--own {
+  --note-bg: color-mix(in srgb, var(--c1) 14%, var(--card));
+  grid-column: 1 / -1;
+  min-height: 0;
+  transform: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 27px,
+      color-mix(in srgb, var(--paper-ink) 8%, transparent) 27px 28px
+    ),
+    linear-gradient(315deg, transparent 0 14px, var(--note-bg) 14px);
+}
+.round-note--own:hover {
+  transform: translateY(-1px);
+}
+.round-note--own::before {
+  background: color-mix(in srgb, var(--c1) 70%, transparent);
+  transform: rotate(-2deg);
+}
+.round-note--own .round-note__head {
+  align-items: center;
+}
+.round-note--own .round-note__title {
+  white-space: normal;
+  font-weight: 400;
+  font-size: var(--fs-small);
+}
+.round-note--own-empty .round-note__head {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.round-note--own .round-note__files {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 120px));
+  padding-bottom: 8px;
+}
+/* ドラッグで上に来た付箋 */
+.round-note--drop {
+  outline: 3px dashed var(--paper-ink);
+  outline-offset: 4px;
+  transform: rotate(0deg) scale(1.01);
 }
 
 /* ボタン・入力 */
@@ -776,6 +837,11 @@ h2[tabindex='-1']:focus {
   cursor: pointer;
   margin-top: var(--space-1);
   font-size: var(--fs-small);
+}
+.test-panel__make {
+  margin-top: var(--space-2);
+  padding-top: var(--space-1);
+  border-top: 1px dashed color-mix(in srgb, var(--paper-ink) 20%, transparent);
 }
 .test-panel__rounds {
   display: flex;

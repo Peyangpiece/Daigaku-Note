@@ -1,5 +1,7 @@
 // IPC の契約（DESIGN-M0 §4）。レンダラから受け取る値は必ず検査する。パスは受け取らない。
 import {ipcMain, dialog, shell, app} from 'electron';
+import {promises as fsp} from 'node:fs';
+import path from 'node:path';
 import {isUlid} from '../shared/ids.js';
 import {checkDownloadDir, defaultRoot} from '../shared/paths.js';
 import {courseFolderName} from '../shared/naming.js';
@@ -266,11 +268,75 @@ export function registerIpc(ctx, {openWindow}) {
     shell.showItemInFolder(m.path);
     return {ok: true};
   });
-  handle('material.move', ({materialId, roundId}) => {
+  // 資料を別の回へ移す。roundId が null なら「自分の付箋」へ。すぐ動かす（同期の列に並べると、長い同期のあいだ待たされる）
+  handle('material.move', async ({materialId, roundId}) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
-    const r = repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません');
-    if (r.course_id !== m.course_id) bad('別の授業の回には移せません');
-    return {jobId: jobs.enqueue('move', {materialId: m.id, roundId: r.id}).id};
+    const r = roundId === null ? null : (repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません'));
+    if (r && r.course_id !== m.course_id) bad('別の授業の回には移せません');
+    if ((r?.id ?? null) === m.round_id) return {ok: true};
+    if (m.status !== 'ok') bad('ファイルが見つからないため移せません');
+    const course = repo.get('course', m.course_id);
+    const term = repo.get('term', course.term_id);
+    await files.relocate({term, course, material: m, round: r});
+    return {ok: true};
+  });
+
+  // 自分のファイルを授業に入れる。最初は「自分の付箋」（roundId を渡せばその回）に置く。
+  // ファイルの場所はレンダラから受け取らない：「ファイルを追加」はメインで選ぶ窓を開き、ドラッグは中身（バイト列）と名前だけを受け取る
+  const MAX_UPLOAD = 300 * 1024 * 1024;
+  const placeFor = (courseId, roundId) => {
+    const course = repo.get('course', id(courseId) ?? bad('授業が不正です')) ?? bad('授業がありません');
+    const term = repo.get('term', course.term_id) ?? bad('学期がありません');
+    const round = roundId ? (repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません')) : null;
+    if (round && round.course_id !== course.id) bad('別の授業の回には入れられません');
+    return {course, term, round};
+  };
+  const addAll = async (place, items) => {
+    const out = {added: 0, dup: [], failed: []};
+    for (const {name, read} of items) {
+      try {
+        const r = await files.addOwn({...place, name, data: await read()});
+        if (r.result === 'dup') {
+          const where = r.material.round_id ? repo.get('round', r.material.round_id) : null;
+          out.dup.push({name, where: where ? (where.number === 0 ? 'その他' : `第${where.number}回`) : '自分の付箋'});
+        } else out.added++;
+      } catch (e) {
+        log.warn(`ファイルを入れられませんでした: ${name}（${e.message}）`);
+        out.failed.push({name, message: e.message});
+      }
+    }
+    return out;
+  };
+  handle('material.upload', async ({courseId, roundId = null}) => {
+    const place = placeFor(courseId, roundId);
+    const r = await dialog.showOpenDialog({title: `${place.course.name} に入れるファイル`, properties: ['openFile', 'multiSelections']});
+    if (r.canceled || !r.filePaths.length) return {added: 0, dup: [], failed: [], canceled: true};
+    const items = [];
+    for (const p of r.filePaths) {
+      const st = await fsp.stat(p);
+      if (st.size > MAX_UPLOAD) bad(`${path.basename(p)} は大きすぎます（300MB まで）`);
+      items.push({name: path.basename(p), read: () => fsp.readFile(p)});
+    }
+    return addAll(place, items);
+  });
+  handle('material.uploadData', async ({courseId, roundId = null, files: list}) => {
+    const place = placeFor(courseId, roundId);
+    if (!Array.isArray(list) || !list.length || list.length > 50) bad('ファイルが不正です');
+    const items = list.map((f) => {
+      const name = str(f?.name, 255) ?? bad('ファイル名が不正です');
+      const data = f?.data instanceof Uint8Array ? f.data : f?.data instanceof ArrayBuffer ? new Uint8Array(f.data) : bad('ファイルの中身が不正です');
+      if (data.byteLength > MAX_UPLOAD) bad(`${name} は大きすぎます（300MB まで）`);
+      return {name, read: async () => Buffer.from(data.buffer, data.byteOffset, data.byteLength)};
+    });
+    return addAll(place, items);
+  });
+  // 自分で入れた資料を外す（ファイルは OS のゴミ箱へ）。LMS から取った資料は外さない（次の同期でまた取ってくるため）
+  handle('material.remove', async ({materialId}) => {
+    const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
+    if (m.source !== 'upload') bad('LMS から取った資料は外せません');
+    if (m.status === 'ok') await files.trash(m.path);
+    repo.remove('material', m.id);
+    return {ok: true};
   });
 
   handle('settings.pickDownloadDir', async () => {
