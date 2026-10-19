@@ -764,3 +764,98 @@ h3 {
   background: transparent;
   color: #2b2b2b;
 }
+
+/* 文字隠し：水色のマーカー。赤の成分が 0 の色を乗算で重ねるので、下の文字は読め、赤シートの下では黒くなる */
+.anno-mask {
+  position: absolute;
+  background: #00d2ff; /* main/pdf-export.js の MARKER_HEX と同じ */
+  mix-blend-mode: multiply;
+  border-radius: 2px;
+  cursor: move;
+}
+.anno-mask--draft {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.anno-mask.is-selected {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 1px;
+}
+.viewer-pages[data-tool='mask'] .pdf-page {
+  cursor: crosshair;
+}
+
+/* 赤シート：赤を乗算で重ねる（白い紙 → 赤、黒い文字 → 黒、水色のマーカー → 黒）。ツールバーより下 */
+.red-sheet {
+  position: fixed;
+  z-index: 15;
+  min-width: 120px;
+  min-height: 60px;
+  background: #e60000; /* 青の成分も 0 にして、マーカーの下を真っ黒にする */
+  mix-blend-mode: multiply;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+  resize: both;
+  overflow: hidden;
+  touch-action: none;
+}
+.red-sheet:active {
+  cursor: grabbing;
+}
+.red-sheet__label {
+  position: absolute;
+  top: 4px;
+  left: 10px;
+  color: #fff;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+}
+.viewer-bar__sheet[aria-pressed='true'] {
+  color: #e60000 !important;
+  border-color: #e60000 !important;
+}
+.viewer-bar__history {
+  display: inline-flex;
+  gap: 2px;
+}
+.viewer-bar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 書き出しの確認 */
+.export-dialog {
+  max-width: 440px;
+  border: 0;
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow-hover);
+}
+.export-dialog::backdrop {
+  background: rgba(43, 43, 43, 0.35);
+}
+.export-dialog form {
+  display: grid;
+  gap: 12px;
+}
+.export-dialog p {
+  margin: 0;
+}
+.export-dialog fieldset {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+.export-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

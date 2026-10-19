@@ -10,7 +10,7 @@ export default [
         setInterval: 'readonly', clearInterval: 'readonly', queueMicrotask: 'readonly', structuredClone: 'readonly',
         fetch: 'readonly', URL: 'readonly', URLSearchParams: 'readonly', AbortSignal: 'readonly', TextEncoder: 'readonly',
         Intl: 'readonly', confirm: 'readonly', window: 'readonly', document: 'readonly', location: 'readonly', CustomEvent: 'readonly', require: 'readonly',
-        IntersectionObserver: 'readonly'
+        IntersectionObserver: 'readonly', NodeFilter: 'readonly'
       }
     },
     rules: {

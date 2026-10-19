@@ -17,9 +17,14 @@ const tilt = (id) => ((hash32(id) % 7) - 3) * 0.5; // -1.5 〜 +1.5 度
 
 function fileCard(m, course) {
   const ok = m.status === 'ok';
-  const tag = m.source === 'notice' ? '<span class="file__tag">お知らせ</span>' : '';
-  // PDF はアプリ内のビューアで開いて編集する。ほかは OS の既定のアプリで開く
-  const action = extOf(m.name) === 'pdf' ? 'open-pdf' : 'open-material';
+  const tag =
+    m.source === 'notice'
+      ? '<span class="file__tag">お知らせ</span>'
+      : m.source === 'export'
+        ? '<span class="file__tag">書き出し</span>'
+        : '';
+  // PDF はアプリ内のビューアで開いて編集する。書き出した PDF（§9.7：注釈の対象にしない）とほかの種類は OS の既定のアプリで開く
+  const action = extOf(m.name) === 'pdf' && m.source !== 'export' ? 'open-pdf' : 'open-material';
   return `<div class="file${ok ? '' : ' file--missing'}">
     <button class="file__open" data-action="${action}" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}">
       ${fileArt(m.name)}

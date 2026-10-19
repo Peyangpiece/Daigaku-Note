@@ -1,8 +1,9 @@
 // PDF の注釈（SPEC §9.3）の形と検査。副作用なし。レンダラから来た値はここを通してから DB に入れる。
 // 座標は PDF のユーザー空間（左下原点、pt）。rect の (x, y) は箱の左下、w・h は幅と高さ。
 // 文字入れ：フォントはヒラギノ角ゴのみ（選べない）。変えられるのはサイズ・太字・色。
+// 文字隠し（mask）：水色のマーカー。色は固定で、body にはマーカーの下の文字（hiddenText）を入れる。
 
-export const KINDS = ['text', 'note'];
+export const KINDS = ['text', 'note', 'mask'];
 export const TEXT_MAX = 2000;
 export const NOTE_MAX = 5000;
 export const SIZE_MIN = 6;
@@ -42,8 +43,8 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
   if (Math.abs(x) > COORD_MAX || Math.abs(y) > COORD_MAX || w < 0 || h < 0 || w > COORD_MAX || h > COORD_MAX)
     throw new Error('位置が不正です');
   const text = typeof body === 'string' ? body : '';
-  if (text.length > (kind === 'text' ? TEXT_MAX : NOTE_MAX))
-    throw new Error(`本文が長すぎます（${kind === 'text' ? TEXT_MAX : NOTE_MAX} 文字まで）`);
+  const max = kind === 'note' ? NOTE_MAX : TEXT_MAX;
+  if (text.length > max) throw new Error(`本文が長すぎます（${max} 文字まで）`);
   const s = style && typeof style === 'object' ? style : {};
   let cleanStyle;
   if (kind === 'text') {
@@ -52,8 +53,11 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
       bold: s.bold === true,
       color: isHex(s.color) ? s.color.toLowerCase() : DEFAULT_TEXT_COLOR
     };
-  } else {
+  } else if (kind === 'note') {
     cleanStyle = {color: isHex(s.color) ? s.color.toLowerCase() : DEFAULT_NOTE_COLOR};
+  } else {
+    if (w === 0 || h === 0) throw new Error('マーカーの大きさが不正です');
+    cleanStyle = {};
   }
   return {
     page,

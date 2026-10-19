@@ -178,6 +178,9 @@ export class Repo {
   findMaterialByHash(courseId, sha256) {
     return this.db.prepare('SELECT * FROM material WHERE course_id = ? AND sha256 = ?').get(courseId, sha256) ?? null;
   }
+  findMaterialByPath(p) {
+    return this.db.prepare('SELECT * FROM material WHERE path = ?').get(p) ?? null;
+  }
   createMaterial(row) {
     return this.insert('material', {id: ulid(), downloaded_at: now(), ...row});
   }

@@ -1,10 +1,15 @@
 // PDF ビューアと編集（SPEC §9）。アプリ内で開けて編集できるのは PDF だけ。
-// 編集は「文字入れ」（フォントはヒラギノ角ゴのみ。サイズ・太字・色を変えられる）と「付箋」（メモ）。
+// 編集は「文字入れ」（フォントはヒラギノ角ゴのみ。サイズ・太字・色を変えられる）・「付箋」（メモ）・「文字隠し」。
+// 文字隠しは水色のマーカー。ふだんは下の文字が読め、赤シートをかぶせたところだけ黒くつぶれて読めなくなる。
+//   仕組み：マーカーの水色は赤の成分が 0（#00d2ff）で、ページに「乗算」で重ねる。赤シートも赤（赤だけ通す）を乗算で重ねるので、
+//   マーカーの部分は 赤 0 × … = 黒 になる。白い紙は赤に、黒い文字は黒のままになり、本物の赤シートと同じ見え方になる
+// 取り消し・やり直し（§9.1：200 手まで。履歴はメモリだけ）。注釈付きの PDF を別のファイルに書き出せる（§9.7）。
 // 元の PDF は変えない（§9.1）。注釈はページ座標（PDF のユーザー空間、左下原点、pt）でメインの DB に保存する。
 // ほかの画面と違い、状態が変わるたびに描き直さない（app.js が mount / unmount だけ呼ぶ）。
 // pdf.js は互換版（legacy）を使う。通常版は Map.prototype.getOrInsertComputed などの新しい機能を前提にしており、
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
+import {toast} from '../app.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -19,6 +24,10 @@ const SIZE_MIN = 6,
   SIZE_MAX = 72,
   DEFAULT_SIZE = 12,
   NOTE_SIZE = 20;
+const FONT = "'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif"; // notebook.css の .anno-text と同じ
+const LINE_HEIGHT = 1.4; // notebook.css の .anno-text と同じ
+const EXPORT_PX_PER_PT = 4; // 書き出す文字入れの画像の細かさ（1pt = 4px、288dpi）
+const HISTORY_MAX = 200;
 const TEXT_COLORS = ['#2b2b2b', '#d93025', '#1a73e8', '#188038', '#e37400', '#9334e6', '#c2185b', '#ffffff'];
 // 付箋は 6 色（tokens.css の --c1〜--c6 の明るい側の値）。既定は授業の色
 const NOTE_COLORS = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70'];
@@ -66,6 +75,12 @@ const BAR = `
       <button type="button" data-tool="select" title="選択・移動（V）">選択</button>
       <button type="button" data-tool="text" title="文字入れ（T）">文字</button>
       <button type="button" data-tool="note" title="付箋（M）">付箋</button>
+      <button type="button" data-tool="mask" title="文字隠し：文字の上をなぞって水色のマーカーを引く（H）">文字隠し</button>
+    </div>
+    <button type="button" class="viewer-bar__sheet" data-v="sheet" aria-pressed="false" title="赤シートを出す・しまう（R）。マーカーのところだけ黒く隠れます">赤シート</button>
+    <div class="viewer-bar__history">
+      <button type="button" data-v="undo" disabled title="取り消す（Ctrl/⌘+Z）" aria-label="取り消す">↶</button>
+      <button type="button" data-v="redo" disabled title="やり直す（Shift+Ctrl/⌘+Z）" aria-label="やり直す">↷</button>
     </div>
     <div class="viewer-bar__group" data-group="text" hidden>
       <span class="viewer-bar__font" title="文字入れのフォントはヒラギノ角ゴです">ヒラギノ角ゴ</span>
@@ -87,8 +102,25 @@ const BAR = `
       <button type="button" data-v="zoom-in" aria-label="拡大">＋</button>
       <button type="button" data-v="fit" title="幅に合わせる">幅</button>
     </div>
+    <button type="button" class="btn btn--small" data-v="export" title="注釈を描き込んだ PDF を別のファイルに作る（Ctrl/⌘+E）">書き出し</button>
     <span class="muted viewer-bar__status" data-v="status" aria-live="polite"></span>
   </div>
+  <dialog class="export-dialog" data-v="export-dialog">
+    <form method="dialog">
+      <h3>注釈付きで書き出す</h3>
+      <p class="muted">元の PDF はそのまま残し、注釈を描き込んだ別の PDF を作ります。</p>
+      <fieldset>
+        <legend>文字隠しのマーカー</legend>
+        <label><input type="radio" name="markers" value="blue" checked /> 水色のまま（印刷して赤シートをかぶせると隠れます）</label>
+        <label><input type="radio" name="markers" value="black" /> 黒く塗りつぶす</label>
+      </fieldset>
+      <label><input type="checkbox" name="notes" checked /> 付箋を PDF のメモ（注釈）として入れる</label>
+      <div class="export-dialog__foot">
+        <button type="submit" class="btn" value="cancel">やめる</button>
+        <button type="submit" class="btn btn--primary" value="ok">書き出す…</button>
+      </div>
+    </form>
+  </dialog>
   <div class="viewer-pages" data-v="pages"><p class="muted">読み込み中…</p></div>`;
 
 class Viewer {
@@ -121,6 +153,10 @@ class Viewer {
         ? COURSE_HEX[course.color]
         : NOTE_COLORS[0];
     this.listeners = [];
+    this.chains = new Set(); // 保存中の処理（書き出しの前に待つ）
+    this.undoStack = [];
+    this.redoStack = [];
+    this.sheet = null;
   }
 
   $(name) {
@@ -271,6 +307,9 @@ class Viewer {
     if (a.kind === 'text') {
       el.className = 'anno-text';
       el.textContent = a.body;
+    } else if (a.kind === 'mask') {
+      el.className = 'anno-mask';
+      el.title = '文字隠し';
     } else {
       el.className = 'anno-note';
       el.innerHTML = `<button type="button" class="anno-note__icon" aria-label="付箋"></button>
@@ -285,6 +324,12 @@ class Viewer {
         this.noteTitle(a);
         this.scheduleSave(a);
       });
+      // 本文の書き換えは、書き始めから書き終わりまでを 1 手として取り消せる
+      ta.addEventListener('focus', () => (a.bodyBefore = this.snap(a)));
+      ta.addEventListener('blur', () => {
+        if (a.bodyBefore) this.record(a.key, a.bodyBefore, this.snap(a));
+        a.bodyBefore = null;
+      });
     }
     a.el = el;
     p.layer.append(el);
@@ -298,7 +343,7 @@ class Viewer {
     if (a.kind === 'text') {
       a.el.style.fontWeight = a.style.bold ? '700' : '400';
       a.el.style.color = a.style.color;
-    } else {
+    } else if (a.kind === 'note') {
       a.el.style.setProperty('--note', a.style.color);
       this.noteTitle(a);
     }
@@ -321,6 +366,9 @@ class Viewer {
     if (a.kind === 'text') {
       a.el.style.fontSize = `${a.style.size * vp.scale}px`;
       a.el.style.maxWidth = `${Math.max(40, vp.width - vx)}px`;
+    } else if (a.kind === 'mask') {
+      a.el.style.width = `${a.rect.w * vp.scale}px`;
+      a.el.style.height = `${a.rect.h * vp.scale}px`;
     } else a.el.style.setProperty('--note-size', `${NOTE_SIZE * vp.scale}px`);
   }
 
@@ -347,6 +395,7 @@ class Viewer {
         body: '',
         style
       });
+      a.fresh = true; // 取り消すと「置く前」に戻る
       this.select(a);
       this.edit(a);
     } else {
@@ -360,6 +409,7 @@ class Viewer {
         body: '',
         style: {color: this.noteColor}
       });
+      this.record(a.key, null, this.snap(a));
       this.select(a);
       this.scheduleSave(a, 0);
       this.openNote(a, true);
@@ -378,6 +428,8 @@ class Viewer {
     if (this.editing === a) return;
     this.finishEdit();
     this.editing = a;
+    a.editBefore = a.fresh ? null : this.snap(a);
+    a.fresh = false;
     const el = a.el;
     el.contentEditable = 'plaintext-only';
     el.classList.add('is-editing');
@@ -409,10 +461,14 @@ class Viewer {
     el.contentEditable = 'false';
     el.classList.remove('is-editing');
     const body = el.innerText.replace(/\n+$/, '').slice(0, 2000);
-    if (!body.trim()) return this.removeAnno(a);
+    if (!body.trim()) {
+      this.removeAnno(a, false);
+      return this.record(a.key, a.editBefore, null);
+    }
     if (body !== el.innerText) el.textContent = body;
     a.body = body;
     this.measure(a);
+    this.record(a.key, a.editBefore, this.snap(a));
     this.scheduleSave(a, 0);
   }
 
@@ -423,8 +479,10 @@ class Viewer {
     if (open) pop.querySelector('textarea').focus();
   }
 
-  removeAnno(a) {
+  /** 注釈を消す。record が真なら取り消しの履歴に積む */
+  removeAnno(a, record = true) {
     if (a.removed) return;
+    if (record) this.record(a.key, this.snap(a), null);
     a.removed = true;
     clearTimeout(a.timer);
     a.el.remove();
@@ -466,7 +524,7 @@ class Viewer {
   track(a, fn) {
     this.inflight++;
     this.setStatus('saving');
-    a.chain = (a.chain ?? Promise.resolve())
+    const chain = (a.chain = (a.chain ?? Promise.resolve())
       .then(fn)
       .then(
         () => (this.failed = false),
@@ -477,8 +535,75 @@ class Viewer {
       )
       .finally(() => {
         this.inflight--;
+        this.chains.delete(chain);
         this.setStatus();
-      });
+      }));
+    this.chains.add(chain);
+  }
+
+  /** 保存待ち・保存中をすべて終わらせる */
+  async settle() {
+    this.flushAll();
+    while (this.chains.size) await Promise.allSettled([...this.chains]);
+    return !this.failed;
+  }
+
+  // ---- 取り消し・やり直し（§9.1）。1 手 = ある注釈の「前」と「後」の写し。null は「ない」 ----
+  snap(a) {
+    if (!a || a.removed) return null;
+    return structuredClone({page: a.page, kind: a.kind, rect: a.rect, body: a.body, style: a.style});
+  }
+
+  record(key, before, after) {
+    if (JSON.stringify(before) === JSON.stringify(after)) return;
+    this.undoStack.push({key, before, after});
+    if (this.undoStack.length > HISTORY_MAX) this.undoStack.shift();
+    this.redoStack = [];
+    this.updateHistory();
+  }
+
+  undo() {
+    this.finishEdit();
+    const step = this.undoStack.pop();
+    if (!step) return;
+    this.restore(step.key, step.before);
+    this.redoStack.push(step);
+    this.updateHistory();
+  }
+
+  redo() {
+    this.finishEdit();
+    const step = this.redoStack.pop();
+    if (!step) return;
+    this.restore(step.key, step.after);
+    this.undoStack.push(step);
+    this.updateHistory();
+  }
+
+  /** 注釈を写しの状態に戻す。写しが null なら消し、ない注釈なら作り直す（DB には新しい行として保存） */
+  restore(key, snap) {
+    let a = this.annos.get(key);
+    if (!snap) {
+      if (a) this.removeAnno(a, false);
+      return;
+    }
+    const data = structuredClone(snap);
+    if (!a) a = this.addAnno({key, id: null, ...data});
+    else {
+      if (a.page !== data.page) this.pages[data.page - 1].layer.append(a.el);
+      Object.assign(a, data);
+      if (a.kind === 'text') a.el.textContent = a.body;
+      else if (a.kind === 'note') a.el.querySelector('textarea').value = a.body;
+      this.applyStyle(a);
+      this.place(a);
+    }
+    this.select(a);
+    this.scheduleSave(a, 0);
+  }
+
+  updateHistory() {
+    this.$('undo').disabled = !this.undoStack.length;
+    this.$('redo').disabled = !this.redoStack.length;
   }
 
   flushAll() {
@@ -515,14 +640,16 @@ class Viewer {
   }
 
   /** 選んだ注釈に書式を当てる。何も選んでいなければ次に置く注釈の書式にする */
-  setTextStyle(patch) {
+  setTextStyle(patch, record = true) {
     const a = this.selected;
     if (a?.kind === 'text') {
+      const before = this.snap(a);
       Object.assign(a.style, patch);
       this.applyStyle(a);
       this.place(a);
       if (this.editing !== a) {
         this.measure(a);
+        if (record) this.record(a.key, before, this.snap(a));
         this.scheduleSave(a);
       }
     }
@@ -530,10 +657,12 @@ class Viewer {
     this.updateBar();
   }
 
-  setNoteColor(color) {
+  setNoteColor(color, record = true) {
     const a = this.selected;
     if (a?.kind === 'note') {
+      const before = this.snap(a);
       a.style.color = color;
+      if (record) this.record(a.key, before, this.snap(a));
       this.applyStyle(a);
       this.scheduleSave(a);
     }
@@ -581,6 +710,10 @@ class Viewer {
         this.setZoom([...ZOOMS].reverse().find((z) => z < this.zoom - 0.001) ?? this.zoom);
       else if (t.dataset.v === 'fit') this.setZoom(this.fitZoom());
       else if (t.dataset.v === 'back') this.onBack();
+      else if (t.dataset.v === 'undo') this.undo();
+      else if (t.dataset.v === 'redo') this.redo();
+      else if (t.dataset.v === 'sheet') this.toggleSheet();
+      else if (t.dataset.v === 'export') this.openExport();
     });
     const size = this.$('size');
     this.on(size, 'change', () => {
@@ -588,8 +721,33 @@ class Viewer {
       size.value = String(v);
       this.setTextStyle({size: v});
     });
-    this.on(this.$('text-custom'), 'input', (e) => this.setTextStyle({color: e.target.value.toLowerCase()}));
-    this.on(this.$('note-custom'), 'input', (e) => this.setNoteColor(e.target.value.toLowerCase()));
+    // 色の選び皿は動かしている間ずっと input が来るので、選び終わり（change）で 1 手にまとめる
+    const pickStart = () => {
+      if (!this.pick && this.selected && this.editing !== this.selected)
+        this.pick = {key: this.selected.key, before: this.snap(this.selected)};
+    };
+    const pickEnd = () => {
+      const pk = this.pick;
+      this.pick = null;
+      if (pk) this.record(pk.key, pk.before, this.snap(this.annos.get(pk.key)));
+    };
+    this.on(this.$('text-custom'), 'input', (e) => {
+      pickStart();
+      this.setTextStyle({color: e.target.value.toLowerCase()}, false);
+    });
+    this.on(this.$('note-custom'), 'input', (e) => {
+      pickStart();
+      this.setNoteColor(e.target.value.toLowerCase(), false);
+    });
+    this.on(this.$('text-custom'), 'change', pickEnd);
+    this.on(this.$('note-custom'), 'change', pickEnd);
+    const dialog = this.$('export-dialog');
+    this.on(dialog, 'close', () => {
+      if (dialog.returnValue === 'ok') {
+        const f = dialog.querySelector('form');
+        this.exportPdf({markers: f.markers.value, notes: f.notes.checked});
+      }
+    });
   }
 
   bindPages() {
@@ -628,6 +786,7 @@ class Viewer {
       this.select(a);
       this.drag = {
         a,
+        before: this.snap(a),
         x: e.clientX,
         y: e.clientY,
         left: parseFloat(a.el.style.left),
@@ -644,10 +803,253 @@ class Viewer {
     const box = pageEl.getBoundingClientRect();
     if (this.tool === 'select') return this.select(null);
     e.preventDefault();
+    if (this.tool === 'mask') return this.startMask(e, p, box);
     this.createAt(this.tool, p, e.clientX - box.left, e.clientY - box.top);
   }
 
+  // ---- 文字隠し：文字の上をなぞって水色のマーカーを引く。文字の行に高さを合わせる ----
+  startMask(e, p, box) {
+    this.select(null);
+    p.textPromise ??= this.textItems(p);
+    const el = document.createElement('div');
+    el.className = 'anno-mask anno-mask--draft';
+    p.layer.append(el);
+    const x = e.clientX - box.left,
+      y = e.clientY - box.top;
+    this.drawing = {p, el, x0: x, y0: y, x1: x, y1: y, pointer: e.pointerId};
+    this.pagesEl.setPointerCapture(e.pointerId);
+    this.drawDraft();
+  }
+
+  drawDraft() {
+    const d = this.drawing;
+    const h = Math.max(Math.abs(d.y1 - d.y0), DEFAULT_SIZE * d.p.viewport.scale);
+    const top = Math.abs(d.y1 - d.y0) < 12 ? d.y0 - h / 2 : Math.min(d.y0, d.y1);
+    Object.assign(d.el.style, {
+      left: `${Math.min(d.x0, d.x1)}px`,
+      top: `${top}px`,
+      width: `${Math.abs(d.x1 - d.x0)}px`,
+      height: `${Math.abs(d.y1 - d.y0) < 12 ? h : Math.abs(d.y1 - d.y0)}px`
+    });
+  }
+
+  /** ページの横書きの文字列と、その PDF 座標での箱（x・基線 y・幅・高さ） */
+  async textItems(p) {
+    const tc = await p.page.getTextContent();
+    return tc.items
+      .filter(
+        (it) => it.str && Math.abs(it.transform[1]) < 1e-3 && Math.abs(it.transform[2]) < 1e-3 && it.transform[0] > 0
+      )
+      .map((it) => ({
+        str: it.str,
+        x: it.transform[4],
+        y: it.transform[5],
+        w: it.width,
+        h: it.height || Math.abs(it.transform[3])
+      }))
+      .filter((it) => it.w > 0 && it.h > 0);
+  }
+
+  async finishMask() {
+    const d = this.drawing;
+    this.drawing = null;
+    d.el.remove();
+    const vp = d.p.viewport;
+    const [ax, ay] = vp.convertToPdfPoint(d.x0, d.y0);
+    const [bx, by] = vp.convertToPdfPoint(d.x1, d.y1);
+    let x1 = Math.min(ax, bx),
+      x2 = Math.max(ax, bx);
+    const items = await d.p.textPromise.catch(() => []);
+    if (this.destroyed) return;
+    const pieces = (list, from, to) =>
+      list
+        .slice()
+        .sort((a, b) => b.y - a.y || a.x - b.x)
+        .map((it) => {
+          const n = it.str.length;
+          const s = Math.max(0, Math.floor(((from - it.x) / it.w) * n));
+          const e = Math.min(n, Math.ceil(((to - it.x) / it.w) * n));
+          return it.str.slice(s, e);
+        })
+        .join('');
+    let rect, hidden;
+    if (Math.abs(d.y1 - d.y0) < 12) {
+      // 横になぞった：なぞり始めの高さにある行に合わせる。動かさずに押しただけなら、その語の上
+      const onLine = items.filter((it) => ay >= it.y - it.h * 0.3 && ay <= it.y + it.h * 1.05);
+      const hit = onLine.filter((it) => it.x < x2 && it.x + it.w > x1);
+      if (x2 - x1 < 2) {
+        const word = onLine.find((it) => it.x <= x1 && x1 <= it.x + it.w);
+        if (!word) return;
+        hit.splice(0, hit.length, word);
+        x1 = word.x;
+        x2 = word.x + word.w;
+      }
+      if (hit.length) {
+        const h = Math.max(...hit.map((it) => it.h));
+        const base = Math.min(...hit.map((it) => it.y));
+        rect = {x: x1, y: base - h * 0.22, w: x2 - x1, h: h * 1.18};
+        hidden = pieces(hit, x1, x2);
+      } else rect = {x: x1, y: ay - DEFAULT_SIZE / 2, w: x2 - x1, h: DEFAULT_SIZE};
+    } else {
+      // 斜め・縦になぞった：囲んだ四角そのまま
+      const y1 = Math.min(ay, by),
+        y2 = Math.max(ay, by);
+      rect = {x: x1, y: y1, w: x2 - x1, h: y2 - y1};
+      hidden = pieces(
+        items.filter((it) => it.y + it.h / 2 >= y1 && it.y + it.h / 2 <= y2 && it.x < x2 && it.x + it.w > x1),
+        x1,
+        x2
+      );
+    }
+    if (rect.w < 2 || rect.h < 2) return;
+    const a = this.addAnno({
+      key: `k${this.seq++}`,
+      id: null,
+      page: d.p.num,
+      kind: 'mask',
+      rect,
+      body: (hidden ?? '').slice(0, 2000),
+      style: {}
+    });
+    this.record(a.key, null, this.snap(a));
+    this.scheduleSave(a, 0);
+  }
+
+  // ---- 赤シート：画面の上に置く赤い下敷き。ドラッグで動かし、右下の角で大きさを変える ----
+  toggleSheet(on = !this.sheet) {
+    if (!on) {
+      this.sheet?.remove();
+      this.sheet = null;
+    } else if (!this.sheet) {
+      const el = document.createElement('div');
+      el.className = 'red-sheet';
+      el.setAttribute('role', 'region');
+      el.setAttribute('aria-label', '赤シート');
+      el.innerHTML = '<span class="red-sheet__label">赤シート</span>';
+      const first = this.pages[0]?.el.getBoundingClientRect();
+      const width = Math.min(first?.width ?? 600, window.innerWidth - 40);
+      Object.assign(el.style, {
+        left: `${Math.max(20, first?.left ?? 20)}px`,
+        top: `${Math.round(window.innerHeight * 0.45)}px`,
+        width: `${width}px`,
+        height: '200px'
+      });
+      el.addEventListener('pointerdown', (e) => {
+        const r = el.getBoundingClientRect();
+        if (e.button !== 0 || (e.clientX > r.right - 20 && e.clientY > r.bottom - 20)) return; // 右下は大きさ変え
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        const sx = e.clientX - r.left,
+          sy = e.clientY - r.top;
+        const move = (ev) => {
+          el.style.left = `${ev.clientX - sx}px`;
+          el.style.top = `${ev.clientY - sy}px`;
+        };
+        const up = () => {
+          el.removeEventListener('pointermove', move);
+          el.removeEventListener('pointerup', up);
+          el.removeEventListener('pointercancel', up);
+        };
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+      });
+      this.root.append(el);
+      this.sheet = el;
+    }
+    this.$('sheet').setAttribute('aria-pressed', String(!!this.sheet));
+  }
+
+  // ---- 書き出し（§9.7）----
+  openExport() {
+    this.finishEdit();
+    const dialog = this.$('export-dialog');
+    dialog.returnValue = ''; // Esc で閉じたときに前回の「書き出す」が残らないように
+    if (!dialog.open) dialog.showModal();
+  }
+
+  async exportPdf(options) {
+    const btn = this.$('export');
+    btn.disabled = true;
+    try {
+      if (!(await this.settle())) return toast('保存できていない注釈があるため書き出せません');
+      const texts = [];
+      for (const a of this.annos.values())
+        if (a.kind === 'text' && a.id) texts.push({id: a.id, png: await this.textToPng(a)});
+      const r = await api['pdf.export']({materialId: this.materialId, options, texts});
+      if (r?.error) toast(r.error);
+      else if (r?.ok) toast(`書き出しました：${r.name}`);
+    } catch (e) {
+      toast(`書き出せませんでした（${e.message}）`);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /** 画面に出ている行の区切りのまま、文字入れを PNG にする（ヒラギノで描く。フォントは PDF に埋め込まない） */
+  async textToPng(a) {
+    const k = EXPORT_PX_PER_PT;
+    const scale = this.pages[a.page - 1].viewport.scale;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.ceil(a.rect.w * k));
+    canvas.height = Math.max(1, Math.ceil(a.rect.h * k));
+    const ctx = canvas.getContext('2d');
+    const font = `${a.style.bold ? 700 : 400} ${a.style.size * k}px ${FONT}`;
+    await document.fonts.load(font).catch(() => {});
+    ctx.font = font;
+    ctx.fillStyle = a.style.color;
+    const m = ctx.measureText('あ');
+    const lh = a.style.size * LINE_HEIGHT * k;
+    const base = (lh - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 + m.fontBoundingBoxAscent;
+    const pad = k / scale; // .anno-text の左の余白 1px
+    this.textLines(a.el).forEach((line, i) => ctx.fillText(line, pad, i * lh + base));
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  /** 箱の中の文字を、画面で折り返されている行ごとに分ける */
+  textLines(el) {
+    const lines = [];
+    let cur = '',
+      lastTop = null;
+    const range = document.createRange();
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const t = n.data;
+      for (let i = 0; i < t.length; ) {
+        const len = t.codePointAt(i) > 0xffff ? 2 : 1;
+        const ch = t.slice(i, i + len);
+        if (ch === '\n') {
+          lines.push(cur);
+          cur = '';
+          lastTop = null;
+        } else {
+          range.setStart(n, i);
+          range.setEnd(n, i + len);
+          const r = range.getClientRects()[0];
+          if (r) {
+            if (lastTop !== null && r.top > lastTop + r.height * 0.5) {
+              lines.push(cur);
+              cur = '';
+            }
+            lastTop = r.top;
+          }
+          cur += ch;
+        }
+        i += len;
+      }
+    }
+    lines.push(cur);
+    return lines;
+  }
+
   onPointerMove(e) {
+    if (this.drawing?.pointer === e.pointerId) {
+      const box = this.drawing.p.el.getBoundingClientRect();
+      this.drawing.x1 = Math.min(Math.max(e.clientX - box.left, 0), box.width);
+      this.drawing.y1 = Math.min(Math.max(e.clientY - box.top, 0), box.height);
+      return this.drawDraft();
+    }
     const d = this.drag;
     if (!d || d.pointer !== e.pointerId) return;
     const dx = e.clientX - d.x,
@@ -660,6 +1062,7 @@ class Viewer {
   }
 
   onPointerUp(e) {
+    if (this.drawing?.pointer === e.pointerId) return void this.finishMask();
     const d = this.drag;
     if (!d || d.pointer !== e.pointerId) return;
     this.drag = null;
@@ -674,6 +1077,7 @@ class Viewer {
       a.rect.x = x;
       a.rect.y = yTop - a.rect.h;
       this.place(a);
+      this.record(a.key, d.before, this.snap(a));
       this.scheduleSave(a, 0);
     } else if (a.kind === 'note') this.openNote(a, a.el.querySelector('.anno-note__pop').hidden);
     else if (a.kind === 'text' && this.tool === 'text') this.edit(a);
@@ -689,18 +1093,27 @@ class Viewer {
       }
       return;
     }
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key.toLowerCase();
+    if ((e.metaKey || e.ctrlKey) && !e.altKey) {
+      if (k === 'z' && !e.shiftKey) this.undo();
+      else if ((k === 'z' && e.shiftKey) || k === 'y') this.redo();
+      else if (k === 'e') this.openExport();
+      else return;
+      return e.preventDefault();
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (k === 'v') this.setTool('select');
     else if (k === 't') this.setTool('text');
     else if (k === 'm') this.setTool('note');
+    else if (k === 'h') this.setTool('mask');
+    else if (k === 'r') this.toggleSheet();
     else if (e.key === 'Escape') {
       this.select(null);
       this.setTool('select');
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.selected) {
       e.preventDefault();
       this.removeAnno(this.selected);
-    } else return;
+    }
   }
 
   unmount() {
@@ -708,6 +1121,7 @@ class Viewer {
     this.destroyed = true;
     for (const off of this.listeners) off();
     this.observer?.disconnect();
+    this.toggleSheet(false);
     for (const p of this.pages) p.renderTask?.cancel();
     this.task?.destroy();
     document.title = '大学ノート';
