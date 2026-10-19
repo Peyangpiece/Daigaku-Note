@@ -310,6 +310,8 @@ class Viewer {
     } else if (a.kind === 'mask') {
       el.className = 'anno-mask';
       el.title = '文字隠し';
+      // 赤シートがかぶったところだけ見せる黒い覆い（syncCovers が切り抜く）。下の文字を確実に読めなくする
+      el.innerHTML = '<span class="anno-mask__cover"></span>';
     } else {
       el.className = 'anno-note';
       el.innerHTML = `<button type="button" class="anno-note__icon" aria-label="付箋"></button>
@@ -356,42 +358,64 @@ class Viewer {
       : '付箋（押すと開きます）';
   }
 
-  /** PDF 座標 → 画面の位置。箱の左上（PDF では y + h）を基準にする */
+  /**
+   * PDF の四角 → 画面の四角（ページの左上からの px）。ページに回転（/Rotate）があっても合うように、
+   * 2 つの角を変換して小さいほう・大きいほうを取る。印刷の「横向き」で作った PDF は 90 度回転していることが多い
+   */
+  toScreen(page, r) {
+    const vp = this.pages[page - 1].viewport;
+    const [ax, ay] = vp.convertToViewportPoint(r.x, r.y);
+    const [bx, by] = vp.convertToViewportPoint(r.x + r.w, r.y + r.h);
+    return {left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay)};
+  }
+
+  /** 画面の四角 → PDF の四角（左下と幅・高さ） */
+  fromScreen(page, s) {
+    const vp = this.pages[page - 1].viewport;
+    const [ax, ay] = vp.convertToPdfPoint(s.left, s.top);
+    const [bx, by] = vp.convertToPdfPoint(s.left + s.width, s.top + s.height);
+    return {x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay)};
+  }
+
+  /** PDF 座標 → 画面の位置 */
   place(a) {
     const vp = this.pages[a.page - 1].viewport;
     if (!vp) return;
-    const [vx, vy] = vp.convertToViewportPoint(a.rect.x, a.rect.y + a.rect.h);
-    a.el.style.left = `${vx}px`;
-    a.el.style.top = `${vy}px`;
+    const s = this.toScreen(a.page, a.rect);
+    a.el.style.left = `${s.left}px`;
+    a.el.style.top = `${s.top}px`;
     if (a.kind === 'text') {
       a.el.style.fontSize = `${a.style.size * vp.scale}px`;
-      a.el.style.maxWidth = `${Math.max(40, vp.width - vx)}px`;
+      a.el.style.maxWidth = `${Math.max(40, vp.width - s.left)}px`;
     } else if (a.kind === 'mask') {
-      a.el.style.width = `${a.rect.w * vp.scale}px`;
-      a.el.style.height = `${a.rect.h * vp.scale}px`;
+      a.el.style.width = `${s.width}px`;
+      a.el.style.height = `${s.height}px`;
+      this.syncCovers();
     } else a.el.style.setProperty('--note-size', `${NOTE_SIZE * vp.scale}px`);
   }
 
-  /** 画面の箱の大きさから rect の幅・高さを取り直す。左上は動かさない */
+  /** 画面の箱（左上と大きさ）から rect を取り直す */
   measure(a) {
-    const s = this.pages[a.page - 1].viewport.scale;
-    const top = a.rect.y + a.rect.h;
-    a.rect.w = a.el.offsetWidth / s;
-    a.rect.h = a.el.offsetHeight / s;
-    a.rect.y = top - a.rect.h;
+    a.rect = this.fromScreen(a.page, {
+      left: parseFloat(a.el.style.left),
+      top: parseFloat(a.el.style.top),
+      width: a.el.offsetWidth,
+      height: a.el.offsetHeight
+    });
   }
 
   createAt(kind, p, vx, vy) {
-    const [x, top] = p.viewport.convertToPdfPoint(vx, vy);
+    const scale = p.viewport.scale;
     if (kind === 'text') {
       const style = {...this.textStyle};
-      const h = style.size * 1.5;
+      // 押した点に文字カーソルが来るように置く：1 行目の高さの真ん中を押した点に、左の余白（1px）ぶん左へずらす
+      const h = style.size * LINE_HEIGHT * scale;
       const a = this.addAnno({
         key: `k${this.seq++}`,
         id: null,
         page: p.num,
         kind,
-        rect: {x, y: top - h, w: 0, h},
+        rect: this.fromScreen(p.num, {left: vx - 1, top: vy - h / 2, width: 0, height: h}),
         body: '',
         style
       });
@@ -399,13 +423,13 @@ class Viewer {
       this.select(a);
       this.edit(a);
     } else {
-      const half = NOTE_SIZE / 2;
+      const n = NOTE_SIZE * scale;
       const a = this.addAnno({
         key: `k${this.seq++}`,
         id: null,
         page: p.num,
         kind,
-        rect: {x: x - half, y: top - half, w: NOTE_SIZE, h: NOTE_SIZE},
+        rect: this.fromScreen(p.num, {left: vx - n / 2, top: vy - n / 2, width: n, height: n}),
         body: '',
         style: {color: this.noteColor}
       });
@@ -768,6 +792,7 @@ class Viewer {
     });
     this.on(document, 'keydown', (e) => this.onKey(e));
     this.on(window, 'beforeunload', () => this.flushAll());
+    this.on(window, 'scroll', () => this.sheet && this.syncCovers(), {passive: true});
   }
 
   annoOf(target) {
@@ -833,86 +858,132 @@ class Viewer {
     });
   }
 
-  /** ページの横書きの文字列と、その PDF 座標での箱（x・基線 y・幅・高さ） */
+  /** ページの文字列（pdf.js の textContent。画面の座標へは finishMask で直す） */
   async textItems(p) {
     const tc = await p.page.getTextContent();
-    return tc.items
-      .filter(
-        (it) => it.str && Math.abs(it.transform[1]) < 1e-3 && Math.abs(it.transform[2]) < 1e-3 && it.transform[0] > 0
-      )
-      .map((it) => ({
-        str: it.str,
-        x: it.transform[4],
-        y: it.transform[5],
-        w: it.width,
-        h: it.height || Math.abs(it.transform[3])
-      }))
-      .filter((it) => it.w > 0 && it.h > 0);
+    return tc.items.filter((it) => it.str && it.width > 0);
+  }
+
+  /** 文字列の画面での箱。画面で横書きに見えるものだけ（回転したページでも、見た目が横書きなら使う） */
+  screenItems(p, items) {
+    const vp = p.viewport;
+    return items
+      .map((it) => {
+        const m = pdfjs.Util.transform(vp.transform, it.transform);
+        const run = Math.hypot(m[0], m[1]);
+        if (!run || m[0] <= 0 || Math.abs(m[1]) > run * 0.05) return null;
+        const fh = Math.hypot(m[2], m[3]); // 文字の高さ（px）
+        if (!fh) return null;
+        // 覆う範囲は基線から上へ 0.96、下へ 0.22（字の上下をはみ出さずに覆う）。
+        // その行をなぞったとみなす範囲は少し広く、基線から上へ 1.05、下へ 0.3
+        return {
+          str: it.str,
+          left: m[4],
+          right: m[4] + it.width * vp.scale,
+          top: m[5] - fh * 0.96,
+          bottom: m[5] + fh * 0.22,
+          hitTop: m[5] - fh * 1.05,
+          hitBottom: m[5] + fh * 0.3
+        };
+      })
+      .filter(Boolean);
   }
 
   async finishMask() {
     const d = this.drawing;
     this.drawing = null;
     d.el.remove();
-    const vp = d.p.viewport;
-    const [ax, ay] = vp.convertToPdfPoint(d.x0, d.y0);
-    const [bx, by] = vp.convertToPdfPoint(d.x1, d.y1);
-    let x1 = Math.min(ax, bx),
-      x2 = Math.max(ax, bx);
-    const items = await d.p.textPromise.catch(() => []);
+    const p = d.p;
+    const raw = await p.textPromise.catch(() => []);
     if (this.destroyed) return;
+    const items = this.screenItems(p, raw);
+    // 画面の座標で考える（左上原点、px）
+    let x1 = Math.min(d.x0, d.x1),
+      x2 = Math.max(d.x0, d.x1);
     const pieces = (list, from, to) =>
       list
         .slice()
-        .sort((a, b) => b.y - a.y || a.x - b.x)
+        .sort((a, b) => a.top - b.top || a.left - b.left)
         .map((it) => {
-          const n = it.str.length;
-          const s = Math.max(0, Math.floor(((from - it.x) / it.w) * n));
-          const e = Math.min(n, Math.ceil(((to - it.x) / it.w) * n));
+          const n = it.str.length,
+            w = it.right - it.left;
+          const s = Math.max(0, Math.floor(((from - it.left) / w) * n));
+          const e = Math.min(n, Math.ceil(((to - it.left) / w) * n));
           return it.str.slice(s, e);
         })
         .join('');
-    let rect, hidden;
+    let box, hidden;
     if (Math.abs(d.y1 - d.y0) < 12) {
       // 横になぞった：なぞり始めの高さにある行に合わせる。動かさずに押しただけなら、その語の上
-      const onLine = items.filter((it) => ay >= it.y - it.h * 0.3 && ay <= it.y + it.h * 1.05);
-      const hit = onLine.filter((it) => it.x < x2 && it.x + it.w > x1);
+      const onLine = items.filter((it) => d.y0 >= it.hitTop && d.y0 <= it.hitBottom);
+      const hit = onLine.filter((it) => it.left < x2 && it.right > x1);
       if (x2 - x1 < 2) {
-        const word = onLine.find((it) => it.x <= x1 && x1 <= it.x + it.w);
+        const word = onLine.find((it) => it.left <= x1 && x1 <= it.right);
         if (!word) return;
         hit.splice(0, hit.length, word);
-        x1 = word.x;
-        x2 = word.x + word.w;
+        x1 = word.left;
+        x2 = word.right;
       }
       if (hit.length) {
-        const h = Math.max(...hit.map((it) => it.h));
-        const base = Math.min(...hit.map((it) => it.y));
-        rect = {x: x1, y: base - h * 0.22, w: x2 - x1, h: h * 1.18};
+        const top = Math.min(...hit.map((it) => it.top));
+        const bottom = Math.max(...hit.map((it) => it.bottom));
+        box = {left: x1, top, width: x2 - x1, height: bottom - top};
         hidden = pieces(hit, x1, x2);
-      } else rect = {x: x1, y: ay - DEFAULT_SIZE / 2, w: x2 - x1, h: DEFAULT_SIZE};
+      } else {
+        const h = DEFAULT_SIZE * p.viewport.scale;
+        box = {left: x1, top: d.y0 - h / 2, width: x2 - x1, height: h};
+      }
     } else {
       // 斜め・縦になぞった：囲んだ四角そのまま
-      const y1 = Math.min(ay, by),
-        y2 = Math.max(ay, by);
-      rect = {x: x1, y: y1, w: x2 - x1, h: y2 - y1};
+      const y1 = Math.min(d.y0, d.y1),
+        y2 = Math.max(d.y0, d.y1);
+      box = {left: x1, top: y1, width: x2 - x1, height: y2 - y1};
       hidden = pieces(
-        items.filter((it) => it.y + it.h / 2 >= y1 && it.y + it.h / 2 <= y2 && it.x < x2 && it.x + it.w > x1),
+        items.filter((it) => {
+          const mid = (it.top + it.bottom) / 2;
+          return mid >= y1 && mid <= y2 && it.left < x2 && it.right > x1;
+        }),
         x1,
         x2
       );
     }
-    if (rect.w < 2 || rect.h < 2) return;
+    if (box.width < 2 || box.height < 2) return;
     const a = this.addAnno({
       key: `k${this.seq++}`,
       id: null,
-      page: d.p.num,
+      page: p.num,
       kind: 'mask',
-      rect,
+      rect: this.fromScreen(p.num, box),
       body: (hidden ?? '').slice(0, 2000),
       style: {}
     });
     this.record(a.key, null, this.snap(a));
     this.scheduleSave(a, 0);
+  }
+
+  /**
+   * 赤シートとマーカーの重なりだけ、マーカーの黒い覆いを見せる（clip-path で切り抜く）。
+   * 赤シートは乗算で重ねており、水色のマーカーは理屈では黒くなるが、字のふちや色によっては形が透けることがあるため、
+   * 重なった部分は不透明の黒で確実に隠す。シートを動かしたとき・大きさを変えたとき・スクロールしたときに呼ぶ
+   */
+  syncCovers() {
+    if (this.coverFrame) return;
+    this.coverFrame = requestAnimationFrame(() => {
+      this.coverFrame = 0;
+      const sr = this.sheet?.getBoundingClientRect();
+      for (const a of this.annos.values()) {
+        if (a.kind !== 'mask') continue;
+        const cover = a.el.firstElementChild;
+        const r = a.el.getBoundingClientRect();
+        const left = sr ? Math.max(sr.left, r.left) - r.left : 0;
+        const top = sr ? Math.max(sr.top, r.top) - r.top : 0;
+        const right = sr ? r.right - Math.min(sr.right, r.right) : 0;
+        const bottom = sr ? r.bottom - Math.min(sr.bottom, r.bottom) : 0;
+        const on = sr && left + right < r.width && top + bottom < r.height;
+        cover.style.display = on ? 'block' : 'none';
+        if (on) cover.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px)`;
+      }
+    });
   }
 
   // ---- 赤シート：画面の上に置く赤い下敷き。ドラッグで動かし、右下の角で大きさを変える ----
@@ -944,6 +1015,7 @@ class Viewer {
         const move = (ev) => {
           el.style.left = `${ev.clientX - sx}px`;
           el.style.top = `${ev.clientY - sy}px`;
+          this.syncCovers();
         };
         const up = () => {
           el.removeEventListener('pointermove', move);
@@ -956,7 +1028,14 @@ class Viewer {
       });
       this.root.append(el);
       this.sheet = el;
+      this.sheetResize = new ResizeObserver(() => this.syncCovers());
+      this.sheetResize.observe(el);
     }
+    if (!this.sheet) {
+      this.sheetResize?.disconnect();
+      this.sheetResize = null;
+    }
+    this.syncCovers();
     this.$('sheet').setAttribute('aria-pressed', String(!!this.sheet));
   }
 
@@ -990,9 +1069,10 @@ class Viewer {
   async textToPng(a) {
     const k = EXPORT_PX_PER_PT;
     const scale = this.pages[a.page - 1].viewport.scale;
+    const box = this.toScreen(a.page, a.rect);
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.ceil(a.rect.w * k));
-    canvas.height = Math.max(1, Math.ceil(a.rect.h * k));
+    canvas.width = Math.max(1, Math.ceil((box.width / scale) * k));
+    canvas.height = Math.max(1, Math.ceil((box.height / scale) * k));
     const ctx = canvas.getContext('2d');
     const font = `${a.style.bold ? 700 : 400} ${a.style.size * k}px ${FONT}`;
     await document.fonts.load(font).catch(() => {});
@@ -1059,6 +1139,7 @@ class Viewer {
     d.a.el.classList.add('is-dragging');
     d.a.el.style.left = `${d.left + dx}px`;
     d.a.el.style.top = `${d.top + dy}px`;
+    if (d.a.kind === 'mask') this.syncCovers();
   }
 
   onPointerUp(e) {
@@ -1073,9 +1154,8 @@ class Viewer {
       // ページの外へは出さない
       const left = Math.min(Math.max(parseFloat(a.el.style.left), 0), p.viewport.width - 8);
       const top = Math.min(Math.max(parseFloat(a.el.style.top), 0), p.viewport.height - 8);
-      const [x, yTop] = p.viewport.convertToPdfPoint(left, top);
-      a.rect.x = x;
-      a.rect.y = yTop - a.rect.h;
+      const {width, height} = this.toScreen(a.page, a.rect);
+      a.rect = this.fromScreen(a.page, {left, top, width, height});
       this.place(a);
       this.record(a.key, d.before, this.snap(a));
       this.scheduleSave(a, 0);
@@ -1122,6 +1202,7 @@ class Viewer {
     for (const off of this.listeners) off();
     this.observer?.disconnect();
     this.toggleSheet(false);
+    cancelAnimationFrame(this.coverFrame);
     for (const p of this.pages) p.renderTask?.cancel();
     this.task?.destroy();
     document.title = '大学ノート';
