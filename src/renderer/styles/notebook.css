@@ -295,6 +295,7 @@ h2[tabindex='-1']:focus {
   /* ポップな付箋の色を白と半々ほどに混ぜた、薄いパステル。紙なので暗い表示でも明るいまま、文字は黒 */
   --note-bg: color-mix(in srgb, var(--note-color, var(--pop1)) 55%, #fff);
   --paper-ink: #2b2b2b;
+  --paper-ink-weak: #5c6068; /* 暗い表示でも付箋は明るい紙なので、薄い文字も濃いまま */
   --paper: #fffdf6;
   --card: #ffffff;
   --note-weak: 80%;
