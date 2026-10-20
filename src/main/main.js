@@ -270,6 +270,8 @@ app.whenReady().then(async () => {
           log.error(`Chromium の取り込みに失敗: ${e.message}`);
         })
         .finally(() => {
+          // 起動したとき（更新のあとも）は、同期の予定を待たずにログインまで済ませる
+          ctx.jobs.enqueue('login', {});
           ctx.jobs.start();
           win?.webContents.send('state.changed', {browser: ctx.browser});
         });

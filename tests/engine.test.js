@@ -187,6 +187,35 @@ test('自動ログイン：パスワードが通らなければ自動ログイ�
   assert.equal(ok.status, 'ok', '自動ログインできれば同期を続ける');
 });
 
+test('起動時の自動ログイン：同期せずにセッションを確かめ、切れていればログインして保存する', async (t) => {
+  const {repo, connection, engine} = await setup(t);
+  const saved = [];
+  const released = [];
+  const connector = (opts) => ({
+    ...fakeConnector(data(), opts),
+    saveSession: async () => saved.push(opts.session),
+    releaseContext: async () => released.push(opts.session),
+    listCourses: async () => assert.fail('同期はしない')
+  });
+  repo.updateConnection(connection.id, {status: 'login-required'});
+  const kept = await engine.restoreSession({connection, connector: connector({session: 'ok'})});
+  assert.deepEqual(kept, {status: 'ok', loggedIn: false});
+  assert.equal(repo.get('connection', connection.id).status, 'ok');
+  assert.deepEqual(saved, [], 'ログインしていなければ保存し直さない');
+
+  const relogged = await engine.restoreSession({connection, connector: connector({session: 'login-required', loginOk: true})});
+  assert.deepEqual(relogged, {status: 'ok', loggedIn: true});
+  assert.deepEqual(saved, ['login-required']);
+
+  repo.updateConnection(connection.id, {save_password: 1});
+  const bad = await engine.restoreSession({connection, connector: connector({session: 'login-required', loginError: {code: 'login-bad-credentials', message: 'パスワード違い'}})});
+  assert.equal(bad.status, 'login-required');
+  assert.equal(bad.error.code, 'login-bad-credentials');
+  assert.equal(repo.get('connection', connection.id).status, 'login-required');
+  assert.equal(repo.get('connection', connection.id).save_password, 0, '通らないパスワードは送り続けない');
+  assert.equal(released.length, 3, '毎回あと片付けをする');
+});
+
 test('同じ LMS の接続が 2 つあると授業が 2 つずつできる → 起動時に 1 つにまとめる', async (t) => {
   const {root, repo, term, connection, files, engine} = await setup(t);
   const trashed = [];

@@ -92,20 +92,13 @@ export class SyncEngine {
     const ctx = await connector.createContext(connection);
     try {
       // セッション
-      let session = await connector.ensureSession(ctx);
-      if (session === 'login-required') {
-        // 保存した ID・パスワードで自動ログイン（SPEC §6.4）。パスワードが通らなければ自動ログインを止める（何度も送ってロックさせない）
-        const failure = await connector.login(ctx, 'headless').then(() => null, (e) => e);
-        if (failure) {
-          const badCredentials = failure.code === 'login-bad-credentials';
-          this.repo.updateConnection(connection.id, {status: 'login-required', ...(badCredentials ? {save_password: 0} : {})});
-          // 自動ログインを試したときだけ理由を添える（試していなければ「ログインが必要」だけで足りる）
-          const code = failure.code?.startsWith('login') ? failure.code : 'login-required';
-          event('error', null, code, `${connection.label} へのログインが必要です${connection.save_password ? `（${failure.message}）` : ''}`);
-          this.repo.finishSyncRun(run.id, {...summary, timing: {total: Date.now() - started}});
-          return {...summary, status: 'login-required'};
-        }
-        session = 'ok';
+      const {error: failure} = await this.loginIfNeeded({connection, connector, ctx});
+      if (failure) {
+        // 自動ログインを試したときだけ理由を添える（試していなければ「ログインが必要」だけで足りる）
+        const code = failure.code?.startsWith('login') ? failure.code : 'login-required';
+        event('error', null, code, `${connection.label} へのログインが必要です${connection.save_password ? `（${failure.message}）` : ''}`);
+        this.repo.finishSyncRun(run.id, {...summary, timing: {total: Date.now() - started}});
+        return {...summary, status: 'login-required'};
       }
       this.repo.updateConnection(connection.id, {status: 'ok'});
 
@@ -148,6 +141,39 @@ export class SyncEngine {
       summary.timing.total = Date.now() - started;
       this.repo.finishSyncRun(run.id, summary);
       return {...summary, status: 'ok'};
+    } finally {
+      await connector.releaseContext?.(ctx).catch(() => {});
+    }
+  }
+
+  /**
+   * セッションを確かめ、切れていれば保存した ID・パスワードでログインする（SPEC §6.4）。
+   * 戻りは {loggedIn}（ログインし直したか）か、だめなら {error}。パスワードが通らなければ自動ログインを止める（何度も送ってロックさせない）
+   */
+  async loginIfNeeded({connection, connector, ctx}) {
+    if ((await connector.ensureSession(ctx)) !== 'login-required') return {loggedIn: false};
+    const error = await connector.login(ctx, 'headless').then(() => null, (e) => e);
+    if (!error) return {loggedIn: true};
+    const badCredentials = error.code === 'login-bad-credentials';
+    this.repo.updateConnection(connection.id, {status: 'login-required', ...(badCredentials ? {save_password: 0} : {})});
+    return {error};
+  }
+
+  /** 起動したとき・更新のあと：同期を待たずにログインまで済ませる。戻りは {status: 'ok'|'login-required', loggedIn, error} */
+  async restoreSession({connection, connector}) {
+    const ctx = await connector.createContext(connection);
+    try {
+      const {loggedIn, error} = await this.loginIfNeeded({connection, connector, ctx});
+      if (error) {
+        this.log(`[login] ${connection.label}: ${error.code ?? ''} ${error.message}`);
+        return {status: 'login-required', loggedIn: false, error};
+      }
+      if (loggedIn) {
+        await connector.saveSession?.(ctx).catch(() => {});
+        this.log(`[login] ${connection.label}: 自動でログインしました`);
+      }
+      this.repo.updateConnection(connection.id, {status: 'ok'});
+      return {status: 'ok', loggedIn};
     } finally {
       await connector.releaseContext?.(ctx).catch(() => {});
     }
