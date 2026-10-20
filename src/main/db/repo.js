@@ -16,7 +16,7 @@ const COLUMNS = {
   round_note: ['round_id', 'body', 'updated_at'],
   material: [
     'id', 'course_id', 'round_id', 'round_from', 'url', 'name', 'path', 'sha256', 'size', 'mime', 'pages', 'layout',
-    'version', 'lms_modified', 'source', 'status', 'read_at', 'downloaded_at'
+    'version', 'lms_modified', 'source', 'status', 'read_at', 'downloaded_at', 'base_sha256'
   ],
   sync_run: ['id', 'connection_id', 'kind', 'course_id', 'started_at', 'finished_at', 'courses', 'materials', 'failures', 'timing_json'],
   sync_event: ['id', 'run_id', 'level', 'course_id', 'code', 'message', 'at'],
@@ -281,8 +281,12 @@ export class Repo {
   findMaterialsByUrl(url) {
     return this.db.prepare('SELECT * FROM material WHERE url = ?').all(url);
   }
+  /** 中身で探す。注釈を描き込んで上書きした PDF は、元の中身（base_sha256）でも同じものとして見つける（同期で 2 重に取らない） */
   findMaterialByHash(courseId, sha256) {
-    return this.db.prepare('SELECT * FROM material WHERE course_id = ? AND sha256 = ?').get(courseId, sha256) ?? null;
+    return (
+      this.db.prepare('SELECT * FROM material WHERE course_id = ? AND (sha256 = ? OR base_sha256 = ?) ORDER BY sha256 = ? DESC').get(courseId, sha256, sha256, sha256) ??
+      null
+    );
   }
   findMaterialByPath(p) {
     return this.db.prepare('SELECT * FROM material WHERE path = ?').get(p) ?? null;

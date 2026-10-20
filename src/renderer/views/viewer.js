@@ -20,6 +20,7 @@ const api = window.daigaku;
 const CSS_UNITS = 96 / 72; // 拡大率 100% で紙の実寸
 const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 const clampZoom = (z) => Math.min(4, Math.max(0.25, z));
+const FILE_SAVE_DELAY = 1500; // 注釈を保存してからファイルを上書きするまで（ms）。続けて書いている間は待つ
 const PINCH_IDLE = 180; // ピンチの指が止まってから描き直すまで（ms）
 const PINCH_SPEED = 0.01; // wheel の deltaY 1 あたりの拡大率の変化（指数）
 // shared/annotation.js と同じ値（レンダラは shared を読まないので写す）
@@ -115,7 +116,8 @@ const BAR = `
       <button type="button" data-v="zoom-in" aria-label="拡大">＋</button>
       <button type="button" data-v="fit" title="幅に合わせる">幅</button>
     </div>
-    <button type="button" class="btn btn--small" data-v="export" title="注釈を描き込んだ PDF を別のファイルに作る（Ctrl/⌘+E）">書き出し</button>
+    <button type="button" class="btn btn--small btn--primary" data-v="save" title="注釈を描き込んで PDF を上書き保存する（Ctrl/⌘+S）。Finder で開いても注釈が見えます。変更は自動でも保存します">保存</button>
+    <button type="button" class="btn btn--small btn--quiet" data-v="export" title="注釈を描き込んだ PDF を別の名前で作る（Ctrl/⌘+E）">別名で書き出す…</button>
     <span class="muted viewer-bar__status" data-v="status" aria-live="polite"></span>
   </div>
   <dialog class="export-dialog" data-v="export-dialog">
@@ -744,7 +746,10 @@ class Viewer {
     const chain = (a.chain = (a.chain ?? Promise.resolve())
       .then(fn)
       .then(
-        () => (this.failed = false),
+        () => {
+          this.failed = false;
+          this.markDirty();
+        },
         (e) => {
           this.failed = true;
           console.error(e);
@@ -834,11 +839,13 @@ class Viewer {
     const pending = state === 'saving' || this.inflight > 0 || [...this.annos.values()].some((a) => a.timer);
     el.textContent = this.failed
       ? '保存できませんでした'
-      : pending
+      : pending || this.fileSaving || this.fileDirty
         ? '保存中…'
-        : this.annos.size || this.saved
-          ? '保存しました'
-          : '';
+        : this.fileBlocked
+          ? 'ファイルには保存していません'
+          : this.annos.size || this.saved
+            ? '保存しました'
+            : '';
     if (!pending && !this.failed) this.saved = true;
     el.classList.toggle('is-error', this.failed);
   }
@@ -933,6 +940,7 @@ class Viewer {
       else if (t.dataset.v === 'redo') this.redo();
       else if (t.dataset.v === 'sheet') this.toggleSheet();
       else if (t.dataset.v === 'export') this.openExport();
+      else if (t.dataset.v === 'save') this.saveFile({manual: true});
     });
     const size = this.$('size');
     this.on(size, 'change', () => {
@@ -1248,11 +1256,9 @@ class Viewer {
     const btn = this.$('export');
     btn.disabled = true;
     try {
+      const snaps = this.textSnaps();
       if (!(await this.settle())) return toast('保存できていない注釈があるため書き出せません');
-      const texts = [];
-      for (const a of this.annos.values())
-        if (a.kind === 'text' && a.id) texts.push({id: a.id, png: await this.textToPng(a)});
-      const r = await api['pdf.export']({materialId: this.materialId, options, texts});
+      const r = await api['pdf.export']({materialId: this.materialId, options, texts: await this.textImages(snaps)});
       if (r?.error) toast(r.error);
       else if (r?.ok) toast(`書き出しました：${r.name}`);
     } catch (e) {
@@ -1262,24 +1268,87 @@ class Viewer {
     }
   }
 
+  // ---- ファイルへの上書き保存 ----
+  // 注釈を保存するたびに少し待って、注釈を描き込んだ PDF でファイルを上書きする（Finder で開いても注釈が見える）。
+  // 元の PDF の写しはメインが取っておくので、アプリの中ではこれまでどおり注釈を編集できる
+  markDirty() {
+    if (this.fileBlocked) return;
+    this.fileDirty = true;
+    clearTimeout(this.fileTimer);
+    if (this.destroyed) return; // 閉じたあとは、閉じるときに始めた保存が拾う（画面がないので新しくは始めない）
+    this.fileTimer = setTimeout(() => !this.destroyed && this.saveFile(), FILE_SAVE_DELAY);
+  }
+  saveFile({manual = false} = {}) {
+    clearTimeout(this.fileTimer);
+    if (this.fileSaving) {
+      this.fileAgain = true;
+      return this.fileSaving;
+    }
+    if (manual) this.fileBlocked = false; // 手で保存するときは、前に止めた理由をもう一度確かめる
+    if (this.fileBlocked) return Promise.resolve();
+    this.finishEdit(); // 書きかけの文字入れも保存に回す
+    // 文字入れの行は画面のレイアウトから読むので、待つ前（画面を閉じる前）に写しておく
+    const snaps = this.textSnaps();
+    this.fileSaving = (async () => {
+      try {
+        if (!(await this.settle())) throw new Error('保存できていない注釈があります');
+        if (!this.fileDirty && !manual) return;
+        this.fileDirty = false;
+        const r = await api['pdf.save']({materialId: this.materialId, texts: await this.textImages(snaps)});
+        if (r?.error) {
+          // ほかのアプリで変更された・元の写しがないときは、何度も試さず止める（「別名で書き出す」は使える）
+          this.fileBlocked = true;
+          throw new Error(r.error);
+        }
+        if (manual) toast(r.changed ? `${r.name} を上書き保存しました` : `${r.name} は保存済みです`);
+      } catch (e) {
+        toast(`ファイルに保存できませんでした：${e.message}`, {error: true});
+      } finally {
+        this.fileSaving = null;
+        this.setStatus();
+        if (this.fileAgain) {
+          this.fileAgain = false;
+          if (this.fileDirty) this.saveFile();
+        }
+      }
+    })();
+    this.setStatus();
+    return this.fileSaving;
+  }
+
+  /** 文字入れの写し（行の区切り・大きさ・書式）。画面が消えても PNG を作れるように、その場で読んでおく */
+  textSnaps() {
+    const out = [];
+    for (const a of this.annos.values()) {
+      if (a.kind !== 'text' || a.removed) continue;
+      const p = this.pages[a.page - 1];
+      if (!p?.viewport) continue;
+      out.push({a, lines: this.textLines(a.el), box: this.toScreen(a.page, a.rect), scale: p.viewport.scale, style: {...a.style}});
+    }
+    return out;
+  }
+  async textImages(snaps) {
+    const texts = [];
+    for (const s of snaps) if (s.a.id && !s.a.removed) texts.push({id: s.a.id, png: await this.textToPng(s)});
+    return texts;
+  }
+
   /** 画面に出ている行の区切りのまま、文字入れを PNG にする（ヒラギノで描く。フォントは PDF に埋め込まない） */
-  async textToPng(a) {
+  async textToPng({lines, box, scale, style}) {
     const k = EXPORT_PX_PER_PT;
-    const scale = this.pages[a.page - 1].viewport.scale;
-    const box = this.toScreen(a.page, a.rect);
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.ceil((box.width / scale) * k));
     canvas.height = Math.max(1, Math.ceil((box.height / scale) * k));
     const ctx = canvas.getContext('2d');
-    const font = `${a.style.bold ? 700 : 400} ${a.style.size * k}px ${FONT}`;
+    const font = `${style.bold ? 700 : 400} ${style.size * k}px ${FONT}`;
     await document.fonts.load(font).catch(() => {});
     ctx.font = font;
-    ctx.fillStyle = a.style.color;
+    ctx.fillStyle = style.color;
     const m = ctx.measureText('あ');
-    const lh = a.style.size * LINE_HEIGHT * k;
+    const lh = style.size * LINE_HEIGHT * k;
     const base = (lh - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 + m.fontBoundingBoxAscent;
     const pad = k / scale; // .anno-text の左の余白 1px
-    this.textLines(a.el).forEach((line, i) => ctx.fillText(line, pad, i * lh + base));
+    lines.forEach((line, i) => ctx.fillText(line, pad, i * lh + base));
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
     return new Uint8Array(await blob.arrayBuffer());
   }
@@ -1375,6 +1444,7 @@ class Viewer {
       if (k === 'z' && !e.shiftKey) this.undo();
       else if ((k === 'z' && e.shiftKey) || k === 'y') this.redo();
       else if (k === 'e') this.openExport();
+      else if (k === 's') this.saveFile({manual: true});
       else return;
       return e.preventDefault();
     }
@@ -1395,6 +1465,8 @@ class Viewer {
   }
 
   unmount() {
+    // 閉じる前の変更もファイルに残す（書きかけ・保存待ちの注釈も含む。文字入れの行は画面があるうちにここで写す。変更がなければ何もしない）
+    this.saveFile();
     this.flushAll();
     this.destroyed = true;
     clearTimeout(this.pinchTimer);
