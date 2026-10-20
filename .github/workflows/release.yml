@@ -1,6 +1,8 @@
 # 配布物（DESIGN-M0 §1・SPEC §14.5）：Mac（dmg・zip、Apple シリコン・Intel）と Windows（インストーラー）を作る。
-# 公開のしかたは 2 つ。どちらも GitHub Releases に公開し、最新版の印を付ける。
+# 公開のしかたは 3 つ。どれも GitHub Releases に公開し、最新版の印を付ける。
 #   アプリは起動時と 1 時間ごとに Releases の最新版を確かめ、自動で更新する（src/main/updater.js）
+# - 自動：package.json の版を上げたコミットが既定のブランチに入ったら（プルリクエストのマージ）、その版がまだ公開されていなければ公開する。
+#   版を上げていない変更は公開しない
 # - Actions の「Release」→「Run workflow」で「Releases に公開する」に印を付けて動かす（既定のブランチのときだけ）。
 #   タグ v<package.json の版> は公開のときに GitHub がその時点のコミットに作る
 # - タグ v<版>（package.json の version と同じ）を push する
@@ -13,6 +15,8 @@ name: Release
 on:
   push:
     tags: ['v*']
+    branches: ['**'] # 既定のブランチかどうか・版が新しいかは decide ジョブで判断する（ほかのブランチではすぐ終わる）
+    paths: ['package.json']
   pull_request:
     paths:
       - '.github/workflows/release.yml'
@@ -30,8 +34,46 @@ on:
 permissions:
   contents: read
 
+# 同じブランチの公開を 2 つ同時に走らせない（後のほうは前が終わってから「公開済み」と判断して止まる）
+concurrency:
+  group: release-${{ github.ref }}
+
 jobs:
+  # 公開するかどうか。タグの push・「公開する」に印を付けた手動の実行・既定のブランチに新しい版が入った push のとき
+  decide:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.d.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: package.json
+          sparse-checkout-cone-mode: false
+      - id: d
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DEFAULT_REF: refs/heads/${{ github.event.repository.default_branch }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          publish=false
+          if [[ "$REF" == refs/tags/* ]]; then publish=true
+          elif [ "$EVENT" = workflow_dispatch ] && [ "$INPUT_PUBLISH" = true ] && [ "$REF" = "$DEFAULT_REF" ]; then publish=true
+          elif [ "$EVENT" = push ] && [ "$REF" = "$DEFAULT_REF" ]; then
+            # まだ公開していない版のときだけ（下書きや中身のない作りかけは公開していない扱い）
+            released=$(gh api "repos/$REPO/releases" --paginate --jq ".[] | select(.tag_name==\"$tag\" and (.draft|not) and (.assets|length)>0) | .id")
+            if [ -z "$released" ]; then publish=true; else echo "$tag は公開済みなので公開しません"; fi
+          fi
+          echo "公開：$publish（$tag）"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: decide
+    # ブランチへの push は、公開するときだけ作る（それ以外の push はここで終わる）
+    if: github.event_name != 'push' || needs.decide.outputs.publish == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -62,7 +104,7 @@ jobs:
         env:
           MAC_SIGN_P12: ${{ secrets.MAC_SIGN_P12 }}
           MAC_SIGN_PASSWORD: ${{ secrets.MAC_SIGN_PASSWORD }}
-          PUBLISH: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+          PUBLISH: ${{ needs.decide.outputs.publish }}
         run: |
           if [ -z "$MAC_SIGN_P12" ]; then
             if [ "$PUBLISH" = "true" ]; then echo "::error::署名用の証明書（Secrets の MAC_SIGN_P12・MAC_SIGN_PASSWORD）がありません。ad-hoc 署名の版を配ると、更新のあと LMS への接続が切れるため公開しません（README の「Mac の署名の証明書」）"; exit 1; fi
@@ -101,11 +143,8 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: >-
-      startsWith(github.ref, 'refs/tags/') ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish &&
-       github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
-    needs: build
+    if: needs.decide.outputs.publish == 'true'
+    needs: [decide, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
