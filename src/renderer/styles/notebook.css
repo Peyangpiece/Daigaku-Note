@@ -1171,15 +1171,18 @@ textarea.input {
   padding: 4px 12px;
   font-size: var(--fs-small);
 }
+/* 編集画面のツールバー：窓に固定（拡大してページを横にスクロールしても動かない。sticky だと横には一緒に流れていた） */
 .viewer-bar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin: -72px calc(var(--space-6) * -1) var(--space-3);
+  margin: 0;
   padding: 10px var(--space-6);
   background: var(--card);
   box-shadow: var(--card-shadow);
