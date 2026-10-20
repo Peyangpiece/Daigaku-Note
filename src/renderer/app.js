@@ -114,7 +114,7 @@ const routeStack = [];
 function trackRoute(route) {
   if (routeStack.at(-1) !== route) routeStack.push(route);
   if (routeStack.length > 50) routeStack.shift();
-  document.getElementById('head-back').hidden = route === '/' || (route === '/setup' && !state.data.connections.length);
+  document.getElementById('head-back').hidden = route === '/';
 }
 function parentOf(route) {
   if (route.startsWith('/viewer/')) {
@@ -141,7 +141,6 @@ function render() {
   const app = document.getElementById('app');
   app.classList.toggle('paper--margin', route === '/' || route.startsWith('/course/'));
   app.classList.toggle('paper--quiet', route.startsWith('/viewer/'));
-  if (!state.data.connections.length && route !== '/setup' && !route.startsWith('/settings')) return navigate('/setup');
   // PDF ビューアは状態が変わっても描き直さない（開いたまま。閉じるときだけ unmount）
   if (route.startsWith('/viewer/')) {
     const materialId = route.slice('/viewer/'.length);
@@ -265,6 +264,10 @@ document.addEventListener('click', async (e) => {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
       if (r?.error) toast(r.error, {error: true});
       else if (!r.canceled) uploaded(r);
+    } else if (action === 'skip-setup') {
+      await api['settings.update']({patch: {skipSetup: true}});
+      await reload();
+      navigate('/');
     } else if (action === 'folder-create') {
       const name = document.getElementById('fn-name')?.value ?? '';
       const scope = document.querySelector('input[name=fn-scope]:checked')?.value ?? 'term';

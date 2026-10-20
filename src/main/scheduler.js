@@ -35,6 +35,9 @@ export class Scheduler {
       jobs.enqueue('recipes', {});
     }
 
+    // LMS をつないでいなければ同期しない（自分のフォルダだけで使っているとき、空の同期の知らせを出さない）
+    if (!repo.listConnections().some((c) => c.kind !== 'manual' && c.status !== 'disabled')) return;
+
     // 毎日の同期
     const time = repo.getSetting('sync.time', '16:30');
     if (dueDailySync({time, lastDay: repo.getSetting('sync.lastFullDay')}, now)) {

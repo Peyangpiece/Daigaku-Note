@@ -250,7 +250,8 @@ app.whenReady().then(async () => {
     ctx.updater = createUpdater({app, dialog, shell, net, refreshTray: () => ctx.refreshTray?.(), allowQuit: () => (ctx.quitConfirmed = true)});
     ctx.updater.start().catch((e) => log.warn(`更新の確認を始められません: ${e.message}`));
     const connections = repo.listConnections();
-    openWindow(connections.length ? null : '/setup');
+    // LMS の登録は任意。つないでいなくても、セットアップを一度飛ばしたか自分のフォルダがあればホームを開く
+    openWindow(connections.length || repo.getSetting('setup.skipped') || repo.listCourses().length ? null : '/setup');
     ctx.scheduler.start();
     // Chromium の取り込みが終わるまでジョブは待つ（画面操作型の接続がなくても、あとで追加できるよう先に用意する）
     ctx.browser = {state: 'pending', message: ''};

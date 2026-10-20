@@ -63,7 +63,9 @@ export function renderHome({data, progress}) {
       (c) =>
         `<li>${esc(c.label)} へのログインが必要です。<button class="btn btn--small" data-action="login" data-id="${esc(c.id)}">ログイン窓を開く</button></li>`
     );
-  if (data.browser?.state === 'failed')
+  // LMS の登録は任意。つないでいなければ、同期のボタンとブラウザの準備の知らせは出さない
+  const hasLms = data.connections.some((c) => c.kind !== 'manual' && c.status !== 'disabled');
+  if (hasLms && data.browser?.state === 'failed')
     attention.push(
       `<li>LMS を読むためのブラウザの${browserState(data.browser)}<button class="btn btn--small" data-action="install-browser">準備し直す</button></li>`
     );
@@ -75,14 +77,20 @@ export function renderHome({data, progress}) {
       ${
         courses.length
           ? `<section class="folders" aria-label="授業">${courses.map(folderCard).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
-          : `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
+          : hasLms
+            ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
+            : `<div class="empty"><p>LMS をつなぐと、授業の資料を自動で集めて、ここに授業のフォルダを貼ります（任意）。</p><button class="btn" data-action="nav" data-route="/setup">LMS をつなぐ</button></div>`
       }
       ${myFolders}
     </div>
     <footer class="home-foot">
       ${data.quiz?.reviewDue ? `<button class="btn btn--primary" data-action="nav" data-route="/review">今日の復習 ${data.quiz.reviewDue} 問</button>` : ''}
-      <button class="btn" data-action="sync" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : '同期'}</button>
-      <span class="muted" id="sync-status" role="status">${preparing ? 'LMS を読むためのブラウザを準備しています（初回だけ。数分かかります）。終わると同期が始まります。' : status}</span>
+      ${
+        hasLms
+          ? `<button class="btn" data-action="sync" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : '同期'}</button>
+      <span class="muted" id="sync-status" role="status">${preparing ? 'LMS を読むためのブラウザを準備しています（初回だけ。数分かかります）。終わると同期が始まります。' : status}</span>`
+          : ''
+      }
       <span style="margin-left:auto"></span>
       <button class="btn" data-action="open-root">資料のフォルダ</button>
       <button class="btn" data-action="nav" data-route="/settings">⚙ 設定</button>

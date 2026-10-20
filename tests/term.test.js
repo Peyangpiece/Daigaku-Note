@@ -55,3 +55,18 @@ test('DB の行（start_date/end_date）でも今日の学期を選べる', () =
   assert.equal(currentTerm(rows, '2026-10-17').id, 'b');
   assert.equal(termEndingSoon(rows[1], '2027-03-10'), true);
 });
+
+test('LMS をつながずに使い始めたときの仮の学期：4〜9 月は春学期、10〜3 月は秋学期（1〜3 月は前の年度）', async () => {
+  const {autoTerm} = await import('../src/shared/term.js');
+  const fall = autoTerm('2026-10-20');
+  assert.equal(fall.label, '秋学期');
+  assert.equal(fall.year, 2026);
+  assert.equal(fall.start_date, '2026-10-01');
+  assert.equal(fall.end_date, '2027-03-31');
+  assert.equal(fall.source, 'auto');
+  assert.equal(autoTerm('2027-02-10').id, fall.id, '1〜3 月は前の年度の秋学期');
+  const spring = autoTerm('2026-05-01');
+  assert.equal(spring.label, '春学期');
+  assert.equal(spring.start_date, '2026-04-01');
+  assert.equal(spring.end_date, '2026-09-30');
+});

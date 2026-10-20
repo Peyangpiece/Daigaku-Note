@@ -39,7 +39,8 @@ export function renderSetup({data}) {
 
 function stepUrl() {
   return `<h2>1. LMS の URL を入れる</h2>
-    <p class="muted">大学の LMS（Moodle・manaba・WebClass・manabo など）のトップページの URL を入れて「種類を判定」を押します。</p>
+    <p class="muted">大学の LMS（Moodle・manaba・WebClass・manabo など）のトップページの URL を入れて「種類を判定」を押します。LMS をつなぐと、授業の資料を自動で集めます。</p>
+    <p class="muted">LMS の登録は任意です。つながずに、自分で作るフォルダやパソコンのフォルダだけで使うこともできます（あとから 設定 → 接続 でつなげます）。<button class="btn btn--small" data-action="skip-setup">LMS をつながずに使う</button></p>
     <label class="sr-only" for="su-url">LMS の URL</label>
     <input class="input" id="su-url" type="url" placeholder="https://lms.example-u.ac.jp/" value="${esc(draft.url)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)} <span class="muted">${esc(KIND_LABEL[c.kind] ?? c.kind)}${c.score ? ` ・ 確からしさ ${Math.round(c.score * 100)}%` : ''}</span></label>`).join('')}</div>
