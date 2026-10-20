@@ -116,6 +116,29 @@ export class JobRunner {
         totals.message = totals.messages.join(' / ');
         return totals;
       }
+      case 'login': {
+        // 起動したとき（更新のあとを含む）：同期を待たずに、各接続のセッションを確かめて切れていれば自動でログインする
+        const connections = repo.listConnections().filter((c) => c.status !== 'disabled' && c.kind !== 'manual');
+        const result = {loggedIn: 0, failures: 0, messages: []};
+        for (const connection of connections) {
+          if (connection.kind === 'recipe' && this.ctx.browser?.state !== 'ready') continue; // ブラウザがなければ次の同期に任せる
+          const r = await engine
+            .restoreSession({connection, connector: registry.forConnection(connection)})
+            .catch((error) => ({status: 'failed', error}));
+          if (r.loggedIn) result.loggedIn++;
+          if (r.status === 'ok') continue;
+          result.failures++;
+          const message = this.ctx.secrets?.isLocked?.(`conn:${connection.id}:`)
+            ? `${connection.label}：保存したログインを読めません。キーチェーンの確認が出たら「常に許可」を選び、大学ノートを開き直してください（出ないときは 設定 → 接続 → ログインし直す）`
+            : r.status === 'login-required'
+              ? `${connection.label} へのログインが必要です${r.error?.message ? `（${r.error.message}）` : ''}`
+              : `${connection.label}：${friendlyError(r.error)}`;
+          result.messages.push(message);
+          if (r.status === 'login-required') this.notify('login.required', {connectionId: connection.id, label: connection.label, message});
+        }
+        result.message = result.messages.join(' / ');
+        return result;
+      }
       case 'move': {
         const material = repo.get('material', job.payload.materialId);
         const round = repo.get('round', job.payload.roundId);

@@ -218,7 +218,7 @@ document.addEventListener('submit', (e) => {
     quizSubmitNum(e.target);
   }
 });
-api.on('login.required', ({label}) => toast(`${label} へのログインが必要です`, {error: true}));
+api.on('login.required', ({label, message}) => toast(message ?? `${label} へのログインが必要です`, {error: true}));
 api.on('route', (r) => navigate(r));
 
 // 画面内のボタンは data-action で受ける（1 か所で委譲）

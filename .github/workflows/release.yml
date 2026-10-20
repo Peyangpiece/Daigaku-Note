@@ -5,7 +5,9 @@
 #   タグ v<package.json の版> は公開のときに GitHub がその時点のコミットに作る
 # - タグ v<版>（package.json の version と同じ）を push する
 # 印を付けずに手で動かしたときと、配布の設定を変えるプルリクエストでは、作るだけ（この実行の Artifacts に置く）
-# Apple・Windows の証明書はない。Mac は ad-hoc 署名（build/after-pack.cjs）、Windows は署名なし
+# Apple・Windows の証明書はない。Mac は自分で作った「コード署名」の証明書（Secrets の MAC_SIGN_P12・MAC_SIGN_PASSWORD）で
+# 署名する（build/after-pack.cjs）。毎回同じ証明書で署名するので、更新のあとも保存した LMS のログインを読める。
+# 証明書がないときは ad-hoc 署名で作るだけはできるが、公開はしない（ad-hoc の版に更新すると接続が切れるため）。Windows は署名なし
 name: Release
 
 on:
@@ -55,6 +57,35 @@ jobs:
             echo "::error::タグ $GITHUB_REF_NAME と package.json の版 $v が違います。package.json の版を上げてからタグを付けてください"
             exit 1
           fi
+      - name: Mac の署名の証明書を用意する
+        if: runner.os == 'macOS'
+        env:
+          MAC_SIGN_P12: ${{ secrets.MAC_SIGN_P12 }}
+          MAC_SIGN_PASSWORD: ${{ secrets.MAC_SIGN_PASSWORD }}
+          PUBLISH: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+        run: |
+          if [ -z "$MAC_SIGN_P12" ]; then
+            if [ "$PUBLISH" = "true" ]; then echo "::error::署名用の証明書（Secrets の MAC_SIGN_P12・MAC_SIGN_PASSWORD）がありません。ad-hoc 署名の版を配ると、更新のあと LMS への接続が切れるため公開しません（README の「Mac の署名の証明書」）"; exit 1; fi
+            echo "署名用の証明書（MAC_SIGN_P12）がないため、ad-hoc 署名で作ります"; exit 0
+          fi
+          kc="$RUNNER_TEMP/daigaku-sign.keychain-db"; kp=$(openssl rand -hex 16)
+          security create-keychain -p "$kp" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kp" "$kc"
+          printf '%s' "$MAC_SIGN_P12" | base64 --decode > "$RUNNER_TEMP/sign.p12"
+          security import "$RUNNER_TEMP/sign.p12" -k "$kc" -P "$MAC_SIGN_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/sign.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kp" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          # 自分で作った証明書は信頼されていないので、この作業用の Mac でだけコード署名用に信頼する
+          # （信頼に加えられなくても署名はできる見込みなので、失敗しても止めない）
+          security find-certificate -a -p "$kc" > "$RUNNER_TEMP/sign.pem"
+          { sudo security authorizationdb write com.apple.trust-settings.admin allow && sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/sign.pem"; } || echo "証明書を信頼に加えられませんでした（署名はそのまま試します）"
+          security find-identity -p codesigning "$kc"
+          id=$(security find-identity -p codesigning "$kc" | awk '/[0-9]+\)/{print $2; exit}')
+          if [ -z "$id" ]; then echo "::error::MAC_SIGN_P12 にコード署名に使える証明書が見つかりません（証明書のタイプが「コード署名」か確かめてください）"; exit 1; fi
+          echo "MAC_SIGN_IDENTITY=$id" >> "$GITHUB_ENV"
+          echo "MAC_SIGN_KEYCHAIN=$kc" >> "$GITHUB_ENV"
       # electron-builder の公開機能は使わない（Mac と Windows のジョブがそれぞれ Release を作ろうとするため）。
       # 作るだけにして、下の publish ジョブで 1 回にまとめて載せる
       - run: npx electron-builder --publish never
