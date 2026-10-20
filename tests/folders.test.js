@@ -126,3 +126,20 @@ test('ファイルが多いときは打ち切り、読まなかったファイ�
   assert.equal(r.files.length, 3);
   assert.equal(r.truncated, true);
 });
+
+test('LMS をつながずに（学期がないまま）フォルダを作ると、今日の日付から仮の学期を作る', async (t) => {
+  const base = await mkdtemp(path.join(tmpdir(), 'dn-folders-'));
+  t.after(() => rm(base, {recursive: true, force: true}));
+  const {db} = await openDatabase(':memory:');
+  const repo = new Repo(db);
+  const folders = createFolders({repo, rootDir: () => base, today: () => '2026-10-20'});
+  const f = await folders.create({name: 'ゼミ', scope: 'term', mode: 'new'});
+  const terms = repo.listTerms();
+  assert.equal(terms.length, 1);
+  assert.equal(terms[0].label, '秋学期');
+  assert.equal(terms[0].source, 'auto');
+  assert.equal(f.term_id, terms[0].id);
+  assert.equal(f.dir, path.join(base, '2026_秋学期', TERM_FOLDERS, 'ゼミ'));
+  await folders.create({name: '就活', scope: 'always', mode: 'new'});
+  assert.equal(repo.listTerms().length, 1, '2 つ目からは同じ学期を使う');
+});

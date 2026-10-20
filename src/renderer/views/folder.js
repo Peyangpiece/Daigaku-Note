@@ -20,6 +20,7 @@ function scopeChoice(selected = 'term') {
 /** /folder-new?mode=new|link */
 export function renderFolderNew({data}, route) {
   const mode = new URLSearchParams(route.split('?')[1] ?? '').get('mode') === 'link' ? 'link' : 'new';
+  // 学期がまだなければ（LMS をつながずに使い始めたとき）、メインが今日の日付から仮の学期を作る
   const noTerm = !data.terms.length;
   return `
     <nav class="page-nav">
@@ -37,9 +38,9 @@ export function renderFolderNew({data}, route) {
         <input class="input" id="fn-name" type="text" maxlength="80" autocomplete="off">`
       }
       ${scopeChoice()}
-      ${noTerm ? '<p class="muted">先に学期を設定してください（設定 → 学期）。</p>' : ''}
+      ${noTerm ? '<p class="muted">学期はまだ設定されていないので、今日の日付から仮の学期（4〜9 月は春学期、10〜3 月は秋学期）を作ります。設定 → 学期 で直せます。</p>' : ''}
       <div class="actions">
-        <button class="btn btn--primary" data-action="folder-create" data-mode="${mode}" ${noTerm ? 'disabled' : ''}>${mode === 'new' ? '作る' : 'フォルダを選んで登録…'}</button>
+        <button class="btn btn--primary" data-action="folder-create" data-mode="${mode}">${mode === 'new' ? '作る' : 'フォルダを選んで登録…'}</button>
       </div>
     </section>`;
 }

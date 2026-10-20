@@ -76,3 +76,16 @@ export function currentTerm(terms, today) {
 export function termEndingSoon(term, today, days = 30) {
   return !!term && addDays(endOf(term), -days) <= today && today <= endOf(term);
 }
+
+/**
+ * 学期がまだないとき（LMS をつながずに使い始めたとき）の仮の学期。4〜9 月は春学期、10〜3 月は秋学期（1〜3 月は前の年度）。
+ * 期間は defaultTermDates のまま。あとで 設定 → 学期 で直せる
+ */
+export function autoTerm(today) {
+  const [y, m] = String(today).split('-').map(Number);
+  const spring = m >= 4 && m <= 9;
+  const year = m >= 4 ? y : y - 1;
+  const label = spring ? '春学期' : '秋学期';
+  const d = defaultTermDates(label, year);
+  return {id: termId(year, label), label, year, folder: termFolder(year, label), start_date: d.start, end_date: d.end, rounds: 15, holidays_json: '[]', source: 'auto'};
+}

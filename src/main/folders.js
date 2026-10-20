@@ -9,7 +9,7 @@ import {ulid} from '../shared/ids.js';
 import {layoutOf} from '../shared/layout.js';
 import {sanitizeSegment, uniqueName} from '../shared/naming.js';
 import {inside} from '../shared/paths.js';
-import {currentTerm} from '../shared/term.js';
+import {autoTerm, currentTerm} from '../shared/term.js';
 
 export const MY_FOLDER = 'マイフォルダ'; // ルート/マイフォルダ/<名前>
 export const TERM_FOLDERS = '自分のフォルダ'; // ルート/<学期>/自分のフォルダ/<名前>（授業フォルダと名前がぶつからないよう 1 段下げる）
@@ -59,9 +59,14 @@ export function createFolders({
   today = () => new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'}),
   log = () => {}
 }) {
+  // LMS をつながずに使い始めたときは学期がまだないので、今日の日付から仮の学期を作る（設定 → 学期 で直せる）
   const termNow = () => {
     const terms = repo.listTerms();
-    return currentTerm(terms, today()) ?? terms.at(-1) ?? null;
+    if (!terms.length) {
+      repo.upsertTerm(autoTerm(today()));
+      return repo.listTerms()[0];
+    }
+    return currentTerm(terms, today()) ?? terms.at(-1);
   };
   /** フォルダの見えない回（クイズと「ファイルを追加」の置き場所）。なければ作る */
   const roundOf = (course) =>

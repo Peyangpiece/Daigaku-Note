@@ -235,6 +235,12 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       periods_json: periods ? JSON.stringify(periods) : null,
       source: 'user'
     });
+    // LMS をつなぐ前にフォルダのために作った仮の学期が同じ時期にあれば、フォルダをこの学期へ移して仮の学期を消す
+    for (const t of repo.listTerms())
+      if (t.source === 'auto' && t.id !== row.id && t.start_date <= end && start <= t.end_date) {
+        for (const c of repo.listCourses({termId: t.id})) repo.updateCourse(c.id, {term_id: row.id});
+        repo.remove('term', t.id);
+      }
     return {ok: true, term: row};
   });
 
@@ -493,6 +499,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
     if (patch.resetRoot === true) repo.setSetting('storage.root', null);
+    if (patch.skipSetup === true) repo.setSetting('setup.skipped', true); // LMS をつながずに使う（次から起動時にセットアップを出さない）
     if (typeof patch.openAtLogin === 'boolean') {
       if (!loginItem().available) bad('ログイン時の起動は、アプリとして入れた大学ノートでだけ設定できます');
       app.setLoginItemSettings({openAtLogin: patch.openAtLogin});
