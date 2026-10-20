@@ -1234,7 +1234,9 @@ textarea.input {
 .viewer-pages {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* 画面に収まるときは真ん中、はみ出すときは左から（center だと左右に同じだけはみ出し、左側へスクロールで戻れない。
+     拡大するといつも真ん中に寄ってしまい、指の下の場所を保てない） */
+  align-items: safe center;
   gap: var(--space-3);
   padding-bottom: var(--space-6);
 }
