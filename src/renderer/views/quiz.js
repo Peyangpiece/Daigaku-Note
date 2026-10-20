@@ -138,7 +138,11 @@ export function renderQuiz({data}, route) {
         : s.mode === 'retry'
           ? 'まちがえた問題はありません。'
           : 'まだ問題がありません。授業画面の「クイズを作る」から作れます。';
-    return head + `<div class="empty"><p>${esc(msg)}</p></div>`;
+    // 次の一手：授業画面へ（授業が分からなければホームへ）
+    const go = course
+      ? `<button class="btn btn--primary" data-action="quiz-quit" data-route="/course/${esc(course.id)}">${esc(course.name)}の授業画面へ</button>`
+      : '<button class="btn btn--primary" data-action="quiz-quit" data-route="/">ホームへ</button>';
+    return head + `<div class="empty"><p>${esc(msg)}</p>${go}</div>`;
   }
   if (s.i >= s.questions.length) return head + renderResult(s, course);
   const q = s.questions[s.i];

@@ -14,29 +14,53 @@ function hash32(str) {
 }
 const tapeAngle = (id) => (hash32(id) % 13) - 6;
 
-export function folderCard(course) {
-  const sub =
-    course.kind === 'folder'
-      ? scopeLabel(course)
-      : course.weekday
-        ? `${course.weekday}曜${course.period ? ` ${course.period}限` : ''}`
-        : '';
+const DAYS = '日月火水木金土';
+const slotOf = (c) => `${c.weekday}曜${c.period ? ` ${c.period}限` : ''}`;
+const byPeriod = (a, b) => (a.period ?? 99) - (b.period ?? 99);
+
+/** 今日の授業（時限の順）と、今日がなければ次に授業のある日の授業。曜日の分からない授業は数えない */
+export function classDays(courses, now = new Date()) {
+  const dow = now.getDay();
+  const on = (d) => courses.filter((c) => c.weekday === DAYS[d]).sort(byPeriod);
+  const today = on(dow);
+  for (let i = 1; i <= 7 && !today.length; i++) {
+    const list = on((dow + i) % 7);
+    if (list.length) return {today, next: {list, inDays: i}};
+  }
+  return {today, next: null};
+}
+
+// 名前の中の、折り返せない一続き（<wbr> の間）が長いときは字を小さくして、「マーケティング／・リサーチ」のような変な切れ方をさせない
+const longestRun = (html) => Math.max(...html.split('<wbr>').map((s) => [...s.replace(/&[a-z#0-9]+;/g, '_')].length));
+
+export function folderCard(course, {today = false} = {}) {
+  const sub = course.kind === 'folder' ? scopeLabel(course) : course.weekday ? slotOf(course) : '';
+  const name = jaWrap(course.name);
   const badges = [
     course.unread
       ? `<span class="badge" style="--badge-color: var(--c${course.color})">新着 ${course.unread}</span>`
       : '',
     course.review ? `<span class="badge">復習 ${course.review}</span>` : ''
   ].join('');
-  return `<button class="folder${course.hidden ? ' folder--hidden' : ''}${course.kind === 'folder' ? ' folder--mine' : ''}" data-action="open-course" data-id="${esc(course.id)}">
+  return `<button class="folder${course.hidden ? ' folder--hidden' : ''}${course.kind === 'folder' ? ' folder--mine' : ''}${today ? ' folder--today' : ''}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
     <span class="tape tape--${esc(course.tape_pattern)}" style="--tape-color: var(--c${course.color}); --tape-angle: ${tapeAngle(course.id)}deg"></span>
-    <span class="folder__name ja-wrap">${jaWrap(course.name)}</span>
-    <span class="folder__sub">${esc(sub)}</span>
+    <span class="folder__name ja-wrap${longestRun(name) > 6 ? ' folder__name--long' : ''}">${name}</span>
+    <span class="folder__sub">${today ? '<span class="folder__today">今日</span> ' : ''}${esc(sub)}</span>
     <span class="folder__badges">${badges}</span>
   </button>`;
 }
 
 export function renderHome({data, progress}) {
-  const courses = data.courses.filter((c) => !c.hidden && c.kind !== 'folder');
+  const all = data.courses.filter((c) => !c.hidden && c.kind !== 'folder');
+  // 今日の授業を先頭に（時限の順）。あとはこれまでの並び
+  const {today, next} = classDays(all);
+  const courses = [...today, ...all.filter((c) => !today.includes(c))];
+  const todayIds = new Set(today.map((c) => c.id));
+  const dayLine = today.length
+    ? `<p class="home-day" id="today-label"><strong>今日の授業</strong> ${today.map((c) => `${esc(c.name)}（${c.period ? `${c.period}限` : '時限なし'}）`).join('・')}</p>`
+    : next
+      ? `<p class="home-day"><strong>次の授業</strong> ${next.inDays === 1 ? '明日' : `${esc(next.list[0].weekday)}曜`}　${next.list.map((c) => `${esc(c.name)}${c.period ? `（${c.period}限）` : ''}`).join('・')}</p>`
+      : '';
   const hidden = data.courses.filter((c) => c.hidden);
   // 自分のフォルダ：マイフォルダと今学期のフォルダ。前の学期のフォルダは畳んで下に
   const mine = data.courses.filter((c) => c.kind === 'folder' && !c.hidden);
@@ -44,12 +68,12 @@ export function renderHome({data, progress}) {
   const past = mine.filter((c) => !folderShown(c, data.currentTermId));
   const myFolders = `<section class="my-folders" aria-labelledby="my-folders-title">
       <h2 class="my-folders__title" id="my-folders-title">自分のフォルダ</h2>
-      ${shown.length ? `<div class="folders">${shown.map(folderCard).join('')}</div>` : '<p class="muted">自分でフォルダを作ったり、パソコンのフォルダを登録したりできます。</p>'}
+      ${shown.length ? `<div class="folders">${shown.map((c) => folderCard(c)).join('')}</div>` : '<p class="muted">自分でフォルダを作ったり、パソコンのフォルダを登録したりできます。</p>'}
       <div class="actions">
         <button class="btn" data-action="nav" data-route="/folder-new?mode=new">＋ フォルダを作る</button>
         <button class="btn" data-action="nav" data-route="/folder-new?mode=link">＋ パソコンのフォルダを登録</button>
       </div>
-      ${past.length ? `<details class="my-folders__past" id="my-folders-past"><summary>前の学期のフォルダ ${past.length}</summary><div class="folders">${past.map(folderCard).join('')}</div></details>` : ''}
+      ${past.length ? `<details class="my-folders__past" id="my-folders-past"><summary>前の学期のフォルダ ${past.length}</summary><div class="folders">${past.map((c) => folderCard(c)).join('')}</div></details>` : ''}
     </section>`;
   const last = data.lastSync;
   const status = progress
@@ -76,7 +100,7 @@ export function renderHome({data, progress}) {
       ${attention.length ? `<aside class="sticky attention" style="--sticky-color: var(--c2)" aria-labelledby="attention-title"><strong id="attention-title">要確認</strong><ul>${attention.join('')}</ul></aside>` : ''}
       ${
         courses.length
-          ? `<section class="folders" aria-label="授業">${courses.map(folderCard).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
+          ? `${dayLine}<section class="folders" aria-label="授業">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id)})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
           : hasLms
             ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
             : '' /* LMS をつないでいなければ授業の段は出さない（つなぐのは 設定 → LMS との連携 から） */

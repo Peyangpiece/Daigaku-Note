@@ -109,37 +109,13 @@ function restore(view, snap) {
 let lastRoute = null;
 /** 状態を読み直さずに描き直す（クイズの画面の中の動きなど） */
 export const refresh = () => render();
-// 戻るボタン（ヘッダー）：アプリの中で通った画面を覚えておき、1 つ前の画面へ。覚えていなければ上の画面へ
-const routeStack = [];
-function trackRoute(route) {
-  if (routeStack.at(-1) !== route) routeStack.push(route);
-  if (routeStack.length > 50) routeStack.shift();
-  document.getElementById('head-back').hidden = route === '/';
-}
-function parentOf(route) {
-  if (route.startsWith('/viewer/')) {
-    const id = route.slice('/viewer/'.length);
-    const m = Object.values(state.data.materials)
-      .flat()
-      .find((x) => x.id === id);
-    return m ? `/course/${m.course_id}` : '/';
-  }
-  if (route.startsWith('/settings/')) return '/settings';
-  return '/';
-}
-function goBack() {
-  const here = routeStack.pop() ?? '/';
-  navigate(routeStack.pop() ?? parentOf(here)); // 移った先で trackRoute がもう一度積む
-}
-
 function render() {
   if (!state.data) return;
   head();
   const view = document.getElementById('view');
   const route = location.hash.replace(/^#/, '') || '/';
-  trackRoute(route);
   const app = document.getElementById('app');
-  app.classList.toggle('paper--margin', route === '/' || route.startsWith('/course/'));
+  app.classList.toggle('paper--margin', !route.startsWith('/viewer/')); // 余白の縦線はどの画面にも（編集画面だけなし）
   app.classList.toggle('paper--quiet', route.startsWith('/viewer/'));
   // PDF ビューアは状態が変わっても描き直さない（開いたまま。閉じるときだけ unmount）
   if (route.startsWith('/viewer/')) {
@@ -173,7 +149,7 @@ function render() {
   else if (route === '/settings/term') view.innerHTML = renderTerm(state);
   else if (route.startsWith('/quiz-edit/')) view.innerHTML = renderQuizEdit(state, route.slice('/quiz-edit/'.length));
   else if (route.startsWith('/quiz') || route.startsWith('/review')) view.innerHTML = renderQuiz(state, route);
-  else if (route === '/settings') view.innerHTML = renderSettings(state);
+  else if (route === '/settings' || route.startsWith('/settings?')) view.innerHTML = renderSettings(state, route);
   else view.innerHTML = renderHome(state);
   lastRoute = route;
   if (snap) restore(view, snap);
@@ -242,8 +218,7 @@ document.addEventListener('click', async (e) => {
       });
       if (r?.error) toast(r.error, {error: true});
       else toast(el.dataset.full === '1' ? '過去の回も含めて全部確かめます（数分かかります）' : '同期を始めます');
-    } else if (action === 'back') goBack();
-    else if (action === 'open-pdf') navigate(`/viewer/${el.dataset.id}`);
+    } else if (action === 'open-pdf') navigate(`/viewer/${el.dataset.id}`);
     else if (action === 'open-material') {
       const r = await api['material.open']({materialId: el.dataset.id});
       if (r?.error) toast(r.error, {error: true});

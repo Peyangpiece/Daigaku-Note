@@ -15,7 +15,7 @@ body {
   background: var(--paper);
 }
 
-/* 紙：横罫（32px ごとの 1px）。内容と一緒にスクロールする。左の縦線はホームと授業画面だけ（.paper--margin） */
+/* 紙：横罫（32px ごとの 1px）。内容と一緒にスクロールする。左の縦線は編集画面のほかのすべての画面（.paper--margin） */
 .paper {
   --rules: repeating-linear-gradient(
     to bottom,
@@ -158,6 +158,33 @@ h2[tabindex='-1']:focus {
   font-size: var(--fs-small);
   min-height: 1.4em;
 }
+/* 折り返せない一続きが長い名前（「マーケティング・リサーチ」など）は字を少し小さく */
+.folder__name--long {
+  font-size: 15px;
+}
+/* 今日の授業：カードを浮かせて、時限の前に「今日」 */
+.folder--today {
+  box-shadow:
+    0 0 0 2px var(--paper-ink),
+    var(--card-shadow-hover);
+}
+.folder__today {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--paper-ink);
+  color: var(--card);
+  font-weight: 700;
+}
+/* ホームの上の 1 行：今日の授業・次の授業 */
+.home-day {
+  margin: 0 0 var(--space-1);
+  color: var(--paper-ink-weak);
+}
+.home-day strong {
+  margin-right: 8px;
+  color: var(--paper-ink);
+}
 .folder__badges {
   display: flex;
   gap: 6px;
@@ -292,10 +319,11 @@ h2[tabindex='-1']:focus {
   align-items: start;
 }
 .round-note {
-  /* ポップな付箋の色を白と半々ほどに混ぜた、薄いパステル。紙なので暗い表示でも明るいまま、文字は黒 */
-  --note-bg: color-mix(in srgb, var(--note-color, var(--pop1)) 55%, #fff);
+  /* ポップな付箋の色を白と半々ほどに混ぜた、薄いパステル。紙なので暗い表示でも紙の色のまま、文字は黒
+     （暗い表示では白の代わりに灰色と混ぜ、まぶしくないようにする：tokens.css の --note-mix） */
+  --note-bg: color-mix(in srgb, var(--note-color, var(--pop1)) 55%, var(--note-mix, #fff));
   --paper-ink: #2b2b2b;
-  --paper-ink-weak: #5c6068; /* 暗い表示でも付箋は明るい紙なので、薄い文字も濃いまま */
+  --paper-ink-weak: var(--note-ink-weak, #5c6068); /* 付箋は紙の色なので、暗い表示でも薄い文字は濃いまま（暗い表示の付箋はさらに濃く） */
   --paper: #fffdf6;
   --card: #ffffff;
   --note-weak: 80%;
@@ -390,7 +418,10 @@ h2[tabindex='-1']:focus {
   font-size: var(--fs-small);
 }
 .round-note--empty {
-  min-height: 150px;
+  min-height: 0;
+}
+.round-note--empty .round-note__none {
+  margin-top: 12px;
 }
 /* これからの回（資料なし）：見出しだけの小さな付箋 */
 .round-note--upcoming {
@@ -523,7 +554,7 @@ h2[tabindex='-1']:focus {
 
 /* 自分の付箋：自分で入れたファイルが最初に置かれる。行の幅いっぱい。罫線入りの白い付箋に黄色のテープ */
 .round-note--own {
-  --note-bg: color-mix(in srgb, var(--c1) 14%, var(--card));
+  --note-bg: color-mix(in srgb, var(--c1) 14%, var(--note-mix, var(--card)));
   grid-column: 1 / -1;
   min-height: 0;
   transform: none;
@@ -682,6 +713,31 @@ h2[tabindex='-1']:focus {
 }
 
 /* 画面の上の段（← 戻る・見出し）と、ボタンの並び */
+/* 設定：まとまりごとの見出しと、広い窓では 2 列の並び */
+.settings {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 1120px;
+}
+.settings__group {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-small);
+  color: var(--paper-ink-weak);
+  letter-spacing: 0.08em;
+}
+.settings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+.settings__more {
+  margin-top: var(--space-2);
+}
+.settings__more summary {
+  cursor: pointer;
+  color: var(--paper-ink-weak);
+}
 .page-nav {
   display: flex;
   gap: var(--space-2);
@@ -752,6 +808,7 @@ h2[tabindex='-1']:focus {
   gap: var(--space-1);
   align-items: center;
   flex-wrap: wrap;
+  margin-bottom: var(--space-3);
 }
 .course-help {
   margin: 6px 0 var(--space-3);
@@ -1105,7 +1162,7 @@ textarea.input {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 8px;
   margin: -72px calc(var(--space-6) * -1) var(--space-3);
   padding: 10px var(--space-6);
   background: var(--card);
@@ -1137,7 +1194,7 @@ textarea.input {
   outline-offset: 1px;
 }
 .viewer-bar__name {
-  max-width: 260px;
+  max-width: 150px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1224,8 +1281,20 @@ textarea.input {
   text-align: center;
 }
 .viewer-bar__status {
-  min-width: 6em;
-  text-align: right;
+  /* 保存の状態は並びの外（ツールバーの右下に小さく）。並びの幅を取らず、文字が変わってもボタンが動かない */
+  position: absolute;
+  right: var(--space-6);
+  top: 100%;
+  margin-top: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 12px;
+  line-height: 20px;
+  pointer-events: none;
+}
+.viewer-bar__status:empty {
+  display: none;
 }
 .viewer-bar__status.is-error {
   color: #d93025;
@@ -1484,10 +1553,6 @@ textarea.input {
   pointer-events: none;
 }
 
-/* ヘッダーの戻るボタン（ホーム以外のすべての画面） */
-.head-back[hidden] {
-  display: none;
-}
 
 /* 自分のフォルダ（ホームの下の段・作る画面・中身の画面） */
 .my-folders {
@@ -1507,10 +1572,6 @@ textarea.input {
 .my-folders__past summary {
   cursor: pointer;
   color: var(--paper-ink-weak);
-}
-/* 自分のフォルダのカードは、左上に小さなフォルダの印 */
-.folder--mine .folder__name::before {
-  content: '📁 ';
 }
 .folder-new {
   max-width: 640px;
@@ -1539,6 +1600,63 @@ textarea.input {
 /* しおり：ツールバーの一覧と、ページの右端のリボン */
 .viewer-bar__bookmarks {
   position: relative;
+}
+/* しおり・赤シート：押すと出る・しまうもの。道具（選択・文字・付箋・文字隠し）とは区切って並べる */
+.viewer-bar__toggles {
+  display: inline-flex;
+  gap: 2px;
+  padding-left: var(--space-1);
+  border-left: 1px solid color-mix(in srgb, var(--paper-ink) 18%, transparent);
+}
+.viewer-bar__history button {
+  font-size: 18px;
+}
+/* ページ番号（入れて Enter で移る） */
+.viewer-bar__page {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-small);
+}
+.viewer-bar__page input {
+  width: 3.4em;
+  height: 28px;
+  padding: 0 4px;
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--paper-ink);
+  font: inherit;
+  text-align: right;
+}
+/* キーボードの操作の一覧 */
+.viewer-bar__help {
+  position: relative;
+}
+.help-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 300px;
+  padding: 10px 14px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow-hover);
+  font-size: var(--fs-small);
+}
+.help-panel dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+}
+.help-panel dt {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.help-panel dd {
+  margin: 0;
 }
 .bookmark-panel {
   position: absolute;
@@ -1620,4 +1738,11 @@ textarea.input {
   transform: translateY(-50%);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   cursor: pointer;
+}
+/* ボタンの並びのすぐ下に説明があるとき（自分のフォルダの画面）は、説明をボタンに寄せる */
+.course-actions + .course-help {
+  margin-top: calc(var(--space-3) * -1 + 6px);
+}
+.viewer-bar .btn[hidden] {
+  display: none;
 }

@@ -91,6 +91,7 @@ const BAR = `
       <button type="button" data-tool="note" title="付箋（M）">付箋</button>
       <button type="button" data-tool="mask" title="文字隠し：文字の上をなぞって水色のマーカーを引く（H）">文字隠し</button>
     </div>
+    <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
       <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="しおり（B で今の場所にしおりを足す）">しおり</button>
       <div class="bookmark-panel" data-v="bookmark-panel" hidden>
@@ -102,6 +103,7 @@ const BAR = `
       </div>
     </div>
     <button type="button" class="viewer-bar__sheet" data-v="sheet" aria-pressed="false" title="赤シートを出す・しまう（R）。マーカーのところだけ黒く隠れます">赤シート</button>
+    </div>
     <div class="viewer-bar__history">
       <button type="button" data-v="undo" disabled title="取り消す（Ctrl/⌘+Z）" aria-label="取り消す">↶</button>
       <button type="button" data-v="redo" disabled title="やり直す（Shift+Ctrl/⌘+Z）" aria-label="やり直す">↷</button>
@@ -118,17 +120,35 @@ const BAR = `
       <span class="swatches">${swatches(NOTE_COLORS, 'note-color')}</span>
       <input type="color" data-v="note-custom" title="ほかの色" aria-label="付箋のほかの色" />
     </div>
-    <button type="button" class="btn btn--small" data-v="delete" disabled title="選んだ注釈を消す（Delete）">削除</button>
+    <button type="button" class="btn btn--small" data-v="delete" hidden title="選んだ注釈を消す（Delete）">削除</button>
     <span class="viewer-bar__spacer"></span>
+    <label class="viewer-bar__page" title="ページ番号を入れて Enter で移る">
+      <input type="number" data-v="page" min="1" value="1" aria-label="ページ" /><span data-v="page-count">/ 1</span>
+    </label>
     <div class="viewer-bar__zoom">
       <button type="button" data-v="zoom-out" aria-label="縮小">−</button>
       <span data-v="zoom-label">100%</span>
       <button type="button" data-v="zoom-in" aria-label="拡大">＋</button>
-      <button type="button" data-v="fit" title="幅に合わせる">幅</button>
+      <button type="button" data-v="fit" title="ページの幅を画面の幅に合わせる">ページ幅</button>
     </div>
-    <button type="button" class="btn btn--small btn--primary" data-v="save" title="注釈を描き込んで PDF を上書き保存する（Ctrl/⌘+S）。Finder で開いても注釈が見えます。変更は自動でも保存します">保存</button>
-    <button type="button" class="btn btn--small btn--quiet" data-v="export" title="注釈を描き込んだ PDF を別の名前で作る（Ctrl/⌘+E）">別名で書き出す…</button>
-    <span class="muted viewer-bar__status" data-v="status" aria-live="polite"></span>
+    <span class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（Ctrl/⌘+S ですぐに保存）"></span>
+    <button type="button" class="btn btn--small btn--quiet" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（Ctrl/⌘+E）">書き出す…</button>
+    <div class="viewer-bar__help">
+      <button type="button" data-v="help" aria-expanded="false" aria-haspopup="true" title="キーボードの操作（?）" aria-label="キーボードの操作">?</button>
+      <div class="help-panel" data-v="help-panel" hidden>
+        <strong>キーボードの操作</strong>
+        <dl>
+          <dt>V・T・M・H</dt><dd>選択・文字・付箋・文字隠し</dd>
+          <dt>B</dt><dd>今の場所にしおり</dd>
+          <dt>R</dt><dd>赤シートを出す・しまう</dd>
+          <dt>Delete</dt><dd>選んだ注釈を消す</dd>
+          <dt>Esc</dt><dd>選択をやめる</dd>
+          <dt>⌘Z・⇧⌘Z</dt><dd>取り消す・やり直す</dd>
+          <dt>⌘S・⌘E</dt><dd>すぐに保存（ふだんは自動）・書き出す</dd>
+          <dt>ピンチ・⌘＋ホイール</dt><dd>拡大・縮小</dd>
+        </dl>
+      </div>
+    </div>
   </div>
   <dialog class="export-dialog" data-v="export-dialog">
     <form method="dialog">
@@ -226,6 +246,8 @@ class Viewer {
     }
     if (this.destroyed) return;
     this.pagesEl.innerHTML = '';
+    this.$('page').max = String(this.doc.numPages);
+    this.$('page-count').textContent = `/ ${this.doc.numPages}`;
     for (let i = 1; i <= this.doc.numPages; i++) {
       const page = await this.doc.getPage(i);
       if (this.destroyed) return;
@@ -297,6 +319,16 @@ class Viewer {
     const bar = this.root.querySelector('.viewer-bar').getBoundingClientRect().bottom;
     const r = p.el.getBoundingClientRect();
     window.scrollTo({top: window.scrollY + r.top + b.y * r.height - bar - 8});
+  }
+  openHelp(open) {
+    this.$('help-panel').hidden = !open;
+    this.$('help').setAttribute('aria-expanded', String(open));
+  }
+  /** 今見ているページの番号をツールバーに出す（ページ番号の欄を打っているあいだは変えない） */
+  showPage() {
+    const input = this.$('page');
+    if (!this.pages.length || document.activeElement === input) return;
+    input.value = String(this.currentSpot().page);
   }
   openBookmarks(open) {
     const panel = this.$('bookmark-panel');
@@ -390,6 +422,7 @@ class Viewer {
     // 一覧の外を押したら閉じる
     this.on(document, 'pointerdown', (e) => {
       if (!panel.hidden && !e.target.closest('.viewer-bar__bookmarks')) this.openBookmarks(false);
+      if (!this.$('help-panel').hidden && !e.target.closest('.viewer-bar__help')) this.openHelp(false);
     });
   }
 
@@ -974,7 +1007,7 @@ class Viewer {
     for (const b of this.root.querySelectorAll('[data-note-color]'))
       b.setAttribute('aria-pressed', String(b.dataset.noteColor === nc));
     this.$('note-custom').value = nc;
-    this.$('delete').disabled = !a;
+    this.$('delete').hidden = !a; // 選んでいるときだけ出す（ツールバーを 1 行に収める）
   }
 
   bindBar() {
@@ -1003,8 +1036,18 @@ class Viewer {
       else if (t.dataset.v === 'redo') this.redo();
       else if (t.dataset.v === 'sheet') this.toggleSheet();
       else if (t.dataset.v === 'export') this.openExport();
-      else if (t.dataset.v === 'save') this.saveFile({manual: true});
+      else if (t.dataset.v === 'help') this.openHelp(this.$('help-panel').hidden);
     });
+    // ページ番号を入れて移る。スクロールしたら今のページを出す
+    const page = this.$('page');
+    const goPage = () => {
+      const n = Math.min(this.pages.length, Math.max(1, Math.round(Number(page.value) || 1)));
+      page.value = String(n);
+      this.jumpTo({page: n, y: 0});
+    };
+    this.on(page, 'change', goPage);
+    this.on(page, 'keydown', (e) => e.key === 'Enter' && goPage());
+    this.on(window, 'scroll', () => this.showPage(), {passive: true});
     const size = this.$('size');
     this.on(size, 'change', () => {
       const v = clampSize(size.value);
@@ -1420,7 +1463,7 @@ class Viewer {
         this.fileDirty = false;
         const r = await api['pdf.save']({materialId: this.materialId, texts: await this.textImages(snaps)});
         if (r?.error) {
-          // ほかのアプリで変更された・元の写しがないときは、何度も試さず止める（「別名で書き出す」は使える）
+          // ほかのアプリで変更された・元の写しがないときは、何度も試さず止める（「書き出す…」は使える）
           this.fileBlocked = true;
           throw new Error(r.error);
         }
@@ -1580,13 +1623,15 @@ class Viewer {
       return e.preventDefault();
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (k === 'b') this.addBookmark();
+    if (e.key === '?') this.openHelp(this.$('help-panel').hidden);
+    else if (k === 'b') this.addBookmark();
     else if (k === 'v') this.setTool('select');
     else if (k === 't') this.setTool('text');
     else if (k === 'm') this.setTool('note');
     else if (k === 'h') this.setTool('mask');
     else if (k === 'r') this.toggleSheet();
     else if (e.key === 'Escape') {
+      this.openHelp(false);
       this.select(null);
       this.setTool('select');
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.selected) {
