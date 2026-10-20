@@ -93,27 +93,60 @@ export function wordAt(it, x, measure, locale = 'ja') {
 
 /**
  * 描かれた字（ページの絵）に合わせてマーカーの箱を直す。字の幅は見積もりなので、端が字の途中に来ることがある。
- * 左右の端は、いちばん近い「字の描かれていない縦の列」（字と字のすき間）へ寄せる（見積もりのずれが半字より小さければ正しい側）。
+ * 箱のまわりの縦の列を調べ、インクのかたまり（間に空いた列のない一続き）を作り、かたまりを字ごとにまとめる。
+ * 日本語の字は「か」と濁点「゛」、「は」の左の棒と右、「に」「い」「川」のように 1 字の中にもすき間があるので、
+ * edges（見積もりの字の切れ目）があれば、かたまりの真ん中が入る見積もりの字ごとにまとめる（1 字の中のすき間で切らない）。
+ * そのうえで、見積もりの箱（box の左右。字の切れ目に合わせてある）と 35% 以上重なる字を丸ごと覆う。
+ * edges がないときは、合わせて 1 字の幅（字の高さ × 1.05）に収まるかたまりを 1 字としてまとめる（cjk が false ならまとめない）。
  * 上下は、字がはみ出していれば広げる（狭めない）。最後に少し余白を足す（マーカーの角の丸みで字の角が見えないように）。
  * ink(x, y) は画面の座標（px）にインクがあるか。step は調べる間隔（px。canvas の 1 画素）。fh は字の高さ（px）
  */
-export function fitToInk(box, ink, {fh, step = 1, pad = 1.5}) {
+export function fitToInk(box, ink, {fh, step = 1, pad = 1.5, cjk = true, edges = null}) {
   let {left, right, top, bottom} = box;
-  const blankCol = (x) => {
-    for (let y = top; y <= bottom; y += step) if (ink(x, y)) return false;
-    return true;
+  const inkCol = (x) => {
+    for (let y = top; y <= bottom; y += step) if (ink(x, y)) return true;
+    return false;
   };
-  const lim = fh * 0.5;
-  const nearestGap = (x) => {
-    for (let d = 0; d <= lim; d += step) {
-      if (blankCol(x - d)) return x - d;
-      if (blankCol(x + d)) return x + d;
+  // インクのかたまり [始め, 終わり)
+  const runs = [];
+  for (let x = left - fh; x <= right + fh; x += step) {
+    if (!inkCol(x)) continue;
+    const last = runs.at(-1);
+    if (last && x - last[1] < step / 2) last[1] = x + step;
+    else runs.push([x, x + step]);
+  }
+  const chars = [];
+  if (edges?.length > 1) {
+    // 見積もりの字ごとにまとめる（見積もりの字の外のかたまりは 1 つずつ）
+    const slot = (x) => {
+      if (x < edges[0] || x >= edges.at(-1)) return null;
+      let i = 0;
+      while (x >= edges[i + 1]) i++;
+      return i;
+    };
+    let prev = null;
+    for (const r of runs) {
+      const k = slot((r[0] + r[1]) / 2);
+      if (k !== null && k === prev) chars.at(-1)[1] = r[1];
+      else chars.push([...r]);
+      prev = k;
     }
-    return x;
-  };
-  const l = nearestGap(left);
-  const r = nearestGap(right);
-  if (r - l >= fh * 0.3) [left, right] = [l, r];
+  } else {
+    // 1 字の幅に収まるかたまりはまとめる（日本語の字の中のすき間）
+    for (const r of runs) {
+      const last = chars.at(-1);
+      if (cjk && last && r[1] - last[0] <= fh * 1.05) last[1] = r[1];
+      else chars.push([...r]);
+    }
+  }
+  const overlap = (c) => Math.min(c[1], right) - Math.max(c[0], left);
+  const hit = chars.filter((c) => overlap(c) >= 0.35 * Math.min(c[1] - c[0], right - left));
+  if (hit.length) {
+    // 字がくっついて 1 つの大きなかたまりになっているところは、見積もりの端で切る
+    const ends = hit.map((c) => (c[1] - c[0] > fh * 1.3 ? [Math.max(c[0], left), Math.min(c[1], right)] : c));
+    left = Math.min(...ends.map((c) => c[0]));
+    right = Math.max(...ends.map((c) => c[1]));
+  }
   const inkRow = (y) => {
     for (let x = left; x <= right; x += step) if (ink(x, y)) return true;
     return false;

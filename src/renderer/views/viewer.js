@@ -10,7 +10,7 @@
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
 import {toast} from '../app.js';
-import {fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
+import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -1203,7 +1203,7 @@ class Viewer {
    * マーカーの箱（ページの中の px）を、描かれた字に合わせて直す（text-snap.js の fitToInk）。
    * 字の幅は見積もりなので、そのままだと字の右や左が少し見えることがある。ページの絵がまだなければそのまま
    */
-  fitMask(p, box, fh) {
+  fitMask(p, box, fh, edges = null) {
     const c = p.canvas;
     if (!c?.width) return box;
     const k = c.width / p.viewport.width; // ページの px → canvas の画素
@@ -1220,7 +1220,7 @@ class Viewer {
     }
     const ink = inkFromImage(img, {x0: Math.floor(x0 * k) / k, y0: Math.floor(y0 * k) / k, scale: k});
     if (!ink) return box;
-    const r = fitToInk({left: box.left, right: box.left + box.width, top: box.top, bottom: box.top + box.height}, ink, {fh, step: 1 / k});
+    const r = fitToInk({left: box.left, right: box.left + box.width, top: box.top, bottom: box.top + box.height}, ink, {fh, step: 1 / k, edges});
     return {left: r.left, top: r.top, width: r.right - r.left, height: r.bottom - r.top};
   }
 
@@ -1299,7 +1299,9 @@ class Viewer {
       if (hit.length) {
         const top = Math.min(...hit.map((it) => it.top));
         const bottom = Math.max(...hit.map((it) => it.bottom));
-        box = this.fitMask(p, {left: x1, top, width: x2 - x1, height: bottom - top}, (bottom - top) / 1.18);
+        // 見積もりの字の切れ目（同じ行の字すべて）。描かれた字のかたまりを字ごとにまとめるのに使う
+        const edges = [...new Set(onLine.flatMap((it) => charEdges(it, measure)))].sort((a, b) => a - b);
+        box = this.fitMask(p, {left: x1, top, width: x2 - x1, height: bottom - top}, (bottom - top) / 1.18, edges);
         hidden = pieces(hit, box.left, box.left + box.width);
       } else {
         const h = DEFAULT_SIZE * p.viewport.scale;
