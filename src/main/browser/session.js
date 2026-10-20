@@ -1,6 +1,7 @@
 // Playwright のブラウザ文脈・Cookie の保存・見えるログイン窓（DESIGN-M0 §8.5）。
 // ふだんはヘッドレス。本人の操作が要るときだけ別の Chromium を画面に出す。開ける先は許可したホストだけ。
 import {hostAllowed} from '../../shared/recipe.js';
+import {markLoginForm, noAutofillHost} from './login-form.js';
 
 const BLOCK_TYPES = new Set(['image', 'font', 'media']);
 
@@ -60,8 +61,10 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
    * 見えるログイン窓。url を開き、isLoggedIn(page) が true になるか capture が値を返すまで待つ。
    * ログイン中はホストを止めない（統合認証へ飛ぶため）。訪れたホストを返すので、接続の allowedHosts に足せる。
    * capture: {urlPattern: RegExp, extract: (body: string) => string|null}  例：Moodle の launch.php からトークンを取る
+   * autofill: {user, password}  保存した ID・パスワード。ログインの欄が空なら入れておく（送信はしない。本人が押す）。
+   *   本人が見ている窓なので統合認証のホストにも入れる。Google・Microsoft には入れない（SPEC §6.4）。https のページだけ
    */
-  async function loginVisible(connection, {url, isLoggedIn, capture = null, timeoutMs = 600000, onStatus = () => {}}) {
+  async function loginVisible(connection, {url, isLoggedIn, capture = null, autofill = null, timeoutMs = 600000, onStatus = () => {}}) {
     const {chromium} = await loadPw();
     const b = await chromium.launch(launchOptions(false));
     const storageState = (await secrets?.get(`conn:${connection.id}:cookies`)) ?? undefined;
@@ -92,6 +95,7 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     page.on('framenavigated', (f) => {
       if (f === page.mainFrame()) visited.add(safeHost(f.url()));
     });
+    if (autofill?.user) page.on('load', () => fillSaved(page, autofill).catch(() => {}));
     const started = Date.now();
     try {
       await page.goto(url, {waitUntil: 'domcontentloaded'}).catch(() => {});
@@ -109,6 +113,16 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     } finally {
       await b.close().catch(() => {});
     }
+  }
+
+  /** 見えるログイン窓の欄に、保存した ID・パスワードを入れる（空の欄だけ。送信しない） */
+  async function fillSaved(page, {user, password}) {
+    const u = new URL(page.url());
+    if (u.protocol !== 'https:' && u.hostname !== '127.0.0.1' && u.hostname !== 'localhost') return;
+    if (noAutofillHost(u.hostname)) return;
+    const f = await page.evaluate(markLoginForm);
+    if (f.user && !f.filledUser) await page.locator('[data-dn-login="user"]').first().fill(user);
+    if (f.password && !f.filledPassword && password) await page.locator('[data-dn-login="password"]').first().fill(password);
   }
 
   async function shutdown() {

@@ -4,11 +4,13 @@
     <meta charset="utf-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:" />
     <title>大学ノート</title>
+    <link rel="stylesheet" href="fonts/noto-sans-jp.css" />
+    <link rel="stylesheet" href="fonts/zen-maru-gothic.css" />
     <link rel="stylesheet" href="styles/tokens.css" />
     <link rel="stylesheet" href="styles/notebook.css" />
   </head>
   <body>
-    <div id="app" class="paper paper--margin" aria-live="polite">
+    <div id="app" class="paper paper--margin">
       <header class="notebook-head">
         <h1>大学ノート</h1>
         <span class="muted" id="head-term"></span>
@@ -16,6 +18,7 @@
       </header>
       <main id="view"></main>
     </div>
+    <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
     <script type="module" src="app.js"></script>
   </body>
 </html>

@@ -5,6 +5,7 @@ import {readdir, unlink, writeFile} from 'node:fs/promises';
 import {applyRegex, applyUniversityOverride, fillTemplate, parseFieldList, resolveHref} from '../../shared/recipe.js';
 import {parseRound} from '../../shared/rounds.js';
 import {parseSlot} from './slot.js';
+import {markLoginForm, noAutofillHost} from '../browser/login-form.js';
 
 const META = new Set(['url', 'items', 'openBeforeRead', 'files', 'container']);
 const FILE_LINK = /\.(pdf|pptx?|docx?|xlsx?|csv|txt|zip|png|jpe?g|gif|mp4|mp3|m4a|mov)(\?|#|$)|\/file[s]?\/|\/download|forcedownload|pluginfile|attachment/i;
@@ -286,6 +287,59 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       return (await page.locator('input[type=password]').count()) > 0;
     },
 
+    /** 自動ログインの本体。ページを 1 枚ずつ進める（ID → パスワードの 2 段階、統合認証への転送と戻りを含む） */
+    async _autoLogin(page, ctx, cred) {
+      const form = ctx.recipe.login?.form;
+      const baseHost = safeHost(ctx.base);
+      const allowed = (h) => h === baseHost || ctx.allowedHosts.some((a) => h === a || h.endsWith('.' + a));
+      let sentUser = false;
+      let sentPassword = false;
+      for (let step = 0; step < 6; step++) {
+        const host = safeHost(page.url());
+        if (host === baseHost && (await this._isLoggedIn(page, ctx))) return;
+        if (!host || !allowed(host)) throw err('login-required', 'ログインのページに自動では入れません。一度ブラウザ窓でログインしてください（通るページを覚えます）');
+        if (noAutofillHost(host)) throw err('login-needs-user', 'Google・Microsoft のログインは自動では入れません。ブラウザ窓でログインしてください');
+        const f = form
+          ? {user: (await page.locator(form.user).count()) > 0, password: (await page.locator(form.password).count()) > 0, submit: true}
+          : await page.evaluate(markLoginForm).catch(() => ({user: false, password: false, submit: false}));
+        const loc = (role) => (form ? page.locator(form[role]).first() : page.locator(`[data-dn-login="${role}"]`).first());
+        if (f.password) {
+          if (sentPassword) throw err('login-bad-credentials', '保存した ID かパスワードでログインできませんでした。設定 → 接続 で入れ直してください（自動ログインは止めました）');
+          if (f.user) await loc('user').fill(cred.user);
+          await loc('password').fill(cred.password);
+          sentPassword = sentUser = true;
+        } else if (f.user && !sentUser && !sentPassword) {
+          await loc('user').fill(cred.user);
+          sentUser = true;
+        } else if (f.user && sentUser && !sentPassword) {
+          throw err('login-bad-credentials', '保存した ID でログインできませんでした。設定 → 接続 で入れ直してください（自動ログインは止めました）');
+        } else if (sentPassword || sentUser) {
+          // パスワードを送ったあと、ID・パスワード以外の画面（認証コード・同意など）。転送の途中なら少し待って見直す
+          if (await this._settle(page, ctx, baseHost)) continue;
+          throw err('login-needs-user', '認証コードなど、本人の入力が要る画面になりました。設定 → 接続 の「ログインし直す」で窓を開いてください（ID とパスワードは入れておきます）');
+        } else {
+          if (await this._settle(page, ctx, baseHost)) continue;
+          throw err('login-needs-user', 'ログインのフォームが見つかりませんでした。ブラウザ窓でログインしてください');
+        }
+        const before = page.url();
+        const submit = f.submit ? loc('submit').click() : (f.password ? loc('password') : loc('user')).press('Enter');
+        await Promise.all([page.waitForLoadState(ctx.waits.pageLoad).catch(() => {}), submit]);
+        await this._settle(page, ctx, baseHost, before);
+      }
+      throw err('login-needs-user', 'ログインが終わりませんでした。ブラウザ窓でログインしてください');
+    },
+
+    /** 送信のあと、転送（SAML の自動送信など）が落ち着くまで待つ。URL が変わったかログインできたら true */
+    async _settle(page, ctx, baseHost, before = page.url()) {
+      for (let i = 0; i < 20; i++) {
+        await page.waitForTimeout(500);
+        await page.waitForLoadState(ctx.waits.pageLoad).catch(() => {});
+        if (safeHost(page.url()) === baseHost && (await this._isLoggedIn(page, ctx))) return true;
+        if (page.url() !== before && i >= 2) return true;
+      }
+      return false;
+    },
+
     async ensureSession(ctx) {
       const page = await this._page(ctx);
       try {
@@ -298,30 +352,45 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       }
     },
 
-    /** headless：保存した ID・パスワードをフォームに入れる（login.form があるときだけ）。visible：見えるログイン窓 */
+    /**
+     * headless：保存した ID・パスワードでログインする（SPEC §6.4「次回から自動でログイン」）。
+     *   レシピに login.form があればそのセレクタ、なければ画面からパスワード欄と ID 欄を探す（統合認証のページ）。
+     *   入力するのは、LMS のホストと、見えるログイン窓で一度ログインしたときに通ったホスト（allowedHosts）だけ。
+     *   認証コードなど ID・パスワード以外の入力が求められたら login-needs-user、パスワードが通らなければ login-bad-credentials
+     *   （呼ぶ側は自動ログインを止める。何度も送ってアカウントをロックさせない）。
+     * visible：見えるログイン窓。ID・パスワードを保存していれば欄に入れておく（送信は本人が押す）
+     */
     async login(ctx, mode = 'headless', {credentials} = {}) {
-      const form = ctx.recipe.login?.form;
+      const saved = async () => (ctx.connection.save_password ? await secrets?.get(`conn:${ctx.connection.id}:password`) : null);
       if (mode === 'headless') {
-        if (!form) throw err('login-required', 'この LMS は統合認証のため、ブラウザ窓でログインしてください');
-        const cred = credentials ?? (await secrets?.get(`conn:${ctx.connection.id}:password`));
-        if (!cred?.user) throw err('login-required', '保存した ID とパスワードがありません');
+        const cred = credentials ?? (await saved());
+        if (!cred?.user) throw err('login-required', 'ブラウザ窓でログインしてください（自動ログインを使うには、設定 → 接続 で ID とパスワードを保存します）');
         const page = await this._page(ctx);
         try {
-          await this._goto(page, ctx, ctx.base + '/');
+          try {
+            await this._goto(page, ctx, ctx.base + '/');
+          } catch (e) {
+            if (e.code === 'blocked-navigation') throw err('login-required', 'ログインのページに自動では入れません。一度ブラウザ窓でログインしてください（通るページを覚えます）');
+            throw e;
+          }
           if (await this._isLoggedIn(page, ctx)) return {ok: true};
-          await page.locator(form.user).first().fill(cred.user);
-          await page.locator(form.password).first().fill(cred.password);
-          await Promise.all([page.waitForLoadState(ctx.waits.pageLoad).catch(() => {}), page.locator(form.submit).first().click()]);
-          await page.locator(ctx.recipe.login.loggedIn.selector).first().waitFor({timeout: 30000}).catch(() => {});
-          if (!(await this._isLoggedIn(page, ctx))) throw err('login-required', 'ID かパスワードが違うか、追加の認証が必要です');
+          try {
+            await this._autoLogin(page, ctx, cred);
+          } catch (e) {
+            // 止まった画面を debug に残す（統合認証のページに合わせるための手がかり。入力した値は HTML に含まれない）
+            if (e.code !== 'login-bad-credentials') await this._dump(page, 'login-auto');
+            throw e;
+          }
           await session.save(ctx.connection, ctx.context);
           return {ok: true};
         } finally {
           await this._release(ctx, page);
         }
       }
+      const cred = credentials ?? (await saved());
       const r = await session.loginVisible(ctx.connection, {
         url: ctx.base + '/',
+        autofill: cred?.user ? cred : null,
         isLoggedIn: async (page) => {
           try {
             return new URL(page.url()).hostname === safeHost(ctx.base) && (await this._isLoggedIn(page, ctx));

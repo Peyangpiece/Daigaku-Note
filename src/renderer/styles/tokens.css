@@ -11,10 +11,7 @@
   --card-shadow: 0 2px 6px rgba(43, 43, 43, 0.08);
   --card-shadow-hover: 0 6px 14px rgba(43, 43, 43, 0.12);
   --tape-alpha: 0.72;
-  --board: #e9d6b4; /* クリップボードの板（薄いクラフト色） */
-  --board-ink: #4a3b25;
-  --clip: #9aa3ad; /* 金具 */
-  --clip-light: #d6dce2;
+  --note-weak: 80%; /* 付箋の上の補助の文字の濃さ（インクの割合）。コントラスト 4.5:1 以上になる値 */
   --c1: #f6c445;
   --c2: #f28b82;
   --c3: #7fd1ae;
@@ -23,6 +20,16 @@
   --c6: #ffab70;
   --c7: #6fd3e6;
   --c8: #f7a1c4;
+  /* 授業画面の回の付箋：ポップな色。回の番号で順に変える（第 1 回は黄、第 2 回は桃…）。
+     付箋は紙なので、暗い表示でも同じ色・同じ黒い文字のまま（notebook.css の .round-note） */
+  --pop1: #ffe14d;
+  --pop2: #ff9ec4;
+  --pop3: #6fe3b8;
+  --pop4: #7cccff;
+  --pop5: #ffad5c;
+  --pop6: #c3a6ff;
+  --pop7: #c2f06a;
+  --pop8: #ff8a7a;
   --focus: #2b2b2b;
   --radius: 10px;
   --space-1: 8px;
@@ -49,10 +56,7 @@
   --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
   --tape-alpha: 0.55;
-  --board: #4a4030;
-  --board-ink: #f1e6d2;
-  --clip: #6b737d;
-  --clip-light: #9aa3ad;
+  --note-weak: 100%;
   --focus: #eceff4;
 }
 @media (prefers-color-scheme: dark) {
@@ -66,10 +70,8 @@
     --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
     --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
     --tape-alpha: 0.55;
-    --board: #4a4030;
-    --board-ink: #f1e6d2;
-    --clip: #6b737d;
-    --clip-light: #9aa3ad;
+    --note-weak: 100%;
+    --note-weak: 100%;
     --focus: #eceff4;
   }
 }

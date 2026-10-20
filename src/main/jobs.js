@@ -104,6 +104,7 @@ export class JobRunner {
           totals.failures += r.failures;
           if (r.status === 'login-required') {
             totals.status = 'login-required';
+            totals.messages.push(r.events.find((e) => e.code?.startsWith('login'))?.message ?? `${connection.label} へのログインが必要です`);
             this.notify('login.required', {connectionId: connection.id, label: connection.label});
           }
           if (r.status === 'failed') {

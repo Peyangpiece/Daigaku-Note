@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
-import {FileManager, filenameFromDisposition, filenameFromUrl, sha256} from '../src/main/sync/files.js';
+import {FileManager, OWN_FOLDER, filenameFromDisposition, filenameFromUrl, sha256} from '../src/main/sync/files.js';
 
 async function setup(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'dn-files-'));
@@ -143,4 +143,48 @@ test('フォルダの改名と合流', async (t) => {
   assert.equal(await readFile(path.join(to, 'diff (2).pdf'), 'utf8'), 'X');
   await assert.rejects(readdir(from));
   await files.renameDir(path.join(root, 'nothing'), path.join(root, 'nowhere')); // 元がなければ何もしない
+});
+
+test('自分のファイル：自分の付箋に置く・回へ移す・戻す・同じ中身・Finder での移動・外したあとに入れ直す', async (t) => {
+  const {root, repo, term, course, r2, r3, files} = await setup(t);
+  const base = path.join(root, '大学ノート', '2026_秋学期', '管理会計Ⅱ');
+
+  // 最初は自分の付箋（授業フォルダの「自分の資料」）。元のファイル名のまま・未読の印なし・回なし
+  const a = await files.addOwn({term, course, name: 'ノート.pdf', data: Buffer.from('MINE')});
+  assert.equal(a.result, 'saved');
+  assert.equal(a.material.round_id, null);
+  assert.equal(a.material.source, 'upload');
+  assert.ok(a.material.read_at);
+  assert.equal(a.material.path, path.join(base, OWN_FOLDER, 'ノート.pdf'));
+  assert.equal(await readFile(a.material.path, 'utf8'), 'MINE');
+
+  // 同じ中身はもう一度入れない（どこにあるかを返す）
+  const dup = await files.addOwn({term, course, name: '別名.pdf', data: Buffer.from('MINE')});
+  assert.equal(dup.result, 'dup');
+  assert.equal(dup.material.id, a.material.id);
+
+  // 回を指定して入れる
+  const b = await files.addOwn({term, course, round: r3, name: 'b.txt', data: Buffer.from('B')});
+  assert.equal(b.material.round_id, r3.id);
+  assert.equal(path.dirname(b.material.path), path.join(base, '第03回_原価維持'));
+
+  // 第 2 回へ振り分け、また自分の付箋へ戻す
+  const moved = await files.relocate({term, course, material: a.material, round: r2});
+  assert.equal(moved.round_id, r2.id);
+  assert.equal(moved.path, path.join(base, '第02回_原価企画', 'ノート.pdf'));
+  const back = await files.relocate({term, course, material: moved, round: null});
+  assert.equal(back.round_id, null);
+  assert.equal(back.path, path.join(base, OWN_FOLDER, 'ノート.pdf'));
+
+  // Finder で自分の資料フォルダへ戻された回の資料は、自分の付箋に戻る
+  await rename(b.material.path, path.join(base, OWN_FOLDER, 'b.txt'));
+  const changes = await files.reconcileFiles({term, course, rounds: [r2, r3]});
+  assert.deepEqual(changes.map((c) => c.change), ['moved-round']);
+  assert.equal(repo.get('material', b.material.id).round_id, null);
+
+  // 外した（ゴミ箱へ入れた）ものは、同じ中身でも入れ直せる
+  repo.updateMaterial(back.id, {status: 'trashed'});
+  const again = await files.addOwn({term, course, name: 'ノート.pdf', data: Buffer.from('MINE')});
+  assert.equal(again.result, 'saved');
+  assert.equal(repo.get('material', back.id), null);
 });

@@ -9,6 +9,9 @@ import {inside} from '../../shared/paths.js';
 
 export const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
+/** 自分で入れた資料（回に振り分ける前）を置くフォルダ。授業フォルダの中。回のフォルダ名（第NN回…・その他）とは重ならない */
+export const OWN_FOLDER = '自分の資料';
+
 const OPENABLE = /\.(pdf|docx?|pptx?|xlsx?|csv|txt|md|rtf|od[tps]|png|jpe?g|gif|webp|heic|mp4|mov|m4a|mp3|wav)$/i;
 export const isOpenable = (p) => OPENABLE.test(String(p));
 
@@ -59,6 +62,10 @@ export class FileManager {
   }
   roundDir(term, course, round) {
     return path.join(this.courseDir(term, course), round.folder_name);
+  }
+  /** 回のフォルダ。round が null なら「自分の付箋」（自分の資料フォルダ） */
+  placeDir(term, course, round) {
+    return round ? this.roundDir(term, course, round) : path.join(this.courseDir(term, course), OWN_FOLDER);
   }
 
   /** 同名があれば中身を比べ、同じならそのパス、違えば (2) (3) を足したパス。{path, existed} */
@@ -159,14 +166,49 @@ export class FileManager {
     return {result: prev ? 'updated' : 'saved', material};
   }
 
-  /** 資料を別の回へ移す（SPEC §8.3）。ファイルも移動し、記録を更新する */
+  /**
+   * 自分のファイルを授業に入れる（授業画面の「ファイルを追加」・ドラッグ）。元のファイルは残してコピーする。
+   * round が null なら「自分の付箋」に置く。戻り: {result: 'saved'|'dup', material}
+   */
+  async addOwn({term, course, round = null, name, data}) {
+    const body = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    const h = sha256(body);
+    const same = this.repo.findMaterialByHash(course.id, h);
+    if (same && same.status !== 'trashed') return {result: 'dup', material: same};
+    if (same) this.repo.remove('material', same.id); // 前にゴミ箱へ入れたもの：記録を消して入れ直す
+    const dir = this.placeDir(term, course, round);
+    await fsp.mkdir(dir, {recursive: true});
+    const clean = sanitizeFileName(name);
+    const {path: file, existed} = await this.uniquePath(dir, clean, h);
+    if (!existed) await this.writeAtomic(file, body);
+    const material = this.repo.createMaterial({
+      course_id: course.id,
+      round_id: round?.id ?? null,
+      round_from: 'user',
+      url: null,
+      name: path.basename(file),
+      path: file,
+      sha256: h,
+      size: body.length,
+      mime: null,
+      layout: layoutOf(clean),
+      version: 1,
+      lms_modified: null,
+      source: 'upload',
+      status: 'ok',
+      read_at: new Date().toISOString() // 自分で入れたものは未読の印を付けない
+    });
+    return {result: 'saved', material};
+  }
+
+  /** 資料を別の回へ移す（SPEC §8.3）。ファイルも移動し、記録を更新する。round が null なら「自分の付箋」へ */
   async relocate({term, course, material, round}) {
-    const dir = this.roundDir(term, course, round);
+    const dir = this.placeDir(term, course, round);
     await fsp.mkdir(dir, {recursive: true});
     const {path: target, existed} = await this.uniquePath(dir, path.basename(material.path), material.sha256);
     if (!existed && target !== material.path) await fsp.rename(material.path, target);
     else if (existed && target !== material.path) await fsp.rm(material.path, {force: true}); // 同じ中身が移動先にある
-    return this.repo.updateMaterial(material.id, {path: target, name: path.basename(target), round_id: round.id, round_from: 'user'});
+    return this.repo.updateMaterial(material.id, {path: target, name: path.basename(target), round_id: round?.id ?? null, round_from: 'user'});
   }
 
   /** 授業フォルダ・回フォルダの改名（名前が変わったとき）。移動先があれば中身を合流させる */
@@ -241,11 +283,14 @@ export class FileManager {
         continue;
       }
       const dirName = path.basename(path.dirname(found));
+      // 回のフォルダへ動かされていれば、その回へ。自分の資料フォルダなら「自分の付箋」へ
+      const own = dirName === OWN_FOLDER && path.dirname(path.dirname(found)) === courseDir;
       const round = rounds.find((r) => r.folder_name === dirName);
+      const target = own ? null : round ? round.id : undefined;
       const patch = {path: found, name: path.basename(found), status: 'ok'};
-      if (round && round.id !== m.round_id) Object.assign(patch, {round_id: round.id, round_from: 'user'});
+      if (target !== undefined && target !== m.round_id) Object.assign(patch, {round_id: target, round_from: 'user'});
       this.repo.updateMaterial(m.id, patch);
-      changes.push({material: m, change: round && round.id !== m.round_id ? 'moved-round' : 'moved'});
+      changes.push({material: m, change: target !== undefined && target !== m.round_id ? 'moved-round' : 'moved'});
     }
     return changes;
   }
