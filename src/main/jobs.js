@@ -7,7 +7,7 @@ const RETRY_DELAYS = [15 * 60e3]; // 失敗した同期は 15 分後に 1 回だ
 export function friendlyError(e) {
   const m = String(e?.message ?? e ?? '');
   if (/Executable doesn't exist|browserType\.launch/.test(m)) return 'LMS を読むためのブラウザの準備ができていません。設定の「ブラウザを準備し直す」を押すか、準備が終わるまで待ってください';
-  if (e?.code === 'login-required' || /login-required/.test(m)) return 'LMS へのログインが必要です（設定 → 接続 → ログインし直す）';
+  if (e?.code === 'login-required' || /login-required/.test(m)) return 'LMS へのログインが必要です（設定 → LMS との連携 → ログインし直す）';
   if (e?.code === 'network' || /fetch failed|ENOTFOUND|ECONNREFUSED|ECONNRESET/.test(m)) return 'LMS に接続できませんでした。ネットワークを確かめてください';
   if (e?.code === 'selector-missing') return 'LMS の画面を読み取れませんでした（画面の構成が変わった可能性）';
   if (e?.code === 'blocked-navigation') return '想定外のページに移動したため中断しました';
@@ -129,7 +129,7 @@ export class JobRunner {
           if (r.status === 'ok') continue;
           result.failures++;
           const message = this.ctx.secrets?.isLocked?.(`conn:${connection.id}:`)
-            ? `${connection.label}：保存したログインを読めません。キーチェーンの確認が出たら「常に許可」を選び、大学ノートを開き直してください（出ないときは 設定 → 接続 → ログインし直す）`
+            ? `${connection.label}：保存したログインを読めません。キーチェーンの確認が出たら「常に許可」を選び、大学ノートを開き直してください（出ないときは 設定 → LMS との連携 → ログインし直す）`
             : r.status === 'login-required'
               ? `${connection.label} へのログインが必要です${r.error?.message ? `（${r.error.message}）` : ''}`
               : `${connection.label}：${friendlyError(r.error)}`;

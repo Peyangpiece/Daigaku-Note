@@ -534,7 +534,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
     if (patch.resetRoot === true) repo.setSetting('storage.root', null);
-    if (patch.skipSetup === true) repo.setSetting('setup.skipped', true); // LMS をつながずに使う（次から起動時にセットアップを出さない）
+    if (patch.skipSetup === true) repo.setSetting('setup.skipped', true); // 初回のセットアップを終えた（次から起動時に出さない。LMS は任意で、設定からつなぐ）
     if (typeof patch.openAtLogin === 'boolean') {
       if (!loginItem().available) bad('ログイン時の起動は、アプリとして入れた大学ノートでだけ設定できます');
       app.setLoginItemSettings({openAtLogin: patch.openAtLogin});

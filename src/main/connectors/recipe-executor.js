@@ -304,7 +304,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           : await page.evaluate(markLoginForm).catch(() => ({user: false, password: false, submit: false}));
         const loc = (role) => (form ? page.locator(form[role]).first() : page.locator(`[data-dn-login="${role}"]`).first());
         if (f.password) {
-          if (sentPassword) throw err('login-bad-credentials', '保存した ID かパスワードでログインできませんでした。設定 → 接続 で入れ直してください（自動ログインは止めました）');
+          if (sentPassword) throw err('login-bad-credentials', '保存した ID かパスワードでログインできませんでした。設定 → LMS との連携 で入れ直してください（自動ログインは止めました）');
           if (f.user) await loc('user').fill(cred.user);
           await loc('password').fill(cred.password);
           sentPassword = sentUser = true;
@@ -312,11 +312,11 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           await loc('user').fill(cred.user);
           sentUser = true;
         } else if (f.user && sentUser && !sentPassword) {
-          throw err('login-bad-credentials', '保存した ID でログインできませんでした。設定 → 接続 で入れ直してください（自動ログインは止めました）');
+          throw err('login-bad-credentials', '保存した ID でログインできませんでした。設定 → LMS との連携 で入れ直してください（自動ログインは止めました）');
         } else if (sentPassword || sentUser) {
           // パスワードを送ったあと、ID・パスワード以外の画面（認証コード・同意など）。転送の途中なら少し待って見直す
           if (await this._settle(page, ctx, baseHost)) continue;
-          throw err('login-needs-user', '認証コードなど、本人の入力が要る画面になりました。設定 → 接続 の「ログインし直す」で窓を開いてください（ID とパスワードは入れておきます）');
+          throw err('login-needs-user', '認証コードなど、本人の入力が要る画面になりました。設定 → LMS との連携 の「ログインし直す」で窓を開いてください（ID とパスワードは入れておきます）');
         } else {
           if (await this._settle(page, ctx, baseHost)) continue;
           throw err('login-needs-user', 'ログインのフォームが見つかりませんでした。ブラウザ窓でログインしてください');
@@ -364,7 +364,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const saved = async () => (ctx.connection.save_password ? await secrets?.get(`conn:${ctx.connection.id}:password`) : null);
       if (mode === 'headless') {
         const cred = credentials ?? (await saved());
-        if (!cred?.user) throw err('login-required', 'ブラウザ窓でログインしてください（自動ログインを使うには、設定 → 接続 で ID とパスワードを保存します）');
+        if (!cred?.user) throw err('login-required', 'ブラウザ窓でログインしてください（自動ログインを使うには、設定 → LMS との連携 で ID とパスワードを保存します）');
         const page = await this._page(ctx);
         try {
           try {
