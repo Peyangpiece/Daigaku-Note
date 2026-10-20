@@ -23,6 +23,7 @@ function fakeConnector(data, opts = {}) {
       return opts.session ?? 'ok';
     },
     async login() {
+      if (opts.loginError) throw Object.assign(new Error(opts.loginError.message), {code: opts.loginError.code});
       if (!opts.loginOk) throw Object.assign(new Error('no'), {code: 'login-required'});
     },
     async listCourses() {
@@ -156,6 +157,74 @@ test('授業の改名でフォルダも改名。消えた授業は sync_enabled=
   d.courses.push({lmsId: '3', name: '新しい授業', rounds: []});
   await engine.run({connection: repo.get('connection', connection.id), connector: fakeConnector(d), term, kind: 'course', courseIds: [c1.id]});
   assert.equal(repo.findCourseByLms(connection.id, '3') !== null, true, '一覧の突き合わせは常に行う');
+});
+
+test('セットアップで外した授業は非表示で作られ、同期しない', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  repo.setSetting(`courses.exclude.${connection.id}`, ['2']);
+  await engine.run({connection, connector: fakeConnector(data()), term, kind: 'initial'});
+  const c2 = repo.findCourseByLms(connection.id, '2');
+  assert.equal(c2.hidden, 1);
+  assert.equal(repo.listMaterials(c2.id).length, 0);
+  assert.equal(repo.findCourseByLms(connection.id, '1').hidden, 0);
+});
+
+test('自動ログイン：パスワードが通らなければ自動ログインを止め、理由を残す。認証コードなら止めない', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  repo.updateConnection(connection.id, {save_password: 1});
+  const bad = await engine.run({connection: repo.get('connection', connection.id), connector: fakeConnector(data(), {session: 'login-required', loginError: {code: 'login-bad-credentials', message: 'パスワード違い'}}), term});
+  assert.equal(bad.status, 'login-required');
+  assert.equal(repo.get('connection', connection.id).save_password, 0, '次の同期でまた送らない');
+  assert.equal(bad.events[0].code, 'login-bad-credentials');
+  assert.match(bad.events[0].message, /パスワード違い/);
+
+  repo.updateConnection(connection.id, {save_password: 1});
+  const otp = await engine.run({connection: repo.get('connection', connection.id), connector: fakeConnector(data(), {session: 'login-required', loginError: {code: 'login-needs-user', message: '認証コード'}}), term});
+  assert.equal(otp.events[0].code, 'login-needs-user');
+  assert.equal(repo.get('connection', connection.id).save_password, 1, '認証コードのときは自動ログインを残す（次はまた ID・パスワードで入れる）');
+
+  const ok = await engine.run({connection: repo.get('connection', connection.id), connector: fakeConnector(data(), {session: 'login-required', loginOk: true}), term});
+  assert.equal(ok.status, 'ok', '自動ログインできれば同期を続ける');
+});
+
+test('同じ LMS の接続が 2 つあると授業が 2 つずつできる → 起動時に 1 つにまとめる', async (t) => {
+  const {root, repo, term, connection, files, engine} = await setup(t);
+  const trashed = [];
+  files.trash = async (f) => (trashed.push(f), rm(f, {recursive: true, force: true}));
+  repo.updateConnection(connection.id, {allowed_hosts_json: '["idp.example"]'});
+  const second = repo.createConnection({kind: 'recipe', connector_id: 'fake', label: 'LMS', base_url: 'https://lms'});
+  // 2 つ目の接続を作った順に並べるため、作成時刻をずらす
+  repo.db.prepare('UPDATE connection SET created_at = ? WHERE id = ?').run('2099-01-01T00:00:00.000Z', second.id);
+  repo.updateConnection(second.id, {save_password: 1});
+  await engine.run({connection, connector: fakeConnector(data()), term, kind: 'initial'});
+  const d2 = data();
+  d2.courses[0].rounds[0].files.push({url: 'https://lms/f/only2', name: '2 つ目だけの資料.pdf', body: 'only2'});
+  d2.courses[1].rounds[0].files = [{url: 'https://lms/f/w2b', name: 'w2 改訂.pdf', body: 'w2-new'}]; // 数は同じ・中身が違う
+  await engine.run({connection: repo.get('connection', second.id), connector: fakeConnector(d2), term, kind: 'initial'});
+  assert.equal(repo.listCourses().length, 4, '再現：同じ授業が 2 つずつ');
+  assert.deepEqual((await readdir(path.join(root, '2026_秋学期'))).sort(), ['意思決定論', '意思決定論 (2)', '管理会計Ⅱ', '管理会計Ⅱ (2)']);
+
+  assert.ok(repo.findCourseByLms(connection.id, '2').full_synced_at, '前提：全部の回を確かめ終えた印がある');
+  const r = await engine.mergeDuplicateConnections();
+  assert.deepEqual(r, {merged: 1, removedCourses: 2});
+  const conns = repo.listConnections();
+  assert.equal(conns.length, 1);
+  assert.equal(conns[0].id, second.id, '新しいほう（本人が最後に設定したほう）を残す');
+  assert.equal(conns[0].save_password, 1);
+  assert.deepEqual(JSON.parse(conns[0].allowed_hosts_json), ['idp.example'], '覚えたホストを引き継ぐ');
+  const courses = repo.listCourses();
+  assert.equal(courses.length, 2, '授業は 1 つずつ');
+  assert.ok(courses.every((c) => c.connection_id === second.id));
+  // 管理会計Ⅱ は資料の多い 2 つ目（フォルダ「(2)」）を残し、元の名前に戻す。意思決定論は同数なので古いほう
+  const kanri = courses.find((c) => c.lms_id === '1');
+  assert.equal(kanri.folder_name, '管理会計Ⅱ');
+  assert.ok(repo.listMaterials(kanri.id).some((m) => m.name === '2 つ目だけの資料.pdf' && m.path.includes(`${path.sep}管理会計Ⅱ${path.sep}`)), '記録のパスも元の名前に');
+  assert.deepEqual((await readdir(path.join(root, '2026_秋学期'))).sort(), ['意思決定論', '管理会計Ⅱ']);
+  const ishi = courses.find((c) => c.lms_id === '2');
+  assert.equal(ishi.full_synced_at, null, '消したほうにしかない資料があるので、次の同期で全部の回を見直す');
+  assert.ok(kanri.full_synced_at, '取りこぼしがなければ印はそのまま');
+  assert.equal(trashed.length, 2, '消すほうのフォルダはゴミ箱へ');
+  assert.equal(await engine.mergeDuplicateConnections().then((x) => x.merged), 0, '2 回目は何もしない');
 });
 
 test('ログインが必要・授業一覧の失敗・1 授業の失敗はほかを止めない', async (t) => {

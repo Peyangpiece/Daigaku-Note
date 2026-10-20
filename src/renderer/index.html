@@ -2,20 +2,27 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:"
+    />
     <title>大学ノート</title>
+    <link rel="stylesheet" href="fonts/noto-sans-jp.css" />
+    <link rel="stylesheet" href="fonts/zen-maru-gothic.css" />
     <link rel="stylesheet" href="styles/tokens.css" />
     <link rel="stylesheet" href="styles/notebook.css" />
   </head>
   <body>
-    <div id="app" class="paper paper--margin" aria-live="polite">
+    <div id="app" class="paper paper--margin">
       <header class="notebook-head">
+        <button type="button" class="btn btn--small head-back" id="head-back" data-action="back" hidden>← 戻る</button>
         <h1>大学ノート</h1>
         <span class="muted" id="head-term"></span>
         <span class="muted" id="head-date" style="margin-left: auto"></span>
       </header>
       <main id="view"></main>
     </div>
+    <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
     <script type="module" src="app.js"></script>
   </body>
 </html>

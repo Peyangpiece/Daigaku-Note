@@ -21,6 +21,14 @@ const COLUMNS = {
   sync_run: ['id', 'connection_id', 'kind', 'course_id', 'started_at', 'finished_at', 'courses', 'materials', 'failures', 'timing_json'],
   sync_event: ['id', 'run_id', 'level', 'course_id', 'code', 'message', 'at'],
   job: ['id', 'kind', 'payload_json', 'status', 'result_json', 'tries', 'created_at', 'updated_at'],
+  quiz: ['id', 'round_id', 'version', 'title', 'status', 'source_json', 'generated_by', 'error', 'created_at', 'updated_at'],
+  question: [
+    'id', 'quiz_id', 'seq', 'type', 'q', 'a', 'o_json', 'n', 'src_sha256', 'src_page', 'src_quote', 'tags_json', 'difficulty',
+    'review', 'report_reason', 'deleted', 'updated_at'
+  ],
+  attempt: ['id', 'question_id', 'mode', 'ok', 'answer', 'seconds', 'at'],
+  srs: ['question_id', 's', 'due', 'at', 'c', 'lapses'],
+  ai_usage: ['id', 'quiz_id', 'model', 'input', 'output', 'cache_read', 'cache_write', 'cost_usd', 'purpose', 'at'],
   annotation: ['id', 'sha256', 'page', 'kind', 'rect_json', 'body', 'style_json', 'memorized', 'z', 'created_at', 'updated_at']
 };
 
@@ -77,6 +85,103 @@ export class Repo {
       this.db.exec('ROLLBACK');
       throw e;
     }
+  }
+
+  // ---- クイズ（SPEC §11） ----
+  readMaterialText(sha256) {
+    return this.db.prepare('SELECT page, text FROM material_text WHERE sha256 = ? ORDER BY page').all(sha256);
+  }
+  saveMaterialText(sha256, method, pages) {
+    const st = this.db.prepare('INSERT OR REPLACE INTO material_text (sha256, page, text, method) VALUES (?, ?, ?, ?)');
+    this.transaction(() => {
+      for (const p of pages) st.run(sha256, p.page, p.text, method);
+    });
+  }
+  roundNote(roundId) {
+    return this.get('round_note', roundId, 'round_id');
+  }
+  latestQuiz(roundId) {
+    return this.db.prepare("SELECT * FROM quiz WHERE round_id = ? AND status != 'replaced' ORDER BY version DESC LIMIT 1").get(roundId) ?? null;
+  }
+  insertQuiz(row) {
+    const t = now();
+    // 同じ回の古い版は「置き換えた」にする（記録は残す）
+    this.db.prepare("UPDATE quiz SET status = 'replaced', updated_at = ? WHERE round_id = ? AND status != 'replaced'").run(t, row.round_id);
+    return this.insert('quiz', {created_at: t, updated_at: t, ...row});
+  }
+  insertQuestion(row) {
+    return this.insert('question', {id: ulid(), deleted: 0, updated_at: now(), ...row});
+  }
+  updateQuestion(id, patch) {
+    this.update('question', id, {...patch, updated_at: now()});
+    return this.get('question', id);
+  }
+  /** 授業のクイズの一覧（回ごとの最新版）。問題数・要確認・正答率つき */
+  listQuizzes(courseId) {
+    return this.db
+      .prepare(
+        `SELECT z.*, r.number AS round_number, r.title AS round_title, r.title_user AS round_title_user,
+           (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0) AS count,
+           (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0 AND q.review IS NOT NULL) AS flagged,
+           (SELECT COUNT(*) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS tries,
+           (SELECT SUM(a.ok) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS correct
+         FROM quiz z JOIN round r ON r.id = z.round_id
+         WHERE r.course_id = ? AND z.status != 'replaced' ORDER BY r.number`
+      )
+      .all(courseId);
+  }
+  /** 問題（復習の段階・まちがえた回数・最後の正誤つき） */
+  listQuestions({quizIds = null, courseId = null, includeDeleted = false} = {}) {
+    const where = [];
+    const args = [];
+    if (quizIds) where.push(`q.quiz_id IN (${quizIds.map(() => '?').join(',')})`), args.push(...quizIds);
+    if (courseId) where.push("z.round_id IN (SELECT id FROM round WHERE course_id = ?) AND z.status != 'replaced'"), args.push(courseId);
+    if (!includeDeleted) where.push('q.deleted = 0');
+    return this.db
+      .prepare(
+        `SELECT q.*, z.round_id, s.s AS srs_s, s.due AS srs_due, s.at AS srs_at, s.c AS srs_c, s.lapses AS srs_lapses,
+           (SELECT a.ok FROM attempt a WHERE a.question_id = q.id ORDER BY a.at DESC LIMIT 1) AS last_ok,
+           (SELECT COUNT(*) FROM attempt a WHERE a.question_id = q.id) AS tries,
+           (SELECT SUM(a.ok) FROM attempt a WHERE a.question_id = q.id) AS correct
+         FROM question q JOIN quiz z ON z.id = q.quiz_id LEFT JOIN srs s ON s.question_id = q.id
+         ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY z.round_id, q.seq`
+      )
+      .all(...args);
+  }
+  /** 復習の対象（報告・削除していない、card 以外の、現役の版の問題） */
+  reviewCandidates() {
+    return this.db
+      .prepare(
+        `SELECT q.*, z.round_id, r.course_id, s.s AS srs_s, s.due AS srs_due, s.at AS srs_at, s.c AS srs_c, s.lapses AS srs_lapses
+         FROM question q JOIN quiz z ON z.id = q.quiz_id JOIN round r ON r.id = z.round_id JOIN srs s ON s.question_id = q.id
+         WHERE q.deleted = 0 AND q.report_reason IS NULL AND q.type != 'card' AND z.status != 'replaced'`
+      )
+      .all();
+  }
+  addAttempt({question_id, mode, ok, answer = null, seconds = null}) {
+    return this.insert('attempt', {id: ulid(), question_id, mode, ok: ok ? 1 : 0, answer, seconds, at: now()});
+  }
+  saveSrs(questionId, e) {
+    this.db
+      .prepare('INSERT OR REPLACE INTO srs (question_id, s, due, at, c, lapses) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(questionId, e.s, new Date(e.due).toISOString(), new Date(e.at).toISOString(), e.c ?? 0, e.lapses ?? 0);
+  }
+  addAiUsage({model, usage, cost, purpose, quizId = null}) {
+    return this.insert('ai_usage', {
+      id: ulid(), quiz_id: quizId, model, input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0,
+      cache_read: usage.cache_read_input_tokens ?? 0, cache_write: usage.cache_creation_input_tokens ?? 0,
+      cost_usd: cost, purpose, at: now()
+    });
+  }
+  /** 今日の生成回数（日本時間）と今月の費用 */
+  aiUsageSummary(at = new Date()) {
+    const jst = new Date(at.getTime() + 9 * 3600e3).toISOString();
+    const day = jst.slice(0, 10);
+    const month = jst.slice(0, 7);
+    const toJst = "strftime('%Y-%m-%d', datetime(at, '+9 hours'))";
+    const today = this.db.prepare(`SELECT COUNT(*) c FROM ai_usage WHERE purpose = 'generate' AND ${toJst} = ?`).get(day).c;
+    const monthUsd = this.db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) c FROM ai_usage WHERE substr(${toJst}, 1, 7) = ?`).get(month).c;
+    return {today, monthUsd};
   }
 
   // ---- settings ----
