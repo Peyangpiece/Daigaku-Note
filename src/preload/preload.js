@@ -5,7 +5,7 @@ const INVOKE = [
   'state.get', 'setup.detect', 'setup.createConnection', 'setup.excludeCourses', 'connection.login', 'connection.savePassword', 'connection.forgetPassword', 'connection.remove',
   'term.save', 'courses.list', 'course.update', 'sync.run', 'material.open', 'material.reveal', 'material.move', 'material.upload', 'material.uploadData', 'material.remove', 'folder.create', 'folder.scan', 'folder.reveal', 'folder.update',
   'quiz.status', 'quiz.setKey', 'quiz.removeKey', 'quiz.settings', 'quiz.generate', 'quiz.list', 'quiz.questions', 'quiz.answer', 'quiz.review', 'question.update',
-  'pdf.open', 'pdf.asset', 'pdf.export', 'annotation.save', 'annotation.remove', 'bookmark.save', 'bookmark.remove',
+  'pdf.open', 'pdf.asset', 'pdf.export', 'pdf.save', 'annotation.save', 'annotation.remove', 'bookmark.save', 'bookmark.remove',
   'settings.pickDownloadDir', 'settings.update', 'shell.openExternal', 'shell.openRoot', 'app.version', 'app.openWindow', 'browser.install'
 ];
 const ON = ['quiz.progress', 'quiz.finished', 'state.changed', 'sync.progress', 'sync.finished', 'attention.changed', 'login.required', 'route'];

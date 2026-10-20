@@ -10,6 +10,7 @@ import {PERIOD_PRESETS} from '../shared/schedule.js';
 import {createRequire} from 'node:module';
 import {isOpenable, sha256} from './sync/files.js';
 import {exportAnnotatedPdf, isPng} from './pdf-export.js';
+import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
 import {annotationToClient, normalizeAnnotation} from '../shared/annotation.js';
 import {normalizeBookmark} from '../shared/bookmark.js';
@@ -288,15 +289,20 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (m.status !== 'ok') bad('このファイルは見つかりません');
     return m;
   };
+  // 上書き保存した PDF の元の写し（注釈はいつもこの写しの上に描く）
+  const originalsDir = () => path.join(app.getPath('userData'), 'originals');
   handle('pdf.open', async ({materialId}) => {
     const m = pdfMaterial(materialId);
-    const bytes = await fsp.readFile(m.path).catch(() => bad('ファイルを読めませんでした（移動または削除された可能性があります）'));
+    // 上書き保存したことがあれば、注釈を描き込む前の写しを開く（描き込み済みの上に注釈を重ねて 2 重にしない）
+    const base = await readBase(m, originalsDir()).catch(() => bad('ファイルを読めませんでした（移動または削除された可能性があります）'));
+    if (!base.pristine) log.warn(`元の PDF の写しがありません：${m.name}（描き込み済みのファイルを開きます）`);
+    const bytes = base.bytes;
     repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
     return {
       material: {id: m.id, name: m.name, course_id: m.course_id, round_id: m.round_id},
       bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
-      annotations: repo.listAnnotations(m.sha256).map(annotationToClient),
-      bookmarks: repo.listBookmarks(m.sha256).map(bookmarkToClient)
+      annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient),
+      bookmarks: repo.listBookmarks(annoKey(m)).map(bookmarkToClient)
     };
   });
   // しおり（名前・ページ・位置）。追加・名前の変更・移動は同じ窓口（id がなければ追加）
@@ -304,11 +310,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   handle('bookmark.save', ({materialId, bookmark}) => {
     const m = pdfMaterial(materialId);
     const bid = bookmark?.id == null ? null : (id(bookmark.id) ?? bad('しおりが不正です'));
-    return {bookmark: bookmarkToClient(repo.saveBookmark(m.sha256, bid, normalizeBookmark(bookmark)))};
+    return {bookmark: bookmarkToClient(repo.saveBookmark(annoKey(m), bid, normalizeBookmark(bookmark)))};
   });
   handle('bookmark.remove', ({materialId, bookmarkId}) => {
     const m = pdfMaterial(materialId);
-    repo.removeBookmark(m.sha256, id(bookmarkId) ?? bad('しおりが不正です'));
+    repo.removeBookmark(annoKey(m), id(bookmarkId) ?? bad('しおりが不正です'));
     return {ok: true};
   });
   handle('pdf.asset', async ({kind, filename}) => {
@@ -321,20 +327,16 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   handle('annotation.save', ({materialId, annotation}) => {
     const m = pdfMaterial(materialId);
     const aid = annotation?.id == null ? null : id(annotation.id) ?? bad('注釈が不正です');
-    const row = repo.saveAnnotation(m.sha256, aid, normalizeAnnotation(annotation));
+    const row = repo.saveAnnotation(annoKey(m), aid, normalizeAnnotation(annotation));
     return {annotation: annotationToClient(row)};
   });
   handle('annotation.remove', ({materialId, annotationId}) => {
     const m = pdfMaterial(materialId);
-    repo.removeAnnotation(m.sha256, id(annotationId) ?? bad('注釈が不正です'));
+    repo.removeAnnotation(annoKey(m), id(annotationId) ?? bad('注釈が不正です'));
     return {ok: true};
   });
-  // 注釈付きで書き出す（§9.7）。注釈の位置と中身は DB のものを使い、レンダラからは文字入れの画像だけ受け取る
-  handle('pdf.export', async ({materialId, options, texts}) => {
-    const m = pdfMaterial(materialId);
-    const markers = options?.markers === 'black' ? 'black' : 'blue';
-    const notes = options?.notes !== false;
-    const rows = repo.listAnnotations(m.sha256).map(annotationToClient);
+  // 文字入れの画像（レンダラが描いた PNG）。DB にある文字入れの分だけ受け取る
+  const textImages = (rows, texts) => {
     const textIds = new Set(rows.filter((r) => r.kind === 'text').map((r) => r.id));
     const images = new Map();
     let total = 0;
@@ -346,7 +348,26 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       if (total > 200 * 1024 * 1024) bad('文字入れが多すぎて書き出せません');
       images.set(tid, t.png);
     }
-    const src = await fsp.readFile(m.path).catch(() => bad('元の PDF を読めませんでした'));
+    return images;
+  };
+  // 上書き保存：注釈を描き込んだ PDF でファイルを置き換える（Finder で開いても注釈が見える）。元の写しはアプリの中に取っておく
+  handle('pdf.save', async ({materialId, texts}) => {
+    const m = pdfMaterial(materialId);
+    const rows = repo.listAnnotations(annoKey(m)).map(annotationToClient);
+    const r = await overwritePdf({repo, material: m, annotations: rows, images: textImages(rows, texts), originalsDir: originalsDir()});
+    if (r.changed) getWindow()?.webContents.send('state.changed', {});
+    return {ok: true, changed: r.changed, name: m.name};
+  });
+  // 注釈付きで別名で書き出す（§9.7）。注釈の位置と中身は DB のものを使い、レンダラからは文字入れの画像だけ受け取る
+  handle('pdf.export', async ({materialId, options, texts}) => {
+    const m = pdfMaterial(materialId);
+    const markers = options?.markers === 'black' ? 'black' : 'blue';
+    const notes = options?.notes !== false;
+    const rows = repo.listAnnotations(annoKey(m)).map(annotationToClient);
+    const images = textImages(rows, texts);
+    const base = await readBase(m, originalsDir()).catch(() => bad('元の PDF を読めませんでした'));
+    if (!base.pristine) bad('元の PDF の写しが見つからないため書き出せません');
+    const src = base.bytes;
     const out = Buffer.from(await exportAnnotatedPdf(src, rows, {images, markers, notes}));
     const dir = path.dirname(m.path);
     const opts = {
