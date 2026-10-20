@@ -98,6 +98,7 @@ export function renderHome({data, progress}) {
   return `
     <div class="home${attention.length ? ' home--attention' : ''}">
       ${attention.length ? `<aside class="sticky attention" style="--sticky-color: var(--c2)" aria-labelledby="attention-title"><strong id="attention-title">要確認</strong><ul>${attention.join('')}</ul></aside>` : ''}
+      <div class="home__main">
       ${
         courses.length
           ? `${dayLine}<section class="folders" aria-label="授業">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id)})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
@@ -106,6 +107,7 @@ export function renderHome({data, progress}) {
             : '' /* LMS をつないでいなければ授業の段は出さない（つなぐのは 設定 → LMS との連携 から） */
       }
       ${myFolders}
+      </div>
     </div>
     <footer class="home-foot">
       ${data.quiz?.reviewDue ? `<button class="btn btn--primary" data-action="nav" data-route="/review">今日の復習 ${data.quiz.reviewDue} 問</button>` : ''}
