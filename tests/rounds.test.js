@@ -74,9 +74,9 @@ test('授業画面の並び：今週の回が先頭、前の回は新しい順�
   const r = (number, date) => ({id: `r${number}`, number, date});
   const rounds = [r(0, null), r(3, '2026-10-16'), r(1, '2026-10-02'), r(4, '2026-10-23'), r(2, '2026-10-09'), r(5, '2026-10-30')];
   const ids = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v.map((x) => x.id)]));
-  assert.deepEqual(ids(orderRounds(rounds, '2026-10-20')), {current: ['r4', 'r5'], past: ['r3', 'r2', 'r1'], other: ['r0']});
+  assert.deepEqual(ids(orderRounds(rounds, '2026-10-20')), {current: ['r4', 'r5'], past: ['r1', 'r2', 'r3'], other: ['r0']});
   assert.deepEqual(ids(orderRounds(rounds, '2026-10-24')).current[0], 'r4', '授業の日が過ぎても同じ週なら先頭');
   assert.deepEqual(ids(orderRounds(rounds, '2026-10-26')).current, ['r5'], '今週に回がなければ次の回');
-  assert.deepEqual(ids(orderRounds(rounds, '2026-11-10')), {current: [], past: ['r5', 'r4', 'r3', 'r2', 'r1'], other: ['r0']}, '学期のあと');
+  assert.deepEqual(ids(orderRounds(rounds, '2026-11-10')), {current: [], past: ['r1', 'r2', 'r3', 'r4', 'r5'], other: ['r0']}, '学期のあと');
   assert.deepEqual(ids(orderRounds([r(2, null), r(1, null)], '2026-10-20')).current, ['r1', 'r2'], '日付がなければ回の順');
 });

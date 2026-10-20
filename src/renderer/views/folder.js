@@ -30,15 +30,15 @@ export function renderFolderNew({data}, route) {
     <section class="card folder-new" data-form="folder-new-${mode}">
       ${
         mode === 'new'
-          ? `<p class="muted">資料の保存先の中に新しいフォルダを作ります。あとから「ファイルを追加」かドラッグで、パソコンのファイルを入れられます（元のファイルはそのまま残り、コピーが入ります）。</p>
+          ? `<p class="muted">保存先の中にフォルダを作ります。ファイルはあとからドラッグか「ファイルを追加」で入れます（元のファイルは残ります）。</p>
         <label for="fn-name">フォルダの名前</label>
         <input class="input" id="fn-name" type="text" maxlength="80" placeholder="例：ゼミ・就活・資格の勉強" autocomplete="off">`
-          : `<p class="muted">パソコンにあるフォルダを、コピーせずにそのまま大学ノートで開けるようにします。フォルダにファイルを足したり消したりすると、次に開いたときに反映されます。大学ノートで追加したファイルも、そのフォルダに入ります。</p>
+          : `<p class="muted">パソコンのフォルダを、コピーせずにそのまま開きます。中身の変更は次に開いたときに反映されます。</p>
         <label for="fn-name">大学ノートでの名前 <span class="muted">（空ならフォルダの名前）</span></label>
         <input class="input" id="fn-name" type="text" maxlength="80" autocomplete="off">`
       }
       ${scopeChoice()}
-      ${noTerm ? '<p class="muted">学期はまだ設定されていないので、今日の日付から仮の学期（4〜9 月は春学期、10〜3 月は秋学期）を作ります。設定 → 学期 で直せます。</p>' : ''}
+      ${noTerm ? '<p class="muted">学期が未設定のため、今日の日付から仮の学期を作ります（設定 → 学期 で直せます）。</p>' : ''}
       <div class="actions">
         <button class="btn btn--primary" data-action="folder-create" data-mode="${mode}">${mode === 'new' ? '作る' : 'フォルダを選んで登録…'}</button>
       </div>
@@ -83,9 +83,9 @@ export function renderFolder({data}, course) {
       <button class="btn btn--quiet" data-action="folder-scope" data-course-id="${esc(course.id)}" data-scope="${course.scope === 'always' ? 'term' : 'always'}">${course.scope === 'always' ? '今学期のフォルダにする' : 'マイフォルダにする'}</button>
       <button class="btn btn--quiet" data-action="folder-hide" data-course-id="${esc(course.id)}">ホームから外す</button>
     </div>
-    <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身をそのまま表示しています。追加したファイルはこのフォルダにコピーされます。ファイルの名前の変更や削除は Finder（Windows はエクスプローラー）で行い、「読み直す」で反映します。</p>
+    <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です。名前の変更や削除は Finder（Windows はエクスプローラー）で行い、「読み直す」で反映します。</p>
     <section class="round-note round-note--own round-note--folder" data-drop="own" data-course-id="${esc(course.id)}" aria-label="${esc(course.name)} のファイル">
-      ${list.length ? files : '<p class="round-note__none">まだファイルがありません。ここにドラッグするか「ファイルを追加」で入れます。</p>'}
+      ${list.length ? files : '<p class="round-note__none">ここにファイルをドラッグして入れます。</p>'}
       ${round ? quizLine(round, list, course, quiz, gen, !!data.quiz?.key?.set, 'このフォルダ') : ''}
     </section>`;
 }

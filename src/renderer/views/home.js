@@ -17,6 +17,14 @@ const tapeAngle = (id) => (hash32(id) % 13) - 6;
 const DAYS = '日月火水木金土';
 const slotOf = (c) => `${c.weekday}曜${c.period ? ` ${c.period}限` : ''}`;
 const byPeriod = (a, b) => (a.period ?? 99) - (b.period ?? 99);
+/** 授業の並び：月曜の 1 限から週の順（月→日、同じ曜日は時限の若い順）。曜日の分からない授業は最後（もとの並びのまま） */
+export function weekOrder(courses) {
+  const day = (c) => (c.weekday && '月火水木金土日'.includes(c.weekday) ? '月火水木金土日'.indexOf(c.weekday) : 7);
+  return courses
+    .map((c, i) => [c, i])
+    .sort(([a, i], [b, j]) => day(a) - day(b) || byPeriod(a, b) || i - j)
+    .map(([c]) => c);
+}
 
 /** 今日の授業（時限の順）と、今日がなければ次に授業のある日の授業。曜日の分からない授業は数えない */
 export function classDays(courses, now = new Date()) {
@@ -52,9 +60,9 @@ export function folderCard(course, {today = false} = {}) {
 
 export function renderHome({data, progress}) {
   const all = data.courses.filter((c) => !c.hidden && c.kind !== 'folder');
-  // 今日の授業を先頭に（時限の順）。あとはこれまでの並び
+  // 今日の授業（なければ次の授業）を上の 1 行に
   const {today, next} = classDays(all);
-  const courses = [...today, ...all.filter((c) => !today.includes(c))];
+  const courses = weekOrder(all); // 月曜の 1 限から週の順。今日の授業には「今日」を付ける
   const todayIds = new Set(today.map((c) => c.id));
   const dayLine = today.length
     ? `<p class="home-day" id="today-label"><strong>今日の授業</strong> ${today.map((c) => `${esc(c.name)}（${c.period ? `${c.period}限` : '時限なし'}）`).join('・')}</p>`
@@ -68,7 +76,7 @@ export function renderHome({data, progress}) {
   const past = mine.filter((c) => !folderShown(c, data.currentTermId));
   const myFolders = `<section class="my-folders" aria-labelledby="my-folders-title">
       <h2 class="my-folders__title" id="my-folders-title">自分のフォルダ</h2>
-      ${shown.length ? `<div class="folders">${shown.map((c) => folderCard(c)).join('')}</div>` : '<p class="muted">自分でフォルダを作ったり、パソコンのフォルダを登録したりできます。</p>'}
+      ${shown.length ? `<div class="folders">${shown.map((c) => folderCard(c)).join('')}</div>` : ''}
       <div class="actions">
         <button class="btn" data-action="nav" data-route="/folder-new?mode=new">＋ フォルダを作る</button>
         <button class="btn" data-action="nav" data-route="/folder-new?mode=link">＋ パソコンのフォルダを登録</button>

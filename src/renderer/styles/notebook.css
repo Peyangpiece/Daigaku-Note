@@ -1762,3 +1762,40 @@ textarea.input {
 .viewer-bar .btn[hidden] {
   display: none;
 }
+/* ホームのカードの右クリックのメニュー */
+.card-menu {
+  position: fixed;
+  z-index: 50;
+  display: grid;
+  min-width: 140px;
+  padding: 4px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow-hover);
+}
+.card-menu button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.card-menu button:hover,
+.card-menu button:focus-visible {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+  outline: none;
+}
+.card-menu__danger {
+  color: #c5221f !important;
+}
+:root[data-theme='dark'] .card-menu__danger {
+  color: #ff8a80 !important;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .card-menu__danger {
+    color: #ff8a80 !important;
+  }
+}
