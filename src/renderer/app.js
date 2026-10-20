@@ -1,4 +1,4 @@
-// 画面の土台（DESIGN-M0 §10）。経路：#/setup・#/（ホーム）・#/course/<id>・#/viewer/<資料 id>・#/settings・#/settings/term
+// 画面の土台（DESIGN-M0 §10）。経路：#/setup（初回）・#/（ホーム）・#/course/<id>・#/viewer/<資料 id>・#/settings・#/settings/term・#/settings/lms（LMS とつなぐ）
 // ホーム（フォルダのグリッド）・授業（資料一覧）・PDF ビューア（文字入れ・付箋・文字隠し）・クイズ・設定・セットアップ。
 import {renderHome} from './views/home.js';
 import {renderCourse} from './views/course.js';
@@ -160,11 +160,12 @@ function render() {
   viewer = null;
   const same = route === lastRoute;
   const snap = same ? snapshot(view) : null;
-  if (route === '/setup' && !same) resetSetup();
+  if (route === '/setup' && !same) resetSetup('first');
+  if (route === '/settings/lms' && !same) resetSetup('lms', state.data);
   if (route === '/settings/term' && !same) resetTerm();
   if (!same && !route.startsWith('/quiz') && !route.startsWith('/review')) leaveQuiz();
   if (!same && !route.startsWith('/quiz-edit/')) leaveQuizEdit();
-  if (route === '/setup') view.innerHTML = renderSetup(state);
+  if (route === '/setup' || route === '/settings/lms') view.innerHTML = renderSetup(state);
   else if (route.startsWith('/course/')) {
     const course = state.data.courses.find((c) => c.id === route.slice('/course/'.length));
     view.innerHTML = course?.kind === 'folder' ? renderFolder(state, course) : renderCourse(state, route.slice('/course/'.length));
@@ -197,7 +198,7 @@ api.on('sync.progress', (p) => {
 api.on('sync.finished', (r) => {
   state.progress = null;
   if (r.status === 'login-required')
-    toast(r.message || 'LMS へのログインが必要です（設定 → 接続 → ログインし直す）', {error: true});
+    toast(r.message || 'LMS へのログインが必要です（設定 → LMS との連携 → ログインし直す）', {error: true});
   else if (r.status === 'failed' || r.status === 'browser-not-ready')
     toast(r.message || '同期に失敗しました', {error: true});
   else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 学期）', {error: true});
@@ -264,7 +265,8 @@ document.addEventListener('click', async (e) => {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
       if (r?.error) toast(r.error, {error: true});
       else if (!r.canceled) uploaded(r);
-    } else if (action === 'skip-setup') {
+    } else if (action === 'finish-setup') {
+      // 初回のセットアップを終える（次から起動時に出さない。LMS は 設定 → LMS との連携 からつなぐ）
       await api['settings.update']({patch: {skipSetup: true}});
       await reload();
       navigate('/');

@@ -79,7 +79,7 @@ export function renderHome({data, progress}) {
           ? `<section class="folders" aria-label="授業">${courses.map(folderCard).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
           : hasLms
             ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
-            : `<div class="empty"><p>LMS をつなぐと、授業の資料を自動で集めて、ここに授業のフォルダを貼ります（任意）。</p><button class="btn" data-action="nav" data-route="/setup">LMS をつなぐ</button></div>`
+            : '' /* LMS をつないでいなければ授業の段は出さない（つなぐのは 設定 → LMS との連携 から） */
       }
       ${myFolders}
     </div>
