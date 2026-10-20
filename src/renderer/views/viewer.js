@@ -19,6 +19,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 const api = window.daigaku;
 const CSS_UNITS = 96 / 72; // 拡大率 100% で紙の実寸
 const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+const clampZoom = (z) => Math.min(4, Math.max(0.25, z));
+const PINCH_IDLE = 180; // ピンチの指が止まってから描き直すまで（ms）
+const PINCH_SPEED = 0.01; // wheel の deltaY 1 あたりの拡大率の変化（指数）
 // shared/annotation.js と同じ値（レンダラは shared を読まないので写す）
 const SIZE_MIN = 6,
   SIZE_MAX = 72,
@@ -239,9 +242,9 @@ class Viewer {
     return Math.min(2, Math.max(0.5, Math.floor((avail / first.width) * 100) / 100));
   }
 
-  layout() {
+  layout(keepAnchor = true) {
     // 拡大率を変えても見ていた場所を保つ
-    const anchor = this.pages.find((p) => p.el.getBoundingClientRect().bottom > 0);
+    const anchor = keepAnchor ? this.pages.find((p) => p.el.getBoundingClientRect().bottom > 0) : null;
     const before = anchor?.el.getBoundingClientRect();
     const frac = before && before.height ? -before.top / before.height : 0;
     for (const p of this.pages) {
@@ -259,9 +262,48 @@ class Viewer {
     }
   }
 
-  setZoom(z) {
-    this.zoom = Math.min(4, Math.max(0.25, z));
-    this.layout();
+  /** at（画面の座標）を渡すと、その下にあったページの場所を描き直したあとも同じ位置に保つ（ピンチの指の下） */
+  setZoom(z, at = null) {
+    const hit =
+      at &&
+      this.pages.find((p) => {
+        const r = p.el.getBoundingClientRect();
+        return at.y >= r.top && at.y <= r.bottom;
+      });
+    const before = hit?.el.getBoundingClientRect();
+    this.zoom = clampZoom(z);
+    this.layout(!hit);
+    if (hit) {
+      const after = hit.el.getBoundingClientRect();
+      const fx = (at.x - before.left) / before.width;
+      const fy = (at.y - before.top) / before.height;
+      window.scrollBy(after.left + fx * after.width - at.x, after.top + fy * after.height - at.y);
+    }
+  }
+
+  // トラックパッドの 2 本指（ピンチ）と Ctrl＋ホイールで拡大・縮小する。Chromium はピンチを ctrlKey 付きの wheel として送る。
+  // 指を動かしているあいだは CSS の拡大で見た目だけを変え（PDF を毎回描き直すと重い）、止まったらその倍率で描き直す
+  onWheel(e) {
+    if (!e.ctrlKey || !this.pages.length) return;
+    e.preventDefault(); // アプリ全体の拡大にしない
+    if (!this.pinch) {
+      const r = this.pagesEl.getBoundingClientRect();
+      this.pinch = {zoom: this.zoom, x: e.clientX, y: e.clientY};
+      this.pagesEl.style.transformOrigin = `${e.clientX - r.left}px ${e.clientY - r.top}px`;
+    }
+    const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // 行単位（マウスのホイール）はおよそのピクセルに
+    this.pinch.zoom = clampZoom(this.pinch.zoom * Math.exp(-dy * PINCH_SPEED));
+    this.pagesEl.style.transform = `scale(${this.pinch.zoom / this.zoom})`;
+    clearTimeout(this.pinchTimer);
+    this.pinchTimer = setTimeout(() => this.endPinch(), PINCH_IDLE);
+  }
+  endPinch() {
+    const p = this.pinch;
+    this.pinch = null;
+    if (!p || this.destroyed) return;
+    this.pagesEl.style.transform = '';
+    this.pagesEl.style.transformOrigin = '';
+    this.setZoom(p.zoom, p);
   }
 
   onIntersect(entries) {
@@ -776,6 +818,7 @@ class Viewer {
 
   bindPages() {
     const el = this.pagesEl;
+    this.on(window, 'wheel', (e) => this.onWheel(e), {passive: false});
     this.on(el, 'pointerdown', (e) => this.onPointerDown(e));
     this.on(el, 'pointermove', (e) => this.onPointerMove(e));
     this.on(el, 'pointerup', (e) => this.onPointerUp(e));
@@ -1199,6 +1242,7 @@ class Viewer {
   unmount() {
     this.flushAll();
     this.destroyed = true;
+    clearTimeout(this.pinchTimer);
     for (const off of this.listeners) off();
     this.observer?.disconnect();
     this.toggleSheet(false);
