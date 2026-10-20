@@ -1012,6 +1012,12 @@ class Viewer {
 
   bindBar() {
     const bar = this.root.querySelector('.viewer-bar');
+    // ツールバーは窓に固定なので、ページの上にツールバーの高さ（2 行に折り返したときも）＋余白を空ける
+    this.barObserver = new ResizeObserver(() => {
+      const top = this.pagesEl.parentElement.getBoundingClientRect().top + window.scrollY; // ページの並びの親の上端（紙の上の余白の下）
+      this.pagesEl.style.marginTop = `${Math.max(0, bar.offsetHeight + 24 - top)}px`;
+    });
+    this.barObserver.observe(bar);
     // ツールバーを押しても文字入れの編集を終わらせない（書式を変えながら打てるように）
     this.on(bar, 'pointerdown', (e) => {
       if (this.editing && e.target.closest('button, .swatch')) e.preventDefault();
@@ -1650,6 +1656,7 @@ class Viewer {
     clearTimeout(this.pinchTimer);
     for (const off of this.listeners) off();
     this.observer?.disconnect();
+    this.barObserver?.disconnect();
     this.toggleSheet(false);
     cancelAnimationFrame(this.coverFrame);
     for (const p of this.pages) p.renderTask?.cancel();
