@@ -10,7 +10,7 @@ const COLUMNS = {
   course: [
     'id', 'term_id', 'connection_id', 'lms_id', 'lms_url', 'name', 'folder_name', 'weekday', 'period', 'weekday_from',
     'color', 'tape_pattern', 'sort_order', 'hidden', 'sync_enabled', 'generic_json', 'font_json', 'quiz_json', 'full_synced_at',
-    'created_at', 'updated_at'
+    'kind', 'dir', 'scope', 'created_at', 'updated_at'
   ],
   round: ['id', 'course_id', 'number', 'title', 'title_user', 'folder_name', 'date', 'lms_ref'],
   round_note: ['round_id', 'body', 'updated_at'],

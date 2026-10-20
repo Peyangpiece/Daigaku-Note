@@ -5,7 +5,7 @@ import {Repo} from '../src/main/db/repo.js';
 
 test('マイグレーションが当たり、2 回当てても変わらない', async () => {
   const {db, applied} = await openDatabase(':memory:');
-  assert.deepEqual(applied, [1, 2, 3]);
+  assert.deepEqual(applied, [1, 2, 3, 4]);
   assert.deepEqual(migrate(db), []);
   const tables = db
     .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")

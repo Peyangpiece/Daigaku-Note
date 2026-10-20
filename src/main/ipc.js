@@ -5,7 +5,7 @@ import path from 'node:path';
 import {isUlid} from '../shared/ids.js';
 import {checkDownloadDir, defaultRoot} from '../shared/paths.js';
 import {courseFolderName} from '../shared/naming.js';
-import {defaultTermDates, termFolder, termId} from '../shared/term.js';
+import {currentTerm, defaultTermDates, termFolder, termId} from '../shared/term.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
 import {createRequire} from 'node:module';
 import {isOpenable, sha256} from './sync/files.js';
@@ -36,7 +36,7 @@ const bad = (msg) => {
 };
 
 export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
-  const {repo, registry, jobs, files, secrets, log} = ctx;
+  const {repo, registry, jobs, files, secrets, log, folders} = ctx;
   const handle = (channel, fn) =>
     ipcMain.handle(channel, async (_e, arg) => {
       try {
@@ -52,11 +52,15 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     const connections = repo.listConnections().map(({session_json, ...c}) => c);
     const courses = repo.listCourses().map((c) => ({...c, unread: repo.countUnread(c.id)}));
     const rounds = Object.fromEntries(courses.map((c) => [c.id, repo.listRounds(c.id)]));
-    const materials = Object.fromEntries(courses.map((c) => [c.id, repo.listMaterials(c.id).map(({path, ...m}) => m)]));
+    // 自分のフォルダの資料は、フォルダの中のどの下のフォルダにあるか（sub）も渡す。パスそのものは渡さない
+    const sub = (c, m) => (c.kind === 'folder' && c.dir ? path.relative(c.dir, path.dirname(m.path)).split(path.sep).join('/') : '');
+    const materials = Object.fromEntries(courses.map((c) => [c.id, repo.listMaterials(c.id).map(({path: p, ...m}) => ({...m, sub: sub(c, {path: p})}))]));
+    const today = new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'});
     return {
       connections,
       terms,
-      courses,
+      currentTermId: currentTerm(terms, today)?.id ?? terms.at(-1)?.id ?? null,
+      courses: courses.map(({dir, ...c}) => (c.kind === 'folder' ? {...c, dirName: path.basename(dir ?? '')} : c)),
       rounds,
       materials,
       settings: {
@@ -253,7 +257,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return {course: repo.updateCourse(cid, allowed)};
   });
 
-  handle('sync.run', ({connectionId, courseId, full}) => {
+  handle('sync.run', async ({connectionId, courseId, full}) => {
+    if (courseId && repo.get('course', id(courseId) ?? bad('授業が不正です'))?.kind === 'folder') return folders.scan(courseId);
     const payload = {};
     if (connectionId) payload.connectionId = id(connectionId) ?? bad('接続が不正です');
     if (courseId) payload.courseId = id(courseId) ?? bad('授業が不正です');
@@ -369,6 +374,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
     const r = roundId === null ? null : (repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません'));
     if (r && r.course_id !== m.course_id) bad('別の授業の回には移せません');
+    if (repo.get('course', m.course_id)?.kind === 'folder') bad('自分のフォルダの中では移せません（Finder で動かしてください）');
     if ((r?.id ?? null) === m.round_id) return {ok: true};
     if (m.status !== 'ok') bad('ファイルが見つからないため移せません');
     const course = repo.get('course', m.course_id);
@@ -383,6 +389,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   const placeFor = (courseId, roundId) => {
     const course = repo.get('course', id(courseId) ?? bad('授業が不正です')) ?? bad('授業がありません');
     const term = repo.get('term', course.term_id) ?? bad('学期がありません');
+    if (course.kind === 'folder') return {course, term, round: folders.roundOf(course)}; // フォルダの中にコピーする
     const round = roundId ? (repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません')) : null;
     if (round && round.course_id !== course.id) bad('別の授業の回には入れられません');
     return {course, term, round};
@@ -394,7 +401,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         const r = await files.addOwn({...place, name, data: await read()});
         if (r.result === 'dup') {
           const where = r.material.round_id ? repo.get('round', r.material.round_id) : null;
-          out.dup.push({name, where: where ? (where.number === 0 ? 'その他' : `第${where.number}回`) : '自分の付箋'});
+          out.dup.push({name, where: place.course.kind === 'folder' ? 'このフォルダ' : where ? (where.number === 0 ? 'その他' : `第${where.number}回`) : '自分の付箋'});
         } else out.added++;
       } catch (e) {
         log.warn(`ファイルを入れられませんでした: ${name}（${e.message}）`);
@@ -429,10 +436,47 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   // 自分で入れた資料を外す（ファイルは OS のゴミ箱へ）。LMS から取った資料は外さない（次の同期でまた取ってくるため）
   handle('material.remove', async ({materialId}) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
+    if (m.source === 'folder') bad('パソコンのフォルダにあるファイルは、Finder（エクスプローラー）で消してください');
     if (m.source !== 'upload') bad('LMS から取った資料は外せません');
     if (m.status === 'ok') await files.trash(m.path);
     repo.remove('material', m.id);
     return {ok: true};
+  });
+
+  // 自分のフォルダ：作る（保存先の中に新しく）・パソコンのフォルダを登録する（選ぶ窓はメインで開く。パスは受け取らない）
+  handle('folder.create', async ({name, scope, mode}) => {
+    if (!['term', 'always'].includes(scope)) bad('フォルダの種類が不正です');
+    if (mode === 'new') {
+      const course = await folders.create({name: str(name, 200) ?? bad('フォルダの名前を入れてください'), scope, mode});
+      return {courseId: course.id};
+    }
+    if (mode !== 'link') bad('フォルダの作り方が不正です');
+    const win = getWindow();
+    const opts = {title: '大学ノートに登録するフォルダ', properties: ['openDirectory']};
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    if (r.canceled || !r.filePaths.length) return {canceled: true};
+    const course = await folders.create({name: str(name, 200) ?? '', scope, mode, dir: r.filePaths[0]});
+    const scanned = await folders.scan(course.id);
+    return {courseId: course.id, ...scanned};
+  });
+  handle('folder.scan', async ({courseId}) => folders.scan(id(courseId) ?? bad('フォルダが不正です')));
+  handle('folder.reveal', async ({courseId}) => {
+    const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
+    const e = await shell.openPath(c.dir);
+    if (e) bad(`フォルダを開けませんでした（${e}）`);
+    return {ok: true};
+  });
+  handle('folder.update', ({courseId, name, scope}) => {
+    const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
+    const patch = {};
+    if (name !== undefined) patch.name = (str(name, 200) ?? '').trim().slice(0, 80) || bad('名前を入れてください');
+    if (scope !== undefined) {
+      if (!['term', 'always'].includes(scope)) bad('フォルダの種類が不正です');
+      patch.scope = scope;
+      // 今学期のフォルダにするときは、いまの学期に付け直す（前の学期のフォルダを今学期へ戻すとき）
+      if (scope === 'term') patch.term_id = folders.termNow()?.id ?? c.term_id;
+    }
+    return {course: repo.updateCourse(c.id, patch)};
   });
 
   handle('settings.pickDownloadDir', async () => {
