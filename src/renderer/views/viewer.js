@@ -30,6 +30,15 @@ const SIZE_MIN = 6,
   DEFAULT_SIZE = 12,
   NOTE_SIZE = 20;
 const FONT = "'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif"; // notebook.css の .anno-text と同じ
+/** 行の字の上下（覆う範囲）と、その行をなぞったとみなす上下 */
+const lineOf = (items) => ({
+  top: Math.min(...items.map((it) => it.top)),
+  bottom: Math.max(...items.map((it) => it.bottom)),
+  hitTop: Math.min(...items.map((it) => it.hitTop)),
+  hitBottom: Math.max(...items.map((it) => it.hitBottom))
+});
+/** 文字隠しを横になぞっているか：上下の動きが小さいか、指が行の字の高さの中にとどまっている（行の字の縦幅を超えなければ、行のマーカーのまま） */
+const isFlat = (d, line) => Math.abs(d.y1 - d.y0) < 12 || (!!line && d.y1 >= line.hitTop && d.y1 <= line.hitBottom);
 const LINE_HEIGHT = 1.4; // notebook.css の .anno-text と同じ
 const EXPORT_PX_PER_PT = 4; // 書き出す文字入れの画像の細かさ（1pt = 4px、288dpi）
 const HISTORY_MAX = 200;
@@ -1125,7 +1134,7 @@ class Viewer {
       .then((raw) => {
         const onLine = this.screenItems(p, raw).filter((it) => y >= it.hitTop && y <= it.hitBottom);
         if (!onLine.length || this.drawing !== d) return;
-        d.line = {top: Math.min(...onLine.map((it) => it.top)), bottom: Math.max(...onLine.map((it) => it.bottom))};
+        d.line = lineOf(onLine);
         this.drawDraft();
       })
       .catch(() => {});
@@ -1135,7 +1144,7 @@ class Viewer {
 
   drawDraft() {
     const d = this.drawing;
-    const flat = Math.abs(d.y1 - d.y0) < 12; // 横になぞっている
+    const flat = isFlat(d, d.line); // 横になぞっている（行の高さの中なら上下に動いても）
     const h = DEFAULT_SIZE * d.p.viewport.scale;
     const top = flat ? (d.line?.top ?? d.y0 - h / 2) : Math.min(d.y0, d.y1);
     const height = flat ? (d.line ? d.line.bottom - d.line.top : h) : Math.abs(d.y1 - d.y0);
@@ -1224,10 +1233,10 @@ class Viewer {
     const measure = this.measureChar;
     const pieces = (list, from, to) => textIn(list, from, to, measure);
     let box, hidden;
-    if (Math.abs(d.y1 - d.y0) < 12) {
-      // 横になぞった：なぞり始めの高さにある行に合わせ、左右の端は字の切れ目に合わせる（字の途中で切らない）。
-      // 動かさずに押しただけ（ダブルクリックも）なら、その位置の単語を覆う
-      const onLine = items.filter((it) => d.y0 >= it.hitTop && d.y0 <= it.hitBottom);
+    const onLine = items.filter((it) => d.y0 >= it.hitTop && d.y0 <= it.hitBottom);
+    if (isFlat(d, onLine.length ? lineOf(onLine) : null)) {
+      // 横になぞった（指が行の字の高さの中にとどまっていれば、上下に動いても）：なぞり始めの高さにある行に合わせ、
+      // 左右の端は字の切れ目に合わせる（字の途中で切らない）。動かさずに押しただけ（ダブルクリックも）なら、その位置の単語を覆う
       let hit = onLine.filter((it) => it.left < x2 && it.right > x1);
       if (x2 - x1 < 2) {
         const it = onLine.find((t) => t.left <= x1 && x1 <= t.right);
