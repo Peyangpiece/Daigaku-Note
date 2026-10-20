@@ -444,7 +444,7 @@ class Viewer {
   // トラックパッドの 2 本指（ピンチ）と Ctrl＋ホイールで拡大・縮小する。Chromium はピンチを ctrlKey 付きの wheel として送る。
   // 指を動かしているあいだは CSS の拡大で見た目だけを変え（PDF を毎回描き直すと重い）、止まったらその倍率で描き直す
   onWheel(e) {
-    if (!e.ctrlKey || !this.pages.length) return;
+    if (!e.ctrlKey || !this.pages.length || this.pinch?.touch) return;
     e.preventDefault(); // アプリ全体の拡大にしない
     if (!this.pinch) {
       const r = this.pagesEl.getBoundingClientRect();
@@ -463,7 +463,54 @@ class Viewer {
     if (!p || this.destroyed) return;
     this.pagesEl.style.transform = '';
     this.pagesEl.style.transformOrigin = '';
-    this.setZoom(p.zoom, p);
+    if (Math.abs(p.zoom - this.zoom) > 0.001) this.setZoom(p.zoom, p); // 2 本指で動かしただけなら描き直さない
+    if (p.dx || p.dy) window.scrollBy(-p.dx, -p.dy); // 指を動かした分だけ、ページも指について動く
+  }
+
+  // タッチ画面の 2 本指で拡大・縮小する（Electron はブラウザのピンチ拡大を切っているので、自分で受ける）。
+  // 基準は 2 本の指の真ん中。指をそろえて動かすとスクロールにもなる（文字隠しの道具では 1 本指がなぞりになるため）
+  onTouchStart(e) {
+    if (e.touches.length !== 2 || !this.pages.length || (this.pinch && !this.pinch.touch)) return;
+    e.preventDefault(); // ブラウザのスクロールに渡さない（あとの touchmove を止められるように）
+    this.cancelPointer();
+    clearTimeout(this.pinchTimer);
+    const [a, b] = e.touches;
+    const x = (a.clientX + b.clientX) / 2,
+      y = (a.clientY + b.clientY) / 2;
+    const r = this.pagesEl.getBoundingClientRect();
+    const zoom = this.pinch?.zoom ?? this.zoom;
+    this.pinch = {touch: true, zoom, start: zoom, x, y, dx: 0, dy: 0, dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1};
+    this.pagesEl.style.transformOrigin = `${x - r.left}px ${y - r.top}px`;
+  }
+  onTouchMove(e) {
+    const p = this.pinch;
+    if (!p?.touch || e.touches.length < 2) return;
+    if (e.cancelable) e.preventDefault();
+    const [a, b] = e.touches;
+    p.zoom = clampZoom((p.start * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)) / p.dist);
+    p.dx = (a.clientX + b.clientX) / 2 - p.x;
+    p.dy = (a.clientY + b.clientY) / 2 - p.y;
+    this.pagesEl.style.transform = `translate(${p.dx}px, ${p.dy}px) scale(${p.zoom / this.zoom})`;
+  }
+  onTouchEnd(e) {
+    if (this.pinch?.touch && e.touches.length < 2) this.endPinch();
+  }
+
+  /** 1 本目の指で始めたこと（なぞり中のマーカー・動かし中の注釈・置く前の文字入れや付箋）を取りやめる。2 本目の指が来たときなど */
+  cancelPointer() {
+    this.tap = null;
+    if (this.drawing) {
+      this.drawing.el.remove();
+      this.drawing = null;
+    }
+    const d = this.drag;
+    if (d) {
+      this.drag = null;
+      d.a.el.classList.remove('is-dragging');
+      d.a.el.style.left = `${d.left}px`;
+      d.a.el.style.top = `${d.top}px`;
+      if (d.a.kind === 'mask') this.syncCovers();
+    }
   }
 
   onIntersect(entries) {
@@ -990,6 +1037,18 @@ class Viewer {
     this.on(el, 'pointerdown', (e) => this.onPointerDown(e));
     this.on(el, 'pointermove', (e) => this.onPointerMove(e));
     this.on(el, 'pointerup', (e) => this.onPointerUp(e));
+    this.on(el, 'pointercancel', (e) => {
+      if ([this.drawing, this.drag, this.tap].some((t) => t?.pointer === e.pointerId)) this.cancelPointer();
+    });
+    // 画面に触れている指（ページの外で離したときも数え落とさないよう window で受ける）
+    this.touchIds = new Set();
+    const lift = (e) => this.touchIds.delete(e.pointerId);
+    this.on(window, 'pointerup', lift);
+    this.on(window, 'pointercancel', lift);
+    this.on(el, 'touchstart', (e) => this.onTouchStart(e), {passive: false});
+    this.on(el, 'touchmove', (e) => this.onTouchMove(e), {passive: false});
+    this.on(el, 'touchend', (e) => this.onTouchEnd(e));
+    this.on(el, 'touchcancel', (e) => this.onTouchEnd(e));
     this.on(el, 'dblclick', (e) => {
       const a = this.annoOf(e.target);
       if (a?.kind === 'text') this.edit(a);
@@ -1012,6 +1071,11 @@ class Viewer {
   }
 
   onPointerDown(e) {
+    if (e.pointerType === 'touch') {
+      this.touchIds.add(e.pointerId);
+      // 2 本目の指は書き込みに使わない（ピンチ）。1 本目で始めたことも取りやめる
+      if (this.touchIds.size > 1) return this.cancelPointer();
+    }
     if (e.target.closest('.bookmark-ribbon')) return; // しおりのリボンは押しても書き込まない
     if (e.button !== 0) return;
     if (e.target.closest('.anno-note__pop')) return; // 付箋の本文は普通に打てる
@@ -1041,6 +1105,8 @@ class Viewer {
     if (this.tool === 'select') return this.select(null);
     e.preventDefault();
     if (this.tool === 'mask') return this.startMask(e, p, box);
+    // 指では、離したときに置く（2 本指のピンチやスクロールの始まりで文字入れ・付箋ができないように）
+    if (e.pointerType === 'touch') return void (this.tap = {pointer: e.pointerId, p, x: e.clientX, y: e.clientY});
     this.createAt(this.tool, p, e.clientX - box.left, e.clientY - box.top);
   }
 
@@ -1423,6 +1489,13 @@ class Viewer {
 
   onPointerUp(e) {
     if (this.drawing?.pointer === e.pointerId) return void this.finishMask();
+    const t = this.tap;
+    if (t?.pointer === e.pointerId) {
+      this.tap = null;
+      if (Math.hypot(e.clientX - t.x, e.clientY - t.y) > 10) return; // 指が動いた（スクロール）
+      const box = t.p.el.getBoundingClientRect();
+      return void this.createAt(this.tool, t.p, e.clientX - box.left, e.clientY - box.top);
+    }
     const d = this.drag;
     if (!d || d.pointer !== e.pointerId) return;
     this.drag = null;

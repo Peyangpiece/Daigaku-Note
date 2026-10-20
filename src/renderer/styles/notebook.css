@@ -1239,6 +1239,15 @@ textarea.input {
   align-items: safe center;
   gap: var(--space-3);
   padding-bottom: var(--space-6);
+  /* タッチ画面：1 本指のスクロールはブラウザに任せ、2 本指のピンチは viewer.js で受ける */
+  touch-action: pan-x pan-y;
+}
+/* 文字隠しの道具では 1 本指でなぞる。注釈は指で動かせるように（どちらもスクロールにしない。スクロールは 2 本指で） */
+.viewer-pages[data-tool='mask'] .pdf-page,
+.anno-text,
+.anno-note,
+.anno-mask {
+  touch-action: none;
 }
 .viewer-pages[data-tool='text'] .pdf-page {
   cursor: text;
