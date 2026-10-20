@@ -1082,6 +1082,7 @@ textarea.input {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: var(--space-1);
+}
 
 /* ---- PDF ビューア（SPEC §8.4・§9）：ノートは薄く、PDF が主役。ツールバーは上部の白い帯 ---- */
 .btn--small {
@@ -1461,4 +1462,9 @@ textarea.input {
   background: #000;
   border-radius: inherit;
   pointer-events: none;
+}
+
+/* ヘッダーの戻るボタン（ホーム以外のすべての画面） */
+.head-back[hidden] {
+  display: none;
 }

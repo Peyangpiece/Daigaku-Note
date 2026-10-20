@@ -11,7 +11,7 @@ export default [
         fetch: 'readonly', URL: 'readonly', URLSearchParams: 'readonly', AbortSignal: 'readonly', TextEncoder: 'readonly',
         Intl: 'readonly', confirm: 'readonly', window: 'readonly', document: 'readonly', location: 'readonly', CustomEvent: 'readonly', require: 'readonly',
         IntersectionObserver: 'readonly', NodeFilter: 'readonly', ResizeObserver: 'readonly',
-        requestAnimationFrame: 'readonly', cancelAnimationFrame: 'readonly'
+        requestAnimationFrame: 'readonly', cancelAnimationFrame: 'readonly', history: 'readonly'
       }
     },
     rules: {
