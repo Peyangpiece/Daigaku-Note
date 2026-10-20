@@ -57,6 +57,8 @@
   --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
   --tape-alpha: 0.55;
   --note-weak: 100%;
+  --note-mix: #a9a59b;
+  --note-ink-weak: #33363b;
   --focus: #eceff4;
 }
 @media (prefers-color-scheme: dark) {
@@ -71,7 +73,8 @@
     --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
     --tape-alpha: 0.55;
     --note-weak: 100%;
-    --note-weak: 100%;
+    --note-mix: #a9a59b;
+  --note-ink-weak: #33363b;
     --focus: #eceff4;
   }
 }

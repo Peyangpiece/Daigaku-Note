@@ -121,6 +121,8 @@ function testPanel(course, quizzes, makeable, byRound, hasKey) {
   const all = ready.map((z) => z.id).join(',');
   const roundName = (z) => (z.round_number === 0 ? 'その他' : `第${z.round_number}回`);
   const make = hasKey ? makePicker(makeable, byRound) : '';
+  // API キーがなく、作った問題もなければ出さない（クイズを使わない人には毎回の雑音になる。入口は上の「クイズを使う…」）
+  if (!ready.length && !hasKey) return '';
   if (!ready.length)
     return `<section class="test-panel"><h3>この授業のテスト</h3>
       <p class="muted">${hasKey ? (makeable.length ? '下で回を選んでクイズを作ると、テストができます。' : '資料（PDF・Word・PowerPoint・テキスト）のある回ができると、クイズを作れます。') : 'クイズを作るには Claude API キーが必要です。<button class="btn btn--small" data-action="nav" data-route="/settings">設定 → クイズ</button>'}</p>${make}</section>`;
@@ -153,8 +155,8 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
         ${hasKey && extractable ? `<button class="btn btn--small btn--quiet" data-action="quiz-generate" data-rounds="${esc(round.id)}" title="資料から作り直します（前の版の記録は残ります）">作り直す</button>` : ''}
       </span></div>`;
   }
-  if (!extractable) return '';
-  return `<div class="round-quiz">${hasKey ? `<button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button>` : '<span class="muted">クイズを作るには Claude API キーが必要です（設定 → クイズ）</span>'}</div>`;
+  if (!extractable || !hasKey) return ''; // API キーがなければ回ごとには案内しない（授業画面の上に 1 つだけ）
+  return `<div class="round-quiz"><button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button></div>`;
 }
 
 function roundNote(round, list, course, today, quizzes = {}, places = []) {
@@ -230,11 +232,11 @@ export function renderCourse({data, progress}, courseId) {
     </nav>
     <div class="course-actions">
       <button class="btn btn--primary" data-action="sync" data-course-id="${esc(courseId)}" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : 'この授業を同期'}</button>
-      <button class="btn btn--quiet" data-action="sync" data-course-id="${esc(courseId)}" data-full="1" ${syncing ? 'disabled' : ''} aria-describedby="full-help">過去の回も全部確かめる</button>
+      <button class="btn btn--quiet" data-action="sync" data-course-id="${esc(courseId)}" data-full="1" ${syncing ? 'disabled' : ''} title="ふだんの同期は今日の前後 7 日の回だけを見ます。前の回の資料が足りないときに押してください（数分かかります）">過去の回も全部確かめる</button>
       ${course.lms_url ? `<button class="btn btn--quiet" data-action="open-external" data-url="${esc(course.lms_url)}">LMS で開く</button>` : ''}
+      ${quizInfo.hasKey || quizzes.length ? '' : '<button class="btn btn--quiet" data-action="nav" data-route="/settings?focus=quiz" title="資料から復習のクイズを作れます（自分の Claude API キーが要ります）">クイズを使う…</button>'}
       <span class="muted" id="sync-status" role="status">${esc(status)}</span>
     </div>
-    <p class="muted course-help" id="full-help">ふだんの同期は今日の前後 7 日の回だけを見ます。前の回の資料が足りないときは「過去の回も全部確かめる」を押してください（数分かかります）。</p>
     ${testPanel(course, quizzes, makeable, quizInfo.byRound, quizInfo.hasKey)}
     <div class="round-notes">
       ${order.current.map(note).join('')}

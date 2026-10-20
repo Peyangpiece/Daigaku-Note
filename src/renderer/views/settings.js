@@ -31,7 +31,7 @@ function autoLogin(c) {
 
 /** クイズ（SPEC §11.8・§11.9）：API キー・同意・モデル・問題数と種類・上限・今月の使用量 */
 const TYPE_NAMES = {choice: '選択', tf: '正誤', cloze: '穴埋め', num: '数値', card: '記述カード'};
-function quizSection(q) {
+function quizSection(q, focus = false) {
   if (!q) return '';
   const key = q.key?.set
     ? `<p>API キー：<code>••••${esc(q.key.last4)}</code> <button class="btn btn--small" data-quiz-removekey>削除</button></p>`
@@ -48,13 +48,14 @@ function quizSection(q) {
         `<label>${label}<input class="input" type="number" min="0" max="30" id="qz-mix-${t}" value="${q.mix?.[t] ?? 0}"></label>`
     )
     .join('');
-  return `<section class="card"><h3>クイズ</h3>
+  return `<section class="card" id="st-quiz"${focus ? ' data-scroll-into-view' : ''}><h3>クイズ</h3>
     ${key}
+    <p class="muted" style="margin: var(--space-1) 0 0">今月の費用：$${(q.monthUsd ?? 0).toFixed(2)} ／ 上限 $${q.perMonthUsd}・今日の作成 ${q.today} ／ ${q.perDay} 回</p>
+    <details class="settings__more"><summary>問題の数と種類・AI のモデル・費用の上限</summary>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2)">
       <label>AI のモデル<select class="input" id="qz-model">${Object.entries(q.models ?? {})
         .map(([id, label]) => `<option value="${esc(id)}" ${id === q.model ? 'selected' : ''}>${esc(label)}</option>`)
         .join('')}</select></label>
-      <div class="muted" style="align-self:end">今月の費用：$${(q.monthUsd ?? 0).toFixed(2)} ／ 上限 $${q.perMonthUsd}・今日の作成 ${q.today} ／ ${q.perDay} 回</div>
     </div>
     <p style="margin: var(--space-2) 0 4px">1 回分の問題数と種類（合計 1〜30 問）</p>
     <div class="qz-mix">${mix}</div>
@@ -63,6 +64,7 @@ function quizSection(q) {
       <label>1 か月の費用の上限（ドル）<input class="input" type="number" min="0.5" max="500" step="0.5" id="qz-permonth" value="${q.perMonthUsd}"></label>
     </div>
     <div class="actions"><button class="btn" data-quiz-save>クイズの設定を保存</button></div>
+    </details>
   </section>`;
 }
 
@@ -73,32 +75,29 @@ export function browserState(b) {
   return `準備に失敗しました。ネットにつながっているか確かめて、「準備し直す」を押してください。${b?.message ? `<details class="muted"><summary>くわしく</summary>${esc(b.message)}</details>` : ''}`;
 }
 
-export function renderSettings({data}) {
+export function renderSettings({data}, route = '/settings') {
   const s = data.settings;
   const hidden = data.courses.filter((c) => c.hidden);
-  const hasLms = data.connections.some((c) => c.kind !== 'manual'); // 同期の設定は LMS をつないだときだけ出す
+  // 「手動」の接続はアプリの中の仕組み（自分のファイルの置き場）なので出さない。同期の設定は LMS をつないだときだけ出す
+  const lmsConns = data.connections.filter((c) => c.kind !== 'manual');
+  const hasLms = lmsConns.length > 0;
+  const focus = new URLSearchParams(route.split('?')[1] ?? '').get('focus');
   queueMicrotask(bind);
   return `
     <nav class="page-nav">
       <button class="btn" data-action="nav" data-route="/">← ホーム</button><h2>設定</h2>
     </nav>
-    <div style="display:grid; gap: var(--space-3); max-width: 760px">
+    <div class="settings">
+      <h3 class="settings__group">ふだんの設定</h3>
+      <div class="settings__grid">
       <section class="card"><h3>学期</h3>
         ${data.terms.length ? `<ul style="padding-left: 1.2em">${data.terms.map((t) => `<li>${t.year} ${esc(t.label)} <span class="muted">${esc(t.start_date)}〜${esc(t.end_date)}・${t.rounds} 回${t.periods_json ? '・時限あり' : '・時限未設定'}</span></li>`).join('')}</ul>` : '<p class="muted">学期の設定がありません。</p>'}
         <button class="btn" data-action="nav" data-route="/settings/term">${data.terms.length ? '学期を編集・追加' : '学期を設定'}</button>
-      </section>
-      <section class="card"><h3>授業</h3>
-        ${
-          hidden.length
-            ? `<p class="muted">非表示の授業（同期もしません）：</p><ul style="padding-left: 1.2em">${hidden.map((c) => `<li style="margin-bottom: 6px">${esc(c.name)} <button class="btn btn--small" data-show-course="${esc(c.id)}">表示して同期する</button></li>`).join('')}</ul>`
-            : '<p class="muted">非表示の授業はありません。</p>'
-        }
       </section>
       <section class="card"><h3>保存先</h3>
         <p><code>${esc(s.root)}</code>${s.root === s.defaultRoot ? ' <span class="muted">（既定）</span>' : ''}</p>
         <div style="display:flex; gap: var(--space-1)"><button class="btn" data-action="pick-dir">フォルダを選択…</button>${s.root !== s.defaultRoot ? '<button class="btn" data-action="reset-dir">既定に戻す</button>' : ''}<button class="btn" data-action="open-root">開く</button></div>
       </section>
-      ${quizSection(data.quiz)}
       <section class="card"><h3>見た目</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
           <label>テーマ<select class="input" id="st-theme">${[
@@ -117,11 +116,26 @@ export function renderSettings({data}) {
             .join('')}</select></label>
         </div>
       </section>
+        ${
+          hidden.length
+            ? `<section class="card"><h3>非表示の授業・フォルダ</h3>
+                <p class="muted">ホームに出さない授業とフォルダ（授業は同期もしません）：</p>
+                <ul style="padding-left: 1.2em">${hidden.map((c) => `<li style="margin-bottom: 6px">${esc(c.name)} <button class="btn btn--small" data-show-course="${esc(c.id)}">${c.kind === 'folder' ? 'ホームに戻す' : '表示して同期する'}</button></li>`).join('')}</ul>
+              </section>`
+            : ''
+        }
+      </div>
+      <h3 class="settings__group">復習（任意）</h3>
+      <div class="settings__grid">
+      ${quizSection(data.quiz, focus === 'quiz')}
+      </div>
+      <h3 class="settings__group">LMS（任意）</h3>
+      <div class="settings__grid">
       <section class="card" id="st-lms"><h3>LMS との連携</h3>
         <p class="muted">大学の LMS（Moodle・manaba・WebClass・manabo など）とつなぐと、授業の資料を自動で集めてホームに授業のフォルダを貼ります（任意）。</p>
         ${
-          data.connections.length
-            ? `<ul style="padding-left: 1.2em">${data.connections
+          lmsConns.length
+            ? `<ul style="padding-left: 1.2em">${lmsConns
                 .map(
                   (
                     c
@@ -134,7 +148,7 @@ export function renderSettings({data}) {
                 .join('')}</ul>`
             : '<p class="muted">LMS とはつないでいません。</p>'
         }
-        <button class="btn${data.connections.length ? '' : ' btn--primary'}" data-action="nav" data-route="/settings/lms">${data.connections.length ? '別の LMS を追加' : 'LMS とつなぐ'}</button>
+        <button class="btn${lmsConns.length ? '' : ' btn--primary'}" data-action="nav" data-route="/settings/lms">${lmsConns.length ? '別の LMS を追加' : 'LMS とつなぐ'}</button>
         <div class="muted" style="margin-top: var(--space-2)">LMS を読むためのブラウザ：${browserState(data.browser)}
           <button class="btn btn--small" data-action="install-browser" ${data.browser?.state === 'pending' ? 'disabled' : ''}>準備し直す</button></div>
       </section>
@@ -147,6 +161,7 @@ export function renderSettings({data}) {
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-login" ${s.openAtLogin?.on ? 'checked' : ''} ${s.openAtLogin?.available ? '' : 'disabled'}> パソコンにログインしたら大学ノートを起動する（同期はアプリが起動している間だけ動きます）</label>
         ${s.openAtLogin?.available ? '' : '<p class="muted" style="margin-top: 4px">アプリとして入れたとき（Mac は <code>npm run install:mac</code>）に設定できます。</p>'}
       </section>
+      </div>
       <section class="card"><h3>情報</h3><p class="muted">大学ノート ${esc(data.version)}</p></section>
     </div>`;
 }

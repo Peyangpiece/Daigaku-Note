@@ -50,7 +50,7 @@ export async function overwritePdf({repo, material: m, annotations, images = new
   if (sha256(cur) !== m.sha256)
     throw err(
       'conflict',
-      'PDF がほかのアプリで変更されたため上書きしませんでした。「別名で書き出す」で保存してください'
+      'PDF がほかのアプリで変更されたため上書きしませんでした。編集画面の「書き出す…」で別の名前で保存してください'
     );
   const base = annoKey(m);
   let src;
