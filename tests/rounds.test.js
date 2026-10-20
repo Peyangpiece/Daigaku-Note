@@ -65,3 +65,18 @@ test('回の名前からタイトルを取る', () => {
   assert.equal(roundTitle('イントロダクション'), 'イントロダクション');
   assert.equal(roundTitle('第3回'), '');
 });
+
+test('授業画面の並び：今週の回が先頭、前の回は新しい順で後ろ、「その他」は最後', async () => {
+  const {orderRounds, weekStart} = await import('../src/shared/rounds.js');
+  assert.equal(weekStart('2026-10-20'), '2026-10-19', '火曜 → その週の月曜');
+  assert.equal(weekStart('2026-10-25'), '2026-10-19', '日曜は前の月曜から');
+  assert.equal(weekStart('2026-10-19'), '2026-10-19');
+  const r = (number, date) => ({id: `r${number}`, number, date});
+  const rounds = [r(0, null), r(3, '2026-10-16'), r(1, '2026-10-02'), r(4, '2026-10-23'), r(2, '2026-10-09'), r(5, '2026-10-30')];
+  const ids = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v.map((x) => x.id)]));
+  assert.deepEqual(ids(orderRounds(rounds, '2026-10-20')), {current: ['r4', 'r5'], past: ['r3', 'r2', 'r1'], other: ['r0']});
+  assert.deepEqual(ids(orderRounds(rounds, '2026-10-24')).current[0], 'r4', '授業の日が過ぎても同じ週なら先頭');
+  assert.deepEqual(ids(orderRounds(rounds, '2026-10-26')).current, ['r5'], '今週に回がなければ次の回');
+  assert.deepEqual(ids(orderRounds(rounds, '2026-11-10')), {current: [], past: ['r5', 'r4', 'r3', 'r2', 'r1'], other: ['r0']}, '学期のあと');
+  assert.deepEqual(ids(orderRounds([r(2, null), r(1, null)], '2026-10-20')).current, ['r1', 'r2'], '日付がなければ回の順');
+});

@@ -513,6 +513,14 @@ h2[tabindex='-1']:focus {
   cursor: grabbing;
 }
 
+/* 「これまでの回」の見出し：行の幅いっぱい */
+.round-notes__divider {
+  grid-column: 1 / -1;
+  margin: var(--space-2) 0 0;
+  font-size: 0.95rem;
+  color: var(--paper-ink-weak);
+}
+
 /* 自分の付箋：自分で入れたファイルが最初に置かれる。行の幅いっぱい。罫線入りの白い付箋に黄色のテープ */
 .round-note--own {
   --note-bg: color-mix(in srgb, var(--c1) 14%, var(--card));

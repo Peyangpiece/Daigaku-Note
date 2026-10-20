@@ -8,6 +8,29 @@ const fmtDate = (d) =>
     ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}（${'日月火水木金土'[new Date(d + 'T00:00:00').getDay()]}）`
     : '';
 
+// shared/rounds.js の weekStart・orderRounds と同じ（レンダラは main のモジュールを読まないので写す。テストは shared のほう）
+/** その日を含む週の月曜（'YYYY-MM-DD'） */
+function weekStart(day) {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 授業画面の付箋の並び。今週（月〜日）の回を先頭（左上）に、そのあとの回を順に、前の回は新しい順に後ろへ。「その他」（第 0 回）は最後。
+ * 今週に回がなければ次の回が先頭。学期が終わっていれば最後の回から新しい順。日付のある回がなければ回の順のまま
+ * @returns {{current: object[], past: object[], other: object[]}}
+ */
+function orderRounds(rounds, today) {
+  const numbered = rounds.filter((r) => r.number > 0).sort((a, b) => a.number - b.number);
+  const other = rounds.filter((r) => r.number === 0);
+  if (!numbered.some((r) => r.date)) return {current: numbered, past: [], other};
+  const monday = weekStart(today);
+  let i = numbered.findIndex((r) => r.date && r.date >= monday);
+  if (i < 0) i = numbered.length;
+  return {current: numbered.slice(i), past: numbered.slice(0, i).reverse(), other};
+}
+
 // shared/ids.js の hash32 と同じ（レンダラは main のモジュールを読まないので写す）。付箋ごとの小さな傾き
 function hash32(str) {
   let h = 0x811c9dc5;
@@ -147,7 +170,7 @@ function roundNote(round, list, course, today, quizzes = {}, places = []) {
   ]
     .filter(Boolean)
     .join(' ');
-  return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: var(--pop${round.number === 0 ? 1 : ((round.number - 1) % 8) + 1})" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}"${isToday ? ' data-scroll-into-view' : ''}>
+  return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: var(--pop${round.number === 0 ? 1 : ((round.number - 1) % 8) + 1})" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}">
     <header class="round-note__head">
       <span class="round-note__round">${esc(head)}</span>
       <span class="round-note__title">${esc(title)}</span>
@@ -172,6 +195,8 @@ export function renderCourse({data, progress}, courseId) {
   const slot = course.weekday ? `（${course.weekday}曜${course.period ? ` ${course.period}限` : ''}）` : '';
   // 「その他」は資料があるときだけ出す。回は資料の有無にかかわらず全部出す（空の付箋も並ぶ）
   const shown = rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length);
+  // 今週の回を左上に。前の回は「これまでの回」として新しい順に後ろへ
+  const order = orderRounds(shown, today);
   const syncing = !!progress || (data.jobs ?? []).some((j) => j.kind === 'sync');
   const running = (data.jobs ?? []).some((j) => j.kind === 'sync' && j.status === 'running');
   const quizzes = data.quizzes?.[courseId] ?? [];
@@ -190,6 +215,7 @@ export function renderCourse({data, progress}, courseId) {
     {value: 'own', label: '自分の付箋'},
     ...rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length).map((r) => ({value: r.id, label: placeName(r)}))
   ];
+  const note = (r) => roundNote(r, byRound.get(r.id) ?? [], course, today, quizInfo, places);
   const status = progress
     ? progressText(progress)
     : running
@@ -211,8 +237,10 @@ export function renderCourse({data, progress}, courseId) {
     <p class="muted course-help" id="full-help">ふだんの同期は今日の前後 7 日の回だけを見ます。前の回の資料が足りないときは「過去の回も全部確かめる」を押してください（数分かかります）。</p>
     ${testPanel(course, quizzes, makeable, quizInfo.byRound, quizInfo.hasKey)}
     <div class="round-notes">
+      ${order.current.map(note).join('')}
+      ${order.past.length ? `<h3 class="round-notes__divider">これまでの回</h3>${order.past.map(note).join('')}` : ''}
+      ${order.other.map(note).join('')}
       ${ownNote(course, own, places)}
-      ${shown.map((r) => roundNote(r, byRound.get(r.id) ?? [], course, today, quizInfo, places)).join('')}
     </div>
     ${shown.length ? '' : `<div class="empty"><p>まだ回がありません。同期すると、回ごとの付箋がここに並びます。</p></div>`}`;
 }
