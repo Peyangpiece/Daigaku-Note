@@ -39,16 +39,35 @@ test('押した位置の単語を覆う。句読点・字の外なら null', () 
   assert.deepEqual(wordAt(en, 62, measure), {left: 50, right: 90, str: 'down'});
 });
 
-test('描かれた字に合わせる：見積もりの端が字の途中なら、近い字のすき間へ。上下ははみ出した字まで広げる', () => {
-  // 字は 20px ごと（x = 2〜17, 22〜37, …）、y = 8〜27 に描かれている。字と字のすき間は x = 18〜21
+test('描かれた字に合わせる：見積もりの箱と重なる字を丸ごと覆う。上下ははみ出した字まで広げる', () => {
+  // 字は 20px ごと（x = 2〜17, 22〜37, …）、y = 8〜27 に描かれている
   const ink = (x, y) => x >= 0 && x < 100 && y >= 8 && y <= 27 && ((x % 20) + 20) % 20 >= 2 && ((x % 20) + 20) % 20 <= 17;
   const r = fitToInk({left: 1, right: 55, top: 10, bottom: 25}, ink, {fh: 20, pad: 0});
-  assert.equal(r.left, 1, '左はすき間の上なのでそのまま');
-  assert.equal(r.right, 58, '右は字（40〜57）の途中 → 右のすき間へ');
-  assert.equal(r.top, 8, '上にはみ出した字まで広げる');
-  assert.equal(r.bottom, 27);
+  assert.deepEqual([r.left, r.right], [2, 58], '3 字目（42〜57）は大半が箱の中 → 丸ごと覆う');
+  assert.deepEqual([r.top, r.bottom], [8, 27], '上下ははみ出した字まで');
   const r2 = fitToInk({left: 4, right: 43, top: 10, bottom: 25}, ink, {fh: 20, pad: 0});
-  assert.deepEqual([r2.left, r2.right], [1, 41], '左は字の始まり近く → 左のすき間、右は次の字に少し入った → 左のすき間');
+  assert.deepEqual([r2.left, r2.right], [2, 38], '次の字に 1px 入っただけなら覆わない');
+});
+
+test('描かれた字に合わせる：字の中のすき間（「が」の濁点・「は」の左の棒）で切らない', () => {
+  // 「が」：か（0〜11）と濁点（14〜16）、「成」（22〜37）。字の高さ 20px
+  const ga = (x, y) => y >= 0 && y <= 20 && ((x >= 0 && x < 12) || (x >= 14 && x < 17) || (x >= 22 && x < 38));
+  const r = fitToInk({left: 15, right: 38, top: 0, bottom: 20}, ga, {fh: 20, pad: 0});
+  assert.equal(r.left, 22, '見積もりの左端が濁点の上でも、「が」には入らず「成」から');
+  // 「は」：左の棒（40〜42）と右（46〜56）、次の字（62〜77）。見積もりの箱が「は」の左だけ（40〜44）
+  const ha = (x, y) => y >= 0 && y <= 20 && ((x >= 40 && x < 43) || (x >= 46 && x < 57) || (x >= 62 && x < 78));
+  const r2 = fitToInk({left: 40, right: 44, top: 0, bottom: 20}, ha, {fh: 20, pad: 0});
+  assert.deepEqual([r2.left, r2.right], [40, 57], '「は」を丸ごと（左の棒だけにしない）。次の字は覆わない');
+  // 見積もりの字の切れ目（edges）があれば、かたまりはその字ごとにまとめる。「に」（右の部分 20〜34）と「は」の左の棒（36〜38）は
+  // 合わせると 1 字の幅に収まるが、見積もりでは別の字なのでまとめない
+  const niha = (x, y) => y >= 0 && y <= 20 && ((x >= 13 && x < 16) || (x >= 20 && x < 34) || (x >= 36 && x < 39) || (x >= 42 && x < 54) || (x >= 58 && x < 63));
+  const edges = [12, 35, 56, 66]; // に・は・，
+  const r4 = fitToInk({left: 35, right: 56, top: 0, bottom: 20}, niha, {fh: 30, pad: 0, edges});
+  assert.deepEqual([r4.left, r4.right], [36, 54], '「は」だけを丸ごと（「に」も「，」も覆わない）');
+  // 英数字だけ（cjk: false）のときはまとめない：「1」（0〜3）と「2」（6〜12）
+  const digits = (x, y) => y >= 0 && y <= 20 && ((x >= 0 && x < 4) || (x >= 6 && x < 13));
+  const r3 = fitToInk({left: 0, right: 4, top: 0, bottom: 20}, digits, {fh: 20, pad: 0, cjk: false});
+  assert.equal(r3.right, 4, '英数字は隣の字とまとめない');
 });
 
 test('ImageData から字（背景より暗い画素）を見分ける。背景が暗ければ直さない', () => {
