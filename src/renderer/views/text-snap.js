@@ -90,3 +90,52 @@ export function wordAt(it, x, measure, locale = 'ja') {
   if (!w?.word) return null;
   return {left: e[w.start], right: e[w.end], str: it.chars.slice(w.start, w.end).join('')};
 }
+
+/**
+ * 描かれた字（ページの絵）に合わせてマーカーの箱を直す。字の幅は見積もりなので、端が字の途中に来ることがある。
+ * 左右の端は、いちばん近い「字の描かれていない縦の列」（字と字のすき間）へ寄せる（見積もりのずれが半字より小さければ正しい側）。
+ * 上下は、字がはみ出していれば広げる（狭めない）。最後に少し余白を足す（マーカーの角の丸みで字の角が見えないように）。
+ * ink(x, y) は画面の座標（px）にインクがあるか。step は調べる間隔（px。canvas の 1 画素）。fh は字の高さ（px）
+ */
+export function fitToInk(box, ink, {fh, step = 1, pad = 1.5}) {
+  let {left, right, top, bottom} = box;
+  const blankCol = (x) => {
+    for (let y = top; y <= bottom; y += step) if (ink(x, y)) return false;
+    return true;
+  };
+  const lim = fh * 0.5;
+  const nearestGap = (x) => {
+    for (let d = 0; d <= lim; d += step) {
+      if (blankCol(x - d)) return x - d;
+      if (blankCol(x + d)) return x + d;
+    }
+    return x;
+  };
+  const l = nearestGap(left);
+  const r = nearestGap(right);
+  if (r - l >= fh * 0.3) [left, right] = [l, r];
+  const inkRow = (y) => {
+    for (let x = left; x <= right; x += step) if (ink(x, y)) return true;
+    return false;
+  };
+  const limV = fh * 0.3;
+  for (let d = 0; d < limV && inkRow(top - step); d += step) top -= step;
+  for (let d = 0; d < limV && inkRow(bottom + step); d += step) bottom += step;
+  return {left: left - pad, right: right + pad, top: top - pad, bottom: bottom + pad};
+}
+
+/** ImageData（明るさで判定）から ink(x, y) を作る。背景より十分暗い画素をインクとみなす。背景が暗いときは null（直さない） */
+export function inkFromImage({data, width, height}, {x0, y0, scale}) {
+  const lum = new Uint8Array(width * height);
+  for (let i = 0; i < lum.length; i++) lum[i] = (data[i * 4] * 299 + data[i * 4 + 1] * 587 + data[i * 4 + 2] * 114) / 1000;
+  const sorted = Uint8Array.from(lum).sort();
+  const bg = sorted[Math.floor(sorted.length * 0.9)];
+  if (bg < 110) return null;
+  const limit = bg - 48;
+  return (x, y) => {
+    const ix = Math.round((x - x0) * scale);
+    const iy = Math.round((y - y0) * scale);
+    if (ix < 0 || iy < 0 || ix >= width || iy >= height) return false;
+    return lum[iy * width + ix] < limit;
+  };
+}

@@ -10,7 +10,7 @@
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
 import {toast} from '../app.js';
-import {snapRange, textIn, wordAt} from './text-snap.js';
+import {fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -1119,21 +1119,57 @@ class Viewer {
     p.layer.append(el);
     const x = e.clientX - box.left,
       y = e.clientY - box.top;
-    this.drawing = {p, el, x0: x, y0: y, x1: x, y1: y, pointer: e.pointerId};
+    const d = (this.drawing = {p, el, x0: x, y0: y, x1: x, y1: y, pointer: e.pointerId, line: null});
+    // なぞっている行の高さ（文字の上下）。文字が読めたら下書きもその高さにそろえる
+    p.textPromise
+      .then((raw) => {
+        const onLine = this.screenItems(p, raw).filter((it) => y >= it.hitTop && y <= it.hitBottom);
+        if (!onLine.length || this.drawing !== d) return;
+        d.line = {top: Math.min(...onLine.map((it) => it.top)), bottom: Math.max(...onLine.map((it) => it.bottom))};
+        this.drawDraft();
+      })
+      .catch(() => {});
     this.pagesEl.setPointerCapture(e.pointerId);
     this.drawDraft();
   }
 
   drawDraft() {
     const d = this.drawing;
-    const h = Math.max(Math.abs(d.y1 - d.y0), DEFAULT_SIZE * d.p.viewport.scale);
-    const top = Math.abs(d.y1 - d.y0) < 12 ? d.y0 - h / 2 : Math.min(d.y0, d.y1);
+    const flat = Math.abs(d.y1 - d.y0) < 12; // 横になぞっている
+    const h = DEFAULT_SIZE * d.p.viewport.scale;
+    const top = flat ? (d.line?.top ?? d.y0 - h / 2) : Math.min(d.y0, d.y1);
+    const height = flat ? (d.line ? d.line.bottom - d.line.top : h) : Math.abs(d.y1 - d.y0);
     Object.assign(d.el.style, {
       left: `${Math.min(d.x0, d.x1)}px`,
       top: `${top}px`,
       width: `${Math.abs(d.x1 - d.x0)}px`,
-      height: `${Math.abs(d.y1 - d.y0) < 12 ? h : Math.abs(d.y1 - d.y0)}px`
+      height: `${height}px`
     });
+  }
+
+  /**
+   * マーカーの箱（ページの中の px）を、描かれた字に合わせて直す（text-snap.js の fitToInk）。
+   * 字の幅は見積もりなので、そのままだと字の右や左が少し見えることがある。ページの絵がまだなければそのまま
+   */
+  fitMask(p, box, fh) {
+    const c = p.canvas;
+    if (!c?.width) return box;
+    const k = c.width / p.viewport.width; // ページの px → canvas の画素
+    const m = fh; // 調べる範囲の余白
+    const x0 = Math.max(0, box.left - m),
+      y0 = Math.max(0, box.top - m);
+    const x1 = Math.min(p.viewport.width, box.left + box.width + m),
+      y1 = Math.min(p.viewport.height, box.top + box.height + m);
+    let img;
+    try {
+      img = c.getContext('2d').getImageData(Math.floor(x0 * k), Math.floor(y0 * k), Math.ceil((x1 - x0) * k), Math.ceil((y1 - y0) * k));
+    } catch {
+      return box;
+    }
+    const ink = inkFromImage(img, {x0: Math.floor(x0 * k) / k, y0: Math.floor(y0 * k) / k, scale: k});
+    if (!ink) return box;
+    const r = fitToInk({left: box.left, right: box.left + box.width, top: box.top, bottom: box.top + box.height}, ink, {fh, step: 1 / k});
+    return {left: r.left, top: r.top, width: r.right - r.left, height: r.bottom - r.top};
   }
 
   /** 字の相対的な幅（全角・半角の違い）。文字列の幅を字ごとに分けるのに使う（text-snap.js） */
@@ -1211,8 +1247,8 @@ class Viewer {
       if (hit.length) {
         const top = Math.min(...hit.map((it) => it.top));
         const bottom = Math.max(...hit.map((it) => it.bottom));
-        box = {left: x1, top, width: x2 - x1, height: bottom - top};
-        hidden = pieces(hit, x1, x2);
+        box = this.fitMask(p, {left: x1, top, width: x2 - x1, height: bottom - top}, (bottom - top) / 1.18);
+        hidden = pieces(hit, box.left, box.left + box.width);
       } else {
         const h = DEFAULT_SIZE * p.viewport.scale;
         box = {left: x1, top: d.y0 - h / 2, width: x2 - x1, height: h};
