@@ -10,6 +10,7 @@
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
 import {toast} from '../app.js';
+import {snapRange, textIn, wordAt} from './text-snap.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -1063,6 +1064,13 @@ class Viewer {
     });
   }
 
+  /** 字の相対的な幅（全角・半角の違い）。文字列の幅を字ごとに分けるのに使う（text-snap.js） */
+  measureChar = (ch) => {
+    const ctx = (this.measureCtx ??= document.createElement('canvas').getContext('2d'));
+    ctx.font = `100px ${FONT}`;
+    return ctx.measureText(ch).width;
+  };
+
   /** ページの文字列（pdf.js の textContent。画面の座標へは finishMask で直す） */
   async textItems(p) {
     const tc = await p.page.getTextContent();
@@ -1105,29 +1113,28 @@ class Viewer {
     // 画面の座標で考える（左上原点、px）
     let x1 = Math.min(d.x0, d.x1),
       x2 = Math.max(d.x0, d.x1);
-    const pieces = (list, from, to) =>
-      list
-        .slice()
-        .sort((a, b) => a.top - b.top || a.left - b.left)
-        .map((it) => {
-          const n = it.str.length,
-            w = it.right - it.left;
-          const s = Math.max(0, Math.floor(((from - it.left) / w) * n));
-          const e = Math.min(n, Math.ceil(((to - it.left) / w) * n));
-          return it.str.slice(s, e);
-        })
-        .join('');
+    const measure = this.measureChar;
+    const pieces = (list, from, to) => textIn(list, from, to, measure);
     let box, hidden;
     if (Math.abs(d.y1 - d.y0) < 12) {
-      // 横になぞった：なぞり始めの高さにある行に合わせる。動かさずに押しただけなら、その語の上
+      // 横になぞった：なぞり始めの高さにある行に合わせ、左右の端は字の切れ目に合わせる（字の途中で切らない）。
+      // 動かさずに押しただけ（ダブルクリックも）なら、その位置の単語を覆う
       const onLine = items.filter((it) => d.y0 >= it.hitTop && d.y0 <= it.hitBottom);
-      const hit = onLine.filter((it) => it.left < x2 && it.right > x1);
+      let hit = onLine.filter((it) => it.left < x2 && it.right > x1);
       if (x2 - x1 < 2) {
-        const word = onLine.find((it) => it.left <= x1 && x1 <= it.right);
+        const it = onLine.find((t) => t.left <= x1 && x1 <= t.right);
+        const word = it && wordAt(it, x1, measure);
         if (!word) return;
-        hit.splice(0, hit.length, word);
+        hit = [it];
         x1 = word.left;
         x2 = word.right;
+      } else if (hit.length) {
+        const snapped = snapRange(hit, x1, x2, measure);
+        if (snapped) {
+          x1 = snapped.left;
+          x2 = snapped.right;
+          hit = hit.filter((it) => it.left < x2 && it.right > x1);
+        }
       }
       if (hit.length) {
         const top = Math.min(...hit.map((it) => it.top));
