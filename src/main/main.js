@@ -20,6 +20,7 @@ import {ensureChromium} from './browser/install.js';
 import {createQuarantine} from './sync/quarantine.js';
 import {defaultRoot} from '../shared/paths.js';
 import {createUpdater} from './updater.js';
+import {createFolders} from './folders.js';
 import {createQuizService} from './quiz/service.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -227,6 +228,7 @@ app.whenReady().then(async () => {
       recipes: loadRecipes([path.join(here, '..', '..', 'recipes'), path.join(userData, 'recipes')]),
       recipeExecutorFactory: (recipe) => createRecipeExecutor(recipe, {session: ctx.session, secrets: ctx.secrets, log: (m) => log.info(m), debug: {dir: path.join(userData, 'debug')}})
     });
+    ctx.folders = createFolders({repo, rootDir: () => ctx.rootDir(), log: (m) => log.info(m)});
     ctx.engine = new SyncEngine({
       repo,
       files: ctx.files,

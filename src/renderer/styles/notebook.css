@@ -1477,3 +1477,50 @@ textarea.input {
 .head-back[hidden] {
   display: none;
 }
+
+/* 自分のフォルダ（ホームの下の段・作る画面・中身の画面） */
+.my-folders {
+  margin-top: var(--space-4);
+}
+.my-folders__title {
+  margin: 0 0 var(--space-1);
+  font-size: 1rem;
+  color: var(--paper-ink-weak);
+}
+.my-folders .actions {
+  margin-top: var(--space-2);
+}
+.my-folders__past {
+  margin-top: var(--space-2);
+}
+.my-folders__past summary {
+  cursor: pointer;
+  color: var(--paper-ink-weak);
+}
+/* 自分のフォルダのカードは、左上に小さなフォルダの印 */
+.folder--mine .folder__name::before {
+  content: '📁 ';
+}
+.folder-new {
+  max-width: 640px;
+  display: grid;
+  gap: var(--space-1);
+}
+.folder-new__scope {
+  border: 0;
+  padding: 0;
+  margin: var(--space-1) 0;
+  display: grid;
+  gap: 6px;
+}
+.folder-new__scope legend {
+  margin-bottom: 4px;
+}
+.round-note--folder {
+  margin-top: var(--space-2);
+}
+.folder-page__sub {
+  margin: var(--space-2) 0 4px;
+  font-size: 0.9rem;
+  color: var(--paper-ink-weak);
+}

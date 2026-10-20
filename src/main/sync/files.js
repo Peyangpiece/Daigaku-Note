@@ -58,6 +58,7 @@ export class FileManager {
   }
 
   courseDir(term, course) {
+    if (course.kind === 'folder') return course.dir; // 自分のフォルダ：パソコンのフォルダそのもの
     return path.join(this.rootOf(), term.folder, course.folder_name);
   }
   roundDir(term, course, round) {
@@ -65,6 +66,7 @@ export class FileManager {
   }
   /** 回のフォルダ。round が null なら「自分の付箋」（自分の資料フォルダ） */
   placeDir(term, course, round) {
+    if (course.kind === 'folder') return course.dir; // 自分のフォルダは回で分けない
     return round ? this.roundDir(term, course, round) : path.join(this.courseDir(term, course), OWN_FOLDER);
   }
 

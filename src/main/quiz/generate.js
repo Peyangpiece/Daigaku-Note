@@ -178,7 +178,9 @@ export async function generateQuiz(deps, opts) {
   if (text.truncatedAt)
     notes.push(`資料が長いため、${text.truncatedAt.file} の p.${text.truncatedAt.page} 以降は使っていません`);
   const roundTitle =
-    `${round.number === 0 ? 'その他' : `第${round.number}回`} ${round.title_user || round.title || ''}`.trim();
+    course.kind === 'folder'
+      ? `フォルダ「${course.name}」` // 自分のフォルダは回で分けない
+      : `${round.number === 0 ? 'その他' : `第${round.number}回`} ${round.title_user || round.title || ''}`.trim();
   const hints = repo.roundNote(round.id)?.body?.trim() || '';
 
   const call = async (messages, schema, purpose, maxTokens = 32000) => {

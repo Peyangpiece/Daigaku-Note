@@ -2,6 +2,7 @@
 // ホーム（フォルダのグリッド）・授業（資料一覧）・PDF ビューア（文字入れ・付箋・文字隠し）・クイズ・設定・セットアップ。
 import {renderHome} from './views/home.js';
 import {renderCourse} from './views/course.js';
+import {renderFolder, renderFolderNew} from './views/folder.js';
 import {renderSettings} from './views/settings.js';
 import {renderSetup, resetSetup} from './views/setup.js';
 import {renderTerm, resetTerm} from './views/term.js';
@@ -165,7 +166,10 @@ function render() {
   if (!same && !route.startsWith('/quiz') && !route.startsWith('/review')) leaveQuiz();
   if (!same && !route.startsWith('/quiz-edit/')) leaveQuizEdit();
   if (route === '/setup') view.innerHTML = renderSetup(state);
-  else if (route.startsWith('/course/')) view.innerHTML = renderCourse(state, route.slice('/course/'.length));
+  else if (route.startsWith('/course/')) {
+    const course = state.data.courses.find((c) => c.id === route.slice('/course/'.length));
+    view.innerHTML = course?.kind === 'folder' ? renderFolder(state, course) : renderCourse(state, route.slice('/course/'.length));
+  } else if (route.startsWith('/folder-new')) view.innerHTML = renderFolderNew(state, route);
   else if (route === '/settings/term') view.innerHTML = renderTerm(state);
   else if (route.startsWith('/quiz-edit/')) view.innerHTML = renderQuizEdit(state, route.slice('/quiz-edit/'.length));
   else if (route.startsWith('/quiz') || route.startsWith('/review')) view.innerHTML = renderQuiz(state, route);
@@ -261,6 +265,34 @@ document.addEventListener('click', async (e) => {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
       if (r?.error) toast(r.error, {error: true});
       else if (!r.canceled) uploaded(r);
+    } else if (action === 'folder-create') {
+      const name = document.getElementById('fn-name')?.value ?? '';
+      const scope = document.querySelector('input[name=fn-scope]:checked')?.value ?? 'term';
+      el.disabled = true;
+      const r = await api['folder.create']({name, scope, mode: el.dataset.mode}).finally(() => (el.disabled = false));
+      if (r?.error) return toast(r.error, {error: true});
+      if (r.canceled) return;
+      if (r.truncated) toast('ファイルが多いため、一部だけを表示しています（2000 件まで）', {error: true});
+      await reload();
+      navigate(`/course/${r.courseId}`);
+    } else if (action === 'folder-scan') {
+      const r = await api['folder.scan']({courseId: el.dataset.courseId});
+      if (r?.error) toast(r.error, {error: true});
+      else toast(folderScanText(r) || '変わったファイルはありませんでした', {error: r.missing});
+      reload();
+    } else if (action === 'folder-reveal') {
+      const r = await api['folder.reveal']({courseId: el.dataset.courseId});
+      if (r?.error) toast(r.error, {error: true});
+    } else if (action === 'folder-scope') {
+      const r = await api['folder.update']({courseId: el.dataset.courseId, scope: el.dataset.scope});
+      if (r?.error) toast(r.error, {error: true});
+      else (toast(el.dataset.scope === 'always' ? 'マイフォルダにしました（学期が変わっても残ります）' : '今学期のフォルダにしました'), reload());
+    } else if (action === 'folder-hide') {
+      const r = await api['course.update']({courseId: el.dataset.courseId, patch: {hidden: true}});
+      if (r?.error) return toast(r.error, {error: true});
+      toast('ホームから外しました（パソコンのフォルダとファイルはそのまま。設定で戻せます）');
+      await reload();
+      navigate('/');
     } else if (action === 'remove-material') {
       const r = await api['material.remove']({materialId: el.dataset.id});
       if (r?.error) toast(r.error, {error: true});
@@ -323,6 +355,25 @@ document.addEventListener('click', async (e) => {
 });
 
 // ---- 授業画面：ファイルを入れる・付箋のあいだで移す ----
+function folderScanText(r) {
+  if (r.missing) return 'フォルダが見つかりません（移動・名前の変更・外付けのディスクを外したとき）';
+  const parts = [];
+  if (r.added) parts.push(`${r.added} 件のファイルが増えました`);
+  if (r.removed) parts.push(`${r.removed} 件のファイルがなくなりました`);
+  if (r.truncated) parts.push('ファイルが多いため、一部だけを表示しています（2000 件まで）');
+  return parts.join('。');
+}
+// 自分のフォルダを開いたら読み直す（パソコンの側で足した・消したファイルを反映する）。変わったときだけ描き直す
+document.getElementById('view').addEventListener('rendered', async (e) => {
+  const {route, fresh} = e.detail;
+  if (!fresh || !route.startsWith('/course/')) return;
+  const course = state.data.courses.find((c) => c.id === route.slice('/course/'.length));
+  if (course?.kind !== 'folder') return;
+  const r = await api['folder.scan']({courseId: course.id});
+  if (r?.error) return toast(r.error, {error: true});
+  if (r.missing || r.truncated) toast(folderScanText(r), {error: true});
+  if (r.added || r.removed) reload();
+});
 function uploaded(r) {
   const parts = [];
   if (r.added) parts.push(`${r.added} 件を入れました`);

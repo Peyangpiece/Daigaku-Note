@@ -46,11 +46,11 @@ const EXTRACTABLE = /\.(pdf|docx|pptx|txt|md)$/i;
 const placeName = (r) => (r ? (r.number === 0 ? 'その他' : `第${r.number}回`) : '自分の付箋');
 
 // places：移せる先（自分の付箋と回）。資料の紙はドラッグで別の付箋へ移せる。キーボードでは「移す」の選択で
-function fileCard(m, course, places) {
+export function fileCard(m, course, places) {
   const ok = m.status === 'ok';
   const unread = !m.read_at && ok;
   const here = m.round_id ?? 'own';
-  const move = ok
+  const move = ok && places.length
     ? `<select class="file__move" data-move-material="${esc(m.id)}" aria-label="${esc(m.name)} を別の付箋へ移す">
         <option value="">移す…</option>
         ${places
@@ -139,7 +139,7 @@ function testPanel(course, quizzes, makeable, byRound, hasKey) {
 }
 
 // 回のクイズの行（SPEC §8.2「クイズ」）：作った問題の数・正答率・要確認と「解く」「作り直す」「編集」。資料があってクイズがなければ「作る」
-function quizLine(round, list, course, quiz, gen, hasKey) {
+export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この回') {
   const extractable = list.some((m) => m.status === 'ok' && EXTRACTABLE.test(m.name));
   if (gen)
     return `<div class="round-quiz round-quiz--busy" role="status">${gen.state === 'failed' ? `<span>クイズを作れませんでした：${esc(gen.message)}</span> <button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">もう一度</button>` : `<span class="spinner" aria-hidden="true"></span><span>${esc(gen.message)}</span>`}</div>`;
@@ -154,7 +154,7 @@ function quizLine(round, list, course, quiz, gen, hasKey) {
       </span></div>`;
   }
   if (!extractable) return '';
-  return `<div class="round-quiz">${hasKey ? `<button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">この回の資料からクイズを作る</button>` : '<span class="muted">クイズを作るには Claude API キーが必要です（設定 → クイズ）</span>'}</div>`;
+  return `<div class="round-quiz">${hasKey ? `<button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button>` : '<span class="muted">クイズを作るには Claude API キーが必要です（設定 → クイズ）</span>'}</div>`;
 }
 
 function roundNote(round, list, course, today, quizzes = {}, places = []) {
