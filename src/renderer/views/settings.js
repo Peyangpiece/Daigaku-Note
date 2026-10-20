@@ -132,7 +132,7 @@ export function renderSettings({data}, route = '/settings') {
       <h3 class="settings__group">LMS（任意）</h3>
       <div class="settings__grid">
       <section class="card" id="st-lms"><h3>LMS との連携</h3>
-        <p class="muted">大学の LMS（Moodle・manaba・WebClass・manabo など）とつなぐと、授業の資料を自動で集めてホームに授業のフォルダを貼ります（任意）。</p>
+        <p class="muted">つなぐと授業の資料を自動で集めます（Moodle・manaba・WebClass・manabo など）。</p>
         ${
           lmsConns.length
             ? `<ul style="padding-left: 1.2em">${lmsConns

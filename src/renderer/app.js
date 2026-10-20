@@ -334,6 +334,53 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+// ---- ホームの授業・フォルダのカード：右クリック（トラックパッドの 2 本指タップ・タッチの長押し）で「開く」「消去」 ----
+let cardMenu = null;
+const closeCardMenu = () => {
+  cardMenu?.remove();
+  cardMenu = null;
+};
+document.addEventListener('contextmenu', (e) => {
+  const card = e.target.closest?.('.folder[data-action="open-course"]');
+  closeCardMenu();
+  if (!card) return;
+  const course = state.data?.courses.find((c) => c.id === card.dataset.id);
+  if (!course) return;
+  e.preventDefault();
+  cardMenu = document.createElement('div');
+  cardMenu.className = 'card-menu';
+  cardMenu.setAttribute('role', 'menu');
+  cardMenu.setAttribute('aria-label', course.name);
+  cardMenu.innerHTML = `<button type="button" role="menuitem" data-card-menu="open">開く</button><button type="button" role="menuitem" class="card-menu__danger" data-card-menu="remove">消去…</button>`;
+  document.body.append(cardMenu);
+  const {width, height} = cardMenu.getBoundingClientRect();
+  cardMenu.style.left = `${Math.min(e.clientX, window.innerWidth - width - 8)}px`;
+  cardMenu.style.top = `${Math.min(e.clientY, window.innerHeight - height - 8)}px`;
+  cardMenu.querySelector('button').focus();
+  cardMenu.onclick = (ev) => {
+    const what = ev.target.closest('[data-card-menu]')?.dataset.cardMenu;
+    if (!what) return;
+    closeCardMenu();
+    if (what === 'open') navigate(`/course/${course.id}`);
+    else removeCourse(course).catch((err) => toast(err.message, {error: true}));
+  };
+});
+document.addEventListener('pointerdown', (e) => cardMenu && !cardMenu.contains(e.target) && closeCardMenu());
+document.addEventListener('keydown', (e) => e.key === 'Escape' && closeCardMenu());
+window.addEventListener('scroll', closeCardMenu, {passive: true});
+window.addEventListener('hashchange', closeCardMenu);
+
+/** ホームから消去する（非表示にして同期もやめる。保存した資料・メモ・パソコンのフォルダは残し、設定から戻せる） */
+async function removeCourse(course) {
+  const folder = course.kind === 'folder';
+  const keep = folder ? 'パソコンのフォルダとファイルはそのまま残ります。' : '同期もやめます。保存した資料とメモは残ります。';
+  if (!window.confirm(`「${course.name}」をホームから消去しますか？\n${keep}設定の「非表示の授業・フォルダ」から戻せます。`)) return;
+  const r = await api['course.update']({courseId: course.id, patch: folder ? {hidden: true} : {hidden: true, sync_enabled: false}});
+  if (r?.error) return toast(r.error, {error: true});
+  toast(`「${course.name}」を消去しました（設定で戻せます）`);
+  await reload();
+}
+
 // ---- 授業画面：ファイルを入れる・付箋のあいだで移す ----
 function folderScanText(r) {
   if (r.missing) return 'フォルダが見つかりません（移動・名前の変更・外付けのディスクを外したとき）';

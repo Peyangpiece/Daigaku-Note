@@ -17,8 +17,8 @@ function weekStart(day) {
 }
 
 /**
- * 授業画面の付箋の並び。今週（月〜日）の回を先頭（左上）に、そのあとの回を順に、前の回は新しい順に後ろへ。「その他」（第 0 回）は最後。
- * 今週に回がなければ次の回が先頭。学期が終わっていれば最後の回から新しい順。日付のある回がなければ回の順のまま
+ * 授業画面の付箋の並び。今週（月〜日）の回を先頭（左上）に、そのあとの回を順に、前の回は第 1 回から順に後ろへ。「その他」（第 0 回）は最後。
+ * 今週に回がなければ次の回が先頭。学期が終わっていれば全部が前の回（第 1 回から）。日付のある回がなければ回の順のまま
  * @returns {{current: object[], past: object[], other: object[]}}
  */
 function orderRounds(rounds, today) {
@@ -28,7 +28,7 @@ function orderRounds(rounds, today) {
   const monday = weekStart(today);
   let i = numbered.findIndex((r) => r.date && r.date >= monday);
   if (i < 0) i = numbered.length;
-  return {current: numbered.slice(i), past: numbered.slice(0, i).reverse(), other};
+  return {current: numbered.slice(i), past: numbered.slice(0, i), other};
 }
 
 // shared/ids.js の hash32 と同じ（レンダラは main のモジュールを読まないので写す）。付箋ごとの小さな傾き
@@ -84,7 +84,7 @@ function ownNote(course, list, places) {
   return `<section class="round-note round-note--own${list.length ? '' : ' round-note--own-empty'}" data-drop="own" data-course-id="${esc(course.id)}" aria-label="自分の付箋">
     <header class="round-note__head">
       <span class="round-note__round">自分の付箋</span>
-      <span class="round-note__title muted">${list.length ? 'ドラッグか「移す」で回の付箋へ振り分けると、その回のクイズの資料になります' : 'ファイルをここにドラッグするか「ファイルを追加」で入れます（元のファイルはそのまま残ります）'}</span>
+      <span class="round-note__title muted">${list.length ? '回の付箋へドラッグか「移す」で振り分け' : 'ここにファイルをドラッグ（元のファイルは残ります）'}</span>
       <button class="btn btn--small" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
     </header>
     ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course, places)).join('')}</div>` : ''}
@@ -179,7 +179,7 @@ function roundNote(round, list, course, today, quizzes = {}, places = []) {
       ${isToday ? '<span class="round-note__today">今日</span>' : ''}
       <span class="round-note__date">${esc(fmtDate(round.date))}</span>
     </header>
-    ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course, places)).join('')}</div>` : upcoming ? '' : `<p class="round-note__none">まだ資料はありません</p>`}
+    ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course, places)).join('')}</div>` : upcoming ? '' : `<p class="round-note__none">資料なし</p>`}
     ${quizLine(round, list, course, quizzes.byRound?.get(round.id), quizzes.gen?.[round.id], quizzes.hasKey)}
   </section>`;
 }
@@ -197,7 +197,7 @@ export function renderCourse({data, progress}, courseId) {
   const slot = course.weekday ? `（${course.weekday}曜${course.period ? ` ${course.period}限` : ''}）` : '';
   // 「その他」は資料があるときだけ出す。回は資料の有無にかかわらず全部出す（空の付箋も並ぶ）
   const shown = rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length);
-  // 今週の回を左上に。前の回は「これまでの回」として新しい順に後ろへ
+  // 今週の回を左上に。前の回は「これまでの回」として第 1 回から順に後ろへ
   const order = orderRounds(shown, today);
   const syncing = !!progress || (data.jobs ?? []).some((j) => j.kind === 'sync');
   const running = (data.jobs ?? []).some((j) => j.kind === 'sync' && j.status === 'running');

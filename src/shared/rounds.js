@@ -92,8 +92,8 @@ export function weekStart(day) {
 }
 
 /**
- * 授業画面の付箋の並び。今週（月〜日）の回を先頭（左上）に、そのあとの回を順に、前の回は新しい順に後ろへ。「その他」（第 0 回）は最後。
- * 今週に回がなければ次の回が先頭。学期が終わっていれば最後の回から新しい順。日付のある回がなければ回の順のまま
+ * 授業画面の付箋の並び。今週（月〜日）の回を先頭（左上）に、そのあとの回を順に、前の回は第 1 回から順に後ろへ。「その他」（第 0 回）は最後。
+ * 今週に回がなければ次の回が先頭。学期が終わっていれば全部が前の回（第 1 回から）。日付のある回がなければ回の順のまま
  * @returns {{current: object[], past: object[], other: object[]}}
  */
 export function orderRounds(rounds, today) {
@@ -103,5 +103,5 @@ export function orderRounds(rounds, today) {
   const monday = weekStart(today);
   let i = numbered.findIndex((r) => r.date && r.date >= monday);
   if (i < 0) i = numbered.length;
-  return {current: numbered.slice(i), past: numbered.slice(0, i).reverse(), other};
+  return {current: numbered.slice(i), past: numbered.slice(0, i), other};
 }
