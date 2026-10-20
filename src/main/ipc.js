@@ -12,6 +12,7 @@ import {isOpenable, sha256} from './sync/files.js';
 import {exportAnnotatedPdf, isPng} from './pdf-export.js';
 import {checkQuestion} from '../shared/quiz.js';
 import {annotationToClient, normalizeAnnotation} from '../shared/annotation.js';
+import {normalizeBookmark} from '../shared/bookmark.js';
 
 const str = (v, max = 500) => (typeof v === 'string' && v.length <= max ? v : null);
 const id = (v) => (isUlid(v) ? v : null);
@@ -294,8 +295,21 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return {
       material: {id: m.id, name: m.name, course_id: m.course_id, round_id: m.round_id},
       bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
-      annotations: repo.listAnnotations(m.sha256).map(annotationToClient)
+      annotations: repo.listAnnotations(m.sha256).map(annotationToClient),
+      bookmarks: repo.listBookmarks(m.sha256).map(bookmarkToClient)
     };
+  });
+  // しおり（名前・ページ・位置）。追加・名前の変更・移動は同じ窓口（id がなければ追加）
+  const bookmarkToClient = ({id: bid, page, y, name}) => ({id: bid, page, y, name});
+  handle('bookmark.save', ({materialId, bookmark}) => {
+    const m = pdfMaterial(materialId);
+    const bid = bookmark?.id == null ? null : (id(bookmark.id) ?? bad('しおりが不正です'));
+    return {bookmark: bookmarkToClient(repo.saveBookmark(m.sha256, bid, normalizeBookmark(bookmark)))};
+  });
+  handle('bookmark.remove', ({materialId, bookmarkId}) => {
+    const m = pdfMaterial(materialId);
+    repo.removeBookmark(m.sha256, id(bookmarkId) ?? bad('しおりが不正です'));
+    return {ok: true};
   });
   handle('pdf.asset', async ({kind, filename}) => {
     const dir = PDFJS_ASSET[kind] ?? bad('種類が不正です');

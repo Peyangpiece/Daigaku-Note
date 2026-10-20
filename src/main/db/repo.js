@@ -29,7 +29,8 @@ const COLUMNS = {
   attempt: ['id', 'question_id', 'mode', 'ok', 'answer', 'seconds', 'at'],
   srs: ['question_id', 's', 'due', 'at', 'c', 'lapses'],
   ai_usage: ['id', 'quiz_id', 'model', 'input', 'output', 'cache_read', 'cache_write', 'cost_usd', 'purpose', 'at'],
-  annotation: ['id', 'sha256', 'page', 'kind', 'rect_json', 'body', 'style_json', 'memorized', 'z', 'created_at', 'updated_at']
+  annotation: ['id', 'sha256', 'page', 'kind', 'rect_json', 'body', 'style_json', 'memorized', 'z', 'created_at', 'updated_at'],
+  bookmark: ['id', 'sha256', 'page', 'y', 'name', 'created_at', 'updated_at']
 };
 
 const now = () => new Date().toISOString();
@@ -315,6 +316,23 @@ export class Repo {
   }
   removeAnnotation(sha256, id) {
     this.db.prepare('DELETE FROM annotation WHERE id = ? AND sha256 = ?').run(id, sha256);
+  }
+
+  // ---- bookmark（しおり。注釈と同じく SHA-256 に結び付ける）----
+  listBookmarks(sha256) {
+    return this.db.prepare('SELECT * FROM bookmark WHERE sha256 = ? ORDER BY page, y, created_at, id').all(sha256);
+  }
+  /** 新しいしおりは id なしで渡す。既存のしおりは同じファイルのものだけ書き換える */
+  saveBookmark(sha256, id, row) {
+    const t = now();
+    if (!id) return this.insert('bookmark', {id: ulid(), sha256, created_at: t, updated_at: t, ...row});
+    const cur = this.get('bookmark', id);
+    if (!cur || cur.sha256 !== sha256) throw new Error('しおりがありません');
+    this.update('bookmark', id, {...row, updated_at: t});
+    return this.get('bookmark', id);
+  }
+  removeBookmark(sha256, id) {
+    this.db.prepare('DELETE FROM bookmark WHERE id = ? AND sha256 = ?').run(id, sha256);
   }
 
   // ---- sync ----
