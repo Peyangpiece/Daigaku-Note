@@ -190,7 +190,7 @@ function render() {
   else if (route.startsWith('/quiz-edit/')) view.innerHTML = renderQuizEdit(state, route.slice('/quiz-edit/'.length));
   else if (route.startsWith('/quiz') || route.startsWith('/review')) view.innerHTML = renderQuiz(state, route);
   else if (route === '/settings' || route.startsWith('/settings?')) view.innerHTML = renderSettings(state, route);
-  else if (route === '/kisekae' || route.startsWith('/kisekae?')) view.innerHTML = renderKisekae(state, route);
+  else if (/^\/kisekae(\/edit)?(\?|$)/.test(route)) view.innerHTML = renderKisekae(state, route);
   else view.innerHTML = renderHome(state);
   lastRoute = route;
   if (snap) restore(view, snap);
