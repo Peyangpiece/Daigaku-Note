@@ -24,7 +24,9 @@ import {
   BOOKMARK_SHAPE_LABEL,
   FILE_KINDS,
   FILE_KIND_LABEL,
-  FIXED_PLACES
+  FIXED_PLACES,
+  FILE_ART_ITEMS,
+  FILE_ART_SHIFT
 } from '../../shared/skin.js';
 import {STICKER_BASE, allTemplates, bookmarkLook, forgetSticker, globalId, noteVars, shapesOf, skinOf, stickerUrl} from '../skin.js';
 import {fileArt, kindOf} from './file-art.js';
@@ -45,7 +47,7 @@ const SAMPLE = [
 
 // 画面の状態（描き直しても残す）。draft は直している途中のテンプレート（baseId は元のテンプレート）。
 // 対象・名前などは ui が決めるので、描き直しのときに前の値へ戻さない（data-keep="off"）
-const ui = {target: '', part: 'note', scene: 'home', history: [], future: [], fileKind: 'pdf', book: 'all', draft: null, selected: null, confirm: null, route: null};
+const ui = {target: '', part: 'note', scene: 'home', history: [], future: [], fileKind: 'pdf', art: null, book: 'all', draft: null, selected: null, confirm: null, route: null};
 
 const courses = (data) => data.courses.filter((c) => !c.hidden);
 const targetCourse = (data) => (ui.target ? (data.courses.find((c) => c.id === ui.target) ?? null) : null);
@@ -73,6 +75,7 @@ function startDraft(data, template, {asNew = false, name = null} = {}) {
     stickers: structuredClone(t.stickers)
   };
   ui.selected = null;
+  ui.art = null;
   ui.confirm = null;
   ui.history = [];
   ui.future = [];
@@ -272,11 +275,19 @@ const PARTS = [
 // 付箋のはじめの色（tokens.css の --pop1〜8 と viewer.js の NOTE_COLORS と同じ）
 const POP = ['#ffe14d', '#ff9ec4', '#6fe3b8', '#7cccff', '#ffad5c', '#c3a6ff', '#c2f06a', '#ff8a7a'];
 const PDF_NOTE = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70'];
-const kindChoice = () => `<fieldset class="ks-field"><legend>資料の種類</legend>${choice('fileKind', ui.fileKind, FILE_KINDS, FILE_KIND_LABEL)}</fieldset>`;
 
+const ART_LABEL = {mark: '種類の印（文字・絵）', label: '拡張子のラベル'};
 function fileControls(data) {
   const f = ui.draft.parts.file;
-  return `${kindChoice()}${colorField(`file.${ui.fileKind}`, `${FILE_KIND_LABEL[ui.fileKind]}の色`, f[ui.fileKind], {recent: data.skin?.recent ?? []})}`;
+  const art = ui.draft.parts.fileArt[ui.fileKind];
+  const row = (i) => `<div class="ks-artrow${ui.art === i ? ' is-on' : ''}"><span>${ART_LABEL[i]}${art[i].on ? '' : '<span class="muted">（消しています）</span>'}</span>
+      <span class="actions">${art[i].on ? `<button type="button" class="btn btn--small" data-ks="art-hide" data-art-item="${i}">消す</button>` : `<button type="button" class="btn btn--small" data-ks="art-show" data-art-item="${i}">出す</button>`}
+      ${art[i].dx || art[i].dy ? `<button type="button" class="btn btn--small" data-ks="art-reset" data-art-item="${i}">元の位置に</button>` : ''}</span></div>`;
+  return `${colorField(`file.${ui.fileKind}`, `${FILE_KIND_LABEL[ui.fileKind]}の色`, f[ui.fileKind], {recent: data.skin?.recent ?? []})}
+    <fieldset class="ks-field"><legend>イラストの中身</legend>
+      <p class="muted">見本の大きなイラストの上で、文字やラベルをドラッグして動かせます。選んで Delete で消せます。</p>
+      ${FILE_ART_ITEMS.map(row).join('')}
+    </fieldset>`;
 }
 /** 色の並び（回の付箋の 8 色・PDF の付箋の色の候補 6 色）。1 つずつ色の選び器で変える */
 function colorRow(key, list, defaults, label) {
@@ -307,12 +318,13 @@ function bookmarkControls(data) {
 const SCENES = [
   ['home', 'ホーム'],
   ['course', '授業ページ'],
+  ['file', 'ファイル'],
   ['viewer', 'PDF']
 ];
 // 部分を選んだときに見せる場面
-const SCENE_OF = {note: 'home', folder: 'home', tape: 'home', file: 'course', sticky: 'course', bookmark: 'viewer'};
+const SCENE_OF = {note: 'home', folder: 'home', tape: 'home', file: 'file', sticky: 'course', bookmark: 'viewer'};
 // 場面で押して貼ったときの場所（ドラッグなら落とした所）
-const SCENE_PLACE = {home: 'folder', course: 'heading', viewer: 'viewer'};
+const SCENE_PLACE = {home: 'folder', course: 'heading', file: 'file', viewer: 'viewer'};
 // 見本の中のシールの大きさ：ホームと PDF 編集画面の見本は、窓（幅 1200px ほど）を半分ほどに縮めたものなので基準も半分
 const PREVIEW_SCALE = {folder: 1, home: 0.5, heading: 1, viewer: 0.5, round: 1, file: 1, bookmark: 1};
 // 決まった位置のシールの位置と大きさ（授業画面・編集画面と同じ）
@@ -356,28 +368,17 @@ function homeScene(data, {first, second, note, skin1, skin2}) {
       ${folderCard(second, {data, skin: skin2, edit: {still: true}})}
     </div>`);
 }
-// 資料の種類（FILE_KINDS）を 1 つずつ。3 回に 3 つずつ分ける
-const SCENE_FILES = [
-  ['a.pdf', true],
-  ['a.pptx', false],
-  ['a.docx', false],
-  ['a.xlsx', false],
-  ['a.png', false],
-  ['a.mp4', false],
-  ['a.mp3', false],
-  ['a.zip', false],
-  ['a.dat', false]
-];
+// 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では 3 回に 3 つずつ分ける
+const KIND_FILE = {pdf: 'a.pdf', slide: 'a.pptx', doc: 'a.docx', sheet: 'a.xlsx', image: 'a.png', video: 'a.mp4', audio: 'a.mp3', zip: 'a.zip', other: 'a.dat'};
+const SCENE_FILES = Object.values(KIND_FILE);
 function courseScene(data, {first, note, skin1}) {
   const sk = skin1;
   const colors = sk.sticky.round === 'default' ? POP : sk.sticky.round;
   const find = (place, k) => sk.stickers.find((st) => st.place === place && (!k || st.kind === k));
-  const look = bookmarkLook(sk);
-  const file = ([name, marked]) => {
+  const file = (name) => {
     const kind = kindOf(name);
-    return `<span class="ks-file${isOn('file', kind)}" ${editAttr('file', `${FILE_KIND_LABEL[kind]}の色`)} data-kind="${kind}" data-drop-place="file">
-      <span class="file__art">${fileArt(name, {colors: sk.file})}${fixedOne(data, find('file', kind))}
-        ${marked ? `<span class="file__ribbon bm ${look.cls}${isOn('bookmark')}" style="${look.style}" ${editAttr('bookmark', 'しおり')} data-drop-place="bookmark">2${fixedOne(data, find('bookmark'))}</span>` : ''}</span>
+    return `<span class="ks-file" ${editAttr('file', `${FILE_KIND_LABEL[kind]}のイラスト`)} data-kind="${kind}" data-drop-place="file">
+      <span class="file__art">${fileArt(name, {colors: sk.file, art: sk.fileArt})}${fixedOne(data, find('file', kind))}</span>
       <span class="muted">${FILE_KIND_LABEL[kind]}</span></span>`;
   };
   const roundNote = (n, files) =>
@@ -387,6 +388,23 @@ function courseScene(data, {first, note, skin1}) {
     <div class="ks-place ks-place--heading" data-drop-place="heading" title="シールをここへドラッグすると見出しに貼れます">${stageLayer(data, sk.stickers, 'heading')}
       <span class="btn">← ホーム</span><h2>${esc(first.name)}</h2></div>
     <div class="ks-notes">${roundNote(1, SCENE_FILES.slice(0, 3))}${roundNote(2, SCENE_FILES.slice(3, 6))}${roundNote(3, SCENE_FILES.slice(6))}</div>`);
+}
+// ファイルの場面：選んでいる種類の資料のイラストを大きく出す。印とラベルはドラッグで動かせる。下に種類の切り替え
+const BIG = 3.4;
+function fileScene(data, {note, skin1}) {
+  const sk = skin1;
+  const k = ui.fileKind;
+  const st = sk.stickers.find((x) => x.place === 'file' && x.kind === k);
+  let art = fileArt(KIND_FILE[k], {colors: sk.file, art: sk.fileArt, editable: true});
+  if (ui.art) art = art.replace(`data-art="${ui.art}"`, `data-art="${ui.art}" class="is-sel"`);
+  return noteSwatch(note, 'ks-stage ks-stage--file', `
+    <div class="ks-bigfile${ui.art ? '' : isOn('file', k)}" ${editAttr('file', `${FILE_KIND_LABEL[k]}の色`)} data-kind="${k}" data-drop-place="file" style="--big: ${BIG}">
+      <span class="file__art">${art}${st ? `<span class="ks-fixed">${stageSticker(data, st, {base: FIXED_AT.file.base * BIG, fixed: FIXED_AT.file})}</span>` : ''}</span>
+    </div>
+    <div class="ks-kinds" role="group" aria-label="資料の種類">${FILE_KINDS.map(
+      (x) =>
+        `<button type="button" class="ks-kind" data-ks="set" data-key="fileKind" data-value="${x}" aria-pressed="${x === k}">${fileArt(KIND_FILE[x], {colors: sk.file, art: sk.fileArt})}<span>${FILE_KIND_LABEL[x]}</span></button>`
+    ).join('')}</div>`);
 }
 function viewerScene(data, {note, skin1}) {
   const sk = skin1;
@@ -402,7 +420,7 @@ function viewerScene(data, {note, skin1}) {
 
 /** 場面の見本 */
 function stage(data, ctx) {
-  return {home: homeScene, course: courseScene, viewer: viewerScene}[ui.scene](data, ctx);
+  return {home: homeScene, course: courseScene, file: fileScene, viewer: viewerScene}[ui.scene](data, ctx);
 }
 
 /** シール帳（見本の下の棚）。ドラッグで見本の好きな所へ、押すと今の場面の決まった所へ貼る */
@@ -705,7 +723,9 @@ document.addEventListener('click', async (e) => {
     else if (ks === 'scene') {
       ui.scene = el.dataset.scene;
       ui.selected = null;
-      if (!AVAIL[ui.part]?.includes(ui.scene)) ui.part = 'note';
+      ui.art = null;
+      if (ui.scene === 'file') ui.part = 'file';
+      else if (!AVAIL[ui.part]?.includes(ui.scene)) ui.part = 'note';
     } else if (ks === 'undo') travel(ui.history, ui.future);
     else if (ks === 'redo') travel(ui.future, ui.history);
     else if (ks === 'color' || ks === 'set') {
@@ -714,7 +734,12 @@ document.addEventListener('click', async (e) => {
         return reload();
       }
       peek = null; // 乗せて試していた色は、押した色で決まる
-      if (el.dataset.key === 'fileKind') ui.fileKind = el.dataset.value;
+      if (el.dataset.key === 'fileKind') {
+        ui.fileKind = el.dataset.value;
+        ui.part = 'file';
+        ui.selected = null;
+        ui.art = null;
+      }
       else {
         remember();
         setPath(ui.draft.parts, el.dataset.key, el.dataset.value);
@@ -723,6 +748,12 @@ document.addEventListener('click', async (e) => {
     else if (ks === 'tape-image') {
       remember();
       ui.draft.parts.tape.image = el.dataset.id;
+    } else if (ks === 'art-hide' || ks === 'art-show' || ks === 'art-reset') {
+      remember();
+      const a = ui.draft.parts.fileArt[ui.fileKind][el.dataset.artItem];
+      if (ks === 'art-reset') Object.assign(a, {dx: 0, dy: 0});
+      else a.on = ks === 'art-show';
+      if (ks === 'art-hide' && ui.art === el.dataset.artItem) ui.art = null;
     } else if (ks === 'straight' && ui.selected != null) {
       remember();
       ui.draft.stickers[ui.selected].rotate = 0;
@@ -844,10 +875,11 @@ function repaintPreview() {
 
 // ---- 見本の上で直接さわる ----
 // 部分が見える場面（部分を選んだとき、今の場面になければ移る）
-const AVAIL = {note: ['home', 'course', 'viewer'], folder: ['home'], tape: ['home'], file: ['course'], sticky: ['course', 'viewer'], bookmark: ['viewer']};
+const AVAIL = {note: ['home', 'course', 'viewer'], folder: ['home'], tape: ['home'], file: ['file'], sticky: ['course', 'viewer'], bookmark: ['viewer']};
 function selectPart(part, kind = null) {
   ui.part = part;
   ui.selected = null;
+  ui.art = null;
   if (kind) ui.fileKind = kind;
   if (!AVAIL[part]?.includes(ui.scene)) ui.scene = SCENE_OF[part];
 }
@@ -867,6 +899,7 @@ function duplicate() {
   ui.selected = ui.draft.stickers.length - 1;
 }
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const shift = (v) => Math.round(Math.min(FILE_ART_SHIFT, Math.max(-FILE_ART_SHIFT, v)) * 10) / 10;
 
 // 色の見本にマウスを乗せると、押す前に見本へ映す（外すと戻す）
 let peek = null;
@@ -899,6 +932,7 @@ document.addEventListener('pointerdown', (e) => {
     const h = e.target.closest('[data-h]')?.dataset.h;
     if (h === 'del') return peel(), refresh();
     if (h === 'dup') return duplicate(), refresh();
+    ui.art = null;
     if (ui.selected !== i) {
       // 選ぶ（描き直すので、続けて掴むのは次の押しから。押したまま動かせば、そのまま動かす）
       ui.selected = i;
@@ -929,6 +963,18 @@ document.addEventListener('pointerdown', (e) => {
     }
     return;
   }
+  // 資料のイラストの印・ラベル：選んで、掴んだまま動かす
+  const artEl = e.target.closest('.ks-bigfile [data-art]');
+  if (artEl) {
+    e.preventDefault();
+    ui.part = 'file';
+    ui.selected = null;
+    ui.art = artEl.dataset.art;
+    for (const x of stageEl.querySelectorAll('[data-art].is-sel')) x.classList.remove('is-sel');
+    artEl.classList.add('is-sel');
+    grip = {mode: 'art', item: ui.art, el: artEl, x0: e.clientX, y0: e.clientY, ratio: artEl.ownerSVGElement.getBoundingClientRect().width / 54, start: {...ui.draft.parts.fileArt[ui.fileKind][ui.art]}, moved: false};
+    return;
+  }
   // 部分を押した：その部分を右で直す
   const part = e.target.closest('[data-edit]');
   if (part) {
@@ -938,6 +984,15 @@ document.addEventListener('pointerdown', (e) => {
 });
 document.addEventListener('pointermove', (e) => {
   if (!grip || grip.mode === 'none') return;
+  if (grip.mode === 'art') {
+    const a = ui.draft.parts.fileArt[ui.fileKind][grip.item];
+    if (!grip.moved) remember();
+    grip.moved = true;
+    a.dx = shift(grip.start.dx + (e.clientX - grip.x0) / grip.ratio);
+    a.dy = shift(grip.start.dy + (e.clientY - grip.y0) / grip.ratio);
+    grip.el.setAttribute('transform', `translate(${a.dx} ${a.dy})`);
+    return;
+  }
   const s = ui.draft.stickers[grip.i];
   if (!grip.moved) remember();
   grip.moved = true;
@@ -988,6 +1043,24 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (e.key === 'y' || e.shiftKey) travel(ui.future, ui.history);
     else travel(ui.history, ui.future);
+    return refresh();
+  }
+  // 資料のイラストの印・ラベルを選んでいるとき：矢印で動かし、Delete で消し、Esc で選ぶのをやめる
+  if (ui.art && ui.selected == null && !typing) {
+    const a = ui.draft.parts.fileArt[ui.fileKind][ui.art];
+    const step = e.shiftKey ? 4 : 1;
+    const move = {ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step]}[e.key];
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      remember();
+      a.on = false;
+      ui.art = null;
+    } else if (e.key === 'Escape') ui.art = null;
+    else if (move) {
+      remember();
+      a.dx = shift(a.dx + move[0]);
+      a.dy = shift(a.dy + move[1]);
+    } else return;
+    e.preventDefault();
     return refresh();
   }
   if (ui.selected == null || typing) return;

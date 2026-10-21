@@ -59,12 +59,23 @@ export const DEFAULT_PARTS = {
   folder: {card: 'default', tab: 'default'},
   tape: {color: 'course', pattern: 'course', image: null},
   file: Object.fromEntries(FILE_KINDS.map((k) => [k, 'default'])),
+  fileArt: Object.fromEntries(FILE_KINDS.map((k) => [k, {mark: {dx: 0, dy: 0, on: true}, label: {dx: 0, dy: 0, on: true}}])),
   sticky: {round: 'default', pdf: 'default'},
   bookmark: {color: 'default', shape: 'tag'}
 };
 
 // 色の並び：default（はじめの色）か、#rrggbb を n 個（足りなければ default）
 const colorList = (v, n) => (Array.isArray(v) && v.length === n && v.every(isHex) ? v.map((c) => c.toLowerCase()) : 'default');
+
+// 資料のイラストの中身（種類の印・拡張子のラベル）：元の位置からのずれ（イラストの座標。幅 54・高さ 66）と、出すかどうか
+export const FILE_ART_ITEMS = ['mark', 'label'];
+export const FILE_ART_SHIFT = 40;
+const artItem = (v = {}) => ({
+  dx: Math.round(num(v.dx, -FILE_ART_SHIFT, FILE_ART_SHIFT, 0) * 10) / 10,
+  dy: Math.round(num(v.dy, -FILE_ART_SHIFT, FILE_ART_SHIFT, 0) * 10) / 10,
+  on: typeof v.on === 'boolean' ? v.on : true
+});
+const fileArtParts = (raw = {}) => Object.fromEntries(FILE_KINDS.map((k) => [k, Object.fromEntries(FILE_ART_ITEMS.map((i) => [i, artItem(raw?.[k]?.[i])]))]));
 
 // テープ：柄が画像（image）のときは、シールの素を 1 つ柄にする。画像がなければ無地
 function tape(t) {
@@ -92,6 +103,7 @@ export function normalizeParts(raw = {}) {
     folder: {card: color(f.card, d.folder.card), tab: color(f.tab, d.folder.tab)},
     tape: tape(t),
     file: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.file?.[k], 'default')])),
+    fileArt: fileArtParts(raw.fileArt),
     sticky: {round: colorList(raw.sticky?.round, ROUND_COLORS), pdf: colorList(raw.sticky?.pdf, PDF_NOTE_COLORS)},
     bookmark: {color: color(raw.bookmark?.color, 'default'), shape: oneOf(raw.bookmark?.shape, BOOKMARK_SHAPES, 'tag')}
   };
@@ -219,6 +231,7 @@ export function resolveSkin(templates, globalId, course = null) {
     folder: (own ?? global).parts.folder,
     tape: (own ?? global).parts.tape,
     file: (own ?? global).parts.file,
+    fileArt: (own ?? global).parts.fileArt,
     sticky: (own ?? global).parts.sticky,
     bookmark: (own ?? global).parts.bookmark,
     stickers: stickers.slice().sort((a, b) => a.z - b.z)

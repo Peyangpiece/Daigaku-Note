@@ -2458,6 +2458,77 @@ textarea.input {
   left: 18px;
 }
 
+/* ファイルの場面：選んでいる種類のイラストを大きく。印とラベルは掴んで動かせる */
+.ks-stage--file {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 18px;
+  min-height: 330px;
+  padding: 24px 20px;
+}
+.ks-bigfile {
+  position: relative;
+  padding: 10px;
+  border-radius: 12px;
+}
+.ks-bigfile .file-art {
+  width: calc(54px * var(--big));
+  height: calc(66px * var(--big));
+}
+.ks-bigfile [data-art] {
+  cursor: grab;
+  pointer-events: bounding-box; /* 線だけの印（PDF の文字など）も、囲む四角のどこでも掴める */
+}
+.ks-bigfile [data-art]:hover {
+  filter: drop-shadow(0 0 1px var(--c4));
+}
+.ks-bigfile [data-art].is-sel {
+  filter: drop-shadow(0 0 1px var(--c4)) drop-shadow(0 0 1px var(--c4));
+}
+.ks-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.ks-kind {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 75%, transparent);
+  color: var(--paper-ink);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ks-kind .file-art {
+  width: 27px;
+  height: 33px;
+}
+.ks-kind[aria-pressed='true'] {
+  border-color: var(--paper-ink);
+  font-weight: 700;
+}
+.ks-artrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+.ks-artrow.is-on {
+  background: color-mix(in srgb, var(--c4) 16%, transparent);
+}
+.ks-artrow .actions {
+  margin: 0;
+}
+
 /* しおりの形の見本：PDF の紙（灰色の行）と、右の端から出るリボン */
 .ks-bmswatch {
   position: relative;
@@ -2675,6 +2746,7 @@ textarea.input {
 }
 .ks-target.is-editing .folder,
 .ks-file.is-editing,
+.ks-bigfile.is-editing,
 .ks-note.is-editing,
 .ks-pdfnotes.is-editing,
 .bm.is-editing {

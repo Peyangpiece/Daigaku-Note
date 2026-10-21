@@ -33,13 +33,21 @@ const MARK = {
   other: '<circle cx="20" cy="35" r="2" fill="currentColor"/><circle cx="27" cy="35" r="2" fill="currentColor"/><circle cx="34" cy="35" r="2" fill="currentColor"/>'
 };
 
+// 印・ラベル 1 つ：消していれば描かない。ずらしていれば translate で動かす
+function item(v, key, inner, editable) {
+  if (v?.on === false) return '';
+  const move = v?.dx || v?.dy ? ` transform="translate(${v.dx ?? 0} ${v.dy ?? 0})"` : '';
+  return `<g${editable ? ` data-art="${key}"` : ''}${move}>${inner}</g>`;
+}
+
 export const extOf = (name) => String(name ?? '').split('.').pop().toLowerCase();
 
 /** 資料の種類（印の名前。着せ替えで種類ごとに色・シールを変える。shared/skin.js の FILE_KINDS） */
 export const kindOf = (name) => KIND[extOf(name)]?.[0] ?? 'other';
 
-/** 資料のイラスト。幅 54・高さ 66 の紙（角が折れている）＋種類の色と印＋拡張子のラベル。colors は着せ替えの種類ごとの色（default ならはじめの色） */
-export function fileArt(name, {colors = null} = {}) {
+/** 資料のイラスト。幅 54・高さ 66 の紙（角が折れている）＋種類の色と印＋拡張子のラベル。colors は着せ替えの種類ごとの色（default ならはじめの色）。
+ * art は着せ替えの種類ごとの印とラベルの位置（dx・dy）と出すかどうか（on）。editable なら印とラベルに data-art を付ける（着せ替えの見本で動かす） */
+export function fileArt(name, {colors = null, art = null, editable = false} = {}) {
   const ext = extOf(name);
   const [kind, base] = KIND[ext] ?? ['other', 'var(--paper-ink-weak)'];
   const color = colors?.[kind] && colors[kind] !== 'default' ? colors[kind] : base;
@@ -47,8 +55,8 @@ export function fileArt(name, {colors = null} = {}) {
   return `<svg class="file-art" viewBox="0 0 54 66" width="54" height="66" aria-hidden="true" style="color: ${color}">
     <path d="M6 3h30l12 12v46a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="var(--card)" stroke="var(--paper-ink)" stroke-width="1.6" stroke-linejoin="round"/>
     <path d="M36 3v12h12" fill="color-mix(in srgb, currentColor 35%, var(--card))" stroke="var(--paper-ink)" stroke-width="1.6" stroke-linejoin="round"/>
-    ${MARK[kind]}
-    <rect x="4" y="48" width="36" height="12" rx="2" fill="currentColor"/>
-    <text x="22" y="57.5" text-anchor="middle" font-size="8.5" font-weight="700" font-family="var(--font-body)" fill="#2b2b2b">${label}</text>
+    ${item(art?.[kind]?.mark, 'mark', MARK[kind], editable)}
+    ${item(art?.[kind]?.label, 'label', `<rect x="4" y="48" width="36" height="12" rx="2" fill="currentColor"/>
+    <text x="22" y="57.5" text-anchor="middle" font-size="8.5" font-weight="700" font-family="var(--font-body)" fill="#2b2b2b">${label}</text>`, editable)}
   </svg>`;
 }
