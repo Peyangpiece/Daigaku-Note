@@ -62,6 +62,22 @@ test('repo の往復：接続・学期・授業・回・資料・設定・ジョ
   repo.finishJob(job.id, 'done', {ok: true});
   assert.equal(repo.get('job', job.id).status, 'done');
 
+  // やり直し待ち（waiting）は、待つ時間がたつまで拾わない。上限より多くは拾わない
+  const w = repo.enqueueJob('sync', {x: 1});
+  repo.claimJob({retryDelays: [60e3]});
+  repo.finishJob(w.id, 'waiting');
+  const at = Date.parse(repo.get('job', w.id).updated_at);
+  assert.equal(repo.claimJob({retryDelays: [60e3], at: at + 1000}), null);
+  assert.equal(repo.claimJob({retryDelays: [60e3], at: at + 61e3}).id, w.id);
+  repo.finishJob(w.id, 'waiting');
+  assert.equal(repo.claimJob({retryDelays: [60e3], at: at + 10 * 60e3}), null, '2 回目のあとは拾わない（tries が上限を超えた）');
+  // 落ちたときに running のまま残ったジョブは、起動のときに pending に戻す
+  const r = repo.enqueueJob('sync', {x: 2});
+  repo.claimJob();
+  assert.equal(repo.get('job', r.id).status, 'running');
+  assert.equal(repo.resetRunningJobs(), 1);
+  assert.equal(repo.get('job', r.id).status, 'pending');
+
   const run = repo.startSyncRun({connection_id: conn.id, kind: 'full'});
   repo.addSyncEvent(run.id, {level: 'error', course_id: c1.id, code: 'download', message: 'x'.repeat(600)});
   repo.finishSyncRun(run.id, {courses: 2, materials: 1, failures: 1, timing: {total: 10}});

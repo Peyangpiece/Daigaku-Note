@@ -394,7 +394,7 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// ---- ホームの授業・フォルダのカード：右クリック（トラックパッドの 2 本指タップ・タッチの長押し）で「開く」「消去」 ----
+// ---- ホームの授業・フォルダのカード：右クリック（トラックパッドの 2 本指タップ・タッチの長押し）で「開く」「ホームから外す」など ----
 // ---- 名前を変える：名前の上に入力欄を重ねる。Enter・外を押すと決める、Esc でやめる ----
 export function renameAt(target, value, save) {
   document.querySelector('.rename-pop')?.remove();
@@ -478,7 +478,7 @@ document.addEventListener('contextmenu', (e) => {
   cardMenu.className = 'card-menu';
   cardMenu.setAttribute('role', 'menu');
   cardMenu.setAttribute('aria-label', course.name);
-  cardMenu.innerHTML = `<button type="button" role="menuitem" data-card-menu="open">開く</button>${canRename(course) ? '<button type="button" role="menuitem" data-card-menu="rename">名前を変える…</button>' : ''}<button type="button" role="menuitem" data-card-menu="skin">着せ替え…</button><button type="button" role="menuitem" class="card-menu__danger" data-card-menu="remove">消去…</button>`;
+  cardMenu.innerHTML = `<button type="button" role="menuitem" data-card-menu="open">開く</button>${canRename(course) ? '<button type="button" role="menuitem" data-card-menu="rename">名前を変える…</button>' : ''}<button type="button" role="menuitem" data-card-menu="skin">着せ替え…</button><button type="button" role="menuitem" data-card-menu="remove">ホームから外す</button>`;
   document.body.append(cardMenu);
   const {width, height} = cardMenu.getBoundingClientRect();
   cardMenu.style.left = `${Math.min(e.clientX, window.innerWidth - width - 8)}px`;
@@ -502,14 +502,21 @@ document.addEventListener('keydown', (e) => e.key === 'Escape' && closeCardMenu(
 window.addEventListener('scroll', closeCardMenu, {passive: true});
 window.addEventListener('hashchange', closeCardMenu);
 
-/** ホームから消去する（非表示にして同期もやめる。保存した資料・メモ・パソコンのフォルダは残し、設定から戻せる） */
+/** ホームから外す（非表示にして同期もやめる。保存した資料・メモ・パソコンのフォルダは残し、設定から戻せる） */
 async function removeCourse(course) {
+  // 消すのではなく、ホームに出さないだけ（同期もやめる。資料・メモ・パソコンのフォルダは残る）。すぐ「元に戻す」で戻せるので確認は出さない
   const folder = course.kind === 'folder';
-  const keep = folder ? 'パソコンのフォルダとファイルはそのまま残ります。' : '同期もやめます。保存した資料とメモは残ります。';
-  if (!window.confirm(`「${course.name}」をホームから消去しますか？\n${keep}設定の「非表示の授業・フォルダ」から戻せます。`)) return;
   const r = await api['course.update']({courseId: course.id, patch: folder ? {hidden: true} : {hidden: true, sync_enabled: false}});
   if (r?.error) return toast(r.error, {error: true});
-  toast(`「${course.name}」を消去しました（設定で戻せます）`);
+  toast(`「${course.name}」をホームから外しました（${folder ? 'パソコンのフォルダとファイルはそのまま' : '資料とメモは残ります'}。設定からも戻せます）`, {
+    action: {
+      label: '元に戻す',
+      run: async () => {
+        await api['course.update']({courseId: course.id, patch: folder ? {hidden: false} : {hidden: false, sync_enabled: course.sync_enabled !== 0}});
+        await reload();
+      }
+    }
+  });
   await reload();
 }
 

@@ -152,7 +152,8 @@ test('登録：URL から候補を順に返す', async (t) => {
   const registry = createRegistry({secrets: memSecrets()});
   const cands = await registry.detect(base + '/', '');
   assert.equal(cands[0].connectorId, 'moodle');
-  assert.equal(cands.at(-1).connectorId, 'generic');
+  assert.ok(!cands.some((c) => c.connectorId === 'generic')); // 汎用型はまだ同期できないので出さない
+  assert.deepEqual(await registry.detect('https://unknown.example.ac.jp/', '<html></html>'), []);
   const manabo = await registry.detect('https://manabo.example.ac.jp/', '<div id="div-class-directories"></div>');
   assert.equal(manabo[0].connectorId, 'manabo');
   assert.equal(manabo[0].kind, 'recipe');

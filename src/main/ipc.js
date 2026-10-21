@@ -219,8 +219,15 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
 
   handle('connection.remove', async ({connectionId}) => {
     const cid = id(connectionId) ?? bad('接続が不正です');
+    if (!repo.get('connection', cid)) bad('接続が見つかりません');
+    // 授業・資料・注釈は残す。授業から接続への結び付きを外してから接続を消し、最後に保存した ID・パスワードを消す
+    // （先に秘密を消すと、接続の削除が失敗したときにパスワードだけが消える）
+    repo.transaction(() => {
+      repo.db.prepare('UPDATE course SET connection_id = NULL WHERE connection_id = ?').run(cid);
+      repo.remove('connection', cid);
+      repo.db.prepare('DELETE FROM settings WHERE key = ?').run(`courses.exclude.${cid}`);
+    });
     await secrets.removeByPrefix(`conn:${cid}:`);
-    repo.remove('connection', cid);
     return {ok: true};
   });
 

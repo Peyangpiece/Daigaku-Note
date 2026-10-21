@@ -71,3 +71,33 @@ test('起動時のログインのジョブ：接続ごとにログインし、�
   await jobs.run({kind: 'login', payload: {}});
   assert.deepEqual(tried, ['a'], 'ブラウザの準備ができていなければ画面操作型は次の同期に任せる');
 });
+
+test('同期のジョブ：1 つの接続が失敗しても（未対応の種類など）、ほかの接続は同期する', async () => {
+  const connections = [
+    {id: 'g', kind: 'generic', label: '汎用', status: 'ok'},
+    {id: 'a', kind: 'api', label: 'Moodle', status: 'ok'}
+  ];
+  const ran = [];
+  const ctx = {
+    repo: {listTerms: () => [{id: 't', start_date: '2000-01-01', end_date: '2999-12-31'}], listConnections: () => connections, getSetting: () => null},
+    registry: {
+      forConnection: (c) => {
+        if (c.kind === 'generic') throw new Error('未対応の接続の種類: generic');
+        return c.id;
+      }
+    },
+    browser: {state: 'ready'},
+    engine: {
+      run: async ({connection}) => {
+        ran.push(connection.id);
+        return {courses: 2, materials: 3, failures: 0, status: 'ok', events: []};
+      }
+    }
+  };
+  const r = await new JobRunner(ctx).run({kind: 'sync', payload: {}});
+  assert.deepEqual(ran, ['a']);
+  assert.equal(r.courses, 2);
+  assert.equal(r.failures, 1);
+  assert.equal(r.status, 'failed');
+  assert.match(r.message, /汎用：この接続の種類はまだ同期できません/);
+});

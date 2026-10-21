@@ -12,6 +12,7 @@ export function friendlyError(e) {
   if (e?.code === 'selector-missing') return 'LMS の画面を読み取れませんでした（画面の構成が変わった可能性）';
   if (e?.code === 'blocked-navigation') return '想定外のページに移動したため中断しました';
   if (/ENOSPC|EACCES|EPERM/.test(m)) return '保存先に書き込めません';
+  if (/未対応の接続の種類/.test(m)) return 'この接続の種類はまだ同期できません。設定 → LMS との連携 から削除してください';
   return `処理に失敗しました：${m.split('\n')[0].slice(0, 120)}`;
 }
 
@@ -26,6 +27,7 @@ export class JobRunner {
   /** 準備（Chromium の取り込みなど）が終わってから呼ぶ。それまで積まれたジョブは待つ */
   start() {
     this.started = true;
+    this.ctx.repo.resetRunningJobs(); // 前に落ちたときの「同期中」が残らないように
     this.tick();
   }
   stop() {
@@ -43,7 +45,7 @@ export class JobRunner {
   }
   async tick() {
     if (this.running || !this.started) return;
-    const job = this.ctx.repo.claimJob();
+    const job = this.ctx.repo.claimJob({retryDelays: RETRY_DELAYS});
     if (!job) {
       this.timer = setTimeout(() => this.tick(), 5000);
       return;
@@ -53,8 +55,10 @@ export class JobRunner {
     this.ctx.refreshTray?.();
     try {
       const result = await this.run(job);
-      this.ctx.repo.finishJob(job.id, result?.retry ? 'waiting' : 'done', result);
-      if (result?.retry && job.tries <= RETRY_DELAYS.length) setTimeout(() => this.tick(), RETRY_DELAYS[job.tries - 1]);
+      // やり直しは RETRY_DELAYS の回数まで。待つ時間は claimJob が見る（それより前には拾わない）
+      const retry = result?.retry && job.tries <= RETRY_DELAYS.length;
+      this.ctx.repo.finishJob(job.id, retry ? 'waiting' : 'done', result);
+      if (retry) setTimeout(() => this.tick(), RETRY_DELAYS[job.tries - 1]);
       this.notify('state.changed', {kind: job.kind});
       if (job.kind === 'sync') this.notify('sync.finished', {jobId: job.id, ...result});
     } catch (e) {
@@ -92,15 +96,24 @@ export class JobRunner {
             totals.messages.push(`${connection.label}：${this.ctx.browser?.state === 'failed' ? 'ブラウザの準備に失敗しています。設定の「ブラウザを準備し直す」を押してください' : 'ブラウザを準備中です。終わってからもう一度同期してください'}`);
             continue;
           }
-          const connector = registry.forConnection(connection);
-          const r = await engine.run({
-            connection,
-            connector,
-            term,
-            courseIds: job.payload.courseId ? [job.payload.courseId] : null,
-            kind: job.payload.kind ?? (job.payload.courseId ? 'course' : 'full'),
-            full: job.payload.full === true
-          });
+          // 1 つの接続の失敗（未対応の種類・例外）で、ほかの接続の同期を止めない
+          let r;
+          try {
+            r = await engine.run({
+              connection,
+              connector: registry.forConnection(connection),
+              term,
+              courseIds: job.payload.courseId ? [job.payload.courseId] : null,
+              kind: job.payload.kind ?? (job.payload.courseId ? 'course' : 'full'),
+              full: job.payload.full === true
+            });
+          } catch (e) {
+            this.ctx.log?.error?.(`同期に失敗 ${connection.label}: ${String(e?.message ?? e).slice(0, 200)}`);
+            totals.failures++;
+            totals.status = totals.status === 'ok' ? 'failed' : totals.status;
+            totals.messages.push(`${connection.label}：${friendlyError(e)}`);
+            continue;
+          }
           totals.courses += r.courses;
           totals.materials += r.materials;
           totals.failures += r.failures;
@@ -124,8 +137,8 @@ export class JobRunner {
         const result = {loggedIn: 0, failures: 0, messages: []};
         for (const connection of connections) {
           if (connection.kind === 'recipe' && this.ctx.browser?.state !== 'ready') continue; // ブラウザがなければ次の同期に任せる
-          const r = await engine
-            .restoreSession({connection, connector: registry.forConnection(connection)})
+          const r = await Promise.resolve()
+            .then(() => engine.restoreSession({connection, connector: registry.forConnection(connection)}))
             .catch((error) => ({status: 'failed', error}));
           if (r.loggedIn) result.loggedIn++;
           if (r.status === 'ok') continue;
