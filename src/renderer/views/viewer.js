@@ -458,6 +458,14 @@ class Viewer {
     }
   }
 
+  /** ＋・−のボタンとメニューの「拡大」「縮小」（⌘＋・⌘−）「実際のサイズ」（⌘0）。PDF だけを拡大し、ツールバーや背景は変えない */
+  zoomStep(dir) {
+    if (!this.pages.length) return;
+    if (dir === 'reset') this.setZoom(1, this.viewCenter());
+    else if (dir === 'in') this.setZoom(ZOOMS.find((z) => z > this.zoom + 0.001) ?? this.zoom, this.viewCenter());
+    else this.setZoom([...ZOOMS].reverse().find((z) => z < this.zoom - 0.001) ?? this.zoom, this.viewCenter());
+  }
+
   /** ＋・−のボタンで拡大・縮小するときの基準：ツールバーより下に見えている範囲の真ん中 */
   viewCenter() {
     const top = this.root.querySelector('.viewer-bar').getBoundingClientRect().bottom;
@@ -1031,9 +1039,8 @@ class Viewer {
       else if (t.dataset.v === 'bold')
         this.setTextStyle({bold: !(this.selected?.kind === 'text' ? this.selected.style : this.textStyle).bold});
       else if (t.dataset.v === 'delete' && this.selected) this.removeAnno(this.selected);
-      else if (t.dataset.v === 'zoom-in') this.setZoom(ZOOMS.find((z) => z > this.zoom + 0.001) ?? this.zoom, this.viewCenter());
-      else if (t.dataset.v === 'zoom-out')
-        this.setZoom([...ZOOMS].reverse().find((z) => z < this.zoom - 0.001) ?? this.zoom, this.viewCenter());
+      else if (t.dataset.v === 'zoom-in') this.zoomStep('in');
+      else if (t.dataset.v === 'zoom-out') this.zoomStep('out');
       else if (t.dataset.v === 'fit') this.setZoom(this.fitZoom());
       else if (t.dataset.v === 'back') this.onBack();
       else if (t.dataset.v === 'bookmarks') this.openBookmarks(this.$('bookmark-panel').hidden);

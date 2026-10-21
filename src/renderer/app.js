@@ -115,8 +115,12 @@ function render() {
   const view = document.getElementById('view');
   const route = location.hash.replace(/^#/, '') || '/';
   const app = document.getElementById('app');
-  app.classList.toggle('paper--margin', !route.startsWith('/viewer/')); // 余白の縦線はどの画面にも（編集画面だけなし）
-  app.classList.toggle('paper--quiet', route.startsWith('/viewer/'));
+  // 編集画面：紙（罫線・余白の縦線）はホームと同じものを窓いっぱいに敷く（拡大して横にはみ出しても途切れない）。
+  // アプリ全体の拡大は 100% にする（PDF だけを拡大し、ツールバーや背景は拡大しない）
+  const inViewer = route.startsWith('/viewer/');
+  app.classList.toggle('paper--viewer', inViewer);
+  document.documentElement.classList.toggle('paper-canvas', inViewer);
+  api.appZoom(inViewer ? 'hold' : 'release');
   // PDF ビューアは状態が変わっても描き直さない（開いたまま。閉じるときだけ unmount）
   if (route.startsWith('/viewer/')) {
     const materialId = route.slice('/viewer/'.length);
@@ -200,6 +204,8 @@ document.addEventListener('submit', (e) => {
 });
 api.on('login.required', ({label, message}) => toast(message ?? `${label} へのログインが必要です`, {error: true}));
 api.on('route', (r) => navigate(r));
+// メニューの拡大・縮小（⌘＋・⌘−・⌘0）。編集画面では PDF だけ、ほかの画面ではアプリ全体
+api.on('zoom', (dir) => (viewer ? viewer.zoomStep(dir) : api.appZoom(dir)));
 
 // 画面内のボタンは data-action で受ける（1 か所で委譲）
 document.addEventListener('click', async (e) => {
