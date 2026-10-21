@@ -26,7 +26,7 @@ import {
   FIXED_PLACES
 } from '../../shared/skin.js';
 import {STICKER_BASE, allTemplates, bookmarkLook, forgetSticker, globalId, noteVars, shapesOf, skinOf, stickerUrl} from '../skin.js';
-import {fileArt} from './file-art.js';
+import {fileArt, kindOf} from './file-art.js';
 import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, isBuiltinSticker} from '../../shared/stickers.js';
 
 const api = window.daigaku;
@@ -191,7 +191,7 @@ function folderControls(data) {
 function tapeControls(data) {
   const t = ui.draft.parts.tape;
   return `${colorField('tape.color', 'テープの色', t.color, {allowDefault: false, allowCourse: true, recent: data.skin?.recent ?? []})}
-    <fieldset class="ks-field"><legend>柄</legend>${choice('tape.pattern', t.pattern, ['course', ...TAPE_PATTERNS], TAPE_PATTERN_LABEL)}</fieldset>
+    <fieldset class="ks-field"><legend>柄</legend>${choice('tape.pattern', t.pattern, TAPE_PATTERNS, TAPE_PATTERN_LABEL)}</fieldset>
     ${
       t.pattern === 'image'
         ? `<fieldset class="ks-field"><legend>柄にする画像（シール帳から）</legend><div class="ks-book">${bookItems(data, 'tape-image', t.image)}</div>
@@ -289,10 +289,15 @@ function stickyControls() {
   const st = ui.draft.parts.sticky;
   return `${colorRow('sticky.round', st.round, POP, '回の付箋の色（第 1 回から順に）')}${colorRow('sticky.pdf', st.pdf, PDF_NOTE, 'PDF に貼る付箋の色の候補')}`;
 }
+/** しおりの形の見本：PDF の紙の右の端から出るリボン */
+function bookmarkSwatch(bookmark) {
+  const look = bookmarkLook({bookmark});
+  return `<span class="ks-choice__swatch ks-bmswatch" aria-hidden="true"><span></span><span></span><span class="bookmark-ribbon bm ${look.cls}" style="${look.style}"></span></span>`;
+}
 function bookmarkControls(data) {
   const b = ui.draft.parts.bookmark;
   return `${colorField('bookmark.color', 'リボンの色', b.color, {recent: data.skin?.recent ?? []})}
-    <fieldset class="ks-field"><legend>形</legend>${choice('bookmark.shape', b.shape, BOOKMARK_SHAPES, BOOKMARK_SHAPE_LABEL)}</fieldset>`;
+    <fieldset class="ks-field"><legend>形</legend>${choice('bookmark.shape', b.shape, BOOKMARK_SHAPES, BOOKMARK_SHAPE_LABEL, {swatch: (v) => bookmarkSwatch({...b, shape: v})})}</fieldset>`;
 }
 
 // ---- 見本（ステージ）：場面ごとの見本の上で、部分を押して直し、シールをドラッグで貼って動かす ----
@@ -304,7 +309,7 @@ const SCENES = [
   ['viewer', 'PDF']
 ];
 // 部分を選んだときに見せる場面
-const SCENE_OF = {note: 'home', folder: 'home', tape: 'home', file: 'course', sticky: 'course', bookmark: 'course'};
+const SCENE_OF = {note: 'home', folder: 'home', tape: 'home', file: 'course', sticky: 'course', bookmark: 'viewer'};
 // 場面で押して貼ったときの場所（ドラッグなら落とした所）
 const SCENE_PLACE = {home: 'folder', course: 'heading', viewer: 'viewer'};
 // 見本の中のシールの大きさ：ホームと PDF 編集画面の見本は、窓（幅 1200px ほど）を半分ほどに縮めたものなので基準も半分
@@ -350,13 +355,17 @@ function homeScene(data, {first, second, note, skin1, skin2}) {
       ${folderCard(second, {data, skin: skin2, edit: {still: true}})}
     </div>`);
 }
+// 資料の種類（FILE_KINDS）を 1 つずつ。3 回に 3 つずつ分ける
 const SCENE_FILES = [
   ['a.pdf', true],
   ['a.pptx', false],
   ['a.docx', false],
   ['a.xlsx', false],
   ['a.png', false],
-  ['a.zip', false]
+  ['a.mp4', false],
+  ['a.mp3', false],
+  ['a.zip', false],
+  ['a.dat', false]
 ];
 function courseScene(data, {first, note, skin1}) {
   const sk = skin1;
@@ -364,7 +373,7 @@ function courseScene(data, {first, note, skin1}) {
   const find = (place, k) => sk.stickers.find((st) => st.place === place && (!k || st.kind === k));
   const look = bookmarkLook(sk);
   const file = ([name, marked]) => {
-    const kind = kindOfName(name);
+    const kind = kindOf(name);
     return `<span class="ks-file${isOn('file', kind)}" ${editAttr('file', `${FILE_KIND_LABEL[kind]}の色`)} data-kind="${kind}" data-drop-place="file">
       <span class="file__art">${fileArt(name, {colors: sk.file})}${fixedOne(data, find('file', kind))}
         ${marked ? `<span class="file__ribbon bm ${look.cls}${isOn('bookmark')}" style="${look.style}" ${editAttr('bookmark', 'しおり')} data-drop-place="bookmark">2${fixedOne(data, find('bookmark'))}</span>` : ''}</span>
@@ -376,7 +385,7 @@ function courseScene(data, {first, note, skin1}) {
   return noteSwatch(note, `ks-stage ks-stage--course${isOn('note')}`, `
     <div class="ks-place ks-place--heading" data-drop-place="heading" title="シールをここへドラッグすると見出しに貼れます">${stageLayer(data, sk.stickers, 'heading')}
       <span class="btn">← ホーム</span><h2>${esc(first.name)}</h2></div>
-    <div class="ks-notes">${roundNote(1, SCENE_FILES.slice(0, 2))}${roundNote(2, SCENE_FILES.slice(2, 4))}${roundNote(3, SCENE_FILES.slice(4))}</div>`);
+    <div class="ks-notes">${roundNote(1, SCENE_FILES.slice(0, 3))}${roundNote(2, SCENE_FILES.slice(3, 6))}${roundNote(3, SCENE_FILES.slice(6))}</div>`);
 }
 function viewerScene(data, {note, skin1}) {
   const sk = skin1;
@@ -389,7 +398,6 @@ function viewerScene(data, {note, skin1}) {
     <div class="ks-pdf ks-pdf--stage"><span></span><span></span><span></span>${ribbon(30, 'しおり1', true)}${ribbon(62, 'テストに出る', false)}
       <span class="ks-pdfnotes${isOn('sticky')}" ${editAttr('sticky', 'PDF に貼る付箋の色')}>${pdf.map((c) => `<span class="ks-chip" style="--sw: ${c}"></span>`).join('')}</span></div>`);
 }
-const kindOfName = (name) => ({pdf: 'pdf', pptx: 'slide', docx: 'doc', xlsx: 'sheet', png: 'image', zip: 'zip'})[name.split('.').pop()] ?? 'other';
 
 /** 場面の見本 */
 function stage(data, ctx) {
@@ -814,7 +822,7 @@ function repaintPreview() {
 
 // ---- 見本の上で直接さわる ----
 // 部分が見える場面（部分を選んだとき、今の場面になければ移る）
-const AVAIL = {note: ['home', 'course', 'viewer'], folder: ['home'], tape: ['home'], file: ['course'], sticky: ['course', 'viewer'], bookmark: ['course', 'viewer']};
+const AVAIL = {note: ['home', 'course', 'viewer'], folder: ['home'], tape: ['home'], file: ['course'], sticky: ['course', 'viewer'], bookmark: ['viewer']};
 function selectPart(part, kind = null) {
   ui.part = part;
   ui.selected = null;
