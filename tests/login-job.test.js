@@ -5,6 +5,10 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createSecrets} from '../src/main/secrets.js';
 import {JobRunner} from '../src/main/jobs.js';
+import {LMS_TERMS_VERSION} from '../src/shared/lms-terms.js';
+
+// いまの版の利用規約に同意している設定
+const agreed = (key) => (key === 'lms.terms' ? {version: LMS_TERMS_VERSION} : null);
 
 // 復号できるかを切り替えられる偽の safeStorage（キーチェーンの許可がない版を真似る）
 const fakeSafeStorage = () => {
@@ -46,7 +50,7 @@ test('起動時のログインのジョブ：接続ごとにログインし、�
   const tried = [];
   const notified = [];
   const ctx = {
-    repo: {listConnections: () => connections},
+    repo: {listConnections: () => connections, getSetting: agreed},
     registry: {forConnection: (c) => c.id},
     browser: {state: 'ready'},
     secrets: {isLocked: (prefix) => prefix === 'conn:b:'},
@@ -79,7 +83,7 @@ test('同期のジョブ：1 つの接続が失敗しても（未対応の種類
   ];
   const ran = [];
   const ctx = {
-    repo: {listTerms: () => [{id: 't', start_date: '2000-01-01', end_date: '2999-12-31'}], listConnections: () => connections, getSetting: () => null},
+    repo: {listTerms: () => [{id: 't', start_date: '2000-01-01', end_date: '2999-12-31'}], listConnections: () => connections, getSetting: agreed},
     registry: {
       forConnection: (c) => {
         if (c.kind === 'generic') throw new Error('未対応の接続の種類: generic');
@@ -100,4 +104,19 @@ test('同期のジョブ：1 つの接続が失敗しても（未対応の種類
   assert.equal(r.failures, 1);
   assert.equal(r.status, 'failed');
   assert.match(r.message, /汎用：この接続の種類はまだ同期できません/);
+});
+
+test('利用規約：いまの版に同意していなければ、同期もログインもせずに知らせる', async () => {
+  let ran = 0;
+  const ctx = {
+    repo: {listTerms: () => [], listConnections: () => [{id: 'a', kind: 'api', label: 'Moodle', status: 'ok'}], getSetting: (k) => (k === 'lms.terms' ? {version: '2000-01-01'} : null)},
+    registry: {forConnection: () => 'x'},
+    engine: {run: async () => ran++, restoreSession: async () => ran++}
+  };
+  const jobs = new JobRunner(ctx);
+  const s = await jobs.run({kind: 'sync', payload: {}});
+  assert.equal(s.status, 'terms-required');
+  assert.match(s.message, /利用規約に同意してください/);
+  assert.equal((await jobs.run({kind: 'login', payload: {}})).status, 'terms-required');
+  assert.equal(ran, 0);
 });

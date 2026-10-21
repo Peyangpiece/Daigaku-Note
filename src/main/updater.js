@@ -26,6 +26,7 @@ import path from 'node:path';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {
+  MAC_SIGNING_LEAF,
   REPLACE_SCRIPT,
   appBundle,
   canReplace,
@@ -253,7 +254,7 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     if (canReplace(bundle, writable)) {
       expectUpdate(version);
       try {
-        spawn('/bin/sh', ['-c', REPLACE_SCRIPT, 'sh', String(process.pid), file, bundle, version, logFile, sha512], {
+        spawn('/bin/sh', ['-c', REPLACE_SCRIPT, 'sh', String(process.pid), file, bundle, version, logFile, sha512, MAC_SIGNING_LEAF], {
           detached: true,
           stdio: 'ignore'
         }).unref();

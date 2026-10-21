@@ -181,10 +181,11 @@ function render() {
   const snap = same ? snapshot(view) : null;
   if (route === '/setup' && !same) resetSetup('first');
   if (route === '/settings/lms' && !same) resetSetup('lms', state.data);
+  if (route === '/settings/lms-terms' && !same) resetSetup('terms', state.data);
   if (route === '/settings/term' && !same) resetTerm();
   if (!same && !route.startsWith('/quiz') && !route.startsWith('/review')) leaveQuiz();
   if (!same && !route.startsWith('/quiz-edit/')) leaveQuizEdit();
-  if (route === '/setup' || route === '/settings/lms') view.innerHTML = renderSetup(state);
+  if (route === '/setup' || route === '/settings/lms' || route === '/settings/lms-terms') view.innerHTML = renderSetup(state);
   else if (route.startsWith('/course/')) {
     const course = state.data.courses.find((c) => c.id === route.slice('/course/'.length));
     view.innerHTML = course?.kind === 'folder' ? renderFolder(state, course) : renderCourse(state, route.slice('/course/'.length));
@@ -222,6 +223,7 @@ api.on('sync.finished', (r) => {
   else if (r.status === 'failed' || r.status === 'browser-not-ready')
     toast(r.message || '同期に失敗しました', {error: true});
   else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 学期）', {error: true});
+  else if (r.status === 'terms-required') toast(r.message, {error: true});
   else
     toast(
       `同期しました：資料 ${r.materials ?? 0} 件保存${r.failures ? `・失敗 ${r.failures} 件（${r.message ?? ''}）` : ''}`

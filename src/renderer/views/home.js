@@ -3,6 +3,7 @@ import {esc, jaWrap, progressText} from '../app.js';
 import {browserState} from './settings.js';
 import {folderShown, scopeLabel} from './folder.js';
 import {features} from '../../shared/profile.js';
+import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 import {folderLook, shapesOf, skinOf, stickerImg, stickerLayer} from '../skin.js';
 
 // shared/ids.js の tapeAngle と同じ計算（レンダラは main のモジュールを読まないので写す）
@@ -129,6 +130,9 @@ export function renderHome({data, progress}) {
     );
   // LMS の登録は任意。つないでいなければ、同期のボタンとブラウザの準備の知らせは出さない
   const hasLms = data.connections.some((c) => c.kind !== 'manual' && c.status !== 'disabled');
+  // 規約の版が上がった（または v0.5.11 より前につないだ）ときは、同意し直すまで同期しない
+  if (hasLms && data.settings.lmsTerms?.version !== LMS_TERMS_VERSION)
+    attention.push('<li>大学サービスとの連携の利用規約に同意すると、同期を続けます。<button class="btn btn--small" data-action="nav" data-route="/settings/lms-terms">利用規約を読む</button></li>');
   if (hasLms && data.browser?.state === 'failed')
     attention.push(
       `<li>LMS を読むためのブラウザの${browserState(data.browser)}<button class="btn btn--small" data-action="install-browser">準備し直す</button></li>`

@@ -5,6 +5,12 @@
 import path from 'node:path';
 
 export const RELEASE_BASE = 'https://github.com/Peyangpiece/Daigaku-Note/releases/download';
+/**
+ * 配布物に署名する証明書（Daigaku Note Signing）の指紋（SHA-1）。新しい版は、この証明書で署名されていることを
+ * codesign の要件（certificate leaf = H"…"）で確かめてから入れ替える。名前（Authority=）は誰でも同じものを作れるので見ない。
+ * 証明書を作り直したときは、ここを新しい指紋にした版を、古い証明書で署名して先に出す（そうしないと更新が止まる）
+ */
+export const MAC_SIGNING_LEAF = '37e5ee427fb4249f301d4633725d5ef641d10014';
 
 /** electron-builder.yml の artifactName（daigaku-note-${version}-${os}-${arch}.${ext}）に合わせた名前 */
 export const macInstallerName = (version, arch) =>
@@ -56,12 +62,13 @@ export function canReplace(bundle, writable) {
 }
 
 /**
- * 入れ替えのスクリプト。引数：$1 終了を待つプロセス番号、$2 .dmg、$3 入れ替える .app、$4 新しい版、$5 記録のファイル、$6 .dmg の sha512（base64）
+ * 入れ替えのスクリプト。引数：$1 終了を待つプロセス番号、$2 .dmg、$3 入れ替える .app、$4 新しい版、$5 記録のファイル、$6 .dmg の sha512（base64）、
+ * $7 署名の証明書の指紋（MAC_SIGNING_LEAF）
  * 流れ：終了を待つ → .dmg を作業用フォルダへ写して sha512 を確かめる（写したものだけを使う。元の場所は書き換えられうるため）
  * → 見えない形でつなぐ → 同じ CFBundleIdentifier の .app を隣に書き出す → 版と署名を確かめる → 入れ替える → 外す → 開く。
  * どこかで失敗したら元のまま開き直す。コマンドは環境変数で差し替えられる（テスト用）
  */
-export const REPLACE_SCRIPT = `pid=$1 dmg=$2 app=$3 want=$4 log=$5 sum=$6
+export const REPLACE_SCRIPT = `pid=$1 dmg=$2 app=$3 want=$4 log=$5 sum=$6 leaf=$7
 HDIUTIL=\${HDIUTIL:-/usr/bin/hdiutil} PLIST=\${PLIST:-/usr/libexec/PlistBuddy} DITTO=\${DITTO:-/usr/bin/ditto} OPEN=\${OPEN:-/usr/bin/open}
 XATTR=\${XATTR:-/usr/bin/xattr} CODESIGN=\${CODESIGN:-/usr/bin/codesign} OPENSSL=\${OPENSSL:-/usr/bin/openssl} WAIT=\${WAIT:-240}
 say(){ printf '%s %-5s %s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >> "$log"; }
@@ -70,6 +77,7 @@ work=$(mktemp -d "\${TMPDIR:-/tmp}/daigaku-update.XXXXXX") || { say ERROR "作�
 mnt=$work/mnt copy=$work/installer.dmg attached=
 fail(){ say ERROR "$1"; if [ -n "$attached" ]; then "$HDIUTIL" detach "$mnt" -quiet; fi; rm -rf "$work" "$app.new"; "$OPEN" "$app"; exit 1; }
 [ -n "$sum" ] || fail ".dmg を確かめる値がありません"
+[ -n "$leaf" ] || fail "署名を確かめる証明書の指紋がありません"
 cp "$dmg" "$copy" || fail ".dmg を写せません"
 got=$("$OPENSSL" dgst -sha512 -binary "$copy" | "$OPENSSL" base64 -A)
 [ "$got" = "$sum" ] || fail ".dmg が配布物と一致しません"
@@ -85,9 +93,7 @@ rm -rf "$app.new"
 got=$("$PLIST" -c "Print :CFBundleShortVersionString" "$app.new/Contents/Info.plist" 2>/dev/null)
 [ "$got" = "$want" ] || fail "書き出した版が $want ではありません（$got）"
 "$CODESIGN" --verify --deep --strict "$app.new" >/dev/null 2>&1 || fail "新しい版の署名が壊れています"
-have=$("$CODESIGN" -dvv "$app" 2>&1 | grep '^Authority=')
-new=$("$CODESIGN" -dvv "$app.new" 2>&1 | grep '^Authority=')
-if [ -n "$have" ] && [ "$have" != "$new" ]; then fail "新しい版の署名（証明書）がいまの大学ノートと違います"; fi
+"$CODESIGN" --verify --strict -R="certificate leaf = H\\"$leaf\\"" "$app.new" >/dev/null 2>&1 || fail "新しい版が大学ノートの証明書で署名されていません"
 rm -rf "$app.old"
 mv "$app" "$app.old" || fail "いまの大学ノートを動かせません"
 if ! mv "$app.new" "$app"; then mv "$app.old" "$app"; fail "新しい版に入れ替えられません"; fi

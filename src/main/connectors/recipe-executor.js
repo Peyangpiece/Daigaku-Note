@@ -5,7 +5,7 @@ import {readdir, unlink, writeFile} from 'node:fs/promises';
 import {applyRegex, applyUniversityOverride, fillTemplate, parseFieldList, resolveHref} from '../../shared/recipe.js';
 import {parseRound} from '../../shared/rounds.js';
 import {parseSlot} from './slot.js';
-import {markLoginForm, noAutofillHost} from '../browser/login-form.js';
+import {credentialUrlAllowed, markLoginForm, noAutofillHost} from '../browser/login-form.js';
 
 const META = new Set(['url', 'items', 'openBeforeRead', 'files', 'container']);
 const FILE_LINK = /\.(pdf|pptx?|docx?|xlsx?|csv|txt|zip|png|jpe?g|gif|mp4|mp3|m4a|mov)(\?|#|$)|\/file[s]?\/|\/download|forcedownload|pluginfile|attachment/i;
@@ -299,6 +299,9 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         if (host === baseHost && (await this._isLoggedIn(page, ctx))) return;
         if (!host || !allowed(host)) throw err('login-required', 'ログインのページに自動では入れません。一度ブラウザ窓でログインしてください（通るページを覚えます）');
         if (noAutofillHost(host)) throw err('login-needs-user', 'Google・Microsoft のログインは自動では入れません。ブラウザ窓でログインしてください');
+        // 自動ログインは、本人が見えるログイン窓でログインしたときに通ったホスト（allowedHosts）にも入れる。ただし https だけ
+        if (!credentialUrlAllowed(page.url(), {base: ctx.base, hosts: ctx.allowedHosts}))
+          throw err('login-required', 'このログインのページには ID・パスワードを自動では入れません。ブラウザ窓でログインしてください');
         const f = form
           ? {user: (await page.locator(form.user).count()) > 0, password: (await page.locator(form.password).count()) > 0, submit: true}
           : await page.evaluate(markLoginForm).catch(() => ({user: false, password: false, submit: false}));
@@ -390,7 +393,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const cred = credentials ?? (await saved());
       const r = await session.loginVisible(ctx.connection, {
         url: ctx.base + '/',
-        autofill: cred?.user ? cred : null,
+        autofill: cred?.user ? {...cred, base: ctx.base, hosts: ctx.recipe.allowedHosts ?? []} : null,
         isLoggedIn: async (page) => {
           try {
             return new URL(page.url()).hostname === safeHost(ctx.base) && (await this._isLoggedIn(page, ctx));
