@@ -16,6 +16,8 @@ const FLOWS = {
     ['学期の設定', stepTerm],
     ['保存先', stepRoot]
   ],
+  // 規約の版が上がったとき、今ある接続のために同意し直すだけの手順
+  terms: [['利用規約', stepLmsTerms]],
   lms: [
     ['利用規約', stepLmsTerms],
     ['LMS の URL', stepUrl],
@@ -55,7 +57,7 @@ export function resetSetup(kind = 'first', data = null) {
   // LMS とつなぐときの学期の設定は、学期がまだないときだけ
   // 社会人は学期を使わないので、学期の設定を挟まない
   const terms = features({role: data?.settings?.role, uses: []}).terms;
-  flow = kind === 'lms' ? FLOWS.lms.filter(([name]) => name !== '学期の設定' || (terms && !data?.terms?.length)) : FLOWS.first;
+  flow = kind === 'lms' ? FLOWS.lms.filter(([name]) => name !== '学期の設定' || (terms && !data?.terms?.length)) : kind === 'terms' ? FLOWS.terms : FLOWS.first;
 }
 const termsAccepted = (data) => data.settings.lmsTerms?.version === LMS_TERMS_VERSION;
 /** 選んだものに合わせた手順。授業の資料は大学生で「授業の資料を活用」を選んだときだけ、利用規約は大学サービスとつなぐときだけ（同意済みなら出さない） */
@@ -87,7 +89,7 @@ export function renderSetup({data}) {
     .join('');
   const body = steps[step][1](data, step + 1);
   queueMicrotask(bind);
-  const title = flow === FLOWS.first ? 'はじめに' : 'LMS とつなぐ';
+  const title = flow === FLOWS.first ? 'はじめに' : flow === FLOWS.terms ? '利用規約への同意' : 'LMS とつなぐ';
   return `<div style="max-width: 720px"><p class="muted" style="margin: 0 0 var(--space-1)">${title}</p><ol class="steps" aria-label="${title}の手順">${list}</ol><section class="card">${body}</section></div>`;
 }
 
@@ -288,6 +290,13 @@ function bind() {
       const r = await api['settings.update']({patch: {acceptLmsTerms: LMS_TERMS_VERSION}});
       if (r?.error) return toast(r.error, {error: true});
       draft.agreed = true;
+      if (flow === FLOWS.terms) {
+        toast('利用規約に同意しました。同期を続けます');
+        resetSetup('first');
+        location.hash = '#/';
+        await reload(); // 「要確認」の知らせを消す
+        return;
+      }
       next();
     };
   if ($('su-detect')) $('su-detect').onclick = detect;

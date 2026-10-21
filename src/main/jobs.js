@@ -1,7 +1,11 @@
 // ジョブの待ち行列（SPEC §13.6、DESIGN-M0 §4）。1 件ずつ順に実行する。同じ種類・同じ対象は 1 つにまとめる。
 import {autoTerm, currentTerm} from '../shared/term.js';
+import {LMS_TERMS_VERSION} from '../shared/lms-terms.js';
 
-const RETRY_DELAYS = [15 * 60e3]; // 失敗した同期は 15 分後に 1 回だけやり直す
+const RETRY_DELAYS = [15 * 60e3];
+const TERMS_MESSAGE = '大学サービスとの連携の利用規約に同意してください（ホームの「要確認」か 設定 → LMS との連携 から）';
+/** いまの版の利用規約に同意しているか（版を上げたら、同意し直すまで同期とログインを止める） */
+const termsAccepted = (repo) => repo.getSetting('lms.terms', null)?.version === LMS_TERMS_VERSION; // 失敗した同期は 15 分後に 1 回だけやり直す
 
 /** 画面に出す文言（英語の例外をそのまま見せない。DESIGN-M0 §11） */
 export function friendlyError(e) {
@@ -81,6 +85,7 @@ export class JobRunner {
     const {repo, engine, registry, files} = this.ctx;
     switch (job.kind) {
       case 'sync': {
+        if (!termsAccepted(repo)) return {status: 'terms-required', message: TERMS_MESSAGE, courses: 0, materials: 0, failures: 0};
         const today = new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'});
         // 社会人は学期を設定しないので、学期がなければ今日の日付から仮の学期を作る（画面には出さない）
         if (!repo.listTerms().length && repo.getSetting('profile.role', null) === 'worker') repo.upsertTerm(autoTerm(today));
@@ -135,6 +140,7 @@ export class JobRunner {
         // 起動したとき（更新のあとを含む）：同期を待たずに、各接続のセッションを確かめて切れていれば自動でログインする
         const connections = repo.listConnections().filter((c) => c.status !== 'disabled' && c.kind !== 'manual');
         const result = {loggedIn: 0, failures: 0, messages: []};
+        if (connections.length && !termsAccepted(repo)) return {...result, status: 'terms-required', message: TERMS_MESSAGE};
         for (const connection of connections) {
           if (connection.kind === 'recipe' && this.ctx.browser?.state !== 'ready') continue; // ブラウザがなければ次の同期に任せる
           const r = await Promise.resolve()

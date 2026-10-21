@@ -3,7 +3,7 @@
 import {app, BrowserWindow, Menu, Tray, dialog, nativeImage, nativeTheme, net, shell} from 'electron';
 import {existsSync, mkdirSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {openDatabase} from './db/db.js';
 import {Repo} from './db/repo.js';
 import {createSecrets} from './secrets.js';
@@ -93,8 +93,18 @@ function openWindow(route = null) {
     if (/^https:\/\//.test(url)) shell.openExternal(url);
     return {action: 'deny'};
   });
+  // 移れるのはアプリ自身の画面（index.html。# の後ろは画面の中の経路）だけ。ほかのファイルへも移らない
+  // （日本語の入ったパスの書き方の違いで外れないよう、%xx を戻して比べる）
+  const plain = (u) => {
+    try {
+      return decodeURI(String(u).split('#')[0]);
+    } catch {
+      return String(u);
+    }
+  };
+  const home = plain(pathToFileURL(RENDERER).href);
   win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith('file://')) e.preventDefault();
+    if (plain(url) !== home) e.preventDefault();
   });
   // 右クリックのメニュー：入力欄では切り取り・コピー・貼り付け・すべて選択、選んだ文字ではコピー
   win.webContents.on('context-menu', (_e, params) => {

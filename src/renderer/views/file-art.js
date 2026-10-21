@@ -51,7 +51,8 @@ export function fileArt(name, {colors = null, art = null, editable = false} = {}
   const ext = extOf(name);
   const [kind, base] = KIND[ext] ?? ['other', 'var(--paper-ink-weak)'];
   const color = colors?.[kind] && colors[kind] !== 'default' ? colors[kind] : base;
-  const label = ext.length <= 4 ? ext.toUpperCase() : '';
+  // 拡張子は英数字だけを出す（ファイル名はパソコンのフォルダから来るので、< や " を含むことがある）
+  const label = /^[a-z0-9]{1,4}$/.test(ext) ? ext.toUpperCase() : '';
   return `<svg class="file-art" viewBox="0 0 54 66" width="54" height="66" aria-hidden="true" style="color: ${color}">
     <path d="M6 3h30l12 12v46a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="var(--card)" stroke="var(--paper-ink)" stroke-width="1.6" stroke-linejoin="round"/>
     <path d="M36 3v12h12" fill="color-mix(in srgb, currentColor 35%, var(--card))" stroke="var(--paper-ink)" stroke-width="1.6" stroke-linejoin="round"/>

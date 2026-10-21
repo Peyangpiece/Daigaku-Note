@@ -12,6 +12,44 @@ export const NO_AUTOFILL_HOSTS = [
 
 export const noAutofillHost = (host) => NO_AUTOFILL_HOSTS.some((h) => host === h || host.endsWith('.' + h));
 
+// 日本の属性型の第 2 レベル（ac.jp・co.jp など）。この下の 1 つまでを「同じ組織のドメイン」とみなす
+const JP_SECOND = new Set(['ac', 'co', 'or', 'ne', 'go', 'ed', 'lg', 'gr', 'ad']);
+const LOCAL = new Set(['localhost', '127.0.0.1']);
+/** 組織のドメイン（lms.example-u.ac.jp → example-u.ac.jp、lms.example.edu → example.edu） */
+export function siteOf(host) {
+  const h = String(host ?? '').toLowerCase();
+  if (LOCAL.has(h) || /^\d+(\.\d+){3}$/.test(h)) return h;
+  const p = h.split('.').filter(Boolean);
+  const n = p.length >= 3 && p.at(-1) === 'jp' && JP_SECOND.has(p.at(-2)) ? 3 : 2;
+  return p.slice(-n).join('.');
+}
+/**
+ * 保存した ID・パスワードを入れてよいページか。https（手元の試験用の localhost は除く）で、
+ * LMS と同じ組織のドメイン（大学の統合認証など）か、レシピに書いたホストだけ。
+ * 一度訪れただけのホストや、大学と関係のないページには入れない
+ */
+export function credentialUrlAllowed(url, {base, hosts = []} = {}) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const host = u.hostname.toLowerCase();
+  if (u.protocol !== 'https:' && !LOCAL.has(host)) return false;
+  if (noAutofillHost(host)) return false;
+  const baseHost = (() => {
+    try {
+      return new URL(base).hostname.toLowerCase();
+    } catch {
+      return String(base ?? '').toLowerCase();
+    }
+  })();
+  if (!baseHost) return false;
+  if (host === baseHost || siteOf(host) === siteOf(baseHost)) return true;
+  return hosts.some((h) => host === h || host.endsWith('.' + h));
+}
+
 /**
  * ページの中で欄を探して印を付ける（Playwright の page.evaluate に渡すので、外の変数を使わない）。
  * 返り値：{user, password, submit, extra, filledUser, filledPassword}

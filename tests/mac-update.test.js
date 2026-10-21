@@ -6,6 +6,7 @@ import {chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSy
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {
+  MAC_SIGNING_LEAF,
   REPLACE_SCRIPT,
   appBundle,
   canReplace,
@@ -59,6 +60,7 @@ test('入れ替えられる場所か', () => {
   assert.ok(!canReplace(null, yes));
 });
 
+const GOOD_LEAF = MAC_SIGNING_LEAF;
 // 入れ替えのスクリプトを、Mac のコマンドの代わりの小さなスクリプトで動かす（hdiutil は .dmg の代わりのフォルダを写す）
 function sandbox() {
   const dir = mkdtempSync(path.join(tmpdir(), 'daigaku-update-'));
@@ -95,14 +97,15 @@ function sandbox() {
     DITTO: fake('ditto', 'cp -R "$1" "$2"'),
     OPEN: fake('open', `echo "$1" >> "${opened}"`),
     XATTR: fake('xattr', 'exit 0'),
-    CODESIGN: fake('codesign', '[ "$1" = -dvv ] && echo "Signature=adhoc" >&2; exit 0')
+    // -R（要件）付きの確かめは、正しい指紋のときだけ通す
+    CODESIGN: fake('codesign', `for a; do case "$a" in -R=*) [ "$a" = '-R=certificate leaf = H"${GOOD_LEAF}"' ] || exit 1;; esac; done; exit 0`)
   };
-  const run = (sum) => {
+  const run = (sum, leaf = GOOD_LEAF) => {
     const log = path.join(dir, 'updater.log');
     // プロセス番号 1 の代わりに、もう終わったプロセスを渡す（待たずに進む）
     let code = 0;
     try {
-      execFileSync('/bin/sh', ['-c', REPLACE_SCRIPT, 'sh', '999999', dmg, app, '0.2.0', log, sum], {env});
+      execFileSync('/bin/sh', ['-c', REPLACE_SCRIPT, 'sh', '999999', dmg, app, '0.2.0', log, sum, leaf], {env});
     } catch (e) {
       code = e.status;
     }
@@ -146,4 +149,15 @@ test('入れ替え：sha512 が合わなければ元のまま開き直す', {ski
   assert.match(log, /\.dmg が配布物と一致しません/);
   assert.match(s.version(), /CFBundleShortVersionString=0\.1\.0/);
   assert.equal(s.opened(), s.app);
+});
+
+test('入れ替え：新しい版が大学ノートの証明書で署名されていなければ（指紋が違う・指紋がない）入れ替えない', {skip: noShell}, () => {
+  for (const leaf of ['0000000000000000000000000000000000000000', '']) {
+    const s = sandbox();
+    const {code, log} = s.run(s.sha, leaf);
+    assert.equal(code, 1);
+    assert.match(log, leaf ? /大学ノートの証明書で署名されていません/ : /証明書の指紋がありません/);
+    assert.match(s.version(), /CFBundleShortVersionString=0\.1\.0/);
+    assert.equal(s.opened(), s.app);
+  }
 });
