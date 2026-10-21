@@ -286,11 +286,11 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
   async function check(manual = false) {
     if (!updater) {
       if (manual)
-        message({
-          type: 'info',
-          message: '開発中の大学ノートは更新を確かめません',
-          detail: '配布物（.dmg・.exe）から入れたときに働きます。'
-        });
+        message(
+          process.windowsStore
+            ? {type: 'info', message: 'Microsoft Store の大学ノートは、Store が更新します', detail: 'Microsoft Store の「ライブラリ」から更新を確かめられます。'}
+            : {type: 'info', message: '開発中の大学ノートは更新を確かめません', detail: '配布物（.dmg・.exe）から入れたときに働きます。'}
+        );
       return;
     }
     try {
@@ -324,6 +324,8 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     cleanupDownloads();
     await checkExpected();
     if (!app.isPackaged) return log('INFO', '開発中のため更新を確かめません');
+    // Microsoft Store の版（MSIX）は Store が更新する。自分で入れ替えると Store の版とずれる
+    if (process.windowsStore) return log('INFO', 'Microsoft Store の版のため、更新は Store に任せます');
     const {default: pkg} = await import('electron-updater');
     updater = pkg.autoUpdater;
     updater.logger = {

@@ -22,6 +22,7 @@ import {defaultRoot} from '../shared/paths.js';
 import {createUpdater} from './updater.js';
 import {createFolders} from './folders.js';
 import {createQuizService} from './quiz/service.js';
+import {runSelfTest, selfTestPath} from './self-check.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(here, '..', 'renderer', 'index.html');
@@ -51,9 +52,12 @@ function devBuild() {
 }
 const BUILD = devBuild();
 
+// 配布物の動作確認（--self-test=<結果のパス>）。窓は開かず、確かめて終わる（self-check.js）
+const SELF_TEST = selfTestPath();
+
 // 2 つ目の起動はすぐに終わる（app.quit() は非同期で、そのまま起動の処理が進んでデータベースまで開いていた）
-const primary = app.requestSingleInstanceLock({build: BUILD});
-if (!primary) app.exit(0);
+const primary = SELF_TEST ? false : app.requestSingleInstanceLock({build: BUILD});
+if (!primary && !SELF_TEST) app.exit(0);
 
 let win = null,
   tray = null;
@@ -216,6 +220,7 @@ function buildTray() {
 }
 
 app.whenReady().then(async () => {
+  if (SELF_TEST) return runSelfTest(SELF_TEST);
   if (!primary) return;
   const userData = app.getPath('userData');
   ensureDirs(userData);
