@@ -1867,20 +1867,49 @@ textarea.input {
   position: absolute;
   right: -6px;
   z-index: 4;
+  display: flex;
   max-width: 120px;
   padding: 2px 8px 2px 10px;
   border: 0;
-  border-radius: 4px 0 0 4px;
-  background: #e8505b;
-  color: #fff;
   font-size: 11px;
   line-height: 1.5;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   transform: translateY(-50%);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.25));
   cursor: pointer;
+}
+.bookmark-ribbon__text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* しおりのリボン（着せ替え：色は --bm-color、形は bm--tag・bm--ribbon・bm--round）。
+   形は ::before の地で作る（切り抜きで、先に貼ったシールまで切れないように） */
+.bm {
+  isolation: isolate;
+  border-radius: 4px 0 0 4px;
+  background: transparent;
+  color: var(--bm-ink, #fff);
+}
+.bm::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--bm-color, #e8505b);
+}
+.bm--ribbon {
+  border-radius: 0;
+  padding-left: 14px;
+}
+.bm--ribbon::before {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 8px 50%);
+}
+.bm--round {
+  border-radius: 999px;
+}
+.bm .sticker-layer--fixed {
+  z-index: 1;
 }
 /* ボタンの並びのすぐ下に説明があるとき（自分のフォルダの画面）は、説明をボタンに寄せる */
 .course-actions + .course-help {
@@ -2488,4 +2517,93 @@ textarea.input {
 }
 .ks-book__folder {
   left: 18px;
+}
+
+/* 資料のイラスト：種類ごとのシール（右上）と、しおりのある資料のリボン（右の端から出る） */
+.file__art {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+.sticker-layer--fixed .sticker {
+  pointer-events: none;
+}
+.file__ribbon {
+  position: absolute;
+  top: 8px;
+  right: -12px;
+  min-width: 20px;
+  padding: 0 5px 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+}
+.file__ribbon.bm--ribbon {
+  padding-left: 10px;
+}
+
+/* 着せ替えページの見本：ファイル・付箋・しおり */
+.ks-files {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 12px;
+  padding: 8px;
+}
+.ks-file {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 8px;
+}
+.ks-file.is-current {
+  background: color-mix(in srgb, var(--paper-ink) 7%, transparent);
+}
+.ks-notes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.ks-note {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-height: 84px;
+  padding: 14px 12px;
+  background: color-mix(in srgb, var(--note-color) 55%, var(--note-mix, #fff));
+  color: #2b2b2b;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
+}
+.ks-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 16px 0 0;
+}
+.ks-chip {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--sw);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.ks-pdf--bm {
+  overflow: visible;
+}
+.ks-pdf--bm .bookmark-ribbon {
+  right: -10px;
+  cursor: default;
+}
+.ks-pdf--bm [data-preview-fixed] {
+  pointer-events: auto;
+}
+.ks-gallery__lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+[data-preview-fixed] .sticker {
+  pointer-events: auto;
+  cursor: pointer;
 }

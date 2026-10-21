@@ -170,6 +170,8 @@ function render() {
     if (layer) view.insertAdjacentHTML('afterbegin', layer.replace('<div class="sticker-layer', '<div id="viewer-stickers" class="sticker-layer'));
     return;
   }
+  // 編集画面を出たら読み直す（足したしおりなどを授業画面に出すため）
+  if (viewer) setTimeout(() => reload().catch(console.error));
   viewer?.unmount();
   viewer = null;
   const same = route === lastRoute;

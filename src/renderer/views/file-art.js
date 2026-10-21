@@ -35,10 +35,14 @@ const MARK = {
 
 export const extOf = (name) => String(name ?? '').split('.').pop().toLowerCase();
 
-/** 資料のイラスト。幅 54・高さ 66 の紙（角が折れている）＋種類の色と印＋拡張子のラベル */
-export function fileArt(name) {
+/** 資料の種類（印の名前。着せ替えで種類ごとに色・シールを変える。shared/skin.js の FILE_KINDS） */
+export const kindOf = (name) => KIND[extOf(name)]?.[0] ?? 'other';
+
+/** 資料のイラスト。幅 54・高さ 66 の紙（角が折れている）＋種類の色と印＋拡張子のラベル。colors は着せ替えの種類ごとの色（default ならはじめの色） */
+export function fileArt(name, {colors = null} = {}) {
   const ext = extOf(name);
-  const [kind, color] = KIND[ext] ?? ['other', 'var(--paper-ink-weak)'];
+  const [kind, base] = KIND[ext] ?? ['other', 'var(--paper-ink-weak)'];
+  const color = colors?.[kind] && colors[kind] !== 'default' ? colors[kind] : base;
   const label = ext.length <= 4 ? ext.toUpperCase() : '';
   return `<svg class="file-art" viewBox="0 0 54 66" width="54" height="66" aria-hidden="true" style="color: ${color}">
     <path d="M6 3h30l12 12v46a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="var(--card)" stroke="var(--paper-ink)" stroke-width="1.6" stroke-linejoin="round"/>

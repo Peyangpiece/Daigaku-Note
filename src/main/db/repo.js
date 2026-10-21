@@ -221,6 +221,10 @@ export class Repo {
       this.remove('skin_template', id);
     });
   }
+  /** 資料（SHA-256）ごとのしおりの数（授業画面で、しおりのある資料にリボンを出す） */
+  bookmarkCounts() {
+    return Object.fromEntries(this.db.prepare('SELECT sha256, COUNT(*) AS n FROM bookmark GROUP BY sha256').all().map((r) => [r.sha256, Number(r.n)]));
+  }
   listStickers() {
     return this.db.prepare('SELECT * FROM sticker ORDER BY created_at DESC').all();
   }

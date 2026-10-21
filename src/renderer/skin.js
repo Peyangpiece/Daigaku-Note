@@ -112,3 +112,16 @@ export function stickerLayer(stickers, place, data) {
   const shapes = shapesOf(data);
   return `<div class="sticker-layer sticker-layer--${place}" aria-hidden="true">${list.map((s) => stickerImg(s, shapes)).join('')}</div>`;
 }
+
+/** 決まった位置に貼るシール（回の付箋の角・資料のイラスト・しおりのリボンの先）。x・y は貼る先の中の割合 */
+export function fixedSticker(st, data, {x, y, base, cls = ''}) {
+  if (!st) return '';
+  const img = stickerImg({...st, x, y}, shapesOf(data), {base});
+  return img ? `<span class="sticker-layer sticker-layer--fixed ${cls}" aria-hidden="true">${img}</span>` : '';
+}
+/** しおりのリボンの色と形（着せ替え）。色が default ならはじめの赤 */
+export const BOOKMARK_COLOR = '#e8505b';
+export function bookmarkLook(skin) {
+  const color = skin.bookmark.color === 'default' ? BOOKMARK_COLOR : skin.bookmark.color;
+  return {cls: `bm--${skin.bookmark.shape}`, style: `--bm-color: ${color}; --bm-ink: ${inkOn(color)}`};
+}

@@ -1,8 +1,8 @@
 // 授業画面（SPEC §8.2）：回ごとの付箋に、資料がイラスト付きの紙で貼ってある。
 // 自分のファイルは「自分の付箋」に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
-import {esc, jaWrap, progressText} from '../app.js';
-import {extOf, fileArt} from './file-art.js';
-import {skinOf, stickerLayer} from '../skin.js';
+import {esc, jaWrap, progressText, state} from '../app.js';
+import {extOf, fileArt, kindOf} from './file-art.js';
+import {bookmarkLook, fixedSticker, skinOf, stickerLayer} from '../skin.js';
 
 const fmtDate = (d) =>
   d
@@ -62,9 +62,18 @@ export function fileCard(m, course, places) {
     : '';
   // PDF はアプリ内のビューアで開いて編集する。書き出した PDF（§9.7：注釈の対象にしない）とほかの種類は OS の既定のアプリで開く
   const action = extOf(m.name) === 'pdf' && m.source !== 'export' ? 'open-pdf' : 'open-material';
+  // 着せ替え（SPEC-KISEKAE）：種類ごとの色とシール、しおりのある資料にはリボン
+  const sk = skinOf(state.data, course);
+  const kind = kindOf(m.name);
+  const bm = bookmarkLook(sk);
+  const bmSticker = sk.stickers.find((st) => st.place === 'bookmark');
   return `<div class="file${ok ? '' : ' file--missing'}"${ok ? ` draggable="true" data-drag-material="${esc(m.id)}"` : ''}>
-    <button class="file__open" data-action="${action}" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}">
-      ${fileArt(m.name)}
+    <button class="file__open" data-action="${action}" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}${m.bookmarks ? `（しおり ${m.bookmarks}）` : ''}">
+      <span class="file__art">${fileArt(m.name, {colors: sk.file})}${fixedSticker(
+        sk.stickers.find((st) => st.place === 'file' && st.kind === kind),
+        state.data,
+        {x: 0.12, y: 0.16, base: 30}
+      )}${m.bookmarks ? `<span class="file__ribbon bm ${bm.cls}" style="${bm.style}" aria-hidden="true">${m.bookmarks}${fixedSticker(bmSticker, state.data, {x: 0, y: 0.5, base: 22})}</span>` : ''}</span>
       ${unread ? `<span class="file__dot" style="--dot-color: var(--c${course.color})" aria-hidden="true"></span><span class="sr-only">未読</span>` : ''}
       <span class="file__name">${esc(m.name)}</span>
       ${m.source === 'notice' ? '<span class="file__tag">お知らせ</span>' : ''}
@@ -173,7 +182,12 @@ function roundNote(round, list, course, today, quizzes = {}, places = []) {
   ]
     .filter(Boolean)
     .join(' ');
-  return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: var(--pop${round.number === 0 ? 1 : ((round.number - 1) % 8) + 1})" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}">
+  // 回の付箋の色：第 1 回から順に 8 色（着せ替えで変えていなければ --pop1〜8）。角にはシールを 1 枚
+  const sk = skinOf(state.data, course);
+  const i = round.number === 0 ? 0 : (round.number - 1) % 8;
+  const noteColor = sk.sticky.round === 'default' ? `var(--pop${i + 1})` : sk.sticky.round[i];
+  return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: ${noteColor}" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}">
+    ${fixedSticker(sk.stickers.find((st) => st.place === 'round'), state.data, {x: 0.95, y: 0.04, base: 44})}
     <header class="round-note__head">
       <span class="round-note__round">${esc(head)}</span>
       <span class="round-note__title">${esc(title)}</span>

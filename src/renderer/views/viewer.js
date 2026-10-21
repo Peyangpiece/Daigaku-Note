@@ -9,7 +9,8 @@
 // pdf.js は互換版（legacy）を使う。通常版は Map.prototype.getOrInsertComputed などの新しい機能を前提にしており、
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
-import {toast} from '../app.js';
+import {state, toast} from '../app.js';
+import {bookmarkLook, fixedSticker, skinOf} from '../skin.js';
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -194,10 +195,13 @@ class Viewer {
       }
     })();
     this.textStyle = {size: clampSize(fontDefault.size ?? DEFAULT_SIZE), bold: false, color: TEXT_COLORS[0]};
+    // 着せ替え（SPEC-KISEKAE）：付箋の色の候補・しおりのリボンの色と形・リボンの先のシール
+    this.skin = skinOf(state.data, course ?? null);
+    this.noteColors = this.skin.sticky.pdf === 'default' ? NOTE_COLORS : this.skin.sticky.pdf;
     this.noteColor =
-      COURSE_HEX[course?.color] && NOTE_COLORS.includes(COURSE_HEX[course.color])
+      COURSE_HEX[course?.color] && this.noteColors.includes(COURSE_HEX[course.color])
         ? COURSE_HEX[course.color]
-        : NOTE_COLORS[0];
+        : this.noteColors[0];
     this.listeners = [];
     this.chains = new Set(); // 保存中の処理（書き出しの前に待つ）
     this.undoStack = [];
@@ -215,6 +219,7 @@ class Viewer {
 
   async start() {
     this.root.innerHTML = BAR;
+    if (this.noteColors !== NOTE_COLORS) this.root.querySelector('[data-note-color]').parentElement.innerHTML = swatches(this.noteColors, 'note-color');
     this.pagesEl = this.$('pages');
     this.bindBar();
     this.bindPages();
@@ -353,17 +358,20 @@ class Viewer {
     this.$('bookmarks').textContent = this.bookmarks.length ? `しおり（${this.bookmarks.length}）` : 'しおり';
     // ページの右端のリボン（位置は割合なので、拡大率を変えても置き直さなくてよい）
     for (const el of this.pagesEl.querySelectorAll('.bookmark-ribbon')) el.remove();
+    const look = bookmarkLook(this.skin);
+    const sticker = fixedSticker(this.skin.stickers.find((st) => st.place === 'bookmark'), state.data, {x: 0, y: 0.5, base: 28});
     for (const b of list) {
       const p = this.pages[b.page - 1];
       if (!p) continue;
       const el = document.createElement('button');
       el.type = 'button';
-      el.className = 'bookmark-ribbon';
-      el.style.top = `${b.y * 100}%`;
+      el.className = `bookmark-ribbon bm ${look.cls}`;
+      el.style.cssText = `${look.style}; top: ${b.y * 100}%`;
       el.title = b.name;
       el.dataset.bm = b.id;
       el.setAttribute('aria-label', `しおり：${b.name}`);
-      el.textContent = b.name;
+      el.innerHTML = `${sticker}<span class="bookmark-ribbon__text"></span>`;
+      el.lastElementChild.textContent = b.name;
       p.el.append(el);
     }
   }
