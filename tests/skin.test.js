@@ -175,3 +175,11 @@ test('決まった位置のシール：回の付箋・しおりは 1 枚、資�
     ['round:builtin-star', 'file:pdf:builtin-exam', 'file:slide:builtin-task', 'bookmark:builtin-crown']
   );
 });
+
+test('資料のイラストの中身：印とラベルのずれは ±40 に収め、出すかどうかは真偽だけ。前の版のテンプレートは元のまま', () => {
+  const t = normalizeTemplate({parts: {fileArt: {pdf: {mark: {dx: 99, dy: -3.14, on: false}, label: {on: 'no'}}, nope: {mark: {dx: 1}}}}});
+  assert.deepEqual(t.parts.fileArt.pdf, {mark: {dx: 40, dy: -3.1, on: false}, label: {dx: 0, dy: 0, on: true}});
+  assert.equal('nope' in t.parts.fileArt, false);
+  assert.deepEqual(normalizeTemplate({}).parts.fileArt.video, {mark: {dx: 0, dy: 0, on: true}, label: {dx: 0, dy: 0, on: true}});
+  assert.deepEqual(resolveSkin([t], t.id).fileArt.pdf.mark.on, false, 'テンプレートの中身が当たる');
+});
