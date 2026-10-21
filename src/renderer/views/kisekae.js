@@ -27,7 +27,7 @@ import {
   FIXED_PLACES,
   FILE_ART_ITEMS,
   FILE_ART_SHIFT,
-  ROUND_WEEKDAYS
+  ROUND_DEFAULTS
 } from '../../shared/skin.js';
 import {STICKER_BASE, allTemplates, bookmarkLook, forgetSticker, globalId, noteVars, shapesOf, skinOf, stickerUrl} from '../skin.js';
 import {fileArt, kindOf} from './file-art.js';
@@ -282,7 +282,7 @@ const PARTS = [
 ];
 
 // 付箋のはじめの色（tokens.css の --pop1〜8 と viewer.js の NOTE_COLORS と同じ）
-const POP = ['#ffe14d', '#ff9ec4', '#6fe3b8', '#7cccff', '#ffad5c'];
+const POP = ROUND_DEFAULTS;
 const PDF_NOTE = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70'];
 
 const ART_LABEL = {mark: '種類の印（文字・絵）', label: '拡張子のラベル'};
@@ -310,7 +310,7 @@ function colorRow(key, list, defaults, label, names = null) {
 }
 function stickyControls() {
   const st = ui.draft.parts.sticky;
-  return `${colorRow('sticky.round', st.round, POP, '回の付箋の色（曜日ごと）', ROUND_WEEKDAYS)}${colorRow('sticky.pdf', st.pdf, PDF_NOTE, 'PDF に貼る付箋の色の候補')}`;
+  return `${colorRow('sticky.round', st.round, POP, '回の付箋の色（第 1 回から順に）', POP.map((_, i) => String(i + 1)))}${colorRow('sticky.pdf', st.pdf, PDF_NOTE, 'PDF に貼る付箋の色の候補')}`;
 }
 /** しおりの形の見本：PDF の紙の右の端から出るリボン */
 function bookmarkSwatch(bookmark) {
@@ -379,7 +379,7 @@ function homeScene(data, {first, second, note, skin1, skin2}) {
       ${folderCard(second, {data, skin: skin2, edit: {still: true}})}
     </div>`);
 }
-// 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では 5 回に 2 つずつ分ける
+// 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では前の 9 回に 1 つずつ
 const KIND_FILE = {pdf: 'a.pdf', slide: 'a.pptx', doc: 'a.docx', sheet: 'a.xlsx', image: 'a.png', video: 'a.mp4', audio: 'a.mp3', zip: 'a.zip', other: 'a.dat'};
 const SCENE_FILES = Object.values(KIND_FILE);
 function courseScene(data, {first, note, skin1}) {
@@ -392,14 +392,14 @@ function courseScene(data, {first, note, skin1}) {
       <span class="file__art">${fileArt(name, {colors: sk.file, art: sk.fileArt})}${fixedOne(data, find('file', kind))}</span>
       <span class="muted">${FILE_KIND_LABEL[kind]}</span></span>`;
   };
-  // 回の付箋：曜日ごとの 5 色が全部見えるように、月〜金の 5 枚
+  // 回の付箋：15 色が全部見えるように 15 枚。資料は前の 9 枚に 1 つずつ
   const roundNote = (n, files) =>
-    `<div class="ks-note${isOn('sticky')}" style="--note-color: ${colors[n - 1]}" ${editAttr('sticky', '付箋の色')} aria-label="${ROUND_WEEKDAYS[n - 1]}曜の付箋" data-drop-place="round">
+    `<div class="ks-note${isOn('sticky')}" style="--note-color: ${colors[n - 1]}" ${editAttr('sticky', '付箋の色')} aria-label="第${n}回の付箋" data-drop-place="round">
       ${n === 1 ? fixedOne(data, find('round')) : ''}<span class="ks-note__files">${files.map(file).join('')}</span></div>`;
   return noteSwatch(note, `ks-stage ks-stage--course${isOn('note')}`, `
     <div class="ks-place ks-place--heading" data-drop-place="heading" title="シールをここへドラッグすると見出しに貼れます">${stageLayer(data, sk.stickers, 'heading')}
       <span class="btn">← ホーム</span><h2>${esc(first.name)}</h2></div>
-    <div class="ks-notes">${[0, 1, 2, 3, 4].map((i) => roundNote(i + 1, SCENE_FILES.slice(i * 2, i * 2 + 2))).join('')}</div>`);
+    <div class="ks-notes">${POP.map((_, i) => roundNote(i + 1, SCENE_FILES.slice(i, i + 1))).join('')}</div>`);
 }
 // ファイルの場面：選んでいる種類の資料のイラストを大きく出す。印とラベルはドラッグで動かせる。下に種類の切り替え
 const BIG = 3.4;

@@ -183,9 +183,9 @@ function roundNote(round, list, course, today, quizzes = {}, places = []) {
   ]
     .filter(Boolean)
     .join(' ');
-  // 回の付箋の色：曜日ごとに 5 色（月〜金。着せ替えで変えていなければ --pop1〜5）。角にはシールを 1 枚
+  // 回の付箋の色：第 1 回から順に 15 色（着せ替えで変えていなければ --pop1〜15）。角にはシールを 1 枚
   const sk = skinOf(state.data, course);
-  const i = roundColorIndex(round.date, course.weekday);
+  const i = roundColorIndex(round.number);
   const noteColor = sk.sticky.round === 'default' ? `var(--pop${i + 1})` : sk.sticky.round[i];
   return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: ${noteColor}" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}">
     ${fixedSticker(sk.stickers.find((st) => st.place === 'round'), state.data, {x: 0.95, y: 0.04, base: 44})}
