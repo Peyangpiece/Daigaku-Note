@@ -7,13 +7,54 @@ import {createReadStream, promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {ulid} from '../shared/ids.js';
 import {layoutOf} from '../shared/layout.js';
-import {sanitizeSegment, uniqueName} from '../shared/naming.js';
+import {courseFolderName, sanitizeSegment, uniqueName} from '../shared/naming.js';
 import {inside} from '../shared/paths.js';
 import {autoTerm, currentTerm} from '../shared/term.js';
 
 export const MY_FOLDER = 'マイフォルダ'; // ルート/マイフォルダ/<名前>
 export const TERM_FOLDERS = '自分のフォルダ'; // ルート/<学期>/自分のフォルダ/<名前>（授業フォルダと名前がぶつからないよう 1 段下げる）
 export const MAX_FILES = 2000;
+
+/**
+ * フォルダの名前だけを変える（同じ親フォルダの中のまま。中のファイルは動かさない）。同じ名前がもうあれば変えない。
+ * 大文字と小文字だけの違いは Mac・Windows では同じ名前と見なされるので、あるかどうかを確かめずに変える。変えたら true
+ */
+export async function renameFolder(from, to) {
+  if (from === to) return false;
+  if (from.toLowerCase() !== to.toLowerCase() && (await fsp.stat(to).catch(() => null))) throw err(`「${path.basename(to)}」はもうあります`);
+  if (!(await fsp.stat(from).catch(() => null))?.isDirectory()) throw err('パソコンのフォルダが見つかりません');
+  await fsp.rename(from, to);
+  return true;
+}
+/** フォルダの名前を変えたあと、その授業の資料の記録のパスを新しいフォルダに合わせる */
+export function movePaths(repo, courseId, from, to) {
+  const a = from + path.sep;
+  repo.db
+    .prepare('UPDATE material SET path = ? || substr(path, ?) WHERE course_id = ? AND substr(path, 1, ?) = ?')
+    .run(to + path.sep, a.length + 1, courseId, a.length, a);
+}
+/**
+ * LMS を使わない授業の名前を変える。パソコンの授業フォルダの名前も変える（同じ学期のフォルダの中のまま）。
+ * courseDir は FileManager.courseDir。戻りは course 行
+ */
+export async function renameCourse({repo, courseDir}, courseId, name) {
+  const row = repo.get('course', courseId);
+  const term = repo.get('term', row.term_id);
+  const patch = {name};
+  const folder = courseFolderName(name);
+  if (term && folder !== row.folder_name) {
+    if (repo.courseFolderNames(term.id).some((f) => f !== row.folder_name && f.toLowerCase() === folder.toLowerCase()))
+      throw err(`「${folder}」はもうあります`);
+    const from = courseDir(term, row),
+      to = courseDir(term, {...row, folder_name: folder});
+    if (await fsp.stat(from).catch(() => null)) {
+      await renameFolder(from, to);
+      movePaths(repo, row.id, from, to);
+    }
+    patch.folder_name = folder;
+  }
+  return repo.updateCourse(row.id, patch);
+}
 const MAX_DEPTH = 6;
 const SKIP = /^(\.|~\$|Thumbs\.db$|desktop\.ini$|Icon\r$)/i; // 隠しファイル・Office の一時ファイル・OS の管理ファイル
 
@@ -204,5 +245,31 @@ export function createFolders({
     return {added, removed, truncated, missing: false};
   }
 
-  return {create, scan, roundOf, folderCourse, termNow};
+  /** フォルダの名前を変える。パソコンのフォルダの名前も変える（同じ親フォルダの中のまま）。戻りは course 行 */
+  async function rename(courseId, name) {
+    const c = folderCourse(courseId);
+    const label = String(name ?? '').trim().slice(0, 80);
+    if (!label) throw err('名前を入れてください');
+    const patch = {name: label};
+    const to = path.join(path.dirname(c.dir), sanitizeSegment(label, {max: 80}) || 'フォルダ');
+    if (await renameFolder(c.dir, to)) {
+      movePaths(repo, c.id, c.dir, to);
+      patch.dir = to;
+    }
+    return repo.updateCourse(c.id, patch);
+  }
+  /** フォルダの中の小さなフォルダ（sub：フォルダからの相対パス）の名前を変える。同じ親フォルダの中のまま。戻りは scan の結果 */
+  async function renameSub(courseId, sub, name) {
+    const c = folderCourse(courseId);
+    const to = String(name ?? '').trim();
+    if (!to || to.length > 80 || /[\\/:*?"<>|]/.test(to) || to === '.' || to === '..') throw err('フォルダの名前に使えない文字があります');
+    const from = path.resolve(c.dir, String(sub ?? ''));
+    if (!from.startsWith(path.resolve(c.dir) + path.sep)) throw err('フォルダが不正です');
+    const dest = path.join(path.dirname(from), to);
+    if (!(await renameFolder(from, dest))) return {added: 0, removed: 0, truncated: false, missing: false};
+    movePaths(repo, c.id, from, dest);
+    return scan(c.id);
+  }
+
+  return {create, scan, rename, renameSub, roundOf, folderCourse, termNow};
 }

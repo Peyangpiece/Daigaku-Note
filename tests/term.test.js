@@ -70,3 +70,13 @@ test('LMS をつながずに使い始めたときの仮の学期：4〜9 月は�
   assert.equal(spring.start_date, '2026-04-01');
   assert.equal(spring.end_date, '2026-09-30');
 });
+
+test('3 学期制（高校・中学）：期間は切れ目なく、ID とフォルダ名は学期の番号から', () => {
+  assert.deepEqual(defaultTermDates('1学期', 2026), {start: '2026-04-01', end: '2026-08-31'});
+  assert.deepEqual(defaultTermDates('2学期', 2026), {start: '2026-09-01', end: '2026-12-31'});
+  assert.deepEqual(defaultTermDates('3学期', 2026), {start: '2027-01-01', end: '2027-03-31'});
+  assert.equal(termId(2026, '1学期'), '2026-t1');
+  assert.equal(termId(2026, '3学期'), '2026-t3');
+  assert.equal(termId(2026, '春学期'), '2026-spring'); // 「学期」を含む大学の学期名は今までどおり
+  assert.equal(termFolder(2026, '2学期'), '2026_2学期');
+});

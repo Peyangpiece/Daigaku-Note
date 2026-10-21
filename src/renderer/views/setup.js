@@ -3,10 +3,12 @@
 // （Moodle の ID・パスワードと画面操作型のブラウザ窓。学期がまだなければ学期の設定も挟む）
 import {esc, reload, toast} from '../app.js';
 import {termForm, readTermForm} from './term.js';
+import {SCHOOLS} from '../../shared/school.js';
 
 const api = window.daigaku;
 const FLOWS = {
   first: [
+    ['学校', stepSchool],
     ['学期の設定', stepTerm],
     ['保存先', stepRoot]
   ],
@@ -27,7 +29,9 @@ const blank = () => ({
   base: '',
   connectionId: null,
   courses: [],
-  coursesLoaded: false
+  coursesLoaded: false,
+  school: null,
+  university: null
 });
 let step = 0;
 let draft = blank();
@@ -96,9 +100,20 @@ function stepCourses(data, n) {
     ${list}
     <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-next3">次へ</button></div>`;
 }
+// 学校の種類を選ぶ。大学生のときだけ大学名を入れる。次の「学期の設定」の初期値が種類に合わせて変わる
+function stepSchool(data, n) {
+  const school = draft.school ?? data.settings.school;
+  const university = draft.university ?? data.settings.university ?? '';
+  return `<h2>${n}. 学校</h2>
+    <div class="school-pick" role="radiogroup" aria-label="学校の種類">${Object.entries(SCHOOLS)
+      .map(([k, l]) => `<button type="button" class="school-pick__item" role="radio" data-school="${k}" aria-checked="${school === k}">${l}</button>`)
+      .join('')}</div>
+    ${school === 'university' ? `<label class="school-pick__univ">大学名<input class="input" id="su-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(university)}"></label>` : ''}
+    <div class="actions"><button class="btn btn--primary" id="su-school" ${school ? '' : 'disabled'}>次へ</button></div>`;
+}
 function stepTerm(data, n) {
   return `<h2>${n}. 学期の設定</h2>
-    <p class="muted">学期名と期間、回数、時限の開始時刻。大学ごとに違うので、ここで入れます（あとから 設定 → 学期 で直せます）。</p>
+    <p class="muted">学期の名前と期間、回数、時限の開始時刻を入れます（あとから 設定 → 学期 で直せます）。</p>
     ${termForm(data, null)}
     <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : ''}<button class="btn btn--primary" id="su-next4">保存して次へ</button></div>`;
 }
@@ -138,6 +153,22 @@ function bind() {
     draft.kind = top?.kind ?? null;
     reload();
   };
+  document.querySelectorAll('[data-school]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        if ($('su-univ')) draft.university = $('su-univ').value;
+        draft.school = b.dataset.school;
+        reload();
+      })
+  );
+  if ($('su-school'))
+    $('su-school').onclick = async () => {
+      const school = draft.school ?? document.querySelector('[data-school][aria-checked=true]')?.dataset.school;
+      const university = $('su-univ')?.value.trim() ?? '';
+      const r = await api['settings.update']({patch: {school, ...(school === 'university' ? {university} : {})}});
+      if (r?.error) return toast(r.error, {error: true});
+      next();
+    };
   if ($('su-detect')) $('su-detect').onclick = detect;
   if ($('su-url')) $('su-url').onkeydown = (e) => e.key === 'Enter' && detect();
   document

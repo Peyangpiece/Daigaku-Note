@@ -1,5 +1,6 @@
 // 設定（SPEC §12.2）。学期・授業・保存先・クイズ・見た目、下に LMS との連携（任意）と同期。変更はすぐ保存する。
 import {esc, reload, toast} from '../app.js';
+import {SCHOOLS} from '../../shared/school.js';
 
 const api = window.daigaku;
 const KIND_LABEL = {api: 'API で読む', recipe: '画面を読む', generic: '汎用の読み取り', manual: '手動で取り込む'};
@@ -90,6 +91,14 @@ export function renderSettings({data}, route = '/settings') {
     <div class="settings">
       <h3 class="settings__group">ふだんの設定</h3>
       <div class="settings__grid">
+      <section class="card"><h3>学校</h3>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
+          <label>種類<select class="input" id="st-school">${s.school ? '' : '<option value="">（未設定）</option>'}${Object.entries(SCHOOLS)
+            .map(([v, l]) => `<option value="${v}" ${s.school === v ? 'selected' : ''}>${l}</option>`)
+            .join('')}</select></label>
+          ${s.school === 'university' ? `<label>大学名<input class="input" id="st-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(s.university ?? '')}"></label>` : ''}
+        </div>
+      </section>
       <section class="card"><h3>学期</h3>
         ${data.terms.length ? `<ul style="padding-left: 1.2em">${data.terms.map((t) => `<li>${t.year} ${esc(t.label)} <span class="muted">${esc(t.start_date)}〜${esc(t.end_date)}・${t.rounds} 回${t.periods_json ? '・時限あり' : '・時限未設定'}</span></li>`).join('')}</ul>` : '<p class="muted">学期の設定がありません。</p>'}
         <button class="btn" data-action="nav" data-route="/settings/term">${data.terms.length ? '学期を編集・追加' : '学期を設定'}</button>
@@ -209,6 +218,8 @@ function bind() {
   $('st-class')?.addEventListener('change', (e) => save({classStart: e.target.checked}));
   $('st-login')?.addEventListener('change', (e) => save({openAtLogin: e.target.checked}));
   $('st-theme')?.addEventListener('change', (e) => save({theme: e.target.value}));
+  $('st-school')?.addEventListener('change', (e) => e.target.value && save({school: e.target.value}));
+  $('st-univ')?.addEventListener('change', (e) => save({university: e.target.value}));
   document.querySelectorAll('[data-login]').forEach((b) =>
     b.addEventListener('click', async () => {
       b.disabled = true;

@@ -967,6 +967,32 @@ h2[tabindex='-1']:focus {
 }
 
 /* セットアップの手順：付箋が順に貼られる。まだの手順は点線の枠だけ */
+/* 学校の種類：大きな 3 つのボタンから 1 つ選ぶ */
+.school-pick {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+.school-pick__item {
+  padding: var(--space-3) var(--space-2);
+  border: 2px solid color-mix(in srgb, var(--paper-ink) 20%, transparent);
+  border-radius: 12px;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-h3);
+  font-weight: 700;
+  cursor: pointer;
+}
+.school-pick__item[aria-checked='true'] {
+  border-color: currentColor;
+  background: color-mix(in srgb, var(--c1) 30%, var(--card));
+}
+.school-pick__univ {
+  display: block;
+  margin-bottom: var(--space-2);
+}
 .steps {
   display: flex;
   gap: 12px;

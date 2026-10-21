@@ -1,18 +1,8 @@
 // 学期の設定（SPEC §6.14・§12.2）。セットアップの手順 4 と、設定 → 学期 の編集画面で同じ入力欄を使う。
 import {esc, navigate, reload, toast} from '../app.js';
+import {presetFor, roundsFor, termLabelFor, termLabelsFor} from '../../shared/school.js';
 
 const api = window.daigaku;
-const LABELS = [
-  '前期',
-  '後期',
-  '春学期',
-  '秋学期',
-  '第1クォーター',
-  '第2クォーター',
-  '第3クォーター',
-  '第4クォーター',
-  '通年'
-];
 let editingId; // undefined = いちばん新しい学期、null = 新しい学期を追加
 
 /** 設定から入り直したときは、いちばん新しい学期から（app.js が呼ぶ） */
@@ -20,27 +10,35 @@ export function resetTerm() {
   editingId = undefined;
 }
 
-/** 年度は 4 月はじまり（1〜3 月は前の年度）。学期名は 4〜9 月なら春学期、それ以外は秋学期 */
-function defaults() {
+/** 年度は 4 月はじまり（1〜3 月は前の年度）。学期名は学校の種類と月から（school.js） */
+function defaults(school) {
   const d = new Date();
   const m = d.getMonth() + 1;
-  return {year: m < 4 ? d.getFullYear() - 1 : d.getFullYear(), label: m >= 4 && m <= 9 ? '春学期' : '秋学期'};
+  return {year: m < 4 ? d.getFullYear() - 1 : d.getFullYear(), label: termLabelFor(school, m)};
 }
+const THIRDS = '1 学期 4/1〜8/31、2 学期 9/1〜12/31、3 学期 1/1〜3/31';
+const HALVES = '春・前期 4/1〜9/30、秋・後期 10/1〜3/31';
 
 /** 入力欄。term があればその値を入れる（id は tm-*） */
 export function termForm(data, term) {
-  const d = defaults();
+  const school = data.settings?.school ?? 'university';
+  const d = defaults(school);
   const year = term?.year ?? d.year;
   const label = term?.label ?? d.label;
+  const labels = termLabelsFor(school);
+  const LABELS = labels.includes(label) ? labels : [label, ...labels];
+  const rounds = term?.rounds ?? roundsFor(school, label);
+  const preset = term ? '' : presetFor(school);
+  const three = labels.includes('1学期');
   return `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
       <label>年度<input class="input" id="tm-year" type="number" value="${esc(year)}"></label>
       <label>学期<select class="input" id="tm-label">${LABELS.map((l) => `<option ${l === label ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>開始日<input class="input" id="tm-start" type="date" value="${esc(term?.start_date ?? '')}"></label>
       <label>終了日<input class="input" id="tm-end" type="date" value="${esc(term?.end_date ?? '')}"></label>
-      <label>回数<select class="input" id="tm-rounds">${[15, 14, 8, 7].map((n) => `<option ${n === (term?.rounds ?? 15) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-      <label>時限の開始時刻<select class="input" id="tm-preset"><option value="">${term?.periods_json ? '（いまの設定のまま）' : '（あとで設定）'}</option>${(data.presets ?? []).map((p) => `<option>${esc(p)}</option>`).join('')}</select></label>
+      <label>回数<select class="input" id="tm-rounds">${[15, 14, 10, 8, 7].map((n) => `<option ${n === rounds ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label>時限の開始時刻<select class="input" id="tm-preset"><option value="">${term?.periods_json ? '（いまの設定のまま）' : '（あとで設定）'}</option>${(data.presets ?? []).map((p) => `<option ${p === preset ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
     </div>
-    <p class="muted">開始日・終了日を空にすると学期名からの既定（春・前期 4/1〜9/30、秋・後期 10/1〜3/31）になります。</p>`;
+    <p class="muted">開始日・終了日を空にすると、学期名から決まります（${three ? THIRDS : HALVES}）。</p>`;
 }
 
 /** 入力欄から term.save に渡す値。時限と休みの日は、選び直さなければいまの設定を引き継ぐ */
