@@ -12,6 +12,18 @@ test('字の切れ目：文字列の幅を字の幅の比で分ける（全角�
   assert.deepEqual(it.chars, ['原', '価', 'a', 'b']);
 });
 
+test('字の切れ目：PDF の送り幅（ws。1 em = 1000）があればそれを使う（MS P ゴシックの「は，」など、幅の違う字）', () => {
+  // 実際の資料（MS P ゴシック）の「には，原」：送り幅 1000・1000・664（，）・1000。measure では 4 字とも同じ幅になる
+  const it = {...item('には，原', 0, 366.4), ws: [1000, 1000, 664, 1000]};
+  assert.deepEqual(
+    charEdges(it, measure).map((x) => Math.round(x)),
+    [0, 100, 200, 266, 366]
+  );
+  // 送り幅のない字（pdf.js が足した空白など）だけ measure で測る（100px の字の幅にそろえる）
+  const mixed = {...item('原 価', 0, 250), ws: [1000, null, 1000]};
+  assert.deepEqual(charEdges(mixed, (c) => (c === ' ' ? 50 : 100)), [0, 100, 150, 250]);
+});
+
 test('なぞった端をいちばん近い字の切れ目に合わせる。1 字に満たなければその字', () => {
   const it = item('原価企画の目的', 0, 140); // 1 字 20px
   assert.deepEqual(snapRange([it], 3, 58, measure), {left: 0, right: 60}, '字の途中から途中 → 近い切れ目');

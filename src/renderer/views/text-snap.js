@@ -1,12 +1,14 @@
 // 文字隠しのマーカーを文字に合わせる計算（画面の座標・px）。pdf.js の文字列は全体の幅しか持たないので、
-// 1 字ずつの幅（全角・半角の違い）を measure で測り、その比で文字列の幅を分けて字の切れ目を出す。
-// items は viewer の screenItems の形 {str, left, right, top, bottom}。measure(ch) は字の相対的な幅（DOM なしでも差し替えられる）
+// 1 字ずつの幅の比で文字列の幅を分けて字の切れ目を出す。字の幅は、PDF に書かれた送り幅（it.ws。1 em = 1000）があればそれを、
+// なければ measure で測る（全角・半角の違いだけ。字ごとに幅の違うフォントではずれる）。
+// items は viewer の screenItems の形 {str, ws, left, right, top, bottom}。measure(ch) は 100px の字の幅（DOM なしでも差し替えられる）
 
 /** 字の切れ目の x（字の数 + 1 個）。結果は item に覚えておく */
 export function charEdges(it, measure) {
   if (it.edges) return it.edges;
   const chars = Array.from(it.str);
-  const ws = chars.map((c) => Math.max(0.01, measure(c) || 1));
+  // PDF の送り幅は 1 em = 1000、measure は 100px の字の幅なので、10 で割ってそろえる
+  const ws = chars.map((c, i) => Math.max(0.01, it.ws?.[i] != null ? it.ws[i] / 10 : measure(c) || 1));
   const total = ws.reduce((a, b) => a + b, 0);
   const span = it.right - it.left;
   const edges = [it.left];
