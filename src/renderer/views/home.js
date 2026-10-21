@@ -2,6 +2,7 @@
 import {esc, jaWrap, progressText} from '../app.js';
 import {browserState} from './settings.js';
 import {folderShown, scopeLabel} from './folder.js';
+import {folderLook, shapesOf, skinOf, stickerImg} from '../skin.js';
 
 // shared/ids.js の tapeAngle と同じ計算（レンダラは main のモジュールを読まないので写す）
 function hash32(str) {
@@ -41,20 +42,33 @@ export function classDays(courses, now = new Date()) {
 // 名前の中の、折り返せない一続き（<wbr> の間）が長いときは字を小さくして、「マーケティング／・リサーチ」のような変な切れ方をさせない
 const longestRun = (html) => Math.max(...html.split('<wbr>').map((s) => [...s.replace(/&[a-z#0-9]+;/g, '_')].length));
 
-export function folderCard(course, {today = false} = {}) {
+/**
+ * 授業フォルダのカード。見た目は着せ替え（SPEC-KISEKAE）のテンプレートから。
+ * 着せ替えページの見本では skin（直している途中の見た目）を渡し、edit で貼ったシールを選べるようにする（ボタンにしない）。
+ * edit.still は動かない見本（テンプレートの一覧）
+ */
+export function folderCard(course, {today = false, data = null, skin = null, edit = null} = {}) {
   const sub = course.kind === 'folder' ? scopeLabel(course) : course.weekday ? slotOf(course) : '';
   const name = jaWrap(course.name);
+  const sk = skin ?? skinOf(data, course);
+  const look = folderLook(course, sk);
+  const shapes = shapesOf(data);
+  const stickers = sk.stickers.filter((s) => s.place === 'folder').map((s) => [s]); // 直している見本では s.index が直しているテンプレートの何枚目か
   const badges = [
     course.unread
       ? `<span class="badge" style="--badge-color: var(--c${course.color})">新着 ${course.unread}</span>`
       : '',
     course.review ? `<span class="badge">復習 ${course.review}</span>` : ''
   ].join('');
-  return `<button class="folder${course.hidden ? ' folder--hidden' : ''}${course.kind === 'folder' ? ' folder--mine' : ''}${today ? ' folder--today' : ''}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
-    <span class="tape tape--${esc(course.tape_pattern)}" style="--tape-color: var(--c${course.color}); --tape-angle: ${tapeAngle(course.id)}deg"></span>
+  const cls = `folder${course.hidden ? ' folder--hidden' : ''}${course.kind === 'folder' ? ' folder--mine' : ''}${today ? ' folder--today' : ''}${stickers.length ? ' folder--stickered' : ''}`;
+  const inner = `<span class="tape tape--${esc(look.pattern)}" style="--tape-color: ${look.tapeColor}; --tape-angle: ${tapeAngle(course.id)}deg"></span>
+    ${stickers.length ? `<span class="folder__stickers"${edit ? '' : ' aria-hidden="true"'}>${stickers.map(([st]) => stickerImg(st, shapes, edit && !edit.still && st.index != null ? {index: st.index, selected: edit.selected === st.index} : {})).join('')}</span>` : ''}
     <span class="folder__name ja-wrap${longestRun(name) > 6 ? ' folder__name--long' : ''}">${name}</span>
     <span class="folder__sub">${today ? '<span class="folder__today">今日</span> ' : ''}${esc(sub)}</span>
-    <span class="folder__badges">${badges}</span>
+    <span class="folder__badges">${badges}</span>`;
+  if (edit) return `<div class="${cls} folder--preview" style="${look.style}"${edit.still ? ' aria-hidden="true"' : ' data-preview-folder'}>${inner}</div>`;
+  return `<button class="${cls}" style="${look.style}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
+    ${inner}
   </button>`;
 }
 
@@ -76,12 +90,12 @@ export function renderHome({data, progress}) {
   const past = mine.filter((c) => !folderShown(c, data.currentTermId));
   const myFolders = `<section class="my-folders" aria-labelledby="my-folders-title">
       <h2 class="my-folders__title" id="my-folders-title">自分のフォルダ</h2>
-      ${shown.length ? `<div class="folders">${shown.map((c) => folderCard(c)).join('')}</div>` : ''}
+      ${shown.length ? `<div class="folders">${shown.map((c) => folderCard(c, {data})).join('')}</div>` : ''}
       <div class="actions">
         <button class="btn" data-action="nav" data-route="/folder-new?mode=new">＋ フォルダを作る</button>
         <button class="btn" data-action="nav" data-route="/folder-new?mode=link">＋ パソコンのフォルダを登録</button>
       </div>
-      ${past.length ? `<details class="my-folders__past" id="my-folders-past"><summary>前の学期のフォルダ ${past.length}</summary><div class="folders">${past.map((c) => folderCard(c)).join('')}</div></details>` : ''}
+      ${past.length ? `<details class="my-folders__past" id="my-folders-past"><summary>前の学期のフォルダ ${past.length}</summary><div class="folders">${past.map((c) => folderCard(c, {data})).join('')}</div></details>` : ''}
     </section>`;
   const last = data.lastSync;
   const status = progress
@@ -109,7 +123,7 @@ export function renderHome({data, progress}) {
       <div class="home__main">
       ${
         courses.length
-          ? `${dayLine}<section class="folders" aria-label="授業">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id)})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
+          ? `${dayLine}<section class="folders" aria-label="授業">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
           : hasLms
             ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
             : '' /* LMS をつないでいなければ授業の段は出さない（つなぐのは 設定 → LMS との連携 から） */

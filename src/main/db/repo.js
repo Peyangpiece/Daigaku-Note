@@ -1,5 +1,6 @@
 // 表ごとの読み書き（DESIGN-M0 §5）。SQL はこのファイルの外に出さない。列名は表ごとの一覧で縛る。
 import {ulid} from '../../shared/ids.js';
+import {rotationFor} from '../../shared/skin.js';
 
 const COLUMNS = {
   connection: [
@@ -10,7 +11,7 @@ const COLUMNS = {
   course: [
     'id', 'term_id', 'connection_id', 'lms_id', 'lms_url', 'name', 'folder_name', 'weekday', 'period', 'weekday_from',
     'color', 'tape_pattern', 'sort_order', 'hidden', 'sync_enabled', 'generic_json', 'font_json', 'quiz_json', 'full_synced_at',
-    'kind', 'dir', 'scope', 'created_at', 'updated_at'
+    'kind', 'dir', 'scope', 'skin_template_id', 'sticker_mode', 'created_at', 'updated_at'
   ],
   round: ['id', 'course_id', 'number', 'title', 'title_user', 'folder_name', 'date', 'lms_ref'],
   round_note: ['round_id', 'body', 'updated_at'],
@@ -30,7 +31,9 @@ const COLUMNS = {
   srs: ['question_id', 's', 'due', 'at', 'c', 'lapses'],
   ai_usage: ['id', 'quiz_id', 'model', 'input', 'output', 'cache_read', 'cache_write', 'cost_usd', 'purpose', 'at'],
   annotation: ['id', 'sha256', 'page', 'kind', 'rect_json', 'body', 'style_json', 'memorized', 'z', 'created_at', 'updated_at'],
-  bookmark: ['id', 'sha256', 'page', 'y', 'name', 'created_at', 'updated_at']
+  bookmark: ['id', 'sha256', 'page', 'y', 'name', 'created_at', 'updated_at'],
+  skin_template: ['id', 'json', 'created_at', 'updated_at'],
+  sticker: ['id', 'w', 'h', 'shape', 'folder', 'favorite', 'created_at']
 };
 
 const now = () => new Date().toISOString();
@@ -196,6 +199,32 @@ export class Repo {
       .run(key, JSON.stringify(value));
   }
 
+  // ---- 着せ替え（SPEC-KISEKAE.md） ----
+  listSkinTemplates() {
+    return this.db
+      .prepare('SELECT json FROM skin_template ORDER BY created_at')
+      .all()
+      .map((r) => JSON.parse(r.json));
+  }
+  /** 自作のテンプレートを保存する（あれば上書き）。t は normalizeTemplate を通したもの */
+  saveSkinTemplate(t) {
+    const at = now();
+    const json = JSON.stringify(t);
+    if (this.get('skin_template', t.id)) this.update('skin_template', t.id, {json, updated_at: at});
+    else this.insert('skin_template', {id: t.id, json, created_at: at, updated_at: at});
+    return t;
+  }
+  /** 消す。使っていた授業は「全体と同じ」に戻す */
+  removeSkinTemplate(id) {
+    this.transaction(() => {
+      this.db.prepare('UPDATE course SET skin_template_id = NULL WHERE skin_template_id = ?').run(id);
+      this.remove('skin_template', id);
+    });
+  }
+  listStickers() {
+    return this.db.prepare('SELECT * FROM sticker ORDER BY created_at DESC').all();
+  }
+
   // ---- connection ----
   createConnection({kind, connector_id, label, base_url = null, university_host = null, recipe_version = null}) {
     const t = now();
@@ -247,8 +276,9 @@ export class Repo {
     const t = now();
     const maxOrder = this.db.prepare('SELECT COALESCE(MAX(sort_order), 0) m FROM course WHERE term_id = ?').get(row.term_id).m;
     const count = this.db.prepare('SELECT COUNT(*) c FROM course WHERE term_id = ?').get(row.term_id).c;
+    // 新しい授業には、はじめからあるテンプレートを順に割り当てる（となり同士が同じ見た目にならないように。SPEC-KISEKAE §4.4）
     return this.insert('course', {
-      id: ulid(), color: (count % 8) + 1, sort_order: maxOrder + 1, created_at: t, updated_at: t, ...row
+      id: ulid(), color: (count % 8) + 1, skin_template_id: rotationFor(count), sort_order: maxOrder + 1, created_at: t, updated_at: t, ...row
     });
   }
   updateCourse(id, patch) {
