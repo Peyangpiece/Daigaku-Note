@@ -2,7 +2,7 @@
 // 着せ替えページ（#/kisekae）「おすすめから選ぶ」：押すとすぐ当たる。
 // 細かい編集のページ（#/kisekae/edit）：見本を見ながら直し、自作のテンプレートとして保存する
 import {esc, navigate, refresh, reload, state, toast} from '../app.js';
-import {folderCard} from './home.js';
+import {folderCard, folderLookOf} from './home.js';
 import {
   LICENSES,
   LICENSE_LABEL,
@@ -1158,13 +1158,21 @@ document.addEventListener('drop', (e) => {
   addSticker(sid, box.dataset.dropPlace, [clamp01((e.clientX - r.left) / r.width), clamp01((e.clientY - r.top) / r.height)], box.dataset.kind ?? box.closest('[data-kind]')?.dataset.kind);
 });
 
-// ---- フォルダの右クリック →「着せ替え…」：その場の選択パネル（SPEC-KISEKAE §3.3） ----
+// ---- フォルダの右クリック →「着せ替え…」：そのフォルダだけの色（タブ・フォルダ・マスキングテープ・新着の知らせ）を選ぶパネル ----
+// テンプレートは選ばない（テンプレートは着せ替えページで）。押すとすぐ当たり、「標準」でテンプレートの色に戻る
+const TAB_COLORS = ['#ffe7a3', '#ffd3e0', '#c6eedb', '#cfe2ff', '#e6d5ff', '#ffd8b8', '#d9f2f7', '#dcc6a0'];
+const PICKER_ROWS = [
+  ['tab', 'タブ', TAB_COLORS],
+  ['card', 'フォルダ', LIGHT],
+  ['tape', 'マスキングテープ', VIVID.slice(0, 8)],
+  ['badge', '新着の知らせ', VIVID.slice(0, 8)]
+];
 let picker = null;
 export const closeSkinPicker = () => {
   picker?.el.remove();
   picker = null;
 };
-/** card：ホームのフォルダの要素。押すとすぐ当たり、マウスを乗せると仮にその見た目になる */
+/** card：ホームのフォルダの要素 */
 export function openSkinPicker(course, card, x, y) {
   closeSkinPicker();
   const el = document.createElement('div');
@@ -1174,22 +1182,22 @@ export function openSkinPicker(course, card, x, y) {
   picker = {el, course, card};
   const paint = () => {
     const c = state.data.courses.find((v) => v.id === course.id) ?? course;
-    const cur = c.skin_template_id ?? null;
-    const mineList = allTemplates(state.data).filter((t) => !isBuiltin(t.id));
-    const item = (tid, name) => {
-      const sk = skinOf(state.data, {...c, skin_template_id: tid});
-      return `<button type="button" class="skin-picker__item" data-pick="${tid ?? ''}" aria-pressed="${cur === tid}">
-        <span class="skin-picker__swatch" style="--sw-card: ${sk.folder.card === 'default' ? 'var(--card)' : sk.folder.card}; --sw-tape: ${sk.tape.color === 'course' ? `var(--c${c.color})` : sk.tape.color}"></span>
-        <span>${esc(name)}</span>${cur === tid ? '<span class="skin-picker__check" aria-label="使用中">✓</span>' : ''}</button>`;
+    const over = folderLookOf(state.data, c);
+    const row = ([part, label, colors]) => {
+      const cur = over[part] ?? null;
+      const sw = (hex) =>
+        `<button type="button" class="ks-sw" style="--sw: ${hex}" data-look="${part}" data-color="${hex}" aria-pressed="${cur === hex}" title="${hex}" aria-label="${label}：${hex}"></button>`;
+      return `<div class="skin-picker__row" role="group" aria-label="${label}"><span class="skin-picker__label">${label}</span>
+        <div class="ks-swatches">
+          <button type="button" class="ks-sw ks-sw--text" data-look="${part}" data-color="" aria-pressed="${cur === null}">標準</button>
+          ${colors.map(sw).join('')}
+          ${cur && !colors.includes(cur) ? sw(cur) : ''}
+          <label class="ks-sw ks-sw--pick" title="ほかの色">＋<input type="color" data-look-custom="${part}" value="${cur ?? colors[0]}" aria-label="${label}：ほかの色" /></label>
+        </div></div>`;
     };
     el.innerHTML = `<div class="skin-picker__head">${esc(c.name)} の着せ替え</div>
-      <div class="skin-picker__list" role="group">
-        ${item(null, 'すべての授業と同じ')}
-        <hr />
-        ${allTemplates(state.data).filter((t) => isBuiltin(t.id)).map((t) => item(t.id, t.name)).join('')}
-        ${mineList.length ? `<div class="skin-picker__group">マイノート</div>${mineList.map((t) => item(t.id, t.name)).join('')}` : ''}
-      </div>
-      <button type="button" class="skin-picker__new" data-pick-new>＋ 新しく作成</button>`;
+      ${PICKER_ROWS.map(row).join('')}
+      ${Object.keys(over).length ? '<button type="button" class="skin-picker__new" data-look-reset>すべて標準に戻す</button>' : ''}`;
   };
   paint();
   document.body.append(el);
@@ -1197,51 +1205,24 @@ export function openSkinPicker(course, card, x, y) {
   el.style.left = `${Math.max(8, Math.min(x, window.innerWidth - width - 8))}px`;
   el.style.top = `${Math.max(8, Math.min(y, window.innerHeight - height - 8))}px`;
   el.querySelector('[aria-pressed="true"]')?.focus() ?? el.querySelector('button')?.focus();
-  // 本物のフォルダを仮にその見た目にする（外したら戻す）
-  const preview = (tid) => {
-    const target = document.querySelector(`.folder[data-action="open-course"][data-id="${window.CSS.escape(course.id)}"]`);
-    if (!target) return;
-    const c = state.data.courses.find((v) => v.id === course.id) ?? course;
-    const tmp = document.createElement('div');
-    tmp.innerHTML = folderCard(tid === undefined ? c : {...c, skin_template_id: tid}, {data: state.data, today: target.classList.contains('folder--today')});
-    target.replaceWith(tmp.firstElementChild);
-  };
-  el.addEventListener('pointerover', (e) => {
-    const b = e.target.closest('[data-pick]');
-    if (b && e.pointerType !== 'touch') preview(b.dataset.pick || null);
-  });
-  el.addEventListener('pointerleave', () => preview(undefined));
-  el.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    e.preventDefault();
-    const list = [...el.querySelectorAll('button')];
-    const i = list.indexOf(document.activeElement);
-    list[(i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length].focus();
-  });
-  el.addEventListener('click', async (e) => {
-    if (e.target.closest('[data-pick-new]')) {
-      closeSkinPicker();
-      return navigate(`/kisekae/edit?course=${encodeURIComponent(course.id)}&new=1`);
-    }
-    const b = e.target.closest('[data-pick]');
-    if (!b) return;
-    const c = state.data.courses.find((v) => v.id === course.id) ?? course;
-    const prev = c.skin_template_id ?? null;
-    const tid = b.dataset.pick || null;
-    const r = await api['skin.apply']({courseId: course.id, templateId: tid});
+  const save = async (folderLook) => {
+    const r = await api['settings.update']({patch: {folderLook: {courseId: course.id, ...folderLook}}});
     if (r?.error) return toast(r.error, {error: true});
+    const focus = document.activeElement?.closest?.('[data-look]');
+    const key = focus ? `[data-look="${focus.dataset.look}"][data-color="${focus.dataset.color}"]` : null;
     await reload();
-    if (picker?.el === el) paint();
-    toast(`「${c.name}」を「${tid ? allTemplates(state.data).find((t) => t.id === tid)?.name : 'すべての授業と同じ'}」にしました`, {
-      action: {
-        label: '元に戻す',
-        run: async () => {
-          await api['skin.apply']({courseId: course.id, templateId: prev});
-          await reload();
-          if (picker?.el === el) paint();
-        }
-      }
-    });
+    if (picker?.el !== el) return;
+    paint();
+    if (key) el.querySelector(key)?.focus();
+  };
+  el.addEventListener('click', (e) => {
+    if (e.target.closest('[data-look-reset]')) return save({reset: true});
+    const b = e.target.closest('[data-look]');
+    if (b) save({part: b.dataset.look, color: b.dataset.color || null});
+  });
+  el.addEventListener('change', (e) => {
+    const i = e.target.closest('[data-look-custom]');
+    if (i) save({part: i.dataset.lookCustom, color: i.value});
   });
 }
 document.addEventListener('pointerdown', (e) => picker && !picker.el.contains(e.target) && !e.target.closest?.('.toast') && closeSkinPicker());
