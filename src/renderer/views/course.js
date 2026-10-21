@@ -46,7 +46,9 @@ function hash32(str) {
 const tilt = (id) => ((hash32(id) % 7) - 3) * 0.5; // -1.5 〜 +1.5 度
 
 const EXTRACTABLE = /\.(pdf|docx|pptx|txt|md)$/i;
-const placeName = (r) => (r ? (r.number === 0 ? 'その他' : `第${r.number}回`) : '付箋を追加');
+// 「その他」は回の名前ではないので、名前を自分で変えられる（title_user。空ならその他）
+const otherName = (r) => r.title_user || 'その他';
+const placeName = (r) => (r ? (r.number === 0 ? otherName(r) : `第${r.number}回`) : '付箋を追加');
 
 // places：移せる先（「付箋を追加」と回）。資料の紙はドラッグで別の付箋へ移せる。キーボードでは「移す」の選択で
 export function fileCard(m, course, places) {
@@ -181,8 +183,9 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
 function roundNote(round, list, course, today, quizzes = {}, places = []) {
   const isToday = round.date === today;
   const upcoming = !list.length && round.number > 0 && round.date && round.date > today;
-  const head = round.number === 0 ? 'その他' : `第${round.number}回`;
-  const title = round.title_user || round.title || '';
+  const other = round.number === 0;
+  const head = other ? otherName(round) : `第${round.number}回`;
+  const title = other ? '' : round.title_user || round.title || '';
   const cls = [
     'round-note',
     list.length ? '' : 'round-note--empty',
@@ -198,9 +201,13 @@ function roundNote(round, list, course, today, quizzes = {}, places = []) {
   return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: ${noteColor}" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}">
     ${fixedSticker(sk.stickers.find((st) => st.place === 'round'), state.data, {x: 0.95, y: 0.04, base: 44})}
     <header class="round-note__head" data-rename-box>
-      <span class="round-note__round">${esc(head)}</span>
-      <span class="round-note__title" data-rename-target>${esc(title)}</span>
-      <button type="button" class="rename-btn" data-action="rename" data-what="round" data-id="${esc(round.id)}" data-value="${esc(title)}" title="付箋の名前を変える" aria-label="${esc(head)}の名前を変える">✎</button>
+      ${
+        other
+          ? `<span class="round-note__round" data-rename-target>${esc(head)}</span><span class="round-note__title"></span>`
+          : `<span class="round-note__round">${esc(head)}</span>
+      <span class="round-note__title" data-rename-target>${esc(title)}</span>`
+      }
+      <button type="button" class="rename-btn" data-action="rename" data-what="round" data-id="${esc(round.id)}" data-value="${esc(other ? round.title_user || '' : title)}" title="付箋の名前を変える" aria-label="${esc(head)}の名前を変える">✎</button>
       ${isToday ? '<span class="round-note__today">今日</span>' : ''}
       <span class="round-note__date">${esc(fmtDate(round.date))}</span>
     </header>
