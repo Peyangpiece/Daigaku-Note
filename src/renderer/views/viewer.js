@@ -11,6 +11,7 @@
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
 import {state, toast} from '../app.js';
 import {bookmarkLook, fixedSticker, skinOf} from '../skin.js';
+import {ROUND_DEFAULTS} from '../../shared/skin.js';
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -45,7 +46,8 @@ const EXPORT_PX_PER_PT = 4; // 書き出す文字入れの画像の細かさ（1
 const HISTORY_MAX = 200;
 const TEXT_COLORS = ['#2b2b2b', '#d93025', '#1a73e8', '#188038', '#e37400', '#9334e6', '#c2185b', '#ffffff'];
 // 付箋は 6 色（tokens.css の --c1〜--c6 の明るい側の値）。既定は授業の色
-const NOTE_COLORS = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70'];
+// PDF のメモ（付箋）の色：授業ページの付箋と同じ 5 色（着せ替えで変えられる）
+const NOTE_COLORS = ROUND_DEFAULTS;
 const COURSE_HEX = [null, '#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70', '#6fd3e6', '#f7a1c4'];
 const COLOR_NAMES = {
   '#2b2b2b': '黒',
@@ -197,7 +199,7 @@ class Viewer {
     this.textStyle = {size: clampSize(fontDefault.size ?? DEFAULT_SIZE), bold: false, color: TEXT_COLORS[0]};
     // 着せ替え（SPEC-KISEKAE）：付箋の色の候補・しおりのリボンの色と形・リボンの先のシール
     this.skin = skinOf(state.data, course ?? null);
-    this.noteColors = this.skin.sticky.pdf === 'default' ? NOTE_COLORS : this.skin.sticky.pdf;
+    this.noteColors = this.skin.sticky.round === 'default' ? NOTE_COLORS : this.skin.sticky.round;
     this.noteColor =
       COURSE_HEX[course?.color] && this.noteColors.includes(COURSE_HEX[course.color])
         ? COURSE_HEX[course.color]

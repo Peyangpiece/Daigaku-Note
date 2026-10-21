@@ -155,7 +155,7 @@ test('ファイル・付箋・しおり：種類ごとの色、色の並び、�
   assert.equal(t.parts.file.slide, 'default');
   assert.equal('nope' in t.parts.file, false);
   assert.equal(t.parts.sticky.round.length, 5, '前の版の 8 色は、先頭の 5 色を引き継ぐ');
-  assert.equal(t.parts.sticky.pdf, 'default', '数が合わない並びは、はじめの色に');
+  assert.equal('pdf' in t.parts.sticky, false, 'PDF のメモは付箋と同じ色を使うので、別の並びは持たない');
   assert.deepEqual(t.parts.bookmark, {color: '#00ff00', shape: 'tag'});
 });
 

@@ -281,7 +281,6 @@ const PARTS = [
 
 // 付箋のはじめの色（tokens.css の --pop1〜8 と viewer.js の NOTE_COLORS と同じ）
 const POP = ROUND_DEFAULTS;
-const PDF_NOTE = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70'];
 
 const ART_LABEL = {mark: '「PDF」などの文字・絵', label: '下のラベル'};
 function fileControls(data) {
@@ -307,7 +306,7 @@ function colorRow(key, list, defaults, label, names = null, hint = '') {
 }
 function stickyControls() {
   const st = ui.draft.parts.sticky;
-  return `${colorRow('sticky.round', st.round, POP, '授業ページの付箋の色', POP.map((_, i) => String(i + 1)))}${colorRow('sticky.pdf', st.pdf, PDF_NOTE, 'PDF のメモの色')}`;
+  return colorRow('sticky.round', st.round, POP, '付箋の色');
 }
 /** しおりの形の見本：PDF の紙の右の端から出るリボン */
 function bookmarkSwatch(bookmark) {
@@ -418,7 +417,7 @@ function fileScene(data, {note, skin1}) {
 function viewerScene(data, {note, skin1}) {
   const sk = skin1;
   const look = bookmarkLook(sk);
-  const pdf = sk.sticky.pdf === 'default' ? PDF_NOTE : sk.sticky.pdf;
+  const pdf = sk.sticky.round === 'default' ? POP : sk.sticky.round;
   const ribbon = (top, name, withSticker) =>
     `<span class="bookmark-ribbon bm ${look.cls}${isOn('bookmark')}" style="${look.style}; top: ${top}%" ${editAttr('bookmark', 'しおり')} data-drop-place="bookmark">${withSticker ? fixedOne(data, sk.stickers.find((st) => st.place === 'bookmark')) : ''}<span class="bookmark-ribbon__text">${name}</span></span>`;
   return noteSwatch(note, `ks-stage ks-stage--viewer${isOn('note')}`, `
@@ -889,7 +888,7 @@ let rangeStart = null;
 /** 色の並びの 1 つを変える（はじめの色のままなら、はじめの色を写してから） */
 function setListColor(el) {
   const [a, b] = el.dataset.ksList.split('.');
-  const defaults = el.dataset.ksList === 'sticky.round' ? POP : PDF_NOTE;
+  const defaults = POP;
   const list = ui.draft.parts[a][b] === 'default' ? [...defaults] : [...ui.draft.parts[a][b]];
   list[Number(el.dataset.i)] = el.value.toLowerCase();
   ui.draft.parts[a][b] = list;
@@ -1297,19 +1296,3 @@ document.getElementById('view')?.addEventListener('rendered', () => {
   if (ui.selected != null) document.querySelector(`.kisekae .ks-st[data-sticker-index="${ui.selected}"]`)?.focus({preventScroll: true});
 });
 
-// 付箋の色：直している色が見える場面に見本を切り替える（授業ページの付箋 → 授業ページ、PDF のメモ → PDF）。
-// 色の選び器を閉じないように、見本と場面の札だけ描き直す
-document.addEventListener(
-  'pointerdown',
-  (e) => {
-    const el = e.target.closest?.('.kisekae .ks-inspector [data-ks-list], .kisekae .ks-inspector [data-key="sticky.round"], .kisekae .ks-inspector [data-key="sticky.pdf"]');
-    if (!el || !ui.draft) return;
-    const key = el.dataset.ksList ?? el.dataset.key;
-    const scene = key === 'sticky.pdf' ? 'viewer' : key === 'sticky.round' ? 'course' : null;
-    if (!scene || ui.scene === scene) return;
-    ui.scene = scene;
-    repaintPreview();
-    for (const b of document.querySelectorAll('.kisekae [data-ks="scene"]')) b.setAttribute('aria-pressed', String(b.dataset.scene === scene));
-  },
-  true
-);
