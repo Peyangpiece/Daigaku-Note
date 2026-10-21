@@ -2475,12 +2475,13 @@ textarea.input {
   box-shadow: var(--card-shadow-hover);
   pointer-events: none;
 }
-.ks-pdf span {
+/* 見本の PDF の文字の行（灰色の線）。しおりのリボンやシールの span には当てない */
+.ks-pdf > span:not(.bookmark-ribbon) {
   height: 6px;
   border-radius: 3px;
   background: #d9dce1;
 }
-.ks-pdf span:nth-child(2) {
+.ks-pdf > span:nth-child(2) {
   width: 70%;
 }
 .ks-book__filters {
