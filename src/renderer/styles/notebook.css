@@ -2097,23 +2097,6 @@ textarea.input {
   font-size: var(--fs-h3);
   font-weight: 700;
 }
-.ks-editor {
-  display: grid;
-  grid-template-columns: 150px minmax(320px, 1fr) minmax(280px, 360px);
-  gap: var(--space-3);
-  align-items: start;
-  margin-top: var(--space-2);
-}
-@media (max-width: 1100px) {
-  .ks-editor {
-    grid-template-columns: 1fr;
-  }
-}
-.ks-parts {
-  display: grid;
-  gap: 4px;
-}
-.ks-part,
 .ks-choice {
   padding: 6px 12px;
   border: 1.5px solid transparent;
@@ -2125,47 +2108,15 @@ textarea.input {
   text-align: left;
   cursor: pointer;
 }
-.ks-part[aria-pressed='true'],
 .ks-choice[aria-pressed='true'] {
   border-color: var(--paper-ink);
   font-weight: 700;
-}
-.ks-preview {
-  min-height: 260px;
-  padding: 48px 24px 24px 96px;
-  border-radius: var(--radius);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--paper-ink) 12%, transparent);
-  background-position:
-    0 0,
-    0 0,
-    0 calc(100% - 40px),
-    0 16px,
-    0 16px;
-}
-.ks-preview__folders {
-  padding-top: 0;
 }
 .folder--preview {
   cursor: default;
 }
 .folder--preview:hover {
   transform: none;
-}
-[data-preview-place] .folder__stickers,
-.ks-place {
-  pointer-events: auto;
-}
-[data-preview-place] .sticker {
-  cursor: grab;
-  touch-action: none;
-}
-.sticker.is-selected {
-  outline: 2px dashed var(--paper-ink);
-  outline-offset: 2px;
-}
-.ks-controls {
-  display: grid;
-  gap: var(--space-2);
 }
 .ks-field {
   display: grid;
@@ -2282,12 +2233,6 @@ textarea.input {
   font-size: 12px;
   line-height: 20px;
   cursor: pointer;
-}
-.ks-sel label {
-  display: grid;
-  grid-template-columns: 56px 1fr;
-  align-items: center;
-  gap: 8px;
 }
 .ks-save {
   display: flex;
@@ -2415,31 +2360,10 @@ textarea.input {
 }
 
 /* 着せ替えページの、貼る場所ごとの見本（ホームの余白・見出し・PDF 編集画面の余白） */
-.ks-preview {
-  position: relative;
-}
 .ks-place {
   position: absolute;
   inset: 0;
   z-index: 0;
-}
-.ks-preview--wide {
-  aspect-ratio: 6 / 5;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-}
-.ks-mini {
-  position: absolute;
-  left: 9%;
-  top: 12%;
-  z-index: 1;
-  transform: scale(0.5);
-  transform-origin: top left;
-  pointer-events: none;
-}
-.ks-mini .ks-preview__folders {
-  grid-template-columns: repeat(2, 168px);
 }
 .ks-place--heading {
   position: relative;
@@ -2476,7 +2400,7 @@ textarea.input {
   pointer-events: none;
 }
 /* 見本の PDF の文字の行（灰色の線）。しおりのリボンやシールの span には当てない */
-.ks-pdf > span:not(.bookmark-ribbon) {
+.ks-pdf > span:not(.bookmark-ribbon):not(.ks-pdfnotes) {
   height: 6px;
   border-radius: 3px;
   background: #d9dce1;
@@ -2544,12 +2468,6 @@ textarea.input {
 }
 
 /* 着せ替えページの見本：ファイル・付箋・しおり */
-.ks-files {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 12px;
-  padding: 8px;
-}
 .ks-file {
   display: grid;
   justify-items: center;
@@ -2575,12 +2493,6 @@ textarea.input {
   color: #2b2b2b;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
 }
-.ks-chips {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 16px 0 0;
-}
 .ks-chip {
   width: 18px;
   height: 18px;
@@ -2588,23 +2500,363 @@ textarea.input {
   background: var(--sw);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
-.ks-pdf--bm {
-  overflow: visible;
-}
-.ks-pdf--bm .bookmark-ribbon {
-  right: -10px;
-  cursor: default;
-}
-.ks-pdf--bm [data-preview-fixed] {
-  pointer-events: auto;
-}
 .ks-gallery__lead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }
-[data-preview-fixed] .sticker {
-  pointer-events: auto;
+
+/* ---- 着せ替えの「細かく直す」：見本（ステージ）を直接さわって直す ---- */
+.ks-studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-3);
+  align-items: start;
+  margin-top: var(--space-2);
+}
+@media (max-width: 1000px) {
+  .ks-studio {
+    grid-template-columns: 1fr;
+  }
+}
+/* 右の欄が長くても見本が見えたままになるように。窓が低いと見本の列が収まらないので固定しない */
+@media (min-width: 1001px) and (min-height: 860px) {
+  .ks-stagecol {
+    position: sticky;
+    top: 84px; /* 上の固定ボタンの下 */
+  }
+}
+.ks-stagecol {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* 中身（シール帳の横並び）で列が広がらないように */
+  gap: 10px;
+  min-width: 0;
+}
+.ks-stagebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ks-scenes,
+.ks-stagebar__undo,
+.ks-inspector__parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ks-chipbtn {
+  padding: 4px 12px;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  color: var(--paper-ink);
+  font: inherit;
+  font-size: var(--fs-small);
   cursor: pointer;
+}
+.ks-chipbtn[aria-pressed='true'] {
+  border-color: var(--paper-ink);
+  font-weight: 700;
+}
+.ks-chipbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ks-stagewrap {
+  border-radius: var(--radius);
+  outline: none;
+}
+.ks-stagewrap:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+.ks-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--paper-ink) 14%, transparent);
+  user-select: none;
+  background-position:
+    0 0,
+    0 0,
+    0 calc(100% - 40px),
+    0 16px,
+    0 16px;
+}
+.ks-stage--home {
+  min-height: 330px;
+  padding: 56px 24px 32px 96px;
+}
+.ks-stage__folders {
+  position: relative;
+  z-index: 1;
+  padding-top: 0;
+  pointer-events: none; /* 下の紙を押せるように。フォルダとテープだけ押せる */
+}
+.ks-stage__folders .folder,
+.ks-stage__folders [data-edit] {
+  pointer-events: auto;
+}
+.ks-stage--course {
+  display: grid;
+  gap: 18px;
+  padding: 20px 20px 28px 88px;
+}
+.ks-stage--viewer {
+  aspect-ratio: 3 / 2;
+}
+.ks-pdf--stage {
+  overflow: visible;
+  pointer-events: auto;
+}
+.ks-pdfnotes {
+  position: absolute;
+  left: 8%;
+  bottom: 8%;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 8px;
+}
+/* 押せる部分：乗せると点線で囲み、選んでいる部分は実線で囲む */
+.ks-stage [data-edit] {
+  cursor: pointer;
+}
+.ks-stage [data-edit]:not(.ks-place):hover,
+.ks-stage .ks-place[data-edit]:hover:not(:has(:hover)) {
+  outline: 2px dashed color-mix(in srgb, var(--paper-ink) 45%, transparent);
+  outline-offset: 2px;
+}
+.ks-stage.is-editing {
+  box-shadow:
+    inset 0 0 0 2px var(--paper-ink),
+    inset 0 0 0 1px var(--paper-ink);
+}
+.ks-target.is-editing .folder,
+.ks-file.is-editing,
+.ks-note.is-editing,
+.ks-pdfnotes.is-editing,
+.bm.is-editing {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 3px;
+}
+/* シールをドラッグしている間は、貼れる所を薄く示し、乗せた所を強く示す */
+.ks-stage.is-dropping [data-drop-place] {
+  outline: 2px dashed color-mix(in srgb, var(--c4) 70%, transparent);
+  outline-offset: 2px;
+}
+.ks-stage [data-drop-place].is-drop {
+  outline: 3px solid var(--c4);
+  background-color: color-mix(in srgb, var(--c4) 12%, transparent);
+}
+.ks-place {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.ks-place--heading {
+  position: relative;
+  inset: auto;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 64px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.ks-place--heading > :not(.ks-st) {
+  pointer-events: none;
+}
+.ks-notes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.ks-note {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 150px;
+  padding: 14px 10px;
+  background: color-mix(in srgb, var(--note-color) 55%, var(--note-mix, #fff));
+  color: #2b2b2b;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
+  cursor: pointer;
+}
+.ks-note__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ks-file {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.ks-file .muted {
+  color: #5c6068;
+  font-size: 11px;
+}
+.ks-fixed {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.ks-fixed .ks-st {
+  pointer-events: auto;
+}
+.bm .ks-fixed {
+  z-index: 1;
+}
+/* シール：選ぶと点線の枠と取っ手（右下 ◢ 大きさ・上 ↻ 傾き・左上 × はがす・右上 ＋ 複製） */
+.ks-st {
+  position: absolute;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+.ks-st[data-fixed] {
+  cursor: pointer;
+}
+.ks-st.is-locked {
+  cursor: default;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.ks-st img {
+  position: static; /* .sticker は absolute。外枠の高さを画像に合わせ、取っ手を角に置く */
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+.ks-st:hover:not(.is-locked) {
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--c4) 80%, transparent));
+}
+.ks-st.is-selected {
+  outline: 1.5px dashed var(--paper-ink);
+  outline-offset: 4px;
+}
+.ks-h {
+  position: absolute;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  background: var(--paper-ink);
+  color: var(--card);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.ks-h--scale {
+  right: -15px;
+  bottom: -15px;
+  border-radius: 3px;
+  cursor: nwse-resize;
+}
+.ks-h--rotate {
+  top: -34px;
+  left: calc(50% - 11px);
+  cursor: grab;
+}
+.ks-h--rotate::after {
+  content: '↻';
+  color: var(--card);
+  font-size: 13px;
+}
+.ks-h--del {
+  top: -15px;
+  left: -15px;
+  cursor: pointer;
+}
+.ks-h--dup {
+  top: -15px;
+  right: -15px;
+  cursor: copy;
+}
+.ks-hint {
+  margin: 0;
+}
+.ks-tray {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.ks-tray__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ks-tray__head .ks-book__filters {
+  margin: 0;
+}
+.ks-tray__list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 4px 10px;
+}
+.ks-tray__list .ks-book__item {
+  flex: none;
+}
+.ks-tray__list .ks-book__pick:active {
+  cursor: grabbing;
+}
+.ks-inspector {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.ks-inspector__title {
+  margin: 0;
+  font-size: var(--fs-h3);
+}
+.ks-range {
+  display: grid;
+  grid-template-columns: 56px 1fr 48px;
+  align-items: center;
+  gap: 8px;
+}
+.ks-range output {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.ks-stage .folder__stickers {
+  pointer-events: none;
+}
+.ks-stage .folder__stickers .ks-st:not(.is-locked) {
+  pointer-events: auto;
+}
+/* 選んだシールは、取っ手を押せるように文字やフォルダより上へ（ほかの所は下の部分を押せるまま） */
+.ks-stage .folder__stickers:has(.is-selected) {
+  z-index: 2;
+}
+.ks-stage .ks-place:has(.is-selected) {
+  z-index: 2;
+  pointer-events: none;
+}
+.ks-stage .ks-place .ks-st {
+  pointer-events: auto;
 }

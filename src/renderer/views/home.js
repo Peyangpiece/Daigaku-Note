@@ -61,12 +61,14 @@ export function folderCard(course, {today = false, data = null, skin = null, edi
     course.review ? `<span class="badge">復習 ${course.review}</span>` : ''
   ].join('');
   const cls = `folder${course.hidden ? ' folder--hidden' : ''}${course.kind === 'folder' ? ' folder--mine' : ''}${today ? ' folder--today' : ''}${stickers.length ? ' folder--stickered' : ''}`;
-  const inner = `<span class="tape tape--${esc(look.pattern)}" style="--tape-color: ${look.tapeColor}; --tape-angle: ${tapeAngle(course.id)}deg${look.tapeImage ? `; --tape-image: ${look.tapeImage}` : ''}"></span>
-    ${stickers.length ? `<span class="folder__stickers"${edit ? '' : ' aria-hidden="true"'}>${stickers.map(([st]) => stickerImg(st, shapes, edit && !edit.still && st.index != null ? {index: st.index, selected: edit.selected === st.index} : {})).join('')}</span>` : ''}
+  const live = edit && !edit.still;
+  const inner = `<span class="tape tape--${esc(look.pattern)}"${live ? ' data-edit="tape" title="押すとマスキングテープを変えられます"' : ''} style="--tape-color: ${look.tapeColor}; --tape-angle: ${tapeAngle(course.id)}deg${look.tapeImage ? `; --tape-image: ${look.tapeImage}` : ''}"></span>
+    ${stickers.length ? `<span class="folder__stickers"${edit ? '' : ' aria-hidden="true"'}>${stickers.map(([st]) => (edit?.render ? edit.render(st) : stickerImg(st, shapes, edit && !edit.still && st.index != null ? {index: st.index, selected: edit.selected === st.index} : {}))).join('')}</span>` : ''}
     <span class="folder__name ja-wrap${longestRun(name) > 6 ? ' folder__name--long' : ''}">${name}</span>
     <span class="folder__sub">${today ? '<span class="folder__today">今日</span> ' : ''}${esc(sub)}</span>
     <span class="folder__badges">${badges}</span>`;
-  if (edit) return `<div class="${cls} folder--preview" style="${look.style}"${edit.still ? ' aria-hidden="true"' : ' data-preview-place="folder"'}>${inner}</div>`;
+  if (edit)
+    return `<div class="${cls} folder--preview" style="${look.style}"${edit.still ? ' aria-hidden="true"' : ' data-drop-place="folder" data-edit="folder" title="押すとフォルダの色を変えられます。シールをここへドラッグすると貼れます"'}>${inner}</div>`;
   return `<button class="${cls}" style="${look.style}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
     ${inner}
   </button>`;

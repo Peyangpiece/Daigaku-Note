@@ -30,7 +30,7 @@ test('テンプレートの形：知らない項目は捨て、範囲外は既�
         folder: {card: '#ffffff', tab: 'course'},
         tape: {color: 'course', pattern: 'check'}
       },
-      stickers: [{place: 'folder', asset: SHA, x: 2, y: -1, scale: 9, rotate: 90, z: 3}, {place: 'wall', asset: SHA}],
+      stickers: [{place: 'folder', asset: SHA, x: 2, y: -1, scale: 9, rotate: 270, z: 3}, {place: 'wall', asset: SHA}],
       assets: {[SHA]: {w: 9999, h: 100}}
     },
     {id: 'T1', now: '2026-10-21T00:00:00.000Z'}
@@ -45,7 +45,7 @@ test('テンプレートの形：知らない項目は捨て、範囲外は既�
   assert.deepEqual(t.parts.note, {type: 'ruled', paper: 'default', line: '#abcdef', gap: 'wide', margin: true});
   assert.deepEqual(t.parts.folder, {card: '#ffffff', tab: 'default'}, 'タブに course は使えない');
   assert.deepEqual(t.parts.tape, {color: 'course', pattern: 'check', image: null});
-  assert.deepEqual(t.stickers, [{place: 'folder', asset: SHA, x: 1, y: 0, scale: 2, rotate: 45, z: 3}], '貼れない場所は捨て、値は範囲に収める');
+  assert.deepEqual(t.stickers, [{place: 'folder', asset: SHA, x: 1, y: 0, scale: 2, rotate: 180, z: 3}], '貼れない場所は捨て、値は範囲に収める');
   assert.deepEqual(t.assets, {[SHA]: {mime: 'image/png', w: 512, h: 100}});
 });
 
