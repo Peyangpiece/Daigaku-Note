@@ -2835,9 +2835,6 @@ textarea.input {
   cursor: grab;
   touch-action: none;
 }
-.ks-st[data-fixed] {
-  cursor: pointer;
-}
 .ks-st.is-locked {
   cursor: default;
   opacity: 0.85;

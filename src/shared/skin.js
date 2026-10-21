@@ -127,7 +127,9 @@ export function normalizeStickers(raw) {
       y: num(s.y, 0, 1, 0.5),
       scale: num(s.scale, 0.2, 2, 1),
       rotate: Math.round(num(s.rotate, -180, 180, 0)),
-      z: Math.round(num(s.z, 0, 99, 0))
+      z: Math.round(num(s.z, 0, 99, 0)),
+      // 決まった場所のシールは、動かしていなければ決まった位置（回の付箋の角など）に、動かしていれば x・y に出す
+      ...(FIXED_PLACES.includes(s.place) && s.moved === true ? {moved: true} : {})
     });
   }
   return out;

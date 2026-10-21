@@ -183,3 +183,15 @@ test('資料のイラストの中身：印とラベルのずれは ±40 に収�
   assert.deepEqual(normalizeTemplate({}).parts.fileArt.video, {mark: {dx: 0, dy: 0, on: true}, label: {dx: 0, dy: 0, on: true}});
   assert.deepEqual(resolveSkin([t], t.id).fileArt.pdf.mark.on, false, 'テンプレートの中身が当たる');
 });
+
+test('1 か所に 1 枚のシール：動かしたもの（moved）だけ位置を持つ。ほかの場所には付けない', () => {
+  const t = normalizeTemplate({
+    stickers: [
+      {place: 'round', asset: 'builtin-star', x: 0.3, y: 0.7, moved: true},
+      {place: 'file', kind: 'pdf', asset: 'builtin-star', moved: 'yes'},
+      {place: 'folder', asset: 'builtin-star', moved: true}
+    ]
+  });
+  assert.deepEqual(t.stickers.map((s) => s.moved ?? false), [true, false, false]);
+  assert.equal(t.stickers[0].x, 0.3);
+});

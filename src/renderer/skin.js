@@ -113,10 +113,10 @@ export function stickerLayer(stickers, place, data) {
   return `<div class="sticker-layer sticker-layer--${place}" aria-hidden="true">${list.map((s) => stickerImg(s, shapes)).join('')}</div>`;
 }
 
-/** 決まった位置に貼るシール（回の付箋の角・資料のイラスト・しおりのリボンの先）。x・y は貼る先の中の割合 */
+/** 1 か所に 1 枚のシール（回の付箋・資料のイラスト・しおりのリボン）。x・y は動かしていないときの位置（貼る先の中の割合） */
 export function fixedSticker(st, data, {x, y, base, cls = ''}) {
   if (!st) return '';
-  const img = stickerImg({...st, x, y}, shapesOf(data), {base});
+  const img = stickerImg(st.moved ? st : {...st, x, y}, shapesOf(data), {base});
   return img ? `<span class="sticker-layer sticker-layer--fixed ${cls}" aria-hidden="true">${img}</span>` : '';
 }
 /** しおりのリボンの色と形（着せ替え）。色が default ならはじめの赤 */
