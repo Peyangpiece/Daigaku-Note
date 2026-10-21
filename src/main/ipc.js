@@ -37,6 +37,7 @@ const loginItem = () => {
   const available = app.isPackaged && (process.platform === 'darwin' || process.platform === 'win32');
   return {available, on: available && app.getLoginItemSettings().openAtLogin === true};
 };
+const FOLDER_LOOK_PARTS = ['tab', 'card', 'tape', 'badge'];
 const bad = (msg) => {
   throw new Error(msg);
 };
@@ -80,6 +81,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         everyHours: repo.getSetting('sync.everyHours', 0),
         theme: repo.getSetting('ui.theme', 'system'),
         rules: repo.getSetting('ui.rules', 'normal'),
+        folderLooks: repo.getSetting('skin.folderLooks', {}), // フォルダごとの色 {授業の id: {card, tab, tape, badge}}（右クリック →「着せ替え…」）
         ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「付箋を追加」の色（付箋の 5 色の何番目か）
         role: repo.getSetting('profile.role', null), // 使う人（profile.js の ROLES）。まだ選んでいなければ null
         uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）
@@ -759,6 +761,23 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     } else if (patch.uses !== undefined) repo.setSetting('profile.uses', cleanUses(repo.getSetting('profile.role', null), patch.uses));
     if (patch.acceptLmsTerms === LMS_TERMS_VERSION) repo.setSetting('lms.terms', {version: LMS_TERMS_VERSION, at: new Date().toISOString()});
     if (typeof patch.university === 'string') repo.setSetting('profile.university', patch.university.trim().slice(0, 60));
+    // フォルダごとの色（タブ・フォルダ・マスキングテープ・新着の知らせ）。color が null ならその色を元に戻す。reset ですべて元に戻す
+    if (patch.folderLook && typeof patch.folderLook === 'object') {
+      const {courseId: fcid, part, color: c, reset} = patch.folderLook;
+      const cid = id(fcid) ?? bad('フォルダが不正です');
+      const map = {...repo.getSetting('skin.folderLooks', {})};
+      const look = {...(map[cid] ?? {})};
+      if (reset === true) Object.keys(look).forEach((k) => delete look[k]);
+      else {
+        if (!FOLDER_LOOK_PARTS.includes(part)) bad('変える場所が不正です');
+        if (c === null) delete look[part];
+        else if (isHex(c)) look[part] = c.toLowerCase();
+        else bad('色が不正です');
+      }
+      if (Object.keys(look).length) map[cid] = look;
+      else delete map[cid];
+      repo.setSetting('skin.folderLooks', map);
+    }
     // 「付箋を追加」の色：付箋の 5 色の何番目か（0〜4）。null で元の白に戻す
     if (patch.ownColor && typeof patch.ownColor === 'object') {
       const cid = id(patch.ownColor.courseId) ?? bad('授業が不正です');

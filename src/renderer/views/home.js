@@ -52,16 +52,26 @@ const longestRun = (html) => Math.max(...html.split('<wbr>').map((s) => [...s.re
 const WEEKDAY_BADGE = {月: 'var(--c2)', 火: 'var(--c6)', 水: 'var(--c1)', 木: 'var(--c3)', 金: 'var(--c4)', 土: 'var(--c5)', 日: 'var(--c8)'};
 export const badgeColor = (course) => WEEKDAY_BADGE[course.weekday] ?? `var(--c${course.color ?? 1})`;
 
+/** フォルダごとに選んだ色（右クリック →「着せ替え…」）。タブ・フォルダ・マスキングテープ・新着の知らせ。選んでいなければ空 */
+export const folderLookOf = (data, course) => data?.settings?.folderLooks?.[course.id] ?? {};
+/** テンプレートの見た目に、フォルダごとに選んだ色を重ねる */
+export function withFolderLook(sk, over) {
+  if (!over.card && !over.tab && !over.tape) return sk;
+  return {...sk, folder: {card: over.card ?? sk.folder.card, tab: over.tab ?? sk.folder.tab}, tape: {...sk.tape, color: over.tape ?? sk.tape.color}};
+}
+
 export function folderCard(course, {today = false, data = null, skin = null, edit = null} = {}) {
   const sub = course.kind === 'folder' ? scopeLabel(course) : course.weekday ? slotOf(course) : '';
   const name = jaWrap(course.name);
-  const sk = skin ?? skinOf(data, course);
+  // 着せ替えページの見本（skin・edit を渡す）では、フォルダごとの色は重ねない（テンプレートの見た目を見せる）
+  const over = skin || edit ? {} : folderLookOf(data, course);
+  const sk = skin ?? withFolderLook(skinOf(data, course), over);
   const look = folderLook(course, sk);
   const shapes = shapesOf(data);
   const stickers = sk.stickers.filter((s) => s.place === 'folder').map((s) => [s]); // 直している見本では s.index が直しているテンプレートの何枚目か
   const badges = [
     course.unread
-      ? `<span class="badge" style="--badge-color: ${badgeColor(course)}">新着 ${course.unread}</span>`
+      ? `<span class="badge" style="--badge-color: ${over.badge ?? badgeColor(course)}">新着 ${course.unread}</span>`
       : '',
     course.review ? `<span class="badge">復習 ${course.review}</span>` : ''
   ].join('');
