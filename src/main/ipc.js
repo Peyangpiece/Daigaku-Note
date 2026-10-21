@@ -636,7 +636,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         const r = await files.addOwn({...place, name, data: await read()});
         if (r.result === 'dup') {
           const where = r.material.round_id ? repo.get('round', r.material.round_id) : null;
-          out.dup.push({name, where: place.course.kind === 'folder' ? 'このフォルダ' : where ? (where.number === 0 ? 'その他' : `第${where.number}回`) : '自分の付箋'});
+          out.dup.push({name, where: place.course.kind === 'folder' ? 'このフォルダ' : where ? (where.number === 0 ? 'その他' : `第${where.number}回`) : '「付箋を追加」'});
         } else out.added++;
       } catch (e) {
         log.warn(`ファイルを入れられませんでした: ${name}（${e.message}）`);

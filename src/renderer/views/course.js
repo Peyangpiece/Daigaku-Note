@@ -1,5 +1,5 @@
 // 授業画面（SPEC §8.2）：回ごとの付箋に、資料がイラスト付きの紙で貼ってある。
-// 自分のファイルは「自分の付箋」に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
+// 自分のファイルは「付箋を追加」に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
 import {canRename, esc, jaWrap, progressText, state} from '../app.js';
 import {extOf, fileArt, kindOf} from './file-art.js';
 import {bookmarkLook, fixedSticker, skinOf, stickerLayer} from '../skin.js';
@@ -45,9 +45,9 @@ function hash32(str) {
 const tilt = (id) => ((hash32(id) % 7) - 3) * 0.5; // -1.5 〜 +1.5 度
 
 const EXTRACTABLE = /\.(pdf|docx|pptx|txt|md)$/i;
-const placeName = (r) => (r ? (r.number === 0 ? 'その他' : `第${r.number}回`) : '自分の付箋');
+const placeName = (r) => (r ? (r.number === 0 ? 'その他' : `第${r.number}回`) : '付箋を追加');
 
-// places：移せる先（自分の付箋と回）。資料の紙はドラッグで別の付箋へ移せる。キーボードでは「移す」の選択で
+// places：移せる先（「付箋を追加」と回）。資料の紙はドラッグで別の付箋へ移せる。キーボードでは「移す」の選択で
 export function fileCard(m, course, places) {
   const ok = m.status === 'ok';
   const unread = !m.read_at && ok;
@@ -90,15 +90,14 @@ export function fileCard(m, course, places) {
   </div>`;
 }
 
-// 自分の付箋：授業画面で入れたファイルが最初に置かれる。ここから回の付箋へ振り分ける
+// 付箋を追加：授業画面で入れたファイルが最初に置かれる。回の付箋と同じ大きさで、ここから回の付箋へ振り分ける
 function ownNote(course, list, places) {
-  return `<section class="round-note round-note--own${list.length ? '' : ' round-note--own-empty'}" data-drop="own" data-course-id="${esc(course.id)}" aria-label="自分の付箋">
+  return `<section class="round-note round-note--own" data-drop="own" data-course-id="${esc(course.id)}" aria-label="付箋を追加">
     <header class="round-note__head">
-      <span class="round-note__round">自分の付箋</span>
-      <span class="round-note__title muted">${list.length ? '回の付箋へドラッグか「移す」で振り分け' : 'ここにファイルをドラッグ（元のファイルは残ります）'}</span>
+      <span class="round-note__round">付箋を追加</span>
       <button class="btn btn--small" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
     </header>
-    ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course, places)).join('')}</div>` : ''}
+    ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course, places)).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグ<br>（元のファイルは残ります）</p>'}
   </section>`;
 }
 
@@ -229,9 +228,9 @@ export function renderCourse({data, progress}, courseId) {
     (byRound.get(r.id) ?? []).some((m) => m.status === 'ok' && EXTRACTABLE.test(m.name))
   );
   const own = materials.filter((m) => !m.round_id);
-  // 移せる先：自分の付箋・回（「その他」はまだなくても選べるようにはしない。回は資料の有無にかかわらず全部）
+  // 移せる先：「付箋を追加」・回（「その他」はまだなくても選べるようにはしない。回は資料の有無にかかわらず全部）
   const places = [
-    {value: 'own', label: '自分の付箋'},
+    {value: 'own', label: '付箋を追加'},
     ...rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length).map((r) => ({value: r.id, label: placeName(r)}))
   ];
   const note = (r) => roundNote(r, byRound.get(r.id) ?? [], course, today, quizInfo, places);

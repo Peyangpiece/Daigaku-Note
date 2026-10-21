@@ -676,11 +676,9 @@ h2[tabindex='-1']:focus {
   color: var(--paper-ink-weak);
 }
 
-/* 自分の付箋：自分で入れたファイルが最初に置かれる。行の幅いっぱい。罫線入りの白い付箋に黄色のテープ */
+/* 付箋を追加：自分で入れたファイルが最初に置かれる。回の付箋と同じ大きさ。罫線入りの白い付箋に黄色のテープ */
 .round-note--own {
   --note-bg: color-mix(in srgb, var(--c1) 14%, var(--note-mix, var(--card)));
-  grid-column: 1 / -1;
-  min-height: 0;
   transform: none;
   background:
     repeating-linear-gradient(
@@ -699,20 +697,7 @@ h2[tabindex='-1']:focus {
 }
 .round-note--own .round-note__head {
   align-items: center;
-}
-.round-note--own .round-note__title {
-  white-space: normal;
-  font-weight: 400;
-  font-size: var(--fs-small);
-}
-.round-note--own-empty .round-note__head {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.round-note--own .round-note__files {
-  grid-template-columns: repeat(auto-fill, minmax(104px, 120px));
-  padding-bottom: 8px;
+  justify-content: space-between;
 }
 /* ドラッグで上に来た付箋 */
 .round-note--drop {
