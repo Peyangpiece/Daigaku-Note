@@ -45,7 +45,7 @@ const SAMPLE = [
 
 // 画面の状態（描き直しても残す）。draft は直している途中のテンプレート（baseId は元のテンプレート）。
 // 対象・名前などは ui が決めるので、描き直しのときに前の値へ戻さない（data-keep="off"）
-const ui = {target: '', part: 'note', scene: 'home', history: [], future: [], fileKind: 'pdf', art: null, book: 'all', draft: null, selected: null, confirm: null, route: null};
+const ui = {target: '', part: 'note', scene: 'home', history: [], future: [], fileKind: 'pdf', art: null, book: 'mark', draft: null, selected: null, confirm: null, route: null};
 
 const courses = (data) => data.courses.filter((c) => !c.hidden);
 const targetCourse = (data) => (ui.target ? (data.courses.find((c) => c.id === ui.target) ?? null) : null);
@@ -226,10 +226,18 @@ function bookItems(data, action, current = null, filter = 'all') {
     })
     .join('');
 }
-function bookFilters(data) {
-  const folders = [...new Set((data.skin?.stickers ?? []).map((b) => b.folder).filter(Boolean))];
-  const list = [['all', 'すべて'], ['fav', '★ お気に入り'], ['mark', BUILTIN_STICKER_KIND.mark], ['deco', BUILTIN_STICKER_KIND.deco], ['mine', '取り込んだ画像'], ...folders.map((f) => [f, `▤ ${f}`])];
-  return list.map(([v, l]) => `<button type="button" class="ks-choice" data-ks="book" data-value="${esc(v)}" aria-pressed="${ui.book === v}"><span>${esc(l)}</span></button>`).join('');
+/** シール帳のジャンル（上のバー）。[値, 名前, 見本のシール]。お気に入り・取り込んだ画像は、あれば出す。フォルダは取り込んだ画像のフォルダ分け */
+function bookTabs(data) {
+  const mine = data.skin?.stickers ?? [];
+  const first = (filter) => bookList(data, filter)[0]?.id ?? null;
+  const folders = [...new Set(mine.map((b) => b.folder).filter(Boolean))];
+  return [
+    ...(mine.some((b) => b.favorite) ? [['fav', 'お気に入り', first('fav')]] : []),
+    ['mark', BUILTIN_STICKER_KIND.mark, first('mark')],
+    ['deco', BUILTIN_STICKER_KIND.deco, first('deco')],
+    ['mine', '取り込んだ画像', first('mine')],
+    ...folders.map((f) => [f, f, first(f)])
+  ];
 }
 function stickerControls(data) {
   const book = data.skin?.stickers ?? [];
@@ -343,10 +351,10 @@ function stageSticker(data, st, {base, fixed = null}) {
   const handles = sel
     ? `<span class="ks-h ks-h--scale" data-h="scale" title="引いて大きさを変える"></span>
        <span class="ks-h ks-h--rotate" data-h="rotate" title="回して傾ける"></span>
-       <button type="button" class="ks-h ks-h--del" data-h="del" title="はがす（Delete）" aria-label="はがす">×</button>
-       ${fixed ? '' : '<button type="button" class="ks-h ks-h--dup" data-h="dup" title="もう 1 枚貼る" aria-label="複製">＋</button>'}`
+       <button type="button" tabindex="-1" class="ks-h ks-h--del" data-h="del" title="はがす（Delete）" aria-label="はがす">×</button>
+       ${fixed ? '' : '<button type="button" tabindex="-1" class="ks-h ks-h--dup" data-h="dup" title="もう 1 枚貼る" aria-label="複製">＋</button>'}`
     : '';
-  return `<span class="ks-st${sel ? ' is-selected' : ''}${mine ? '' : ' is-locked'}"${mine ? ` data-sticker-index="${st.index}"` : ''}${fixed ? ' data-fixed' : ''} data-base="${base}" style="${style}" title="${mine ? 'ドラッグで動かす・押して選ぶ' : '全体のシール（ここでは動かせません）'}">
+  return `<span class="ks-st${sel ? ' is-selected' : ''}${mine ? '' : ' is-locked'}"${mine ? ` data-sticker-index="${st.index}" tabindex="0" role="button" aria-label="シール（${esc(PLACE_LABEL[st.place] ?? '')}）。矢印で動かし、Delete ではがす"` : ''}${fixed ? ' data-fixed' : ''} data-base="${base}" style="${style}" title="${mine ? 'ドラッグで動かす・押して選ぶ' : '全体のシール（ここでは動かせません）'}">
     <img class="sticker sticker--${shape}" src="${url}" alt="" draggable="false" />${handles}</span>`;
 }
 const stageLayer = (data, stickers, place) =>
@@ -425,10 +433,22 @@ function stage(data, ctx) {
 
 /** シール帳（見本の下の棚）。ドラッグで見本の好きな所へ、押すと今の場面の決まった所へ貼る */
 function tray(data) {
+  const tabs = bookTabs(data);
+  if (!tabs.some(([v]) => v === ui.book)) ui.book = 'mark';
+  const items = bookItems(data, 'sticker-add', null, ui.book);
+  const empty = ui.book === 'mine' ? 'まだありません。右の ＋ から画像を取り込むと、ここに並びます。' : 'まだありません。';
   return `<div class="ks-tray">
-    <div class="ks-tray__head"><strong>シール帳</strong><span class="ks-choices ks-book__filters">${bookFilters(data)}</span>
-      <label class="ks-book__add btn btn--small">＋ 画像を取り込む<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ks-file hidden /></label></div>
-    <div class="ks-book ks-tray__list">${bookItems(data, 'sticker-add', null, ui.book)}</div>
+    <div class="ks-tray__bar" role="tablist" aria-label="シール帳のジャンル">
+      ${tabs
+        .map(([v, label, sid]) => {
+          const url = sid ? stickerUrl(sid) : '';
+          return `<button type="button" class="ks-tray__tab" role="tab" data-ks="book" data-value="${esc(v)}" aria-selected="${ui.book === v}" title="${esc(label)}">
+            <span class="ks-tray__icon">${url ? `<img src="${url}" alt="" draggable="false" />` : v === 'fav' ? '★' : '🖼'}</span><span class="ks-tray__label">${esc(label)}</span></button>`;
+        })
+        .join('')}
+      <label class="ks-tray__tab ks-tray__add" title="画像を取り込んでシールにする"><span class="ks-tray__icon">＋</span><span class="ks-tray__label">取り込む</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ks-file hidden /></label>
+    </div>
+    <div class="ks-book ks-tray__grid" role="tabpanel" aria-label="${esc(tabs.find(([v]) => v === ui.book)?.[1] ?? '')}">${items || `<p class="muted ks-tray__empty">${empty}</p>`}</div>
   </div>`;
 }
 
@@ -1086,15 +1106,20 @@ document.addEventListener('keydown', (e) => {
   }
   if (ui.selected == null || typing) return;
   const s = ui.draft.stickers[ui.selected];
+  const onSticker = !!e.target.closest?.('.ks-st[data-sticker-index]');
+  const inStage = !!e.target.closest?.('.ks-stagewrap');
   if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault();
     peel();
-    return refresh();
+    refresh();
+    return document.querySelector('.kisekae .ks-stagewrap')?.focus();
   }
   if (e.key === 'Escape') {
     ui.selected = null;
-    return refresh();
+    refresh();
+    return inStage && document.querySelector('.kisekae .ks-stagewrap')?.focus();
   }
+  if (onSticker) ui.refocus = true; // 描き直したあと、同じシールにキーボードの位置を戻す
   const step = e.shiftKey ? 0.05 : 0.01;
   const move = {ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step]}[e.key];
   if (move) {
@@ -1256,4 +1281,22 @@ document.addEventListener(
 document.getElementById('view')?.addEventListener('rendered', () => {
   const el = document.querySelector('.kisekae .ks-inspector');
   if (el && inspectorScroll.key === inspectorKey()) el.scrollTop = inspectorScroll.top;
+});
+
+// キーボード：Tab で見本のシールに移ると、そのシールを選ぶ（矢印で動かし、Delete ではがし、Esc でやめる）
+document.addEventListener('focusin', (e) => {
+  const st = e.target.closest?.('.kisekae .ks-st[data-sticker-index]');
+  if (!st || !ui.draft) return;
+  const i = Number(st.dataset.stickerIndex);
+  if (ui.selected === i) return;
+  ui.selected = i;
+  ui.art = null;
+  ui.part = 'sticker';
+  ui.refocus = true;
+  refresh();
+});
+document.getElementById('view')?.addEventListener('rendered', () => {
+  if (!ui.refocus) return;
+  ui.refocus = false;
+  if (ui.selected != null) document.querySelector(`.kisekae .ks-st[data-sticker-index="${ui.selected}"]`)?.focus({preventScroll: true});
 });
