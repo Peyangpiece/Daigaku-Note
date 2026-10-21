@@ -34,12 +34,10 @@ import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, isBuiltinSticker} from '../../sh
 
 const api = window.daigaku;
 
-// 色の見本（テーマの 8 色・淡い紙の色・濃い色）
-const PALETTE = [
-  '#ffffff', '#fbf8f1', '#fffaf0', '#fff6f8', '#f4fbf7', '#f3f8ff', '#f8f5ff', '#efe6d6',
-  '#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70', '#6fd3e6', '#f7a1c4',
-  '#2c4a7a', '#3a3a3a'
-];
+// 色の見本。紙・カードには淡い色、線・タブ・テープ・資料・しおりにははっきりした色（白などの淡い色は線やテープでは見えないため）
+const LIGHT = ['#ffffff', '#fbf8f1', '#fffaf0', '#fff6f8', '#f4fbf7', '#f3f8ff', '#f8f5ff', '#efe6d6'];
+const VIVID = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70', '#6fd3e6', '#f7a1c4', '#2c4a7a', '#3a3a3a'];
+const RECENT_MAX = 4;
 const SAMPLE = [
   {id: 'sample-1', name: '管理会計Ⅱ', color: 1, tape_pattern: 'plain', weekday: '金', period: 2},
   {id: 'sample-2', name: 'マーケティング', color: 4, tape_pattern: 'stripe', weekday: '月', period: 1}
@@ -150,10 +148,11 @@ function galleryCard(data, t, course, current) {
 }
 
 // ---- 細かく直す：部品ごとの操作 ----
-function colorField(key, label, value, {allowDefault = true, allowCourse = false, recent = []} = {}) {
+function colorField(key, label, value, {allowDefault = true, allowCourse = false, recent = [], light = false} = {}) {
   const sw = (v, text, cls = '') =>
     `<button type="button" class="ks-sw ${cls}" data-ks="color" data-key="${key}" data-value="${v}" aria-pressed="${value === v}" title="${esc(text)}"${v.startsWith('#') ? ` style="--sw: ${v}"` : ''}>${v.startsWith('#') ? '' : esc(text)}</button>`;
-  const colors = [...new Set([...recent, ...PALETTE])];
+  // 最近使った色（4 つまで）・今の色（候補になくても見せる）・候補
+  const colors = [...new Set([...recent.slice(0, RECENT_MAX), ...(value?.startsWith('#') ? [value] : []), ...(light ? LIGHT : VIVID)])];
   return `<fieldset class="ks-field"><legend>${label}</legend><div class="ks-swatches">
     ${allowDefault ? sw('default', 'テーマの色', 'ks-sw--text') : ''}
     ${allowCourse ? sw('course', '授業ごとの色', 'ks-sw--text') : ''}
@@ -179,7 +178,7 @@ function noteControls(data) {
     <fieldset class="ks-field"><legend>ノートの種類</legend>
       ${choice('note.type', n.type, NOTE_TYPES, NOTE_TYPE_LABEL, {swatch: (v) => noteSwatch({...n, type: v}, 'ks-choice__swatch')})}
     </fieldset>
-    ${colorField('note.paper', '紙の色', n.paper, {recent})}
+    ${colorField('note.paper', '紙の色', n.paper, {recent, light: true})}
     ${colorField('note.line', '線の色', n.line, {recent})}
     <fieldset class="ks-field"><legend>線の間隔</legend>${choice('note.gap', n.gap, Object.keys(NOTE_GAPS), NOTE_GAP_LABEL)}</fieldset>
     <label class="ks-check"><input type="checkbox" data-ks-check="note.margin" ${n.margin ? 'checked' : ''} /> 左の余白の縦線を引く</label>
@@ -190,7 +189,7 @@ function noteControls(data) {
 function folderControls(data) {
   const f = ui.draft.parts.folder;
   const recent = data.skin?.recent ?? [];
-  return `${colorField('folder.card', 'カードの色', f.card, {recent})}${colorField('folder.tab', 'タブの色', f.tab, {recent})}`;
+  return `${colorField('folder.card', 'カードの色', f.card, {recent, light: true})}${colorField('folder.tab', 'タブの色', f.tab, {recent})}`;
 }
 function tapeControls(data) {
   const t = ui.draft.parts.tape;
@@ -474,12 +473,12 @@ function editor(data) {
           </span>
         </div>
         <div class="ks-stagewrap" tabindex="0" aria-label="見本。部分を押すと右で変えられます。シールは矢印キーで動かし、Delete ではがせます">${stage(data, {course, first, second, note, skin1, skin2})}</div>
-        <p class="muted ks-hint">見本の上の部分を押すと、右でその部分を変えられます。シールは下のシール帳から見本へドラッグして貼り、そのまま動かせます（角の ◢ で大きさ、上の ↻ で傾き）。</p>
+        <p class="muted ks-hint">部分を押すと右で直せます。シールは下から見本へドラッグして貼ります。</p>
         ${tray(data)}
         <div class="ks-save">
           <label>名前<input class="input" id="ks-name" data-keep="off" maxlength="40" value="${esc(ui.draft.name)}" /></label>
           <label>利用条件<select class="input" id="ks-license" data-keep="off">${LICENSES.map((l) => `<option value="${l}" ${ui.draft.license === l ? 'selected' : ''}>${LICENSE_LABEL[l]}</option>`).join('')}</select></label>
-          <button type="button" class="btn btn--primary" data-ks="save">${ui.draft.baseId ? '保存して当てる' : '新しいテンプレートとして保存して当てる'}</button>
+          <button type="button" class="btn btn--primary" data-ks="save">保存して当てる</button>
           ${ui.draft.baseId ? '<button type="button" class="btn" data-ks="save-new">別のテンプレートとして保存</button>' : ''}
           <button type="button" class="btn" data-ks="discard">やめる</button>
         </div>
@@ -526,6 +525,8 @@ export function renderKisekae({data}, route) {
   const current = currentId(data);
   const [first] = samples(data, course);
   const templates = allTemplates(data);
+  const builtins = templates.filter((t) => isBuiltin(t.id));
+  const mine = templates.filter((t) => !isBuiltin(t.id));
   return `
     <div class="kisekae">
       <h2>着せ替え</h2>
@@ -537,7 +538,7 @@ export function renderKisekae({data}, route) {
       </select></label>
       <section aria-labelledby="ks-gallery-title">
         <h3 id="ks-gallery-title">おすすめから選ぶ</h3>
-        <p class="muted ks-gallery__lead">押すとすぐに${course ? `「${esc(course.name)}」` : 'すべての授業'}に当たります。<button type="button" class="btn btn--small" data-ks="import">テンプレートを読み込む…</button></p>
+        <p class="muted ks-gallery__lead">押すとすぐに${course ? `「${esc(course.name)}」` : 'すべての授業'}に当たります。</p>
         <div class="ks-gallery">
           ${
             course
@@ -546,13 +547,22 @@ export function renderKisekae({data}, route) {
               <span class="ks-card__name">${current === null ? '✓ ' : ''}全体と同じ</span><span class="ks-card__meta muted">すべての授業の設定に合わせる</span></button></div>`
               : ''
           }
-          ${templates.map((t) => galleryCard(data, t, first, current)).join('')}
+          ${builtins.map((t) => galleryCard(data, t, first, current)).join('')}
         </div>
       </section>
-      <section class="ks-tolab" aria-labelledby="ks-tolab-title">
-        <h3 id="ks-tolab-title">自分で作る</h3>
-        <p class="muted">今の${course ? `「${esc(course.name)}」の` : ''}テンプレートをもとに、紙・フォルダ・テープ・シールなどを見本の上で直せます。</p>
-        <button type="button" class="btn btn--primary" data-ks="open-editor">細かい編集へ →</button>
+      <section class="ks-mine" aria-labelledby="ks-mine-title">
+        <h3 id="ks-mine-title">マイノート</h3>
+        <p class="muted ks-gallery__lead">自分で作ったものと、読み込んだものです。押すとすぐ当たります。
+          <button type="button" class="btn btn--small" data-ks="import">テンプレートを読み込む…</button></p>
+        ${
+          mine.length
+            ? `<div class="ks-gallery">${mine.map((t) => galleryCard(data, t, first, current)).join('')}</div>`
+            : '<p class="muted ks-mine__empty">まだありません。上のテンプレートの「もとにして作る」か、下の「細かい編集へ」から作れます。</p>'
+        }
+        <div class="ks-tolab">
+          <p class="muted">今の${course ? `「${esc(course.name)}」の` : ''}テンプレートをもとに、紙・フォルダ・テープ・シールなどを見本の上で直せます。</p>
+          <button type="button" class="btn btn--primary" data-ks="open-editor">細かい編集へ →</button>
+        </div>
       </section>
     </div>`;
 }
@@ -564,7 +574,7 @@ function editPage(data, course) {
     <div class="kisekae kisekae--edit">
       <div class="ks-editbar">
         <button type="button" class="btn" data-ks="back">← 着せ替えへ</button>
-        <h2>細かい編集</h2>
+        <h2>細かい編集</h2>${ui.history.length ? '<span class="ks-dirty" title="保存していない変更があります">● 未保存</span>' : ''}
         <span class="muted">対象：${course ? `「${esc(course.name)}」` : 'すべての授業'}・「${esc(ui.draft.from)}」${ui.draft.baseId ? 'を直しています' : 'をもとに新しく作ります'}</span>
       </div>
       ${editor(data)}
@@ -1143,6 +1153,7 @@ export function openSkinPicker(course, card, x, y) {
   const paint = () => {
     const c = state.data.courses.find((v) => v.id === course.id) ?? course;
     const cur = c.skin_template_id ?? null;
+    const mineList = allTemplates(state.data).filter((t) => !isBuiltin(t.id));
     const item = (tid, name) => {
       const sk = skinOf(state.data, {...c, skin_template_id: tid});
       return `<button type="button" class="skin-picker__item" data-pick="${tid ?? ''}" aria-pressed="${cur === tid}">
@@ -1153,7 +1164,8 @@ export function openSkinPicker(course, card, x, y) {
       <div class="skin-picker__list" role="group">
         ${item(null, '全体と同じ')}
         <hr />
-        ${allTemplates(state.data).map((t) => item(t.id, t.name)).join('')}
+        ${allTemplates(state.data).filter((t) => isBuiltin(t.id)).map((t) => item(t.id, t.name)).join('')}
+        ${mineList.length ? `<div class="skin-picker__group">マイノート</div>${mineList.map((t) => item(t.id, t.name)).join('')}` : ''}
       </div>
       <button type="button" class="skin-picker__new" data-pick-new>＋ 新しく作成</button>`;
   };
@@ -1214,3 +1226,34 @@ document.addEventListener('pointerdown', (e) => picker && !picker.el.contains(e.
 document.addEventListener('keydown', (e) => e.key === 'Escape' && picker && closeSkinPicker());
 window.addEventListener('hashchange', closeSkinPicker);
 
+
+// 直した内容を守る：保存せずに細かい編集のページを離れようとしたら確かめる（「← 着せ替えへ」「やめる」は click で確かめる）。
+// app.js の hashchange（描き直し）より先に登録されるので、やめたときは描き直しを止めて元のアドレスに戻す
+window.addEventListener('hashchange', (e) => {
+  const from = new URL(e.oldURL).hash;
+  if (!from.startsWith('#/kisekae/edit') || location.hash.startsWith('#/kisekae/edit') || !ui.draft || !ui.history.length) return;
+  if (window.confirm('直した内容は保存されていません。捨ててこのページを離れますか？')) {
+    ui.draft = null;
+    return;
+  }
+  e.stopImmediatePropagation();
+  history.replaceState(null, '', e.oldURL);
+});
+window.addEventListener('beforeunload', (e) => {
+  if (location.hash.startsWith('#/kisekae/edit') && ui.draft && ui.history.length) e.preventDefault();
+});
+
+// 右の欄は描き直しても、同じ部分を直している間はスクロールの位置を保つ（色を押すたびに上へ戻らないように）
+const inspectorKey = () => (ui.selected != null ? 'sticker' : `${ui.part}:${ui.fileKind}`);
+let inspectorScroll = {key: null, top: 0};
+document.addEventListener(
+  'scroll',
+  (e) => {
+    if (e.target.classList?.contains('ks-inspector')) inspectorScroll = {key: inspectorKey(), top: e.target.scrollTop};
+  },
+  true
+);
+document.getElementById('view')?.addEventListener('rendered', () => {
+  const el = document.querySelector('.kisekae .ks-inspector');
+  if (el && inspectorScroll.key === inspectorKey()) el.scrollTop = inspectorScroll.top;
+});
