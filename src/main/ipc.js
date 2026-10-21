@@ -130,11 +130,15 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     // 同じ LMS への接続がもうあれば、それを使う（作り直すと授業が 2 つずつできてしまう）
     const host = base ? new URL(base).hostname.toLowerCase() : null;
     const same = repo.listConnections().find((c) => c.connector_id === cid && c.kind === kind && (c.university_host ?? '').toLowerCase() === (host ?? ''));
-    if (same) return {connectionId: same.id, reused: true};
+    const name = (str(label, 200) ?? '').trim().slice(0, 60);
+    if (same) {
+      if (name && name !== same.label) repo.updateConnection(same.id, {label: name}); // 入れ直した名前にする
+      return {connectionId: same.id, reused: true};
+    }
     const conn = repo.createConnection({
       kind,
       connector_id: cid,
-      label: str(label, 60) || recipe?.name || cid,
+      label: name || recipe?.name || cid,
       base_url: base,
       university_host: base ? new URL(base).hostname : null,
       recipe_version: recipe?.version ?? null
@@ -142,6 +146,14 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return {connectionId: conn.id};
   });
 
+  // 学習支援サービスの名前（自分で付ける。ホームやお知らせ・設定に出る）
+  handle('connection.update', ({connectionId, label}) => {
+    const cid = id(connectionId) ?? bad('接続が不正です');
+    if (!repo.get('connection', cid)) bad('接続が見つかりません');
+    const name = (str(label, 200) ?? '').trim().slice(0, 60) || bad('名前を入れてください');
+    repo.updateConnection(cid, {label: name});
+    return {ok: true};
+  });
   handle('connection.savePassword', async ({connectionId, user, password}) => {
     const cid = id(connectionId) ?? bad('接続が不正です');
     const conn = repo.get('connection', cid) ?? bad('接続がありません');

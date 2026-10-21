@@ -1012,6 +1012,10 @@ h2[tabindex='-1']:focus {
 .use-pick--one .use-pick__item[aria-checked='true'] strong::before {
   content: '● ';
 }
+.su-label {
+  display: block;
+  margin-bottom: var(--space-2);
+}
 /* 大学サービスとの連携の注意書きと利用規約（規約は枠の中で読む） */
 .lms-notice {
   max-width: none;

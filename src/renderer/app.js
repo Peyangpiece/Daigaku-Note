@@ -449,6 +449,7 @@ function renameFrom(el) {
     if (course) renameCourse(course, target);
   } else if (what === 'round') renameAt(target, value, (title) => api['round.update']({roundId: id, title}));
   else if (what === 'sub') renameAt(target, value, (name) => api['folder.renameSub']({courseId: id, sub, name}));
+  else if (what === 'conn') renameAt(target, value, (label) => api['connection.update']({connectionId: id, label}));
 }
 
 let cardMenu = null;

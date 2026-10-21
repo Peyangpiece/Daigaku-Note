@@ -41,6 +41,7 @@ const blank = () => ({
   university: null,
   materials: null, // 授業の資料の集め方：'folder'（PC の授業フォルダ）・'service'（大学サービスとの連携）・'later'
   imported: null, // 取り込んだ授業フォルダの結果
+  label: null, // 学習支援サービスの名前（自分で付ける。空なら判定した種類の名前）
   agreed: false // この回のセットアップで利用規約に同意した（同意したあとも手順の番号がずれないよう、規約の手順は残す）
 });
 let step = 0;
@@ -62,7 +63,8 @@ function stepsOf(data) {
   const uses = draft.uses ?? data.settings.uses ?? [];
   const needTerms = !termsAccepted(data) || draft.agreed;
   return flow.filter(([name]) => {
-    if (name === '利用規約') return needTerms && (flow === FLOWS.lms || draft.materials === 'service');
+    // flow は FLOWS.lms を filter した別の配列なので、=== FLOWS.lms では比べない
+    if (name === '利用規約') return needTerms && (flow !== FLOWS.first || draft.materials === 'service');
     if (flow !== FLOWS.first) return true;
     if (name === '授業の資料') return role === 'student' && uses.includes('lms');
     if (name === '学期の設定') return features({role, uses: []}).terms;
@@ -94,6 +96,7 @@ function stepUrl(data, n) {
     <label class="sr-only" for="su-url">LMS の URL</label>
     <input class="input" id="su-url" type="url" placeholder="https://lms.example-u.ac.jp/" value="${esc(draft.url)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)} <span class="muted">${esc(KIND_LABEL[c.kind] ?? c.kind)}${c.score ? ` ・ 確からしさ ${Math.round(c.score * 100)}%` : ''}</span></label>`).join('')}</div>
+    ${draft.connectorId ? `<label class="su-label">学習支援サービスの名前<input class="input" id="su-label" maxlength="60" placeholder="例：manaba・〇〇大学 LMS" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
     <div class="actions"><button class="btn" data-action="nav" data-route="/settings">やめる</button><button class="btn" id="su-detect">種類を判定</button><button class="btn btn--primary" id="su-next1" ${draft.connectorId ? '' : 'disabled'}>次へ</button></div>
     ${draft.connectorId ? '' : '<p class="muted">先に「種類を判定」を押すと「次へ」が押せます。</p>'}`;
 }
@@ -289,13 +292,22 @@ function bind() {
   if ($('su-url')) $('su-url').onkeydown = (e) => e.key === 'Enter' && detect();
   document
     .querySelectorAll('input[name=cand]')
-    .forEach((r) => (r.onchange = () => ([draft.connectorId, draft.kind] = r.value.split('|'))));
+    .forEach(
+      (r) =>
+        (r.onchange = () => {
+          [draft.connectorId, draft.kind] = r.value.split('|');
+          // 名前を自分で入れていなければ、選んだ種類の名前にする
+          if (draft.label === null && $('su-label')) $('su-label').value = draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '';
+        })
+    );
+  if ($('su-label')) $('su-label').oninput = (e) => (draft.label = e.target.value);
   if ($('su-next1'))
     $('su-next1').onclick = async () => {
       const r = await api['setup.createConnection']({
         connectorId: draft.connectorId,
         kind: draft.kind,
-        baseUrl: draft.base || draft.url
+        baseUrl: draft.base || draft.url,
+        label: $('su-label')?.value.trim() ?? ''
       });
       if (r.error) return toast(r.error, {error: true});
       draft.connectionId = r.connectionId;
