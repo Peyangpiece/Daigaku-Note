@@ -77,6 +77,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         everyHours: repo.getSetting('sync.everyHours', 0),
         theme: repo.getSetting('ui.theme', 'system'),
         rules: repo.getSetting('ui.rules', 'normal'),
+        ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「付箋を追加」の色（付箋の 5 色の何番目か）
         openAtLogin: loginItem()
       },
       skin: {
@@ -273,7 +274,20 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     }
     if (patch.font && typeof patch.font === 'object') allowed.font_json = JSON.stringify(patch.font);
     if (patch.quiz && typeof patch.quiz === 'object') allowed.quiz_json = JSON.stringify(patch.quiz);
+    // 名前を変えられるのは、LMS を使わない授業（手動でつくった授業）だけ。LMS の授業名は同期で LMS に合わせる
+    if (patch.name !== undefined) {
+      const conn = repo.get('connection', repo.get('course', cid)?.connection_id);
+      if (conn?.kind !== 'manual') bad('LMS の授業の名前は変えられません');
+      allowed.name = (str(patch.name, 200) ?? '').trim().slice(0, 80) || bad('名前を入れてください');
+    }
     return {course: repo.updateCourse(cid, allowed)};
+  });
+
+  // 回の名前（付箋の題）：自分で変える。空なら LMS の題に戻す
+  handle('round.update', ({roundId, title}) => {
+    const rid = id(roundId) ?? bad('回が不正です');
+    if (!repo.get('round', rid)) bad('回がありません');
+    return {round: repo.updateRound(rid, {title_user: (str(title, 200) ?? '').trim().slice(0, 80) || null})};
   });
 
   // ---- 着せ替え（SPEC-KISEKAE.md）：テンプレートは値だけを持つ。保存のたびに normalizeTemplate を通す ----
@@ -623,7 +637,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         const r = await files.addOwn({...place, name, data: await read()});
         if (r.result === 'dup') {
           const where = r.material.round_id ? repo.get('round', r.material.round_id) : null;
-          out.dup.push({name, where: place.course.kind === 'folder' ? 'このフォルダ' : where ? (where.number === 0 ? 'その他' : `第${where.number}回`) : '自分の付箋'});
+          out.dup.push({name, where: place.course.kind === 'folder' ? 'このフォルダ' : where ? (where.number === 0 ? 'その他' : `第${where.number}回`) : '「付箋を追加」'});
         } else out.added++;
       } catch (e) {
         log.warn(`ファイルを入れられませんでした: ${name}（${e.message}）`);
@@ -682,6 +696,20 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return {courseId: course.id, ...scanned};
   });
   handle('folder.scan', async ({courseId}) => folders.scan(id(courseId) ?? bad('フォルダが不正です')));
+  // 自分のフォルダの中の下のフォルダ（付箋 1 枚）の名前を変える：パソコンのフォルダの名前を変えて、読み直す（中身の記録は SHA-256 で付いていく）
+  handle('folder.renameSub', async ({courseId, sub, name}) => {
+    const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
+    const to = (str(name, 200) ?? '').trim();
+    if (!to || to.length > 80 || /[\\/:*?"<>|]/.test(to) || to === '.' || to === '..') bad('フォルダの名前に使えない文字があります');
+    const rel = str(sub, 1000) ?? bad('フォルダが不正です');
+    const from = path.resolve(c.dir, rel);
+    if (!from.startsWith(path.resolve(c.dir) + path.sep)) bad('フォルダが不正です');
+    const dest = path.join(path.dirname(from), to);
+    if (dest === from) return {ok: true};
+    if (await fsp.stat(dest).catch(() => null)) bad(`「${to}」はもうあります`);
+    await fsp.rename(from, dest);
+    return {ok: true, ...(await folders.scan(c.id))};
+  });
   handle('folder.reveal', async ({courseId}) => {
     const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
     const e = await shell.openPath(c.dir);
@@ -714,6 +742,16 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if ([0, 1, 3, 6].includes(patch.everyHours)) repo.setSetting('sync.everyHours', patch.everyHours);
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
+    // 「付箋を追加」の色：付箋の 5 色の何番目か（0〜4）。null で元の白に戻す
+    if (patch.ownColor && typeof patch.ownColor === 'object') {
+      const cid = id(patch.ownColor.courseId) ?? bad('授業が不正です');
+      const i = patch.ownColor.index;
+      if (i !== null && !(Number.isInteger(i) && i >= 0 && i < 5)) bad('色が不正です');
+      const map = {...repo.getSetting('ui.ownColors', {})};
+      if (i === null) delete map[cid];
+      else map[cid] = i;
+      repo.setSetting('ui.ownColors', map);
+    }
     if (patch.resetRoot === true) repo.setSetting('storage.root', null);
     if (patch.skipSetup === true) repo.setSetting('setup.skipped', true); // 初回のセットアップを終えた（次から起動時に出さない。LMS は任意で、設定からつなぐ）
     if (typeof patch.openAtLogin === 'boolean') {

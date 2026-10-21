@@ -676,11 +676,9 @@ h2[tabindex='-1']:focus {
   color: var(--paper-ink-weak);
 }
 
-/* 自分の付箋：自分で入れたファイルが最初に置かれる。行の幅いっぱい。罫線入りの白い付箋に黄色のテープ */
+/* 付箋を追加：自分で入れたファイルが最初に置かれる。回の付箋と同じ大きさ。罫線入りの白い付箋に黄色のテープ */
 .round-note--own {
   --note-bg: color-mix(in srgb, var(--c1) 14%, var(--note-mix, var(--card)));
-  grid-column: 1 / -1;
-  min-height: 0;
   transform: none;
   background:
     repeating-linear-gradient(
@@ -700,19 +698,32 @@ h2[tabindex='-1']:focus {
 .round-note--own .round-note__head {
   align-items: center;
 }
-.round-note--own .round-note__title {
-  white-space: normal;
-  font-weight: 400;
-  font-size: var(--fs-small);
+.round-note--own .round-note__round {
+  flex: 1;
+  white-space: nowrap;
 }
-.round-note--own-empty .round-note__head {
-  margin: 0;
+/* 色を選んだときは回の付箋と同じ色の混ぜ方にする（罫線は残す） */
+.round-note--own-colored {
+  --note-bg: color-mix(in srgb, var(--note-color) 55%, var(--note-mix, #fff));
+}
+/* 色の選択は付箋の下に小さく */
+.own-colors {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+.own-color {
+  width: 18px;
+  height: 18px;
   padding: 0;
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 30%, transparent);
+  border-radius: 50%;
+  background: var(--sw);
+  cursor: pointer;
 }
-.round-note--own .round-note__files {
-  grid-template-columns: repeat(auto-fill, minmax(104px, 120px));
-  padding-bottom: 8px;
+.own-color[aria-pressed='true'] {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 1px;
 }
 /* ドラッグで上に来た付箋 */
 .round-note--drop {
@@ -2106,27 +2117,48 @@ textarea.input {
 .ks-card:not(:hover, :focus-within, .is-current) .ks-card__tools {
   opacity: 0;
 }
-.ks-mine {
-  display: grid;
+/* 着せ替えページ：上に題と「使う授業」、マイノート（＋ 新しく作る）、おすすめ */
+.ks-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
 }
-.ks-mine > h3,
-.ks-mine > p {
+.ks-head h2,
+.ks-lead {
   margin: 0;
 }
-.ks-mine__empty {
-  padding: var(--space-2);
-  border: 1.5px dashed color-mix(in srgb, var(--paper-ink) 25%, transparent);
-  border-radius: var(--radius);
+.ks-sechead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
 }
-.ks-tolab {
+.ks-sechead h3 {
+  margin: 0;
+}
+.ks-card__new {
   display: grid;
-  justify-items: start;
-  gap: 6px;
-  margin-top: var(--space-1);
+  place-content: center;
+  justify-items: center;
+  min-height: 186px;
+  border: 2px dashed color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
 }
-.ks-tolab > * {
-  margin: 0;
+.ks-card__new:hover {
+  border-color: var(--paper-ink);
+}
+.ks-card__plus {
+  font-size: 40px;
+  line-height: 1;
+}
+.ks-hint2 {
+  margin: 0 0 6px;
+  font-size: var(--fs-small);
 }
 .kisekae--edit {
   max-width: 1280px;
@@ -3082,4 +3114,36 @@ textarea.input {
 }
 .ks-stage .ks-place .ks-st {
   pointer-events: auto;
+}
+
+/* 名前を変える：✎ は乗せたときに出す。押すと名前の上に入力欄を重ねる */
+.rename-btn {
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--paper-ink-weak);
+  font-size: 0.85em;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--motion, 0.15s);
+}
+[data-rename-box]:hover .rename-btn,
+.rename-btn:focus-visible {
+  opacity: 1;
+}
+.rename-btn:hover {
+  background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
+  color: var(--paper-ink);
+}
+.rename-pop {
+  position: fixed;
+  z-index: 100;
+  transform: translateY(-50%);
+  padding: 2px 6px;
+  border: 2px solid var(--paper-ink);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow-hover);
 }

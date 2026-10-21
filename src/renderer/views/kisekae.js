@@ -39,9 +39,11 @@ const api = window.daigaku;
 const LIGHT = ['#ffffff', '#fbf8f1', '#fffaf0', '#fff6f8', '#f4fbf7', '#f3f8ff', '#f8f5ff', '#efe6d6'];
 const VIVID = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70', '#6fd3e6', '#f7a1c4', '#2c4a7a', '#3a3a3a'];
 const RECENT_MAX = 4;
+// 見本の授業名は実際の名前を出さず「（授業名）」とする（色やテープは実際の授業のものを使う）
+const SAMPLE_NAME = '（授業名）';
 const SAMPLE = [
-  {id: 'sample-1', name: '管理会計Ⅱ', color: 1, tape_pattern: 'plain', weekday: '金', period: 2},
-  {id: 'sample-2', name: 'マーケティング', color: 4, tape_pattern: 'stripe', weekday: '月', period: 1}
+  {id: 'sample-1', name: SAMPLE_NAME, color: 1, tape_pattern: 'plain', weekday: '金', period: 2},
+  {id: 'sample-2', name: SAMPLE_NAME, color: 4, tape_pattern: 'stripe', weekday: '月', period: 1}
 ];
 
 // 画面の状態（描き直しても残す）。draft は直している途中のテンプレート（baseId は元のテンプレート）。
@@ -54,7 +56,7 @@ const samples = (data, course) => {
   const list = courses(data);
   const first = course ?? list[0] ?? SAMPLE[0];
   const second = list.find((c) => c.id !== first.id) ?? SAMPLE[1];
-  return [first, second];
+  return [first, second].map((c) => ({...c, name: SAMPLE_NAME}));
 };
 /** 今その対象に当たっているテンプレートの id（授業で「全体と同じ」なら null） */
 const currentId = (data) => {
@@ -127,9 +129,9 @@ function usageText(data, t) {
   if (isBuiltin(t.id)) return '';
   const u = usage(t.id, data.courses, globalId(data));
   const parts = [];
-  if (u.global) parts.push('全体');
+  if (u.global) parts.push('すべての授業');
   if (u.courses) parts.push(`${u.courses} つの授業`);
-  return parts.length ? `${parts.join('と')}で使用中` : '';
+  return parts.length ? `${parts.join('・')}で使用中` : '';
 }
 
 function galleryCard(data, t, course, current) {
@@ -139,10 +141,10 @@ function galleryCard(data, t, course, current) {
     <button type="button" class="ks-card__pick" data-ks="apply" data-id="${esc(t.id)}" aria-pressed="${on}">
       ${noteSwatch(skin.note, 'ks-card__paper', `<div class="ks-card__folder">${folderCard(course, {data, skin, edit: {still: true}})}</div>`)}
       <span class="ks-card__name">${on ? '✓ ' : ''}${esc(t.name)}</span>
-      <span class="ks-card__meta muted">${isBuiltin(t.id) ? 'はじめからある' : esc(usageText(data, t) || '自作')}</span>
+      ${isBuiltin(t.id) || !usageText(data, t) ? '' : `<span class="ks-card__meta muted">${esc(usageText(data, t))}</span>`}
     </button>
     <div class="ks-card__tools">
-      <button type="button" class="btn btn--small" data-ks="edit" data-id="${esc(t.id)}">${isBuiltin(t.id) ? 'もとにして作る' : '直す'}</button>
+      <button type="button" class="btn btn--small" data-ks="edit" data-id="${esc(t.id)}">${isBuiltin(t.id) ? 'これをもとに作る' : '直す'}</button>
       ${isBuiltin(t.id) ? '' : `<button type="button" class="btn btn--small" data-ks="dup" data-id="${esc(t.id)}">複製</button><button type="button" class="btn btn--small" data-ks="export" data-id="${esc(t.id)}" title="ファイル（.dnskin）に書き出して、ほかのパソコンや友だちに渡せます">書き出す</button><button type="button" class="btn btn--small btn--danger" data-ks="remove" data-id="${esc(t.id)}">消す</button>`}
     </div>
   </div>`;
@@ -155,7 +157,7 @@ function colorField(key, label, value, {allowDefault = true, allowCourse = false
   // 最近使った色（4 つまで）・今の色（候補になくても見せる）・候補
   const colors = [...new Set([...recent.slice(0, RECENT_MAX), ...(value?.startsWith('#') ? [value] : []), ...(light ? LIGHT : VIVID)])];
   return `<fieldset class="ks-field"><legend>${label}</legend><div class="ks-swatches">
-    ${allowDefault ? sw('default', 'テーマの色', 'ks-sw--text') : ''}
+    ${allowDefault ? sw('default', '標準', 'ks-sw--text') : ''}
     ${allowCourse ? sw('course', '授業ごとの色', 'ks-sw--text') : ''}
     ${colors.map((c) => sw(c, c)).join('')}
     <label class="ks-sw ks-sw--pick" title="好きな色">＋<input type="color" data-ks-color="${key}" value="${value?.startsWith('#') ? value : '#ffffff'}" aria-label="${label}：好きな色" /></label>
@@ -171,7 +173,7 @@ const choice = (key, value, list, labels, {swatch = null} = {}) =>
 
 function noteControls(data) {
   if (targetCourse(data))
-    return `<p class="muted">ノートの紙はすべての授業で共通です。変えるときは、上の「対象」を「すべての授業」にしてください。</p>`;
+    return `<p class="muted">ノートの紙は、すべての授業で共通です（「使う授業」を「すべての授業」にすると変えられます）。</p>`;
   const n = ui.draft.parts.note;
   const recent = data.skin?.recent ?? [];
   const rules = data.settings?.rules ?? 'normal';
@@ -183,7 +185,7 @@ function noteControls(data) {
     ${colorField('note.line', '線の色', n.line, {recent})}
     <fieldset class="ks-field"><legend>線の間隔</legend>${choice('note.gap', n.gap, Object.keys(NOTE_GAPS), NOTE_GAP_LABEL)}</fieldset>
     <label class="ks-check"><input type="checkbox" data-ks-check="note.margin" ${n.margin ? 'checked' : ''} /> 左の余白の縦線を引く</label>
-    <fieldset class="ks-field"><legend>線の濃さ（すべてのテンプレートで共通）</legend>
+    <fieldset class="ks-field"><legend>線の濃さ（どの着せ替えでも共通）</legend>
       ${choice('rules', rules, ['normal', 'light', 'none'], {normal: '標準', light: '薄い', none: 'なし'})}
     </fieldset>`;
 }
@@ -198,14 +200,13 @@ function tapeControls(data) {
     <fieldset class="ks-field"><legend>柄</legend>${choice('tape.pattern', t.pattern, TAPE_PATTERNS, TAPE_PATTERN_LABEL)}</fieldset>
     ${
       t.pattern === 'image'
-        ? `<fieldset class="ks-field"><legend>柄にする画像（シール帳から）</legend><div class="ks-book">${bookItems(data, 'tape-image', t.image)}</div>
-          <p class="muted">取り込んだ画像は「シール」の欄から足せます。</p></fieldset>`
+        ? `<fieldset class="ks-field"><legend>柄にする画像（シール帳から）</legend><div class="ks-book">${bookItems(data, 'tape-image', t.image)}</div></fieldset>`
         : ''
     }`;
 }
 /** シール帳の並び（はじめから入っているシール＋取り込んだ画像）。filter：all・fav・mark・deco・mine・フォルダ名 */
 function bookList(data, filter = 'all') {
-  const mine = (data.skin?.stickers ?? []).map((b) => ({id: b.id, name: '取り込んだ画像', kind: 'mine', shape: b.shape, favorite: !!b.favorite, folder: b.folder}));
+  const mine = (data.skin?.stickers ?? []).map((b) => ({id: b.id, name: '自分の画像', kind: 'mine', shape: b.shape, favorite: !!b.favorite, folder: b.folder}));
   const builtin = BUILTIN_STICKERS.map((b) => ({id: b.id, name: b.name, kind: b.kind, shape: 'cut'}));
   const all = [...mine, ...builtin];
   if (filter === 'all') return all;
@@ -236,7 +237,7 @@ function bookTabs(data) {
     ...(mine.some((b) => b.favorite) ? [['fav', 'お気に入り', first('fav')]] : []),
     ['mark', BUILTIN_STICKER_KIND.mark, first('mark')],
     ['deco', BUILTIN_STICKER_KIND.deco, first('deco')],
-    ['mine', '取り込んだ画像', first('mine')],
+    ['mine', '自分の画像', first('mine')],
     ...folders.map((f) => [f, f, first(f)])
   ];
 }
@@ -247,25 +248,24 @@ function stickerControls(data) {
   const course = targetCourse(data);
   const shape = sel ? (book.find((b) => b.id === sel.asset)?.shape ?? 'cut') : null;
   const mode = course
-    ? `<label class="ks-field">全体のシールとの重ね方<select class="input" data-ks-mode>
+    ? `<label class="ks-field">この授業に出すシール<select class="input" data-ks-mode>
         ${[
-          ['global', '全体のシールだけ'],
-          ['course', 'この授業のシールだけ'],
-          ['both', '両方']
+          ['global', 'すべての授業用のシールだけ'],
+          ['course', 'この授業用のシールだけ'],
+          ['both', '両方とも出す']
         ]
           .map(([v, l]) => `<option value="${v}" ${course.sticker_mode === v ? 'selected' : ''}>${l}</option>`)
           .join('')}</select></label>`
     : '';
   if (!sel)
-    return `<p class="muted">見本の上のシールを押すと、ここで大きさや傾きを変えられます。貼るときは、下のシール帳から見本へドラッグします。</p>${mode}`;
+    return mode;
   return `
-    <p class="muted">${esc(PLACE_LABEL[sel.place])}${sel.place === 'file' ? `（${esc(FILE_KIND_LABEL[sel.kind])}）` : ''}に貼ってあります。見本の上で、ドラッグで動かし、角の ◢ で大きさ、上の ↻ で傾きを変えられます。矢印キーでも動かせます。</p>
     <label class="ks-range">大きさ<input type="range" min="20" max="200" step="5" value="${Math.round(sel.scale * 100)}" data-ks-range="scale" /><output>${Math.round(sel.scale * 100)}%</output></label>
     <label class="ks-range">傾き<input type="range" min="-180" max="180" step="1" value="${sel.rotate}" data-ks-range="rotate" /><output>${sel.rotate}°</output></label>
     ${isBuiltinSticker(sel.asset) ? '' : `<label class="ks-field">形<select class="input" data-ks-shape="${sel.asset}">${SHAPES.map((x) => `<option value="${x}" ${shape === x ? 'selected' : ''}>${SHAPE_LABEL[x]}</option>`).join('')}</select></label>`}
     <div class="actions">
-      ${FIXED_PLACES.includes(sel.place) ? (sel.moved ? '<button type="button" class="btn btn--small" data-ks="unmove">元の位置に</button>' : '') : '<button type="button" class="btn btn--small" data-ks="z" data-dir="1">前へ</button><button type="button" class="btn btn--small" data-ks="z" data-dir="-1">後ろへ</button>'}
-      <button type="button" class="btn btn--small" data-ks="straight">まっすぐに</button>
+      ${FIXED_PLACES.includes(sel.place) ? (sel.moved ? '<button type="button" class="btn btn--small" data-ks="unmove">位置を戻す</button>' : '') : '<button type="button" class="btn btn--small" data-ks="z" data-dir="1">手前へ</button><button type="button" class="btn btn--small" data-ks="z" data-dir="-1">奥へ</button>'}
+      <button type="button" class="btn btn--small" data-ks="straight">傾きを戻す</button>
       <button type="button" class="btn btn--small btn--danger" data-ks="peel">はがす</button>
     </div>
     ${mode}`;
@@ -283,34 +283,32 @@ const PARTS = [
 
 // 付箋のはじめの色（tokens.css の --pop1〜8 と viewer.js の NOTE_COLORS と同じ）
 const POP = ROUND_DEFAULTS;
-const PDF_NOTE = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70'];
 
-const ART_LABEL = {mark: '種類の印（文字・絵）', label: '拡張子のラベル'};
+const ART_LABEL = {mark: '「PDF」などの文字・絵', label: '下のラベル'};
 function fileControls(data) {
   const f = ui.draft.parts.file;
   const art = ui.draft.parts.fileArt[ui.fileKind];
-  const row = (i) => `<div class="ks-artrow${ui.art === i ? ' is-on' : ''}"><span>${ART_LABEL[i]}${art[i].on ? '' : '<span class="muted">（消しています）</span>'}</span>
+  const row = (i) => `<div class="ks-artrow${ui.art === i ? ' is-on' : ''}"><span>${ART_LABEL[i]}${art[i].on ? '' : '<span class="muted">（非表示）</span>'}</span>
       <span class="actions">${art[i].on ? `<button type="button" class="btn btn--small" data-ks="art-hide" data-art-item="${i}">消す</button>` : `<button type="button" class="btn btn--small" data-ks="art-show" data-art-item="${i}">出す</button>`}
-      ${art[i].dx || art[i].dy ? `<button type="button" class="btn btn--small" data-ks="art-reset" data-art-item="${i}">元の位置に</button>` : ''}</span></div>`;
+      ${art[i].dx || art[i].dy ? `<button type="button" class="btn btn--small" data-ks="art-reset" data-art-item="${i}">位置を戻す</button>` : ''}</span></div>`;
   return `${colorField(`file.${ui.fileKind}`, `${FILE_KIND_LABEL[ui.fileKind]}の色`, f[ui.fileKind], {recent: data.skin?.recent ?? []})}
     <fieldset class="ks-field"><legend>イラストの中身</legend>
-      <p class="muted">見本の大きなイラストの上で、文字やラベルをドラッグして動かせます。選んで Delete で消せます。</p>
       ${FILE_ART_ITEMS.map(row).join('')}
     </fieldset>`;
 }
 /** 色の並び（回の付箋の 8 色・PDF の付箋の色の候補 6 色）。1 つずつ色の選び器で変える */
-function colorRow(key, list, defaults, label, names = null) {
+function colorRow(key, list, defaults, label, names = null, hint = '') {
   const colors = list === 'default' ? defaults : list;
   const name = (i) => names?.[i] ?? `${i + 1} つ目`;
   const sw = (c, i) => `<label class="ks-sw ks-sw--pick" style="--sw: ${c}" title="${esc(name(i))}"><input type="color" data-ks-list="${key}" data-i="${i}" value="${c}" aria-label="${label}：${esc(name(i))}" /></label>`;
-  return `<fieldset class="ks-field"><legend>${label}</legend><div class="ks-swatches">
+  return `<fieldset class="ks-field"><legend>${label}</legend>${hint ? `<p class="muted ks-hint2">${hint}</p>` : ''}<div class="ks-swatches">
     ${colors.map((c, i) => (names ? `<span class="ks-sw-named">${sw(c, i)}<span>${esc(names[i])}</span></span>` : sw(c, i))).join('')}
-    <button type="button" class="ks-sw ks-sw--text" data-ks="set" data-key="${key}" data-value="default" aria-pressed="${list === 'default'}">はじめの色</button>
+    <button type="button" class="ks-sw ks-sw--text" data-ks="set" data-key="${key}" data-value="default" aria-pressed="${list === 'default'}">元の色に戻す</button>
   </div></fieldset>`;
 }
 function stickyControls() {
   const st = ui.draft.parts.sticky;
-  return `${colorRow('sticky.round', st.round, POP, '回の付箋の色（第 1 回から順に）', POP.map((_, i) => String(i + 1)))}${colorRow('sticky.pdf', st.pdf, PDF_NOTE, 'PDF に貼る付箋の色の候補')}`;
+  return colorRow('sticky.round', st.round, POP, '付箋の色');
 }
 /** しおりの形の見本：PDF の紙の右の端から出るリボン */
 function bookmarkSwatch(bookmark) {
@@ -319,8 +317,8 @@ function bookmarkSwatch(bookmark) {
 }
 function bookmarkControls(data) {
   const b = ui.draft.parts.bookmark;
-  return `${colorField('bookmark.color', 'リボンの色', b.color, {recent: data.skin?.recent ?? []})}
-    <fieldset class="ks-field"><legend>形</legend>${choice('bookmark.shape', b.shape, BOOKMARK_SHAPES, BOOKMARK_SHAPE_LABEL, {swatch: (v) => bookmarkSwatch({...b, shape: v})})}</fieldset>`;
+  return `${colorField('bookmark.color', 'しおりの色', b.color, {recent: data.skin?.recent ?? []})}
+    <fieldset class="ks-field"><legend>しおりの形</legend>${choice('bookmark.shape', b.shape, BOOKMARK_SHAPES, BOOKMARK_SHAPE_LABEL, {swatch: (v) => bookmarkSwatch({...b, shape: v})})}</fieldset>`;
 }
 
 // ---- 見本（ステージ）：場面ごとの見本の上で、部分を押して直し、シールをドラッグで貼って動かす ----
@@ -421,7 +419,7 @@ function fileScene(data, {note, skin1}) {
 function viewerScene(data, {note, skin1}) {
   const sk = skin1;
   const look = bookmarkLook(sk);
-  const pdf = sk.sticky.pdf === 'default' ? PDF_NOTE : sk.sticky.pdf;
+  const pdf = sk.sticky.round === 'default' ? POP : sk.sticky.round;
   const ribbon = (top, name, withSticker) =>
     `<span class="bookmark-ribbon bm ${look.cls}${isOn('bookmark')}" style="${look.style}; top: ${top}%" ${editAttr('bookmark', 'しおり')} data-drop-place="bookmark">${withSticker ? fixedOne(data, sk.stickers.find((st) => st.place === 'bookmark')) : ''}<span class="bookmark-ribbon__text">${name}</span></span>`;
   return noteSwatch(note, `ks-stage ks-stage--viewer${isOn('note')}`, `
@@ -440,7 +438,7 @@ function tray(data) {
   const tabs = bookTabs(data);
   if (!tabs.some(([v]) => v === ui.book)) ui.book = 'mark';
   const items = bookItems(data, 'sticker-add', null, ui.book);
-  const empty = ui.book === 'mine' ? 'まだありません。右の ＋ から画像を取り込むと、ここに並びます。' : 'まだありません。';
+  const empty = ui.book === 'mine' ? '右の「＋ 画像を追加」から、パソコンの画像をシールにできます' : 'まだありません';
   return `<div class="ks-tray">
     <div class="ks-tray__bar" role="tablist" aria-label="シール帳のジャンル">
       ${tabs
@@ -450,17 +448,17 @@ function tray(data) {
             <span class="ks-tray__icon">${url ? `<img src="${url}" alt="" draggable="false" />` : v === 'fav' ? '★' : '🖼'}</span><span class="ks-tray__label">${esc(label)}</span></button>`;
         })
         .join('')}
-      <label class="ks-tray__tab ks-tray__add" title="画像を取り込んでシールにする"><span class="ks-tray__icon">＋</span><span class="ks-tray__label">取り込む</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ks-file hidden /></label>
+      <label class="ks-tray__tab ks-tray__add" title="パソコンの画像をシールにする"><span class="ks-tray__icon">＋</span><span class="ks-tray__label">画像を追加</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ks-file hidden /></label>
     </div>
     <div class="ks-book ks-tray__grid" role="tabpanel" aria-label="${esc(tabs.find(([v]) => v === ui.book)?.[1] ?? '')}">${items || `<p class="muted ks-tray__empty">${empty}</p>`}</div>
   </div>`;
 }
 
 const PART_TITLE = {
-  note: 'ノート（紙と線）',
+  note: 'ノートの紙',
   folder: 'フォルダ',
   tape: 'マスキングテープ',
-  file: 'ファイル（資料のイラスト）',
+  file: 'ファイルの絵',
   sticky: '付箋',
   bookmark: 'しおり',
   sticker: 'シール'
@@ -497,19 +495,18 @@ function editor(data) {
           </span>
         </div>
         <div class="ks-stagewrap" tabindex="0" aria-label="見本。部分を押すと右で変えられます。シールは矢印キーで動かし、Delete ではがせます">${stage(data, {course, first, second, note, skin1, skin2})}</div>
-        <p class="muted ks-hint">部分を押すと右で直せます。シールは下から見本へドラッグして貼ります。</p>
         ${tray(data)}
         <div class="ks-save">
           <label>名前<input class="input" id="ks-name" data-keep="off" maxlength="40" value="${esc(ui.draft.name)}" /></label>
-          <label>利用条件<select class="input" id="ks-license" data-keep="off">${LICENSES.map((l) => `<option value="${l}" ${ui.draft.license === l ? 'selected' : ''}>${LICENSE_LABEL[l]}</option>`).join('')}</select></label>
-          <button type="button" class="btn btn--primary" data-ks="save">保存して当てる</button>
-          ${ui.draft.baseId ? '<button type="button" class="btn" data-ks="save-new">別のテンプレートとして保存</button>' : ''}
+          <label>人に配るとき<select class="input" id="ks-license" data-keep="off">${LICENSES.map((l) => `<option value="${l}" ${ui.draft.license === l ? 'selected' : ''}>${LICENSE_LABEL[l]}</option>`).join('')}</select></label>
+          <button type="button" class="btn btn--primary" data-ks="save">保存して使う</button>
+          ${ui.draft.baseId ? '<button type="button" class="btn" data-ks="save-new">別の名前で保存</button>' : ''}
           <button type="button" class="btn" data-ks="discard">やめる</button>
         </div>
         ${
           c
-            ? `<div class="ks-confirm sticky" role="alertdialog" aria-labelledby="ks-confirm-text"><p id="ks-confirm-text">このテンプレートは${esc(c.text)}で使っています。保存すると、すべて変わります。</p>
-            <div class="actions"><button type="button" class="btn btn--primary" data-ks="save-confirm">保存</button>${course ? '<button type="button" class="btn" data-ks="save-course">この授業用に複製</button>' : ''}<button type="button" class="btn" data-ks="confirm-cancel">やめる</button></div></div>`
+            ? `<div class="ks-confirm sticky" role="alertdialog" aria-labelledby="ks-confirm-text"><p id="ks-confirm-text">この着せ替えは${esc(c.text)}でも使っています。保存すると、そちらの見た目も変わります。</p>
+            <div class="actions"><button type="button" class="btn btn--primary" data-ks="save-confirm">変わってよいので保存</button>${course ? '<button type="button" class="btn" data-ks="save-course">この授業用に別に保存</button>' : ''}<button type="button" class="btn" data-ks="confirm-cancel">やめる</button></div></div>`
             : ''
         }
       </div>
@@ -553,39 +550,35 @@ export function renderKisekae({data}, route) {
   const mine = templates.filter((t) => !isBuiltin(t.id));
   return `
     <div class="kisekae">
-      <h2>着せ替え</h2>
-      <label class="ks-target">対象<select class="input" id="ks-target" data-keep="off">
-        <option value="" ${!course ? 'selected' : ''}>すべての授業</option>
-        ${courses(data)
-          .map((c) => `<option value="${esc(c.id)}" ${course?.id === c.id ? 'selected' : ''}>${esc(c.name)}</option>`)
-          .join('')}
-      </select></label>
+      <div class="ks-head">
+        <h2>着せ替え</h2>
+        <label class="ks-target">使う授業<select class="input" id="ks-target" data-keep="off">
+          <option value="" ${!course ? 'selected' : ''}>すべての授業</option>
+          ${courses(data)
+            .map((c) => `<option value="${esc(c.id)}" ${course?.id === c.id ? 'selected' : ''}>${esc(c.name)}</option>`)
+            .join('')}
+        </select></label>
+      </div>
+      <section class="ks-mine" aria-labelledby="ks-mine-title">
+        <div class="ks-sechead"><h3 id="ks-mine-title">マイノート</h3>
+          <button type="button" class="btn btn--small" data-ks="import" title="友だちからもらった着せ替えのファイル（.dnskin）を入れる">ファイルから読み込む…</button></div>
+        <div class="ks-gallery">
+          <div class="ks-card"><button type="button" class="ks-card__pick ks-card__new" data-ks="open-editor">
+            <span class="ks-card__plus" aria-hidden="true">＋</span><span class="ks-card__name">新しく作る</span></button></div>
+          ${mine.map((t) => galleryCard(data, t, first, current)).join('')}
+        </div>
+      </section>
       <section aria-labelledby="ks-gallery-title">
-        <h3 id="ks-gallery-title">おすすめから選ぶ</h3>
-        <p class="muted ks-gallery__lead">押すとすぐに${course ? `「${esc(course.name)}」` : 'すべての授業'}に当たります。</p>
+        <div class="ks-sechead"><h3 id="ks-gallery-title">おすすめ</h3></div>
         <div class="ks-gallery">
           ${
             course
               ? `<div class="ks-card${current === null ? ' is-current' : ''}"><button type="button" class="ks-card__pick ks-card__pick--global" data-ks="apply" data-id="" aria-pressed="${current === null}">
               ${noteSwatch(skinOf(data).note, 'ks-card__paper', `<div class="ks-card__folder">${folderCard({...first, skin_template_id: null}, {data, edit: {still: true}})}</div>`)}
-              <span class="ks-card__name">${current === null ? '✓ ' : ''}全体と同じ</span><span class="ks-card__meta muted">すべての授業の設定に合わせる</span></button></div>`
+              <span class="ks-card__name">${current === null ? '✓ ' : ''}すべての授業と同じ</span></button></div>`
               : ''
           }
           ${builtins.map((t) => galleryCard(data, t, first, current)).join('')}
-        </div>
-      </section>
-      <section class="ks-mine" aria-labelledby="ks-mine-title">
-        <h3 id="ks-mine-title">マイノート</h3>
-        <p class="muted ks-gallery__lead">自分で作ったものと、読み込んだものです。押すとすぐ当たります。
-          <button type="button" class="btn btn--small" data-ks="import">テンプレートを読み込む…</button></p>
-        ${
-          mine.length
-            ? `<div class="ks-gallery">${mine.map((t) => galleryCard(data, t, first, current)).join('')}</div>`
-            : '<p class="muted ks-mine__empty">まだありません。上のテンプレートの「もとにして作る」か、下の「細かい編集へ」から作れます。</p>'
-        }
-        <div class="ks-tolab">
-          <p class="muted">今の${course ? `「${esc(course.name)}」の` : ''}テンプレートをもとに、紙・フォルダ・テープ・シールなどを見本の上で直せます。</p>
-          <button type="button" class="btn btn--primary" data-ks="open-editor">細かい編集へ →</button>
         </div>
       </section>
     </div>`;
@@ -598,8 +591,8 @@ function editPage(data, course) {
     <div class="kisekae kisekae--edit">
       <div class="ks-editbar">
         <button type="button" class="btn" data-ks="back">← 着せ替えへ</button>
-        <h2>細かい編集</h2>${ui.history.length ? '<span class="ks-dirty" title="保存していない変更があります">● 未保存</span>' : ''}
-        <span class="muted">対象：${course ? `「${esc(course.name)}」` : 'すべての授業'}・「${esc(ui.draft.from)}」${ui.draft.baseId ? 'を直しています' : 'をもとに新しく作ります'}</span>
+        <h2>着せ替えを作る</h2>${ui.history.length ? '<span class="ks-dirty" title="保存していない変更があります">● 未保存</span>' : ''}
+        <span class="muted">${ui.draft.baseId ? `「${esc(ui.draft.from)}」を編集中` : `「${esc(ui.draft.from)}」をもとに作成中`}（${course ? `「${esc(course.name)}」用` : 'すべての授業用'}）</span>
       </div>
       ${editor(data)}
     </div>`;
@@ -616,7 +609,7 @@ async function applyTemplate(data, templateId) {
   const r = await api['skin.apply']({courseId: course?.id, templateId: templateId || null});
   if (r?.error) return toast(r.error, {error: true});
   await reload();
-  const name = templateId ? (allTemplates(state.data).find((t) => t.id === templateId)?.name ?? '') : '全体と同じ';
+  const name = templateId ? (allTemplates(state.data).find((t) => t.id === templateId)?.name ?? '') : 'すべての授業と同じ';
   toast(`${course ? `「${course.name}」` : 'すべての授業'}を「${name}」にしました`, {
     action: {
       label: '元に戻す',
@@ -640,7 +633,7 @@ async function save({asNew = false, forCourse = false, confirmed = false} = {}) 
     const others = data.courses.filter((c) => c.skin_template_id === baseId && c.id !== course?.id).length;
     const global = globalId(data) === baseId && !!course;
     if (others || global) {
-      ui.confirm = {text: [global ? '全体' : '', others ? `ほかの ${others} つの授業` : ''].filter(Boolean).join('と')};
+      ui.confirm = {text: [global ? 'すべての授業' : '', others ? `ほかの ${others} つの授業` : ''].filter(Boolean).join('と')};
       return refresh();
     }
   }
@@ -654,7 +647,7 @@ async function save({asNew = false, forCourse = false, confirmed = false} = {}) 
   ui.confirm = null;
   navigate(galleryRoute());
   await reload();
-  toast(`「${r.template.name}」を保存して当てました`);
+  toast(`「${r.template.name}」を保存して使い始めました`);
 }
 
 /** 画像をシールの素にする：長辺 512px 以内の PNG に描き直す（画像の中の付加情報を落とす）。透明な所があれば形どおり、なければ白いふち付き */
@@ -679,7 +672,7 @@ async function importSticker(file) {
   const r = await api['sticker.add']({bytes: new Uint8Array(await blob.arrayBuffer()), shape: clear ? 'cut' : 'framed'});
   if (r?.error) return toast(r.error, {error: true});
   await reload();
-  toast('シール帳に入れました。押すか、見本のフォルダへドラッグして貼れます');
+  toast('シール帳に入れました。見本へドラッグすると貼れます');
 }
 
 // 貼る場所ごとの、はじめに置く位置（見本の真ん中を避ける）
@@ -741,7 +734,7 @@ document.addEventListener('click', async (e) => {
     if (ks === 'remove') {
       const t = allTemplates(data).find((x) => x.id === el.dataset.id);
       const u = usageText(data, t);
-      if (!window.confirm(`「${t.name}」を消しますか？${u ? `\n${u}です。使っていた授業は「全体と同じ」に戻ります。` : ''}`)) return;
+      if (!window.confirm(`「${t.name}」を消しますか？${u ? `\n${u}です。使っていた授業は「すべての授業と同じ」に戻ります。` : ''}`)) return;
       const r = await api['skin.remove']({id: t.id});
       if (r?.error) return toast(r.error, {error: true});
       if (ui.draft?.baseId === t.id) ui.draft = null;
@@ -750,7 +743,7 @@ document.addEventListener('click', async (e) => {
     }
     if (!ui.draft) return;
     if (ks === 'back' || ks === 'discard') {
-      if (ui.history.length && !window.confirm('直した内容は保存されていません。捨てて戻りますか？')) return;
+      if (ui.history.length && !window.confirm('変更が保存されていません。保存せずに戻りますか？')) return;
       ui.draft = null;
       return navigate(galleryRoute());
     }
@@ -811,7 +804,7 @@ document.addEventListener('click', async (e) => {
       return reload();
     } else if (ks === 'sticker-add') addSticker(el.dataset.id);
     else if (ks === 'sticker-del') {
-      if (!window.confirm('このシールをシール帳から消しますか？（貼ってあるテンプレートからも見えなくなります）')) return;
+      if (!window.confirm('このシールをシール帳から消しますか？（貼ってある所からも消えます）')) return;
       const r = await api['sticker.remove']({id: el.dataset.id});
       if (r?.error) return toast(r.error, {error: true});
       forgetSticker(el.dataset.id);
@@ -897,7 +890,7 @@ let rangeStart = null;
 /** 色の並びの 1 つを変える（はじめの色のままなら、はじめの色を写してから） */
 function setListColor(el) {
   const [a, b] = el.dataset.ksList.split('.');
-  const defaults = el.dataset.ksList === 'sticky.round' ? POP : PDF_NOTE;
+  const defaults = POP;
   const list = ui.draft.parts[a][b] === 'default' ? [...defaults] : [...ui.draft.parts[a][b]];
   list[Number(el.dataset.i)] = el.value.toLowerCase();
   ui.draft.parts[a][b] = list;
@@ -1191,7 +1184,7 @@ export function openSkinPicker(course, card, x, y) {
     };
     el.innerHTML = `<div class="skin-picker__head">${esc(c.name)} の着せ替え</div>
       <div class="skin-picker__list" role="group">
-        ${item(null, '全体と同じ')}
+        ${item(null, 'すべての授業と同じ')}
         <hr />
         ${allTemplates(state.data).filter((t) => isBuiltin(t.id)).map((t) => item(t.id, t.name)).join('')}
         ${mineList.length ? `<div class="skin-picker__group">マイノート</div>${mineList.map((t) => item(t.id, t.name)).join('')}` : ''}
@@ -1239,7 +1232,7 @@ export function openSkinPicker(course, card, x, y) {
     if (r?.error) return toast(r.error, {error: true});
     await reload();
     if (picker?.el === el) paint();
-    toast(`「${c.name}」を「${tid ? allTemplates(state.data).find((t) => t.id === tid)?.name : '全体と同じ'}」にしました`, {
+    toast(`「${c.name}」を「${tid ? allTemplates(state.data).find((t) => t.id === tid)?.name : 'すべての授業と同じ'}」にしました`, {
       action: {
         label: '元に戻す',
         run: async () => {
@@ -1261,7 +1254,7 @@ window.addEventListener('hashchange', closeSkinPicker);
 window.addEventListener('hashchange', (e) => {
   const from = new URL(e.oldURL).hash;
   if (!from.startsWith('#/kisekae/edit') || location.hash.startsWith('#/kisekae/edit') || !ui.draft || !ui.history.length) return;
-  if (window.confirm('直した内容は保存されていません。捨ててこのページを離れますか？')) {
+  if (window.confirm('変更が保存されていません。保存せずに移動しますか？')) {
     ui.draft = null;
     return;
   }
@@ -1304,3 +1297,4 @@ document.getElementById('view')?.addEventListener('rendered', () => {
   ui.refocus = false;
   if (ui.selected != null) document.querySelector(`.kisekae .ks-st[data-sticker-index="${ui.selected}"]`)?.focus({preventScroll: true});
 });
+

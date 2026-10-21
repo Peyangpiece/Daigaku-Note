@@ -253,6 +253,7 @@ document.addEventListener('click', async (e) => {
     if (action.startsWith('quiz-') && (await quizAction(action, el))) return;
     if (action.startsWith('qe-') && (await quizEditAction(action, el))) return;
     if (action === 'open-course') navigate(`/course/${el.dataset.id}`);
+    else if (action === 'rename') renameFrom(el);
     else if (action === 'nav') navigate(el.dataset.route);
     else if (action === 'sync') {
       const r = await api['sync.run']({
@@ -279,6 +280,12 @@ document.addEventListener('click', async (e) => {
       });
       if (r?.ok) await api['sync.run']({connectionId: el.dataset.id});
       reload();
+    } else if (action === 'own-color') {
+      // 「付箋を追加」の色。選んでいる色をもう一度押すと元の白に戻す
+      const index = el.dataset.index === '' ? null : Number(el.dataset.index);
+      const r = await api['settings.update']({patch: {ownColor: {courseId: el.dataset.courseId, index}}});
+      if (r?.error) return toast(r.error, {error: true});
+      await reload();
     } else if (action === 'upload') {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
       if (r?.error) toast(r.error, {error: true});
@@ -378,6 +385,62 @@ document.addEventListener('click', async (e) => {
 });
 
 // ---- ホームの授業・フォルダのカード：右クリック（トラックパッドの 2 本指タップ・タッチの長押し）で「開く」「消去」 ----
+// ---- 名前を変える：名前の上に入力欄を重ねる。Enter・外を押すと決める、Esc でやめる ----
+export function renameAt(target, value, save) {
+  document.querySelector('.rename-pop')?.remove();
+  const r = target.getBoundingClientRect();
+  const cs = window.getComputedStyle(target);
+  const input = document.createElement('input');
+  input.className = 'rename-pop input';
+  input.value = value;
+  input.maxLength = 80;
+  Object.assign(input.style, {
+    left: `${Math.max(8, r.left - 6)}px`,
+    top: `${r.top + r.height / 2}px`,
+    width: `${Math.min(window.innerWidth - 16, Math.max(r.width + 40, 200))}px`,
+    font: cs.font
+  });
+  document.body.append(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (ok) => {
+    if (done) return;
+    done = true;
+    input.remove();
+    if (!ok || input.value.trim() === value.trim()) return;
+    try {
+      const res = await save(input.value.trim());
+      if (res?.error) return toast(res.error, {error: true});
+      await reload();
+    } catch (err) {
+      toast(err.message, {error: true});
+    }
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) finish(true);
+    else if (e.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+/** 名前を変えられる授業か：自分のフォルダと、LMS を使わない授業（LMS の授業名は LMS に合わせる） */
+export const canRename = (course) => course.kind === 'folder' || state.data?.connections.find((c) => c.id === course.connection_id)?.kind === 'manual';
+/** 名前を変える：自分のフォルダ・LMS を使わない授業・回の付箋・自分のフォルダの中のフォルダ */
+function renameCourse(course, target) {
+  if (!canRename(course)) return;
+  if (course.kind === 'folder') return renameAt(target, course.name, (name) => api['folder.update']({courseId: course.id, name}));
+  return renameAt(target, course.name, (name) => api['course.update']({courseId: course.id, patch: {name}}));
+}
+function renameFrom(el) {
+  const target = el.closest('[data-rename-box]')?.querySelector('[data-rename-target]') ?? el;
+  const {what, id, sub, value} = el.dataset;
+  if (what === 'course' || what === 'folder') {
+    const course = state.data.courses.find((c) => c.id === id);
+    if (course) renameCourse(course, target);
+  } else if (what === 'round') renameAt(target, value, (title) => api['round.update']({roundId: id, title}));
+  else if (what === 'sub') renameAt(target, value, (name) => api['folder.renameSub']({courseId: id, sub, name}));
+}
+
 let cardMenu = null;
 const closeCardMenu = () => {
   cardMenu?.remove();
@@ -395,7 +458,7 @@ document.addEventListener('contextmenu', (e) => {
   cardMenu.className = 'card-menu';
   cardMenu.setAttribute('role', 'menu');
   cardMenu.setAttribute('aria-label', course.name);
-  cardMenu.innerHTML = `<button type="button" role="menuitem" data-card-menu="open">開く</button><button type="button" role="menuitem" data-card-menu="skin">着せ替え…</button><button type="button" role="menuitem" class="card-menu__danger" data-card-menu="remove">消去…</button>`;
+  cardMenu.innerHTML = `<button type="button" role="menuitem" data-card-menu="open">開く</button>${canRename(course) ? '<button type="button" role="menuitem" data-card-menu="rename">名前を変える…</button>' : ''}<button type="button" role="menuitem" data-card-menu="skin">着せ替え…</button><button type="button" role="menuitem" class="card-menu__danger" data-card-menu="remove">消去…</button>`;
   document.body.append(cardMenu);
   const {width, height} = cardMenu.getBoundingClientRect();
   cardMenu.style.left = `${Math.min(e.clientX, window.innerWidth - width - 8)}px`;
@@ -406,6 +469,7 @@ document.addEventListener('contextmenu', (e) => {
     if (!what) return;
     closeCardMenu();
     if (what === 'open') navigate(`/course/${course.id}`);
+    else if (what === 'rename') renameCourse(course, card.querySelector('.folder__name') ?? card);
     else if (what === 'skin') {
       const r = card.getBoundingClientRect();
       openSkinPicker(course, card, r.right + 8, r.top);

@@ -74,7 +74,8 @@ export function renderFolder({data}, course) {
   const notes = parts
     .map(
       ([sub, ms], i) => `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i)}" data-drop="own" data-course-id="${esc(course.id)}" aria-label="${esc(sub || course.name)} のファイル">
-      <header class="round-note__head"><span class="round-note__round">${sub ? `📁 ${esc(sub)}` : 'このフォルダ'}</span></header>
+      <header class="round-note__head" data-rename-box><span class="round-note__round">${sub ? '📁 ' : ''}<span data-rename-target>${esc(sub ? sub.split('/').pop() : course.name)}</span></span>
+        <button type="button" class="rename-btn" data-action="rename" data-what="${sub ? 'sub' : 'folder'}" data-id="${esc(course.id)}" data-sub="${esc(sub)}" data-value="${esc(sub ? sub.split('/').pop() : course.name)}" title="${sub ? 'フォルダの名前を変える（パソコンのフォルダの名前も変わります）' : 'フォルダの名前を変える'}" aria-label="名前を変える">✎</button></header>
       ${ms.length ? `<div class="round-note__files">${ms.map((m) => fileCard(m, course, [])).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグして入れます。</p>'}
       ${i === 0 && round ? quizLine(round, list, course, quiz, gen, !!data.quiz?.key?.set, 'このフォルダ') : ''}
     </section>`

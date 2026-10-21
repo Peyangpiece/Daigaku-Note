@@ -108,7 +108,7 @@ test('着せ替え：前の版で保存したテンプレート（あとから�
   assert.equal(rest.length, 0, '読めない版は出さない');
   assert.equal(t.name, 'ピンク');
   assert.equal(t.parts.note.type, 'grid');
-  assert.deepEqual(t.parts.sticky, {round: 'default', pdf: 'default'});
+  assert.deepEqual(t.parts.sticky, {round: 'default'});
   assert.deepEqual(t.parts.bookmark, {color: 'default', shape: 'tag'});
   assert.equal(t.parts.file.pdf, 'default');
 });

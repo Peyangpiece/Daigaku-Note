@@ -12,7 +12,7 @@ export const NOTE_GAP_LABEL = {narrow: '狭い', normal: 'ふつう', wide: '広
 export const TAPE_PATTERNS = ['plain', 'stripe', 'dot', 'check', 'image'];
 export const TAPE_PATTERN_LABEL = {plain: '無地', stripe: 'ストライプ', dot: 'ドット', check: 'チェック', image: '画像', course: '授業ごと'};
 export const LICENSES = ['personal', 'share', 'remix'];
-export const LICENSE_LABEL = {personal: '自分で使うだけ', share: 'そのまま配ってよい', remix: '改変して配ってよい'};
+export const LICENSE_LABEL = {personal: '配らない（自分だけで使う）', share: 'そのまま配ってよい', remix: '手を加えて配ってよい'};
 export const STICKER_MODES = ['global', 'course', 'both'];
 // シールを貼れる場所（SPEC-KISEKAE §5）。home（ホームの余白）は全体のテンプレートだけから貼る。
 // round（回の付箋の角）・file（資料のイラスト。種類 kind ごと）・bookmark（しおりのリボンの先）は 1 枚ずつで、貼る位置は決まっている
@@ -34,13 +34,12 @@ export const placeMax = (place) => (FIXED_PLACES.includes(place) ? 1 : STICKERS_
 export const FILE_KINDS = ['pdf', 'slide', 'doc', 'sheet', 'image', 'video', 'audio', 'zip', 'other'];
 export const FILE_KIND_LABEL = {pdf: 'PDF', slide: 'スライド', doc: '文書', sheet: '表', image: '画像', video: '動画', audio: '音声', zip: '圧縮', other: 'その他'};
 export const BOOKMARK_SHAPES = ['tag', 'ribbon', 'round'];
-export const BOOKMARK_SHAPE_LABEL = {tag: 'タグ', ribbon: 'リボン（切れ込み）', round: '丸'};
-export const ROUND_COLORS = 5; // 回の付箋の色の並び（第 1 回から順に。6 回目からはまた 1 色目）
+export const BOOKMARK_SHAPE_LABEL = {tag: 'タグ', ribbon: 'リボン', round: '丸'};
+export const ROUND_COLORS = 5; // 付箋の色（授業ページの回の付箋は第 1 回から順に、6 回目からはまた 1 色目。PDF のメモはこの 5 色から選ぶ）
 // 回の付箋のはじめの色（tokens.css の --pop1〜5 と同じ）
 export const ROUND_DEFAULTS = ['#ffe14d', '#ff9ec4', '#6fe3b8', '#7cccff', '#ffad5c'];
 /** 回の付箋の色の番号（0〜4）：第 1 回から順に。「その他」（第 0 回）は 1 色目 */
 export const roundColorIndex = (number) => (number > 0 ? (number - 1) % ROUND_COLORS : 0);
-export const PDF_NOTE_COLORS = 6; // PDF に貼る付箋の色の候補
 export const SHAPES = ['cut', 'square', 'round', 'circle', 'framed'];
 export const SHAPE_LABEL = {cut: '形どおり', square: 'そのまま', round: '角丸', circle: '丸', framed: '白いふち付き'};
 export const CLASSIC_ID = 'builtin-classic';
@@ -64,7 +63,7 @@ export const DEFAULT_PARTS = {
   tape: {color: 'course', pattern: 'course', image: null},
   file: Object.fromEntries(FILE_KINDS.map((k) => [k, 'default'])),
   fileArt: Object.fromEntries(FILE_KINDS.map((k) => [k, {mark: {dx: 0, dy: 0, on: true}, label: {dx: 0, dy: 0, on: true}}])),
-  sticky: {round: 'default', pdf: 'default'},
+  sticky: {round: 'default'},
   bookmark: {color: 'default', shape: 'tag'}
 };
 
@@ -109,7 +108,7 @@ export function normalizeParts(raw = {}) {
     file: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.file?.[k], 'default')])),
     fileArt: fileArtParts(raw.fileArt),
     // 前の版の 8 色の並びは、先頭の 5 色を引き継ぐ
-    sticky: {round: colorList(Array.isArray(raw.sticky?.round) && raw.sticky.round.length === 8 ? raw.sticky.round.slice(0, ROUND_COLORS) : raw.sticky?.round, ROUND_COLORS), pdf: colorList(raw.sticky?.pdf, PDF_NOTE_COLORS)},
+    sticky: {round: colorList(Array.isArray(raw.sticky?.round) && raw.sticky.round.length === 8 ? raw.sticky.round.slice(0, ROUND_COLORS) : raw.sticky?.round, ROUND_COLORS)},
     bookmark: {color: color(raw.bookmark?.color, 'default'), shape: oneOf(raw.bookmark?.shape, BOOKMARK_SHAPES, 'tag')}
   };
 }
