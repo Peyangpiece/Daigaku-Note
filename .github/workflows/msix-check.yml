@@ -42,16 +42,17 @@ jobs:
           Export-PfxCertificate -Cert $cert -FilePath "$env:RUNNER_TEMP\msix-test.pfx" -Password $pw | Out-Null
           Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP\msix-test.cer" | Out-Null
           Import-Certificate -FilePath "$env:RUNNER_TEMP\msix-test.cer" -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
+      # PowerShell は -c.appx.… の引数を分けてしまうので bash で動かす
       - name: MSIX（appx）を作る
-        shell: pwsh
+        shell: bash
         env:
           CSC_LINK: ${{ runner.temp }}\msix-test.pfx
           CSC_KEY_PASSWORD: msix-test
         run: |
-          npx electron-builder --win appx --x64 --publish never `
-            -c.appx.identityName=DaigakuNote.Test -c.appx.applicationId=DaigakuNote `
-            -c.appx.publisher='CN=DaigakuNoteTest' -c.appx.publisherDisplayName='Daigaku Note Test'
-          Get-ChildItem release -Filter *.appx | Format-Table Name, Length
+          npx electron-builder --win appx --x64 --publish never \
+            -c.appx.identityName=DaigakuNote.Test -c.appx.applicationId=DaigakuNote \
+            '-c.appx.publisher=CN=DaigakuNoteTest' '-c.appx.publisherDisplayName=Daigaku Note Test'
+          ls -la release/*.appx
       - name: 入れて、パッケージの中で動作確認を動かす
         shell: pwsh
         run: |
