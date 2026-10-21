@@ -127,6 +127,7 @@ function editContextMenu({isEditable, selectionText, editFlags}) {
  */
 function buildAppMenu() {
   const mac = process.platform === 'darwin';
+  const zoom = (dir) => (_item, w) => w?.webContents.send('zoom', dir);
   const template = [
     ...(mac
       ? [
@@ -165,9 +166,12 @@ function buildAppMenu() {
         {role: 'reload', label: '再読み込み'},
         {role: 'toggleDevTools', label: '開発者ツール'},
         {type: 'separator'},
-        {role: 'resetZoom', label: '実際のサイズ'},
-        {role: 'zoomIn', label: '拡大'},
-        {role: 'zoomOut', label: '縮小'},
+        // 拡大・縮小は画面に任せる（PDF の編集画面では PDF だけを拡大し、ツールバーや背景は拡大しない。app.js）
+        {label: '実際のサイズ', accelerator: 'CmdOrCtrl+0', click: zoom('reset')},
+        {label: '拡大', accelerator: 'CmdOrCtrl+Plus', click: zoom('in')},
+        {label: '拡大', accelerator: 'CmdOrCtrl+=', click: zoom('in'), visible: false, acceleratorWorksWhenHidden: true},
+        {label: '拡大', accelerator: 'CmdOrCtrl+;', click: zoom('in'), visible: false, acceleratorWorksWhenHidden: true}, // JIS キーボードの「＋」のキー
+        {label: '縮小', accelerator: 'CmdOrCtrl+-', click: zoom('out')},
         {type: 'separator'},
         {role: 'togglefullscreen', label: 'フルスクリーン'}
       ]

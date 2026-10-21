@@ -15,7 +15,7 @@ body {
   background: var(--paper);
 }
 
-/* 紙：横罫（32px ごとの 1px）。内容と一緒にスクロールする。左の縦線は編集画面のほかのすべての画面（.paper--margin） */
+/* 紙：横罫（32px ごとの 1px）と左の余白の縦線（.paper--margin）。内容と一緒にスクロールする */
 .paper {
   --rules: repeating-linear-gradient(
     to bottom,
@@ -31,9 +31,6 @@ body {
   background-position: 0 96px;
   background-attachment: local;
 }
-.paper--quiet {
-  --rule-alpha: 0.4;
-}
 .paper--margin {
   --margin-line: color-mix(in srgb, var(--rule-margin) calc(var(--rule-alpha) * 100%), transparent);
   padding-left: 112px;
@@ -43,6 +40,31 @@ body {
   background-position:
     0 0,
     0 96px;
+}
+
+/* 編集画面：同じ紙を窓（html）いっぱいに敷く。拡大して PDF が横にはみ出しても、はみ出したところまで罫線が続く。
+   罫線は 1 本ずつの模様をくり返すので、PDF の拡大・縮小では大きさが変わらない。余白の縦線は左に 1 本だけ */
+html.paper-canvas {
+  --margin-line: color-mix(in srgb, var(--rule-margin) calc(var(--rule-alpha) * 100%), transparent);
+  --rule-line: color-mix(in srgb, var(--rule) calc(var(--rule-alpha) * 100%), transparent);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(to right, transparent 71px, var(--margin-line) 71px, var(--margin-line) 72px, transparent 72px),
+    linear-gradient(to bottom, transparent calc(var(--rule-gap) - 1px), var(--rule-line) calc(var(--rule-gap) - 1px));
+  background-size:
+    100% 100%,
+    100% var(--rule-gap);
+  background-repeat: repeat-y, repeat;
+  background-position:
+    0 0,
+    0 96px;
+}
+html.paper-canvas body,
+.paper.paper--viewer {
+  background: none;
+}
+.paper.paper--viewer {
+  padding-left: var(--space-6);
 }
 
 /* 上余白（ノートの上部）：アプリ名・学期・日付 */
