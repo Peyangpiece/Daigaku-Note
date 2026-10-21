@@ -335,11 +335,13 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       repo.insert('sticker', {id: sid, w, h, shape: SHAPES.includes(shape) ? shape : 'cut', favorite: 0, created_at: new Date().toISOString()});
     return {sticker: repo.get('sticker', sid)};
   });
-  handle('sticker.update', ({id: sid, shape, favorite}) => {
+  handle('sticker.update', ({id: sid, shape, favorite, folder}) => {
     if (!isSha(sid) || !repo.get('sticker', sid)) bad('シールが見つかりません');
     const patch = {};
     if (SHAPES.includes(shape)) patch.shape = shape;
     if (typeof favorite === 'boolean') patch.favorite = favorite ? 1 : 0;
+    // シール帳のフォルダ分け（名前。空なら分けない）
+    if (typeof folder === 'string') patch.folder = folder.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 20) || null;
     repo.update('sticker', sid, patch);
     return {sticker: repo.get('sticker', sid)};
   });

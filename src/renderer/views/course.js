@@ -2,6 +2,7 @@
 // 自分のファイルは「自分の付箋」に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
 import {esc, jaWrap, progressText} from '../app.js';
 import {extOf, fileArt} from './file-art.js';
+import {skinOf, stickerLayer} from '../skin.js';
 
 const fmtDate = (d) =>
   d
@@ -226,7 +227,8 @@ export function renderCourse({data, progress}, courseId) {
         ? '同期の順番を待っています…'
         : '';
   return `
-    <nav class="page-nav">
+    <nav class="page-nav page-nav--stickers">
+      ${stickerLayer(skinOf(data, course).stickers, 'heading', data)}
       <button class="btn" data-action="nav" data-route="/">← ホーム</button>
       <h2 class="ja-wrap">${jaWrap(course.name)} <span class="muted">${esc(slot)}</span></h2>
     </nav>

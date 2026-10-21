@@ -2,6 +2,7 @@
 // 中身はパソコンのフォルダをそのまま見せる（登録したフォルダはコピーしない）。開くたびにメインが読み直す
 import {esc, jaWrap} from '../app.js';
 import {fileCard, quizLine} from './course.js';
+import {skinOf, stickerLayer} from '../skin.js';
 
 const SCOPE_LABEL = {term: '今学期のフォルダ', always: 'マイフォルダ'};
 export const scopeLabel = (c) => SCOPE_LABEL[c.scope] ?? SCOPE_LABEL.always;
@@ -72,7 +73,8 @@ export function renderFolder({data}, course) {
     )
     .join('');
   return `
-    <nav class="page-nav">
+    <nav class="page-nav page-nav--stickers">
+      ${stickerLayer(skinOf(data, course).stickers, 'heading', data)}
       <button class="btn" data-action="nav" data-route="/">← ホーム</button>
       <h2 class="ja-wrap">${jaWrap(course.name)} <span class="muted">${esc(scopeLabel(course))}</span></h2>
     </nav>

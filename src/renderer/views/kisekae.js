@@ -9,6 +9,9 @@ import {
   NOTE_GAP_LABEL,
   NOTE_TYPES,
   NOTE_TYPE_LABEL,
+  GLOBAL_ONLY_PLACES,
+  PLACE_LABEL,
+  STICKER_PLACES,
   SHAPES,
   SHAPE_LABEL,
   STICKERS_PER_PLACE,
@@ -18,7 +21,8 @@ import {
   normalizeTemplate,
   usage
 } from '../../shared/skin.js';
-import {allTemplates, forgetSticker, globalId, noteVars, skinOf, stickerUrl} from '../skin.js';
+import {STICKER_BASE, allTemplates, forgetSticker, globalId, noteVars, shapesOf, skinOf, stickerImg, stickerUrl} from '../skin.js';
+import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, isBuiltinSticker} from '../../shared/stickers.js';
 
 const api = window.daigaku;
 
@@ -35,7 +39,7 @@ const SAMPLE = [
 
 // 画面の状態（描き直しても残す）。draft は直している途中のテンプレート（baseId は元のテンプレート）。
 // 対象・細かく直す・名前などは ui が決めるので、描き直しのときに前の値へ戻さない（data-keep="off"）
-const ui = {target: '', part: 'note', open: false, draft: null, selected: null, confirm: null, route: null};
+const ui = {target: '', part: 'note', place: 'folder', book: 'all', open: false, draft: null, selected: null, confirm: null, route: null};
 
 const courses = (data) => data.courses.filter((c) => !c.hidden);
 const targetCourse = (data) => (ui.target ? (data.courses.find((c) => c.id === ui.target) ?? null) : null);
@@ -163,7 +167,44 @@ function folderControls(data) {
 function tapeControls(data) {
   const t = ui.draft.parts.tape;
   return `${colorField('tape.color', 'テープの色', t.color, {allowDefault: false, allowCourse: true, recent: data.skin?.recent ?? []})}
-    <fieldset class="ks-field"><legend>柄</legend>${choice('tape.pattern', t.pattern, ['course', ...TAPE_PATTERNS], TAPE_PATTERN_LABEL)}</fieldset>`;
+    <fieldset class="ks-field"><legend>柄</legend>${choice('tape.pattern', t.pattern, ['course', ...TAPE_PATTERNS], TAPE_PATTERN_LABEL)}</fieldset>
+    ${
+      t.pattern === 'image'
+        ? `<fieldset class="ks-field"><legend>柄にする画像（シール帳から）</legend><div class="ks-book">${bookItems(data, 'tape-image', t.image)}</div>
+          <p class="muted">取り込んだ画像は「シール」の欄から足せます。</p></fieldset>`
+        : ''
+    }`;
+}
+/** シール帳の並び（はじめから入っているシール＋取り込んだ画像）。filter：all・fav・mark・deco・mine・フォルダ名 */
+function bookList(data, filter = 'all') {
+  const mine = (data.skin?.stickers ?? []).map((b) => ({id: b.id, name: '取り込んだ画像', kind: 'mine', shape: b.shape, favorite: !!b.favorite, folder: b.folder}));
+  const builtin = BUILTIN_STICKERS.map((b) => ({id: b.id, name: b.name, kind: b.kind, shape: 'cut'}));
+  const all = [...mine, ...builtin];
+  if (filter === 'all') return all;
+  if (filter === 'fav') return mine.filter((b) => b.favorite);
+  if (filter === 'mine') return mine;
+  if (filter === 'mark' || filter === 'deco') return builtin.filter((b) => b.kind === filter);
+  return mine.filter((b) => b.folder === filter);
+}
+/** シール帳の 1 つずつ。action：sticker-add（貼る）か tape-image（テープの柄にする） */
+function bookItems(data, action, current = null, filter = 'all') {
+  return bookList(data, filter)
+    .map((b) => {
+      const url = stickerUrl(b.id);
+      const mine = b.kind === 'mine';
+      const tools = action === 'sticker-add' && mine
+        ? `<button type="button" class="ks-book__tool ks-book__fav" data-ks="sticker-fav" data-id="${b.id}" aria-pressed="${b.favorite}" title="${b.favorite ? 'お気に入りから外す' : 'お気に入りにする'}" aria-label="お気に入り">${b.favorite ? '★' : '☆'}</button><button type="button" class="ks-book__tool ks-book__folder" data-ks="sticker-folder" data-id="${b.id}" title="フォルダに分ける${b.folder ? `（今は「${esc(b.folder)}」）` : ''}" aria-label="フォルダに分ける">▤</button><button type="button" class="ks-book__del" data-ks="sticker-del" data-id="${b.id}" title="シール帳から消す" aria-label="シール帳から消す">×</button>`
+        : '';
+      return `<div class="ks-book__item"><button type="button" class="ks-book__pick" data-ks="${action}" data-id="${b.id}"${action === 'sticker-add' ? ' draggable="true"' : ''} aria-pressed="${current === b.id}" title="${esc(b.name)}">${url ? `<img src="${url}" alt="${esc(b.name)}" class="sticker--${esc(b.shape)}" draggable="false" />` : '…'}</button>${tools}</div>`;
+    })
+    .join('');
+}
+/** 貼れる場所。ホームの余白は全体のテンプレートだけ */
+const places = (data) => STICKER_PLACES.filter((p) => !targetCourse(data) || !GLOBAL_ONLY_PLACES.includes(p));
+function bookFilters(data) {
+  const folders = [...new Set((data.skin?.stickers ?? []).map((b) => b.folder).filter(Boolean))];
+  const list = [['all', 'すべて'], ['fav', '★ お気に入り'], ['mark', BUILTIN_STICKER_KIND.mark], ['deco', BUILTIN_STICKER_KIND.deco], ['mine', '取り込んだ画像'], ...folders.map((f) => [f, `▤ ${f}`])];
+  return list.map(([v, l]) => `<button type="button" class="ks-choice" data-ks="book" data-value="${esc(v)}" aria-pressed="${ui.book === v}"><span>${esc(l)}</span></button>`).join('');
 }
 function stickerControls(data) {
   const book = data.skin?.stickers ?? [];
@@ -184,22 +225,23 @@ function stickerControls(data) {
           .join('')}</select></label>`
         : ''
     }
-    <p class="muted">シール帳のシールを押すか、見本のフォルダへドラッグすると貼れます（1 枚のフォルダに ${STICKERS_PER_PLACE} 枚まで）。貼ったシールは見本の上で動かせます。${course ? '全体のシールの上に重ねて見せています（全体のシールはここでは動かせません）。' : ''}</p>
-    <div class="ks-book">
-      <label class="ks-book__add btn btn--small">＋ 画像を取り込む<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ks-file hidden /></label>
-      ${book
-        .map((b) => {
-          const url = stickerUrl(b.id);
-          return `<div class="ks-book__item"><button type="button" class="ks-book__pick" data-ks="sticker-add" data-id="${b.id}" draggable="true" title="貼る">${url ? `<img src="${url}" alt="シール" class="sticker--${esc(b.shape)}" draggable="false" />` : '…'}</button><button type="button" class="ks-book__del" data-ks="sticker-del" data-id="${b.id}" title="シール帳から消す" aria-label="シール帳から消す">×</button></div>`;
-        })
-        .join('')}
-    </div>
+    <fieldset class="ks-field"><legend>貼る場所</legend>
+      ${choice('place', ui.place, places(data), PLACE_LABEL)}
+    </fieldset>
+    <p class="muted">シール帳のシールを押すか、見本へドラッグすると貼れます（1 か所に ${STICKERS_PER_PLACE} 枚まで）。貼ったシールは見本の上で動かせます。${course ? '全体のシールの上に重ねて見せています（全体のシールはここでは動かせません）。' : ''}</p>
+    <fieldset class="ks-field"><legend>シール帳</legend>
+      <div class="ks-choices ks-book__filters">${bookFilters(data)}</div>
+      <div class="ks-book">
+        <label class="ks-book__add btn btn--small">＋ 画像を取り込む<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ks-file hidden /></label>
+        ${bookItems(data, 'sticker-add', null, ui.book)}
+      </div>
+    </fieldset>
     ${
       sel
         ? `<fieldset class="ks-field ks-sel"><legend>選んだシール</legend>
         <label>大きさ<input type="range" min="20" max="200" step="5" value="${Math.round(sel.scale * 100)}" data-ks-range="scale" /></label>
         <label>傾き<input type="range" min="-45" max="45" step="1" value="${sel.rotate}" data-ks-range="rotate" /></label>
-        <label>形<select class="input" data-ks-shape="${sel.asset}">${SHAPES.map((s) => `<option value="${s}" ${shape === s ? 'selected' : ''}>${SHAPE_LABEL[s]}</option>`).join('')}</select></label>
+        ${isBuiltinSticker(sel.asset) ? '' : `<label>形<select class="input" data-ks-shape="${sel.asset}">${SHAPES.map((s) => `<option value="${s}" ${shape === s ? 'selected' : ''}>${SHAPE_LABEL[s]}</option>`).join('')}</select></label>`}
         <div class="actions"><button type="button" class="btn btn--small" data-ks="z" data-dir="1">前へ</button><button type="button" class="btn btn--small" data-ks="z" data-dir="-1">後ろへ</button><button type="button" class="btn btn--small btn--danger" data-ks="peel">はがす</button></div>
       </fieldset>`
         : ''
@@ -213,6 +255,29 @@ const PARTS = [
   ['sticker', 'シール']
 ];
 
+// 見本の中のシールの大きさ：ホームと PDF 編集画面は、窓（幅 1200px ほど）を半分ほどに縮めた見本なので基準も半分
+const PREVIEW_SCALE = {folder: 1, home: 0.5, heading: 1, viewer: 0.5};
+/** 場所の見本に貼るシール（直しているテンプレートのものだけ動かせる） */
+function placeLayer(data, stickers, place) {
+  const shapes = shapesOf(data);
+  const base = STICKER_BASE[place] * PREVIEW_SCALE[place];
+  return stickers
+    .filter((st) => st.place === place)
+    .map((st) => stickerImg(st, shapes, {base, ...(st.index != null ? {index: st.index, selected: ui.selected === st.index} : {})}))
+    .join('');
+}
+/** 真ん中の見本。シールの欄では、選んだ貼る場所の見本にする */
+function preview(data, {first, second, note, skin1, skin2}) {
+  const place = ui.part === 'sticker' ? ui.place : 'folder';
+  const folders = `<div class="folders ks-preview__folders">${folderCard(first, {data, skin: skin1, edit: {selected: place === 'folder' ? ui.selected : null}})}${folderCard(second, {data, skin: skin2, edit: {still: true}})}</div>`;
+  if (place === 'folder') return noteSwatch(note, 'ks-preview', folders);
+  const layer = `<div class="ks-place ks-place--${place}" data-preview-place="${place}">${placeLayer(data, skin1.stickers, place)}`;
+  if (place === 'home') return noteSwatch(note, 'ks-preview ks-preview--wide', `${layer}</div><div class="ks-mini">${folders}</div>`);
+  if (place === 'heading')
+    return noteSwatch(note, 'ks-preview', `${layer}<span class="btn">← ホーム</span><h2>${esc(first.name)}</h2></div>`);
+  return noteSwatch(note, 'ks-preview ks-preview--wide', `${layer}</div><div class="ks-pdf" aria-hidden="true"><span></span><span></span><span></span></div>`);
+}
+
 function editor(data) {
   const course = targetCourse(data);
   const [first, second] = samples(data, course);
@@ -224,7 +289,7 @@ function editor(data) {
   return `
     <div class="ks-editor">
       <nav class="ks-parts" aria-label="部品">${PARTS.map(([k, l]) => `<button type="button" class="ks-part" data-ks="part" data-part="${k}" aria-pressed="${ui.part === k}">${l}</button>`).join('')}</nav>
-      ${noteSwatch(note, 'ks-preview', `<div class="folders ks-preview__folders">${folderCard(first, {data, skin: skin1, edit: {selected: ui.selected}})}${folderCard(second, {data, skin: skin2, edit: {still: true}})}</div>`)}
+      ${preview(data, {course, first, second, note, skin1, skin2})}
       <div class="ks-controls">${controls}</div>
     </div>
     <div class="ks-save">
@@ -370,11 +435,16 @@ async function importSticker(file) {
   toast('シール帳に入れました。押すか、見本のフォルダへドラッグして貼れます');
 }
 
-function addSticker(asset, x = 0.72, y = 0.62) {
+// 貼る場所ごとの、はじめに置く位置（見本の真ん中を避ける）
+const START = {folder: [0.72, 0.62], home: [0.9, 0.85], heading: [0.85, 0.5], viewer: [0.03, 0.9]};
+function addSticker(asset, place = ui.place, at = START[place]) {
   const d = ui.draft;
-  if (d.stickers.filter((s) => s.place === 'folder').length >= STICKERS_PER_PLACE)
-    return toast(`1 枚のフォルダに貼れるシールは ${STICKERS_PER_PLACE} 枚までです`, {error: true});
-  d.stickers.push({place: 'folder', asset, x, y, scale: 1, rotate: Math.round(Math.random() * 20 - 10), z: Math.max(0, ...d.stickers.map((s) => s.z + 1))});
+  if (d.stickers.filter((s) => s.place === place).length >= STICKERS_PER_PLACE)
+    return toast(`${PLACE_LABEL[place]}に貼れるシールは ${STICKERS_PER_PLACE} 枚までです`, {error: true});
+  // 押して貼るときは、前に貼ったシールと重ならないように少しずつずらす
+  const n = d.stickers.filter((s) => s.place === place).length;
+  const [x, y] = at === START[place] ? [Math.min(1, Math.max(0, at[0] + (at[0] > 0.5 ? -0.08 : 0.08) * n)), at[1]] : at;
+  d.stickers.push({place, asset, x, y, scale: 1, rotate: Math.round(Math.random() * 20 - 10), z: Math.max(0, ...d.stickers.map((s) => s.z + 1))});
   ui.selected = d.stickers.length - 1;
   refresh();
 }
@@ -416,7 +486,25 @@ document.addEventListener('click', async (e) => {
         await api['settings.update']({patch: {rules: el.dataset.value}});
         return reload();
       }
-      setPath(ui.draft.parts, el.dataset.key, el.dataset.value);
+      if (el.dataset.key === 'place') {
+        ui.place = el.dataset.value;
+        ui.selected = null;
+      } else setPath(ui.draft.parts, el.dataset.key, el.dataset.value);
+    } else if (ks === 'book') ui.book = el.dataset.value;
+    else if (ks === 'tape-image') ui.draft.parts.tape.image = el.dataset.id;
+    else if (ks === 'sticker-fav' || ks === 'sticker-folder') {
+      const b = (data.skin?.stickers ?? []).find((x) => x.id === el.dataset.id);
+      if (!b) return;
+      let patch;
+      if (ks === 'sticker-fav') patch = {favorite: !b.favorite};
+      else {
+        const name = window.prompt('シール帳のフォルダの名前（空にすると分けない）', b.folder ?? '');
+        if (name === null) return;
+        patch = {folder: name};
+      }
+      const r = await api['sticker.update']({id: b.id, ...patch});
+      if (r?.error) return toast(r.error, {error: true});
+      return reload();
     } else if (ks === 'sticker-add') addSticker(el.dataset.id);
     else if (ks === 'sticker-del') {
       if (!window.confirm('このシールをシール帳から消しますか？（貼ってあるテンプレートからも見えなくなります）')) return;
@@ -504,8 +592,8 @@ function repaintPreview() {
 // 見本のフォルダの上で、貼ったシールを選んで動かす。シール帳からのドラッグで貼る
 let drag = null;
 document.addEventListener('pointerdown', (e) => {
-  const img = e.target.closest?.('.kisekae [data-preview-folder] [data-sticker-index]');
-  const folder = e.target.closest?.('.kisekae [data-preview-folder]');
+  const img = e.target.closest?.('.kisekae [data-preview-place] [data-sticker-index]');
+  const folder = e.target.closest?.('.kisekae [data-preview-place]');
   if (!folder || !ui.draft) return;
   if (!img) {
     if (ui.selected != null) {
@@ -544,15 +632,15 @@ document.addEventListener('dragstart', (e) => {
   if (b) e.dataTransfer.setData('text/x-daigaku-sticker', b.dataset.id);
 });
 document.addEventListener('dragover', (e) => {
-  if (e.target.closest?.('.kisekae [data-preview-folder]') && e.dataTransfer.types.includes('text/x-daigaku-sticker')) e.preventDefault();
+  if (e.target.closest?.('.kisekae [data-preview-place]') && e.dataTransfer.types.includes('text/x-daigaku-sticker')) e.preventDefault();
 });
 document.addEventListener('drop', (e) => {
-  const folder = e.target.closest?.('.kisekae [data-preview-folder]');
+  const box = e.target.closest?.('.kisekae [data-preview-place]');
   const sid = e.dataTransfer?.getData('text/x-daigaku-sticker');
-  if (!folder || !sid || !ui.draft) return;
+  if (!box || !sid || !ui.draft) return;
   e.preventDefault();
-  const r = folder.getBoundingClientRect();
-  addSticker(sid, Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)));
+  const r = box.getBoundingClientRect();
+  addSticker(sid, box.dataset.previewPlace, [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]);
 });
 document.addEventListener('toggle', (e) => {
   if (e.target.id !== 'ks-detail') return;

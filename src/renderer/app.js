@@ -2,7 +2,7 @@
 // ホーム（フォルダのグリッド）・授業（資料一覧）・PDF ビューア（文字入れ・付箋・文字隠し）・クイズ・設定・セットアップ。
 import {renderHome} from './views/home.js';
 import {closeSkinPicker, openSkinPicker, renderKisekae} from './views/kisekae.js';
-import {applySkin, setStickerReload, watchTheme} from './skin.js';
+import {applySkin, setStickerReload, skinOf, stickerLayer, watchTheme} from './skin.js';
 import {renderCourse} from './views/course.js';
 import {renderFolder, renderFolderNew} from './views/folder.js';
 import {renderSettings} from './views/settings.js';
@@ -154,15 +154,20 @@ function render() {
   if (route.startsWith('/viewer/')) {
     const materialId = route.slice('/viewer/'.length);
     lastRoute = route;
-    if (viewer?.materialId === materialId) return;
-    viewer?.unmount();
-    leaveQuiz();
-    leaveQuizEdit();
     const material = Object.values(state.data.materials)
       .flat()
       .find((m) => m.id === materialId);
     const course = state.data.courses.find((c) => c.id === material?.course_id);
-    viewer = mountViewer(view, {materialId, course, onBack: () => navigate(course ? `/course/${course.id}` : '/')});
+    if (viewer?.materialId !== materialId) {
+      viewer?.unmount();
+      leaveQuiz();
+      leaveQuizEdit();
+      viewer = mountViewer(view, {materialId, course, onBack: () => navigate(course ? `/course/${course.id}` : '/')});
+    }
+    // PDF のまわりの紙に貼るシール（窓に固定。PDF の下に置く）。着せ替えやシールの画像が変わったら貼り直す
+    document.getElementById('viewer-stickers')?.remove();
+    const layer = stickerLayer(skinOf(state.data, course ?? null).stickers, 'viewer', state.data);
+    if (layer) view.insertAdjacentHTML('afterbegin', layer.replace('<div class="sticker-layer', '<div id="viewer-stickers" class="sticker-layer'));
     return;
   }
   viewer?.unmount();
