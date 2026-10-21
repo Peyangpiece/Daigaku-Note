@@ -35,10 +35,10 @@ export const FILE_KINDS = ['pdf', 'slide', 'doc', 'sheet', 'image', 'video', 'au
 export const FILE_KIND_LABEL = {pdf: 'PDF', slide: 'スライド', doc: '文書', sheet: '表', image: '画像', video: '動画', audio: '音声', zip: '圧縮', other: 'その他'};
 export const BOOKMARK_SHAPES = ['tag', 'ribbon', 'round'];
 export const BOOKMARK_SHAPE_LABEL = {tag: 'タグ', ribbon: 'リボン（切れ込み）', round: '丸'};
-export const ROUND_COLORS = 15; // 回の付箋の色の並び（第 1 回から順に。16 回目からはまた 1 色目）
-// 回の付箋のはじめの色（tokens.css の --pop1〜15 と同じ）。前の版の 8 色に 7 色を足した
-export const ROUND_DEFAULTS = ['#ffe14d', '#ff9ec4', '#6fe3b8', '#7cccff', '#ffad5c', '#c3a6ff', '#c2f06a', '#ff8a7a', '#5ed9d1', '#ff7fbf', '#9db4ff', '#ffcf6b', '#8fe08a', '#ffb59e', '#e8a6ff'];
-/** 回の付箋の色の番号（0〜14）：第 1 回から順に。「その他」（第 0 回）は 1 色目 */
+export const ROUND_COLORS = 5; // 回の付箋の色の並び（第 1 回から順に。6 回目からはまた 1 色目）
+// 回の付箋のはじめの色（tokens.css の --pop1〜5 と同じ）
+export const ROUND_DEFAULTS = ['#ffe14d', '#ff9ec4', '#6fe3b8', '#7cccff', '#ffad5c'];
+/** 回の付箋の色の番号（0〜4）：第 1 回から順に。「その他」（第 0 回）は 1 色目 */
 export const roundColorIndex = (number) => (number > 0 ? (number - 1) % ROUND_COLORS : 0);
 export const PDF_NOTE_COLORS = 6; // PDF に貼る付箋の色の候補
 export const SHAPES = ['cut', 'square', 'round', 'circle', 'framed'];
@@ -108,8 +108,8 @@ export function normalizeParts(raw = {}) {
     tape: tape(t),
     file: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.file?.[k], 'default')])),
     fileArt: fileArtParts(raw.fileArt),
-    // 前の版の 8 色の並びは、9 回目からをはじめの色で埋めて引き継ぐ
-    sticky: {round: colorList(Array.isArray(raw.sticky?.round) && raw.sticky.round.length === 8 ? [...raw.sticky.round, ...ROUND_DEFAULTS.slice(8)] : raw.sticky?.round, ROUND_COLORS), pdf: colorList(raw.sticky?.pdf, PDF_NOTE_COLORS)},
+    // 前の版の 8 色の並びは、先頭の 5 色を引き継ぐ
+    sticky: {round: colorList(Array.isArray(raw.sticky?.round) && raw.sticky.round.length === 8 ? raw.sticky.round.slice(0, ROUND_COLORS) : raw.sticky?.round, ROUND_COLORS), pdf: colorList(raw.sticky?.pdf, PDF_NOTE_COLORS)},
     bookmark: {color: color(raw.bookmark?.color, 'default'), shape: oneOf(raw.bookmark?.shape, BOOKMARK_SHAPES, 'tag')}
   };
 }

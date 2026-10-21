@@ -379,7 +379,7 @@ function homeScene(data, {first, second, note, skin1, skin2}) {
       ${folderCard(second, {data, skin: skin2, edit: {still: true}})}
     </div>`);
 }
-// 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では前の 9 回に 1 つずつ
+// 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では 5 回に 2 つずつ
 const KIND_FILE = {pdf: 'a.pdf', slide: 'a.pptx', doc: 'a.docx', sheet: 'a.xlsx', image: 'a.png', video: 'a.mp4', audio: 'a.mp3', zip: 'a.zip', other: 'a.dat'};
 const SCENE_FILES = Object.values(KIND_FILE);
 function courseScene(data, {first, note, skin1}) {
@@ -392,14 +392,14 @@ function courseScene(data, {first, note, skin1}) {
       <span class="file__art">${fileArt(name, {colors: sk.file, art: sk.fileArt})}${fixedOne(data, find('file', kind))}</span>
       <span class="muted">${FILE_KIND_LABEL[kind]}</span></span>`;
   };
-  // 回の付箋：15 色が全部見えるように 15 枚。資料は前の 9 枚に 1 つずつ
+  // 回の付箋：5 色が全部見えるように 5 枚。資料は 2 つずつ
   const roundNote = (n, files) =>
     `<div class="ks-note${isOn('sticky')}" style="--note-color: ${colors[n - 1]}" ${editAttr('sticky', '付箋の色')} aria-label="第${n}回の付箋" data-drop-place="round">
       ${n === 1 ? fixedOne(data, find('round')) : ''}<span class="ks-note__files">${files.map(file).join('')}</span></div>`;
   return noteSwatch(note, `ks-stage ks-stage--course${isOn('note')}`, `
     <div class="ks-place ks-place--heading" data-drop-place="heading" title="シールをここへドラッグすると見出しに貼れます">${stageLayer(data, sk.stickers, 'heading')}
       <span class="btn">← ホーム</span><h2>${esc(first.name)}</h2></div>
-    <div class="ks-notes">${POP.map((_, i) => roundNote(i + 1, SCENE_FILES.slice(i, i + 1))).join('')}</div>`);
+    <div class="ks-notes">${POP.map((_, i) => roundNote(i + 1, SCENE_FILES.slice(i * 2, i * 2 + 2))).join('')}</div>`);
 }
 // ファイルの場面：選んでいる種類の資料のイラストを大きく出す。印とラベルはドラッグで動かせる。下に種類の切り替え
 const BIG = 3.4;

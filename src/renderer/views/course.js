@@ -183,7 +183,7 @@ function roundNote(round, list, course, today, quizzes = {}, places = []) {
   ]
     .filter(Boolean)
     .join(' ');
-  // 回の付箋の色：第 1 回から順に 15 色（着せ替えで変えていなければ --pop1〜15）。角にはシールを 1 枚
+  // 回の付箋の色：第 1 回から順に 5 色（着せ替えで変えていなければ --pop1〜5）。角にはシールを 1 枚
   const sk = skinOf(state.data, course);
   const i = roundColorIndex(round.number);
   const noteColor = sk.sticky.round === 'default' ? `var(--pop${i + 1})` : sk.sticky.round[i];
