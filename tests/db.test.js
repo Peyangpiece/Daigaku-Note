@@ -97,3 +97,18 @@ test('着せ替え：新しい授業にはテンプレートを順に割り当�
   assert.equal(repo.get('course', a.id).skin_template_id, null);
   assert.deepEqual(repo.listSkinTemplates(), []);
 });
+
+test('着せ替え：前の版で保存したテンプレート（あとから足した部品がない）も、読むときに今の形に整える', async () => {
+  const {db} = await openDatabase(':memory:');
+  const repo = new Repo(db);
+  const old = {format: 'daigaku-note.skin', formatVersion: 1, id: 'OLD', name: 'ピンク', parts: {note: {type: 'grid'}, folder: {card: '#ffffff'}, tape: {color: '#f7a1c4', pattern: 'stripe'}}, stickers: []};
+  db.prepare('INSERT INTO skin_template (id, json, created_at, updated_at) VALUES (?, ?, ?, ?)').run('OLD', JSON.stringify(old), 'a', 'a');
+  db.prepare('INSERT INTO skin_template (id, json, created_at, updated_at) VALUES (?, ?, ?, ?)').run('NEW', JSON.stringify({...old, formatVersion: 99}), 'b', 'b');
+  const [t, ...rest] = repo.listSkinTemplates();
+  assert.equal(rest.length, 0, '読めない版は出さない');
+  assert.equal(t.name, 'ピンク');
+  assert.equal(t.parts.note.type, 'grid');
+  assert.deepEqual(t.parts.sticky, {round: 'default', pdf: 'default'});
+  assert.deepEqual(t.parts.bookmark, {color: 'default', shape: 'tag'});
+  assert.equal(t.parts.file.pdf, 'default');
+});

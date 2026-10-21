@@ -1,6 +1,6 @@
 // 表ごとの読み書き（DESIGN-M0 §5）。SQL はこのファイルの外に出さない。列名は表ごとの一覧で縛る。
 import {ulid} from '../../shared/ids.js';
-import {rotationFor} from '../../shared/skin.js';
+import {normalizeTemplate, rotationFor} from '../../shared/skin.js';
 
 const COLUMNS = {
   connection: [
@@ -200,11 +200,18 @@ export class Repo {
   }
 
   // ---- 着せ替え（SPEC-KISEKAE.md） ----
+  /** 自作のテンプレート。読むたびに今の形に整える（前の版で保存したものに、あとから足した部品の既定値を入れる） */
   listSkinTemplates() {
     return this.db
-      .prepare('SELECT json FROM skin_template ORDER BY created_at')
+      .prepare('SELECT id, json FROM skin_template ORDER BY created_at')
       .all()
-      .map((r) => JSON.parse(r.json));
+      .flatMap((r) => {
+        try {
+          return [normalizeTemplate(JSON.parse(r.json), {id: r.id})];
+        } catch {
+          return []; // 読めないものは出さない（新しすぎる版など）
+        }
+      });
   }
   /** 自作のテンプレートを保存する（あれば上書き）。t は normalizeTemplate を通したもの */
   saveSkinTemplate(t) {
