@@ -1,5 +1,6 @@
 // 着せ替え（SPEC-KISEKAE.md）：テンプレートの形式・はじめからあるテンプレート・どれが当たるか・色の計算。
 // main（保存のときの検査）とレンダラ（見た目）の両方で使う。副作用なし・node のモジュールを使わない。
+import {isBuiltinSticker} from './stickers.js';
 
 export const FORMAT = 'daigaku-note.skin';
 export const FORMAT_VERSION = 1;
@@ -8,12 +9,15 @@ export const NOTE_TYPES = ['ruled', 'grid', 'dot', 'ring', 'plain', 'cornell'];
 export const NOTE_TYPE_LABEL = {ruled: '横罫', grid: '方眼', dot: 'ドット', ring: '丸ドット', plain: '無地', cornell: 'コーネル'};
 export const NOTE_GAPS = {narrow: 24, normal: 32, wide: 40};
 export const NOTE_GAP_LABEL = {narrow: '狭い', normal: 'ふつう', wide: '広い'};
-export const TAPE_PATTERNS = ['plain', 'stripe', 'dot', 'check'];
-export const TAPE_PATTERN_LABEL = {plain: '無地', stripe: 'ストライプ', dot: 'ドット', check: 'チェック', course: '授業ごと'};
+export const TAPE_PATTERNS = ['plain', 'stripe', 'dot', 'check', 'image'];
+export const TAPE_PATTERN_LABEL = {plain: '無地', stripe: 'ストライプ', dot: 'ドット', check: 'チェック', image: '画像', course: '授業ごと'};
 export const LICENSES = ['personal', 'share', 'remix'];
 export const LICENSE_LABEL = {personal: '自分で使うだけ', share: 'そのまま配ってよい', remix: '改変して配ってよい'};
 export const STICKER_MODES = ['global', 'course', 'both'];
-export const STICKER_PLACES = ['folder']; // 第 1 弾はフォルダだけ（SPEC-KISEKAE §10）
+// シールを貼れる場所（SPEC-KISEKAE §5）。home（ホームの余白）は全体のテンプレートだけから貼る
+export const STICKER_PLACES = ['folder', 'home', 'heading', 'viewer'];
+export const PLACE_LABEL = {folder: 'フォルダ', home: 'ホームの余白', heading: '授業ページの見出し', viewer: 'PDF 編集画面の余白'};
+export const GLOBAL_ONLY_PLACES = ['home'];
 export const STICKERS_PER_PLACE = 5;
 export const SHAPES = ['cut', 'square', 'round', 'circle', 'framed'];
 export const SHAPE_LABEL = {cut: '形どおり', square: 'そのまま', round: '角丸', circle: '丸', framed: '白いふち付き'};
@@ -21,6 +25,8 @@ export const CLASSIC_ID = 'builtin-classic';
 
 const HEX = /^#[0-9a-f]{6}$/;
 const SHA = /^[0-9a-f]{64}$/;
+/** シールの素の id：取り込んだ画像（SHA-256）か、はじめから入っているシール */
+export const isAssetId = (v) => SHA.test(String(v ?? '')) || isBuiltinSticker(v);
 export const isHex = (v) => typeof v === 'string' && HEX.test(v.toLowerCase());
 
 // 色の値：#rrggbb か default（テーマの色のまま）。テープは course（授業ごとの色・柄）も
@@ -33,8 +39,17 @@ const text = (v, max, fallback = '') => (typeof v === 'string' ? v.replace(/[\u0
 export const DEFAULT_PARTS = {
   note: {type: 'ruled', paper: 'default', line: 'default', gap: 'normal', margin: true},
   folder: {card: 'default', tab: 'default'},
-  tape: {color: 'course', pattern: 'course'}
+  tape: {color: 'course', pattern: 'course', image: null}
 };
+
+// テープ：柄が画像（image）のときは、シールの素を 1 つ柄にする。画像がなければ無地
+function tape(t) {
+  const d = DEFAULT_PARTS.tape;
+  let pattern = oneOf(t.pattern, [...TAPE_PATTERNS, 'course'], d.pattern);
+  const image = pattern === 'image' && isAssetId(t.image) ? t.image : null;
+  if (pattern === 'image' && !image) pattern = 'plain';
+  return {color: color(t.color, d.color, {course: true}), pattern, image};
+}
 
 /** 部品の値を決まった範囲に収める（知らない項目は捨て、範囲外は既定値） */
 export function normalizeParts(raw = {}) {
@@ -51,7 +66,7 @@ export function normalizeParts(raw = {}) {
       margin: typeof n.margin === 'boolean' ? n.margin : d.note.margin
     },
     folder: {card: color(f.card, d.folder.card), tab: color(f.tab, d.folder.tab)},
-    tape: {color: color(t.color, d.tape.color, {course: true}), pattern: oneOf(t.pattern, [...TAPE_PATTERNS, 'course'], d.tape.pattern)}
+    tape: tape(t)
   };
 }
 
@@ -61,7 +76,7 @@ export function normalizeStickers(raw) {
   const out = [];
   const count = {};
   for (const s of raw) {
-    if (!s || !STICKER_PLACES.includes(s.place) || !SHA.test(String(s.asset ?? ''))) continue;
+    if (!s || !STICKER_PLACES.includes(s.place) || !isAssetId(s.asset)) continue;
     if ((count[s.place] = (count[s.place] ?? 0) + 1) > STICKERS_PER_PLACE) continue;
     out.push({
       place: s.place,
@@ -85,10 +100,13 @@ export function normalizeTemplate(raw, {id, now = new Date().toISOString()} = {}
   if (raw.format !== undefined && raw.format !== FORMAT) throw new Error('大学ノートのテンプレートではありません');
   if (Number(raw.formatVersion ?? FORMAT_VERSION) > FORMAT_VERSION) throw new Error('新しい版の大学ノートで作られたテンプレートです。アプリを更新してください');
   const stickers = normalizeStickers(raw.stickers);
+  const parts = normalizeParts(raw.parts);
+  // 取り込んだ画像だけを assets に（はじめから入っているシールはアプリの中にある）
   const assets = {};
-  for (const s of stickers) {
-    const a = raw.assets?.[s.asset] ?? {};
-    assets[s.asset] = {mime: 'image/png', w: Math.round(num(a.w, 1, 512, 256)), h: Math.round(num(a.h, 1, 512, 256))};
+  for (const sid of [...stickers.map((s) => s.asset), parts.tape.image]) {
+    if (!SHA.test(String(sid ?? '')) || assets[sid]) continue;
+    const a = raw.assets?.[sid] ?? {};
+    assets[sid] = {mime: 'image/png', w: Math.round(num(a.w, 1, 512, 256)), h: Math.round(num(a.h, 1, 512, 256))};
   }
   return {
     format: FORMAT,
@@ -99,7 +117,7 @@ export function normalizeTemplate(raw, {id, now = new Date().toISOString()} = {}
     version: /^\d+\.\d+\.\d+$/.test(String(raw.version ?? '')) ? raw.version : '1.0.0',
     license: oneOf(raw.license, LICENSES, 'personal'),
     createdAt: typeof raw.createdAt === 'string' && !Number.isNaN(Date.parse(raw.createdAt)) ? raw.createdAt : now,
-    parts: normalizeParts(raw.parts),
+    parts,
     stickers,
     assets
   };

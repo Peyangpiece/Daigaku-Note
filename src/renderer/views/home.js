@@ -2,7 +2,7 @@
 import {esc, jaWrap, progressText} from '../app.js';
 import {browserState} from './settings.js';
 import {folderShown, scopeLabel} from './folder.js';
-import {folderLook, shapesOf, skinOf, stickerImg} from '../skin.js';
+import {folderLook, shapesOf, skinOf, stickerImg, stickerLayer} from '../skin.js';
 
 // shared/ids.js の tapeAngle と同じ計算（レンダラは main のモジュールを読まないので写す）
 function hash32(str) {
@@ -61,12 +61,12 @@ export function folderCard(course, {today = false, data = null, skin = null, edi
     course.review ? `<span class="badge">復習 ${course.review}</span>` : ''
   ].join('');
   const cls = `folder${course.hidden ? ' folder--hidden' : ''}${course.kind === 'folder' ? ' folder--mine' : ''}${today ? ' folder--today' : ''}${stickers.length ? ' folder--stickered' : ''}`;
-  const inner = `<span class="tape tape--${esc(look.pattern)}" style="--tape-color: ${look.tapeColor}; --tape-angle: ${tapeAngle(course.id)}deg"></span>
+  const inner = `<span class="tape tape--${esc(look.pattern)}" style="--tape-color: ${look.tapeColor}; --tape-angle: ${tapeAngle(course.id)}deg${look.tapeImage ? `; --tape-image: ${look.tapeImage}` : ''}"></span>
     ${stickers.length ? `<span class="folder__stickers"${edit ? '' : ' aria-hidden="true"'}>${stickers.map(([st]) => stickerImg(st, shapes, edit && !edit.still && st.index != null ? {index: st.index, selected: edit.selected === st.index} : {})).join('')}</span>` : ''}
     <span class="folder__name ja-wrap${longestRun(name) > 6 ? ' folder__name--long' : ''}">${name}</span>
     <span class="folder__sub">${today ? '<span class="folder__today">今日</span> ' : ''}${esc(sub)}</span>
     <span class="folder__badges">${badges}</span>`;
-  if (edit) return `<div class="${cls} folder--preview" style="${look.style}"${edit.still ? ' aria-hidden="true"' : ' data-preview-folder'}>${inner}</div>`;
+  if (edit) return `<div class="${cls} folder--preview" style="${look.style}"${edit.still ? ' aria-hidden="true"' : ' data-preview-place="folder"'}>${inner}</div>`;
   return `<button class="${cls}" style="${look.style}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
     ${inner}
   </button>`;
@@ -118,6 +118,7 @@ export function renderHome({data, progress}) {
   const preparing = data.browser?.state === 'pending';
   const syncing = !!progress || (data.jobs ?? []).some((j) => j.kind === 'sync');
   return `
+    ${stickerLayer(skinOf(data).stickers, 'home', data)}
     <div class="home${attention.length ? ' home--attention' : ''}">
       ${attention.length ? `<aside class="sticky attention" style="--sticky-color: var(--c2)" aria-labelledby="attention-title"><strong id="attention-title">要確認</strong><ul>${attention.join('')}</ul></aside>` : ''}
       <div class="home__main">
