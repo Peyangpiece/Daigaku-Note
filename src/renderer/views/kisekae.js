@@ -394,8 +394,8 @@ function courseScene(data, {first, note, skin1}) {
   };
   // 回の付箋：曜日ごとの 5 色が全部見えるように、月〜金の 5 枚
   const roundNote = (n, files) =>
-    `<div class="ks-note${isOn('sticky')}" style="--note-color: ${colors[n - 1]}" ${editAttr('sticky', '付箋の色')} data-drop-place="round">
-      ${n === 1 ? fixedOne(data, find('round')) : ''}<strong>第${n}回<span class="ks-note__day">${ROUND_WEEKDAYS[n - 1]}</span></strong><span class="ks-note__files">${files.map(file).join('')}</span></div>`;
+    `<div class="ks-note${isOn('sticky')}" style="--note-color: ${colors[n - 1]}" ${editAttr('sticky', '付箋の色')} aria-label="${ROUND_WEEKDAYS[n - 1]}曜の付箋" data-drop-place="round">
+      ${n === 1 ? fixedOne(data, find('round')) : ''}<span class="ks-note__files">${files.map(file).join('')}</span></div>`;
   return noteSwatch(note, `ks-stage ks-stage--course${isOn('note')}`, `
     <div class="ks-place ks-place--heading" data-drop-place="heading" title="シールをここへドラッグすると見出しに貼れます">${stageLayer(data, sk.stickers, 'heading')}
       <span class="btn">← ホーム</span><h2>${esc(first.name)}</h2></div>

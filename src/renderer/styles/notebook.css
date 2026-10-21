@@ -2851,13 +2851,6 @@ textarea.input {
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
   cursor: pointer;
 }
-.ks-note__day {
-  margin-left: 4px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
-  font-size: 11px;
-}
 .ks-sw-named {
   display: grid;
   justify-items: center;
