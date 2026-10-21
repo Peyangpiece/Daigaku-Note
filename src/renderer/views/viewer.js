@@ -1244,10 +1244,29 @@ class Viewer {
     return ctx.measureText(ch).width;
   };
 
-  /** ページの文字列（pdf.js の textContent。画面の座標へは finishMask で直す） */
+  /**
+   * ページの文字列（pdf.js の textContent。画面の座標へは finishMask で直す）。
+   * 文字列には全体の幅しかないので、PDF に書かれた字ごとの送り幅（描く命令の字形の幅）を ws に添える。
+   * MS P ゴシックのような字ごとに幅の違うフォントでも、字の切れ目が描かれた字とそろう（text-snap.js の charEdges）
+   */
   async textItems(p) {
-    const tc = await p.page.getTextContent();
-    return tc.items.filter((it) => it.str && it.width > 0);
+    const [tc, widths] = await Promise.all([p.page.getTextContent(), this.glyphWidths(p.page).catch(() => null)]);
+    return tc.items
+      .filter((it) => it.str && it.width > 0)
+      .map((it) => ({...it, ws: widths && Array.from(it.str, (ch) => widths.get(`${it.fontName}|${ch}`) ?? null)}));
+  }
+
+  /** フォントと字ごとの送り幅（1 em = 1000）。描く命令（operator list）の字形から集める */
+  async glyphWidths(page) {
+    const ops = await page.getOperatorList();
+    const out = new Map();
+    let font = null;
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      if (ops.fnArray[i] === pdfjs.OPS.setFont) font = ops.argsArray[i][0];
+      else if (ops.fnArray[i] === pdfjs.OPS.showText)
+        for (const g of ops.argsArray[i][0]) if (g?.unicode && g.width > 0 && !out.has(`${font}|${g.unicode}`)) out.set(`${font}|${g.unicode}`, g.width);
+    }
+    return out;
   }
 
   /** 文字列の画面での箱。画面で横書きに見えるものだけ（回転したページでも、見た目が横書きなら使う） */
@@ -1264,6 +1283,7 @@ class Viewer {
         // その行をなぞったとみなす範囲は少し広く、基線から上へ 1.05、下へ 0.3
         return {
           str: it.str,
+          ws: it.ws,
           left: m[4],
           right: m[4] + it.width * vp.scale,
           top: m[5] - fh * 0.96,
