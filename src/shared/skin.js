@@ -114,7 +114,7 @@ export function normalizeStickers(raw) {
       x: num(s.x, 0, 1, 0.5),
       y: num(s.y, 0, 1, 0.5),
       scale: num(s.scale, 0.2, 2, 1),
-      rotate: Math.round(num(s.rotate, -45, 45, 0)),
+      rotate: Math.round(num(s.rotate, -180, 180, 0)),
       z: Math.round(num(s.z, 0, 99, 0))
     });
   }
