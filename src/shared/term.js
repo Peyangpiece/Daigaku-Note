@@ -5,22 +5,12 @@ import {addDays, holidaysBetween, weekdayOf, ymd} from './holidays.js';
 export const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 /** 学期名の候補（選ぶか自由入力） */
-export const TERM_LABELS = ['前期', '後期', '春学期', '秋学期', '第1クォーター', '第2クォーター', '第3クォーター', '第4クォーター', '通年', '1学期', '2学期', '3学期'];
+export const TERM_LABELS = ['前期', '後期', '春学期', '秋学期', '第1クォーター', '第2クォーター', '第3クォーター', '第4クォーター', '通年'];
 
-/** 3 学期制（高校・中学）の学期名なら 1〜3、ほかは 0 */
-const thirdOf = (label) => Number(String(label ?? '').match(/^\s*([1-3])\s*学期\s*$/)?.[1] ?? 0);
-
-/**
- * 学期名と年度から既定の期間。春・前期：4/1〜9/30、秋・後期：10/1〜翌 3/31、クォーターは 2 か月ごと、通年は 4/1〜翌 3/31。
- * 3 学期制は夏休み・冬休みも含めて切れ目なく、1 学期 4/1〜8/31、2 学期 9/1〜12/31、3 学期 翌 1/1〜3/31
- */
+/** 学期名と年度から既定の期間。春・前期：4/1〜9/30、秋・後期：10/1〜翌 3/31、クォーターは 2 か月ごと、通年は 4/1〜翌 3/31 */
 export function defaultTermDates(label, year) {
   const y = Number(year);
   const l = String(label ?? '');
-  const third = thirdOf(l);
-  if (third === 1) return {start: ymd(y, 4, 1), end: ymd(y, 8, 31)};
-  if (third === 2) return {start: ymd(y, 9, 1), end: ymd(y, 12, 31)};
-  if (third === 3) return {start: ymd(y + 1, 1, 1), end: ymd(y + 1, 3, 31)};
   if (/前期|春/.test(l)) return {start: ymd(y, 4, 1), end: ymd(y, 9, 30)};
   if (/後期|秋/.test(l)) return {start: ymd(y, 10, 1), end: ymd(y + 1, 3, 31)};
   const q = l.match(/第?\s*([1-4])\s*(?:クォーター|Q)/i);
@@ -45,7 +35,6 @@ export function termFolder(year, label) {
 /** 学期 ID：'2026-spring' のような安定した鍵 */
 export function termId(year, label) {
   const l = String(label ?? '');
-  if (thirdOf(l)) return `${Number(year)}-t${thirdOf(l)}`;
   const key = /前期|春/.test(l)
     ? 'spring'
     : /後期|秋/.test(l)

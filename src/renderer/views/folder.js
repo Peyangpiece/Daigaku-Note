@@ -4,6 +4,7 @@ import {esc, jaWrap} from '../app.js';
 import {fileCard, quizLine} from './course.js';
 import {skinOf, stickerLayer} from '../skin.js';
 import {roundColorIndex} from '../../shared/skin.js';
+import {features} from '../../shared/profile.js';
 
 const SCOPE_LABEL = {term: '今学期のフォルダ', always: 'マイフォルダ'};
 export const scopeLabel = (c) => SCOPE_LABEL[c.scope] ?? SCOPE_LABEL.always;
@@ -11,7 +12,9 @@ export const scopeLabel = (c) => SCOPE_LABEL[c.scope] ?? SCOPE_LABEL.always;
 /** ホームに出すか：マイフォルダはいつも、今学期のフォルダはその学期のあいだだけ */
 export const folderShown = (c, currentTermId) => c.scope === 'always' || c.term_id === currentTermId;
 
-function scopeChoice(selected = 'term') {
+// 学期を使わない人（社会人）には選ばせず、いつもマイフォルダにする
+function scopeChoice(terms, selected = 'term') {
+  if (!terms) return '<input type="radio" name="fn-scope" value="always" checked hidden>';
   return `<fieldset class="folder-new__scope">
       <legend>どこに置きますか</legend>
       <label><input type="radio" name="fn-scope" value="term"${selected === 'term' ? ' checked' : ''}> 今学期のフォルダ <span class="muted">（今学期のあいだホームに出ます）</span></label>
@@ -24,6 +27,7 @@ export function renderFolderNew({data}, route) {
   const mode = new URLSearchParams(route.split('?')[1] ?? '').get('mode') === 'link' ? 'link' : 'new';
   // 学期がまだなければ（LMS をつながずに使い始めたとき）、メインが今日の日付から仮の学期を作る
   const noTerm = !data.terms.length;
+  const useTerms = features(data.settings).terms;
   return `
     <nav class="page-nav">
       <button class="btn" data-action="nav" data-route="/">← ホーム</button>
@@ -39,8 +43,8 @@ export function renderFolderNew({data}, route) {
         <label for="fn-name">大学ノートでの名前 <span class="muted">（空ならフォルダの名前）</span></label>
         <input class="input" id="fn-name" type="text" maxlength="80" autocomplete="off">`
       }
-      ${scopeChoice()}
-      ${noTerm ? '<p class="muted">学期が未設定のため、今日の日付から仮の学期を作ります（設定 → 学期 で直せます）。</p>' : ''}
+      ${scopeChoice(useTerms)}
+      ${noTerm && useTerms ? '<p class="muted">学期が未設定のため、今日の日付から仮の学期を作ります（設定 → 学期 で直せます）。</p>' : ''}
       <div class="actions">
         <button class="btn btn--primary" data-action="folder-create" data-mode="${mode}">${mode === 'new' ? '作る' : 'フォルダを選んで登録…'}</button>
       </div>
@@ -91,7 +95,7 @@ export function renderFolder({data}, course) {
       <button class="btn btn--primary" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
       <button class="btn btn--quiet" data-action="folder-reveal" data-course-id="${esc(course.id)}">フォルダを開く</button>
       <button class="btn btn--quiet" data-action="folder-scan" data-course-id="${esc(course.id)}">読み直す</button>
-      <button class="btn btn--quiet" data-action="folder-scope" data-course-id="${esc(course.id)}" data-scope="${course.scope === 'always' ? 'term' : 'always'}">${course.scope === 'always' ? '今学期のフォルダにする' : 'マイフォルダにする'}</button>
+      ${features(data.settings).terms ? `<button class="btn btn--quiet" data-action="folder-scope" data-course-id="${esc(course.id)}" data-scope="${course.scope === 'always' ? 'term' : 'always'}">${course.scope === 'always' ? '今学期のフォルダにする' : 'マイフォルダにする'}</button>` : ''}
       <button class="btn btn--quiet" data-action="folder-hide" data-course-id="${esc(course.id)}">ホームから外す</button>
     </div>
     <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です。名前の変更や削除は Finder（Windows はエクスプローラー）で行い、「読み直す」で反映します。</p>

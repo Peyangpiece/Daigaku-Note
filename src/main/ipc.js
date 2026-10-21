@@ -8,7 +8,7 @@ import {checkDownloadDir, defaultRoot} from '../shared/paths.js';
 import {courseFolderName} from '../shared/naming.js';
 import {currentTerm, defaultTermDates, termFolder, termId} from '../shared/term.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
-import {isSchool} from '../shared/school.js';
+import {cleanUses, isRole} from '../shared/profile.js';
 import {createRequire} from 'node:module';
 import {isOpenable, sha256} from './sync/files.js';
 import {renameCourse} from './folders.js';
@@ -80,7 +80,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         theme: repo.getSetting('ui.theme', 'system'),
         rules: repo.getSetting('ui.rules', 'normal'),
         ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「付箋を追加」の色（付箋の 5 色の何番目か）
-        school: repo.getSetting('profile.school', null), // 学校の種類（school.js の SCHOOLS）。まだ選んでいなければ null
+        role: repo.getSetting('profile.role', null), // 使う人（profile.js の ROLES）。まだ選んでいなければ null
+        uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）
         university: repo.getSetting('profile.university', ''),
         openAtLogin: loginItem()
       },
@@ -239,7 +240,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     const start = /^\d{4}-\d{2}-\d{2}$/.test(term.start) ? term.start : d.start;
     const end = /^\d{4}-\d{2}-\d{2}$/.test(term.end) ? term.end : d.end;
     if (start >= end) bad('終了日は開始日より後にしてください');
-    const rounds = [15, 14, 10, 8, 7].includes(Number(term.rounds)) ? Number(term.rounds) : 15;
+    const rounds = [15, 14, 8, 7].includes(Number(term.rounds)) ? Number(term.rounds) : 15;
     const periods = term.preset && PERIOD_PRESETS[term.preset] ? PERIOD_PRESETS[term.preset] : term.periods && typeof term.periods === 'object' ? term.periods : null;
     const row = repo.upsertTerm({
       id: termId(year, label),
@@ -738,8 +739,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if ([0, 1, 3, 6].includes(patch.everyHours)) repo.setSetting('sync.everyHours', patch.everyHours);
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
-    // 学校の種類と大学名（大学名はいまは記録するだけ）
-    if (isSchool(patch.school)) repo.setSetting('profile.school', patch.school);
+    // 使う人・使い方・大学名（大学名はいまは記録するだけ）。人を変えたら、その人の使い方に合わないものは外す
+    if (isRole(patch.role)) {
+      repo.setSetting('profile.role', patch.role);
+      repo.setSetting('profile.uses', cleanUses(patch.role, patch.uses ?? repo.getSetting('profile.uses', [])));
+    } else if (patch.uses !== undefined) repo.setSetting('profile.uses', cleanUses(repo.getSetting('profile.role', null), patch.uses));
     if (typeof patch.university === 'string') repo.setSetting('profile.university', patch.university.trim().slice(0, 60));
     // 「付箋を追加」の色：付箋の 5 色の何番目か（0〜4）。null で元の白に戻す
     if (patch.ownColor && typeof patch.ownColor === 'object') {

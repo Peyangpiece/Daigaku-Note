@@ -1,5 +1,5 @@
 // ジョブの待ち行列（SPEC §13.6、DESIGN-M0 §4）。1 件ずつ順に実行する。同じ種類・同じ対象は 1 つにまとめる。
-import {currentTerm} from '../shared/term.js';
+import {autoTerm, currentTerm} from '../shared/term.js';
 
 const RETRY_DELAYS = [15 * 60e3]; // 失敗した同期は 15 分後に 1 回だけやり直す
 
@@ -77,8 +77,10 @@ export class JobRunner {
     const {repo, engine, registry, files} = this.ctx;
     switch (job.kind) {
       case 'sync': {
-        const terms = repo.listTerms();
         const today = new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'});
+        // 社会人は学期を設定しないので、学期がなければ今日の日付から仮の学期を作る（画面には出さない）
+        if (!repo.listTerms().length && repo.getSetting('profile.role', null) === 'worker') repo.upsertTerm(autoTerm(today));
+        const terms = repo.listTerms();
         const term = currentTerm(terms, today) ?? terms.at(-1);
         if (!term) return {status: 'no-term', message: '学期の設定がありません'};
         const connections = repo.listConnections().filter((c) => (job.payload.connectionId ? c.id === job.payload.connectionId : true) && c.status !== 'disabled' && c.kind !== 'manual');

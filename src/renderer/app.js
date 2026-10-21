@@ -1,5 +1,6 @@
 // 画面の土台（DESIGN-M0 §10）。経路：#/setup（初回）・#/（ホーム）・#/course/<id>・#/viewer/<資料 id>・#/settings・#/settings/term・#/settings/lms（LMS とつなぐ）
 // ホーム（フォルダのグリッド）・授業（資料一覧）・PDF ビューア（文字入れ・付箋・文字隠し）・クイズ・設定・セットアップ。
+import {features} from '../shared/profile.js';
 import {renderHome} from './views/home.js';
 import {closeSkinPicker, openSkinPicker, renderKisekae} from './views/kisekae.js';
 import {applySkin, setStickerReload, skinOf, stickerLayer, watchTheme} from './skin.js';
@@ -93,7 +94,9 @@ function head() {
   const terms = state.data?.terms ?? [];
   const today = d.toLocaleDateString('sv-SE');
   const term = terms.find((t) => t.start_date <= today && today <= t.end_date) ?? terms.at(-1);
-  document.getElementById('head-term').textContent = term ? `${term.year} ${term.label}` : '';
+  // 学期を使わない人（社会人）には学期名を出さない
+  const useTerms = features(state.data?.settings ?? {}).terms;
+  document.getElementById('head-term').textContent = term && useTerms ? `${term.year} ${term.label}` : '';
 }
 
 // 描き直しても入力中の値・フォーカス・スクロールが消えないように、同じ画面の描き直しでは控えて戻す
@@ -294,7 +297,7 @@ document.addEventListener('click', async (e) => {
       // 初回のセットアップを終える（次から起動時に出さない。LMS は 設定 → LMS との連携 からつなぐ）
       await api['settings.update']({patch: {skipSetup: true}});
       await reload();
-      navigate('/');
+      navigate(el.dataset.next || '/'); // LMS を使う人は、そのまま LMS とつなぐ手順へ
     } else if (action === 'folder-create') {
       const name = document.getElementById('fn-name')?.value ?? '';
       const scope = document.querySelector('input[name=fn-scope]:checked')?.value ?? 'term';

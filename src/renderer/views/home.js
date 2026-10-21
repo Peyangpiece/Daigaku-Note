@@ -2,6 +2,7 @@
 import {esc, jaWrap, progressText} from '../app.js';
 import {browserState} from './settings.js';
 import {folderShown, scopeLabel} from './folder.js';
+import {features} from '../../shared/profile.js';
 import {folderLook, shapesOf, skinOf, stickerImg, stickerLayer} from '../skin.js';
 
 // shared/ids.js の tapeAngle と同じ計算（レンダラは main のモジュールを読まないので写す）
@@ -122,12 +123,15 @@ export function renderHome({data, progress}) {
       `<li>LMS を読むためのブラウザの${browserState(data.browser)}<button class="btn btn--small" data-action="install-browser">準備し直す</button></li>`
     );
   const preparing = data.browser?.state === 'pending';
+  // 使い方に合わせた並び：LMS を使わない人・社会人は自分のフォルダを先に
+  const foldersFirst = features(data.settings).foldersFirst;
   const syncing = !!progress || (data.jobs ?? []).some((j) => j.kind === 'sync');
   return `
     ${stickerLayer(skinOf(data).stickers, 'home', data)}
     <div class="home${attention.length ? ' home--attention' : ''}">
       ${attention.length ? `<aside class="sticky attention" style="--sticky-color: var(--c2)" aria-labelledby="attention-title"><strong id="attention-title">要確認</strong><ul>${attention.join('')}</ul></aside>` : ''}
       <div class="home__main">
+      ${foldersFirst ? myFolders : ''}
       ${
         courses.length
           ? `${dayLine}<section class="folders" aria-label="授業">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
@@ -135,7 +139,7 @@ export function renderHome({data, progress}) {
             ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
             : '' /* LMS をつないでいなければ授業の段は出さない（つなぐのは 設定 → LMS との連携 から） */
       }
-      ${myFolders}
+      ${foldersFirst ? '' : myFolders}
       </div>
     </div>
     <footer class="home-foot">
