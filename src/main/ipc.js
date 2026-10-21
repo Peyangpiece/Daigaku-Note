@@ -8,8 +8,10 @@ import {checkDownloadDir, defaultRoot} from '../shared/paths.js';
 import {courseFolderName} from '../shared/naming.js';
 import {currentTerm, defaultTermDates, termFolder, termId} from '../shared/term.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
+import {cleanUses, isRole} from '../shared/profile.js';
 import {createRequire} from 'node:module';
 import {isOpenable, sha256} from './sync/files.js';
+import {renameCourse} from './folders.js';
 import {exportAnnotatedPdf, isPng} from './pdf-export.js';
 import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
@@ -78,6 +80,9 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         theme: repo.getSetting('ui.theme', 'system'),
         rules: repo.getSetting('ui.rules', 'normal'),
         ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「付箋を追加」の色（付箋の 5 色の何番目か）
+        role: repo.getSetting('profile.role', null), // 使う人（profile.js の ROLES）。まだ選んでいなければ null
+        uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）
+        university: repo.getSetting('profile.university', ''),
         openAtLogin: loginItem()
       },
       skin: {
@@ -258,7 +263,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return {ok: true, term: row};
   });
 
-  handle('course.update', ({courseId, patch}) => {
+  handle('course.update', async ({courseId, patch}) => {
     const cid = id(courseId) ?? bad('授業が不正です');
     const allowed = {};
     if (Number.isInteger(patch.color) && patch.color >= 1 && patch.color <= 8) allowed.color = patch.color;
@@ -278,7 +283,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (patch.name !== undefined) {
       const conn = repo.get('connection', repo.get('course', cid)?.connection_id);
       if (conn?.kind !== 'manual') bad('LMS の授業の名前は変えられません');
-      allowed.name = (str(patch.name, 200) ?? '').trim().slice(0, 80) || bad('名前を入れてください');
+      const name = (str(patch.name, 200) ?? '').trim().slice(0, 80) || bad('名前を入れてください');
+      await renameCourse({repo, courseDir: (t, c) => files.courseDir(t, c)}, cid, name); // パソコンの授業フォルダの名前も変える
     }
     return {course: repo.updateCourse(cid, allowed)};
   });
@@ -699,16 +705,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   // 自分のフォルダの中の下のフォルダ（付箋 1 枚）の名前を変える：パソコンのフォルダの名前を変えて、読み直す（中身の記録は SHA-256 で付いていく）
   handle('folder.renameSub', async ({courseId, sub, name}) => {
     const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
-    const to = (str(name, 200) ?? '').trim();
-    if (!to || to.length > 80 || /[\\/:*?"<>|]/.test(to) || to === '.' || to === '..') bad('フォルダの名前に使えない文字があります');
-    const rel = str(sub, 1000) ?? bad('フォルダが不正です');
-    const from = path.resolve(c.dir, rel);
-    if (!from.startsWith(path.resolve(c.dir) + path.sep)) bad('フォルダが不正です');
-    const dest = path.join(path.dirname(from), to);
-    if (dest === from) return {ok: true};
-    if (await fsp.stat(dest).catch(() => null)) bad(`「${to}」はもうあります`);
-    await fsp.rename(from, dest);
-    return {ok: true, ...(await folders.scan(c.id))};
+    return {ok: true, ...(await folders.renameSub(c.id, str(sub, 1000) ?? bad('フォルダが不正です'), str(name, 200) ?? ''))};
   });
   handle('folder.reveal', async ({courseId}) => {
     const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
@@ -716,10 +713,10 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (e) bad(`フォルダを開けませんでした（${e}）`);
     return {ok: true};
   });
-  handle('folder.update', ({courseId, name, scope}) => {
-    const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
+  handle('folder.update', async ({courseId, name, scope}) => {
+    let c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
     const patch = {};
-    if (name !== undefined) patch.name = (str(name, 200) ?? '').trim().slice(0, 80) || bad('名前を入れてください');
+    if (name !== undefined) c = await folders.rename(c.id, str(name, 200) ?? ''); // パソコンのフォルダの名前も変える
     if (scope !== undefined) {
       if (!['term', 'always'].includes(scope)) bad('フォルダの種類が不正です');
       patch.scope = scope;
@@ -742,6 +739,12 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if ([0, 1, 3, 6].includes(patch.everyHours)) repo.setSetting('sync.everyHours', patch.everyHours);
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
+    // 使う人・使い方・大学名（大学名はいまは記録するだけ）。人を変えたら、その人の使い方に合わないものは外す
+    if (isRole(patch.role)) {
+      repo.setSetting('profile.role', patch.role);
+      repo.setSetting('profile.uses', cleanUses(patch.role, patch.uses ?? repo.getSetting('profile.uses', [])));
+    } else if (patch.uses !== undefined) repo.setSetting('profile.uses', cleanUses(repo.getSetting('profile.role', null), patch.uses));
+    if (typeof patch.university === 'string') repo.setSetting('profile.university', patch.university.trim().slice(0, 60));
     // 「付箋を追加」の色：付箋の 5 色の何番目か（0〜4）。null で元の白に戻す
     if (patch.ownColor && typeof patch.ownColor === 'object') {
       const cid = id(patch.ownColor.courseId) ?? bad('授業が不正です');

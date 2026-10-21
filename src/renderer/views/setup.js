@@ -3,10 +3,13 @@
 // （Moodle の ID・パスワードと画面操作型のブラウザ窓。学期がまだなければ学期の設定も挟む）
 import {esc, reload, toast} from '../app.js';
 import {termForm, readTermForm} from './term.js';
+import {ROLES, USES, features} from '../../shared/profile.js';
 
 const api = window.daigaku;
 const FLOWS = {
   first: [
+    ['あなた', stepRole],
+    ['使い方', stepUses],
     ['学期の設定', stepTerm],
     ['保存先', stepRoot]
   ],
@@ -19,6 +22,7 @@ const FLOWS = {
   ]
 };
 let flow = FLOWS.first;
+let steps = flow; // いまの手順（初回で社会人を選んだら、学期の設定を飛ばす）
 const blank = () => ({
   url: '',
   candidates: [],
@@ -27,7 +31,10 @@ const blank = () => ({
   base: '',
   connectionId: null,
   courses: [],
-  coursesLoaded: false
+  coursesLoaded: false,
+  role: null,
+  uses: null,
+  university: null
 });
 let step = 0;
 let draft = blank();
@@ -37,20 +44,25 @@ export function resetSetup(kind = 'first', data = null) {
   step = 0;
   draft = blank();
   // LMS とつなぐときの学期の設定は、学期がまだないときだけ
-  flow = kind === 'lms' ? FLOWS.lms.filter(([name]) => name !== '学期の設定' || !data?.terms?.length) : FLOWS.first;
+  // 社会人は学期を使わないので、学期の設定を挟まない
+  const terms = features({role: data?.settings?.role, uses: []}).terms;
+  flow = kind === 'lms' ? FLOWS.lms.filter(([name]) => name !== '学期の設定' || (terms && !data?.terms?.length)) : FLOWS.first;
 }
-const next = () => ((step = Math.min(step + 1, flow.length - 1)), reload());
+const next = () => ((step = Math.min(step + 1, steps.length - 1)), reload());
 
 const KIND_LABEL = {api: 'API で読む', recipe: '画面を読む', generic: '汎用の読み取り', manual: '手動で取り込む'};
 
 export function renderSetup({data}) {
-  const list = flow
+  const role = draft.role ?? data.settings.role;
+  steps = flow === FLOWS.first && !features({role, uses: []}).terms ? flow.filter(([name]) => name !== '学期の設定') : flow;
+  step = Math.min(step, steps.length - 1);
+  const list = steps
     .map(([s], i) => {
       const cls = i < step ? 'steps__item--done' : i === step ? 'steps__item--current' : '';
       return `<li class="steps__item ${cls}" style="--sticky-color: var(--c${(i % 8) + 1}); --sticky-angle: ${(i % 2 ? 1 : -1) * 1.5}deg"${i === step ? ' aria-current="step"' : ''}>${i + 1}. ${esc(s)}</li>`;
     })
     .join('');
-  const body = flow[step][1](data, step + 1);
+  const body = steps[step][1](data, step + 1);
   queueMicrotask(bind);
   const title = flow === FLOWS.first ? 'はじめに' : 'LMS とつなぐ';
   return `<div style="max-width: 720px"><p class="muted" style="margin: 0 0 var(--space-1)">${title}</p><ol class="steps" aria-label="${title}の手順">${list}</ol><section class="card">${body}</section></div>`;
@@ -96,18 +108,44 @@ function stepCourses(data, n) {
     ${list}
     <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-next3">次へ</button></div>`;
 }
+// 使う人を選ぶ。大学生のときだけ大学名を入れる（いまは記録するだけ）
+function stepRole(data, n) {
+  const role = draft.role ?? data.settings.role;
+  const university = draft.university ?? data.settings.university ?? '';
+  return `<h2>${n}. あなたについて</h2>
+    <div class="role-pick" role="radiogroup" aria-label="使う人">${Object.entries(ROLES)
+      .map(([k, l]) => `<button type="button" class="role-pick__item" role="radio" data-role="${k}" aria-checked="${role === k}">${l}</button>`)
+      .join('')}</div>
+    ${role === 'student' ? `<label class="role-pick__univ">大学名<input class="input" id="su-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(university)}"></label>` : ''}
+    <div class="actions"><button class="btn btn--primary" id="su-role" ${role ? '' : 'disabled'}>次へ</button></div>`;
+}
+// 使い方を選ぶ（いくつでも）。ホームの並びと設定の項目がこれに合わせて変わる
+function stepUses(data, n) {
+  const role = draft.role ?? data.settings.role ?? 'student';
+  const uses = draft.uses ?? data.settings.uses ?? [];
+  return `<h2>${n}. 何に使いますか</h2>
+    <p class="muted">いくつでも選べます（あとから 設定 → 使い方 で変えられます）。</p>
+    <div class="use-pick" role="group" aria-label="使い方">${USES[role]
+      .map(
+        ([k, l, d]) =>
+          `<button type="button" class="use-pick__item" data-use="${k}" aria-pressed="${uses.includes(k)}"><strong>${l}</strong><span class="muted">${d}</span></button>`
+      )
+      .join('')}</div>
+    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-uses" ${uses.length ? '' : 'disabled'}>次へ</button></div>`;
+}
 function stepTerm(data, n) {
   return `<h2>${n}. 学期の設定</h2>
-    <p class="muted">学期名と期間、回数、時限の開始時刻。大学ごとに違うので、ここで入れます（あとから 設定 → 学期 で直せます）。</p>
+    <p class="muted">学期の名前と期間、回数、時限の開始時刻を入れます（あとから 設定 → 学期 で直せます）。</p>
     ${termForm(data, null)}
     <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : ''}<button class="btn btn--primary" id="su-next4">保存して次へ</button></div>`;
 }
 function stepRoot(data, n) {
+  const f = features(data.settings);
   return `<h2>${n}. 保存先</h2>
-    <p>資料はここに「学期 → 授業 → 回」のフォルダで保存します。</p>
+    <p>${f.terms ? '資料はここに「学期 → 授業 → 回」のフォルダで保存します。' : '資料はここに保存します。'}</p>
     <p><code>${esc(data.settings.root)}</code></p>
-    <p class="muted">LMS とつないで資料を自動で集めたいときは、あとから 設定 → LMS との連携 でつなげます。</p>
-    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn" data-action="pick-dir">フォルダを選択…</button><button class="btn btn--primary" data-action="finish-setup">始める</button></div>`;
+    ${f.lms ? '<p class="muted">「始める」のあと、LMS とつなぐ手順に進みます。</p>' : ''}
+    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn" data-action="pick-dir">フォルダを選択…</button><button class="btn btn--primary" data-action="finish-setup"${f.lms ? ' data-next="/settings/lms"' : ''}>始める</button></div>`;
 }
 function stepSync(data, n) {
   return `<h2>${n}. 最初の同期</h2>
@@ -138,6 +176,39 @@ function bind() {
     draft.kind = top?.kind ?? null;
     reload();
   };
+  document.querySelectorAll('[data-role]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        if ($('su-univ')) draft.university = $('su-univ').value;
+        if (draft.role !== b.dataset.role) draft.uses = null; // 人を変えたら使い方は選び直す
+        draft.role = b.dataset.role;
+        reload();
+      })
+  );
+  if ($('su-role'))
+    $('su-role').onclick = async () => {
+      const role = draft.role ?? document.querySelector('[data-role][aria-checked=true]')?.dataset.role;
+      const university = $('su-univ')?.value.trim() ?? '';
+      const r = await api['settings.update']({patch: {role, ...(role === 'student' ? {university} : {})}});
+      if (r?.error) return toast(r.error, {error: true});
+      draft.role = role;
+      next();
+    };
+  document.querySelectorAll('[data-use]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        const now = [...document.querySelectorAll('[data-use][aria-pressed=true]')].map((x) => x.dataset.use);
+        draft.uses = now.includes(b.dataset.use) ? now.filter((u) => u !== b.dataset.use) : [...now, b.dataset.use];
+        reload();
+      })
+  );
+  if ($('su-uses'))
+    $('su-uses').onclick = async () => {
+      const uses = [...document.querySelectorAll('[data-use][aria-pressed=true]')].map((x) => x.dataset.use);
+      const r = await api['settings.update']({patch: {uses}});
+      if (r?.error) return toast(r.error, {error: true});
+      next();
+    };
   if ($('su-detect')) $('su-detect').onclick = detect;
   if ($('su-url')) $('su-url').onkeydown = (e) => e.key === 'Enter' && detect();
   document

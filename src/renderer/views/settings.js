@@ -1,5 +1,6 @@
 // 設定（SPEC §12.2）。学期・授業・保存先・クイズ・見た目、下に LMS との連携（任意）と同期。変更はすぐ保存する。
 import {esc, reload, toast} from '../app.js';
+import {ROLES, USES, features} from '../../shared/profile.js';
 
 const api = window.daigaku;
 const KIND_LABEL = {api: 'API で読む', recipe: '画面を読む', generic: '汎用の読み取り', manual: '手動で取り込む'};
@@ -82,6 +83,10 @@ export function renderSettings({data}, route = '/settings') {
   const lmsConns = data.connections.filter((c) => c.kind !== 'manual');
   const hasLms = lmsConns.length > 0;
   const focus = new URLSearchParams(route.split('?')[1] ?? '').get('focus');
+  // 使い方に合わせて項目を出す。使っていない機能でも、もう設定してあるもの（LMS の接続・API キー）は出す
+  const f = features({role: s.role, uses: s.uses});
+  const showLms = f.lms || hasLms;
+  const showQuiz = f.quiz || !!data.quiz?.key?.set || focus === 'quiz';
   queueMicrotask(bind);
   return `
     <nav class="page-nav">
@@ -90,10 +95,23 @@ export function renderSettings({data}, route = '/settings') {
     <div class="settings">
       <h3 class="settings__group">ふだんの設定</h3>
       <div class="settings__grid">
-      <section class="card"><h3>学期</h3>
+      <section class="card" id="st-profile"><h3>使い方</h3>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
+          <label>使う人<select class="input" id="st-role">${s.role ? '' : '<option value="">（未設定）</option>'}${Object.entries(ROLES)
+            .map(([v, l]) => `<option value="${v}" ${s.role === v ? 'selected' : ''}>${l}</option>`)
+            .join('')}</select></label>
+          ${s.role === 'student' ? `<label>大学名<input class="input" id="st-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(s.university ?? '')}"></label>` : ''}
+        </div>
+        ${s.role ? `<div style="margin-top: var(--space-2)">${USES[s.role].map(([k, l]) => `<label style="display:block"><input type="checkbox" data-st-use="${k}" ${s.uses.includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div>` : ''}
+      </section>
+      ${
+        f.terms
+          ? `<section class="card"><h3>学期</h3>
         ${data.terms.length ? `<ul style="padding-left: 1.2em">${data.terms.map((t) => `<li>${t.year} ${esc(t.label)} <span class="muted">${esc(t.start_date)}〜${esc(t.end_date)}・${t.rounds} 回${t.periods_json ? '・時限あり' : '・時限未設定'}</span></li>`).join('')}</ul>` : '<p class="muted">学期の設定がありません。</p>'}
         <button class="btn" data-action="nav" data-route="/settings/term">${data.terms.length ? '学期を編集・追加' : '学期を設定'}</button>
-      </section>
+      </section>`
+          : ''
+      }
       <section class="card"><h3>保存先</h3>
         <p><code>${esc(s.root)}</code>${s.root === s.defaultRoot ? ' <span class="muted">（既定）</span>' : ''}</p>
         <div style="display:flex; gap: var(--space-1)"><button class="btn" data-action="pick-dir">フォルダを選択…</button>${s.root !== s.defaultRoot ? '<button class="btn" data-action="reset-dir">既定に戻す</button>' : ''}<button class="btn" data-action="open-root">開く</button></div>
@@ -119,11 +137,16 @@ export function renderSettings({data}, route = '/settings') {
             : ''
         }
       </div>
-      <h3 class="settings__group">復習（任意）</h3>
+      ${
+        showQuiz
+          ? `<h3 class="settings__group">復習</h3>
       <div class="settings__grid">
       ${quizSection(data.quiz, focus === 'quiz')}
-      </div>
-      <h3 class="settings__group">LMS（任意）</h3>
+      </div>`
+          : ''
+      }
+      <div${showLms ? '' : ' hidden'}>
+      <h3 class="settings__group">LMS</h3>
       <div class="settings__grid">
       <section class="card" id="st-lms"><h3>LMS との連携</h3>
         <p class="muted">つなぐと授業の資料を自動で集めます（Moodle・manaba・WebClass・manabo など）。</p>
@@ -156,6 +179,8 @@ export function renderSettings({data}, route = '/settings') {
         ${s.openAtLogin?.available ? '' : '<p class="muted" style="margin-top: 4px">アプリとして入れたとき（Mac は <code>npm run install:mac</code>）に設定できます。</p>'}
       </section>
       </div>
+      </div>
+      ${showQuiz && showLms ? '' : '<p class="muted">使わない機能の設定は出していません。出すには、上の「使い方」で選んでください。</p>'}
       <section class="card"><h3>情報</h3><p class="muted">大学ノート ${esc(data.version)}</p></section>
     </div>`;
 }
@@ -209,6 +234,11 @@ function bind() {
   $('st-class')?.addEventListener('change', (e) => save({classStart: e.target.checked}));
   $('st-login')?.addEventListener('change', (e) => save({openAtLogin: e.target.checked}));
   $('st-theme')?.addEventListener('change', (e) => save({theme: e.target.value}));
+  $('st-role')?.addEventListener('change', (e) => e.target.value && save({role: e.target.value}));
+  document.querySelectorAll('[data-st-use]').forEach((c) =>
+    c.addEventListener('change', () => save({uses: [...document.querySelectorAll('[data-st-use]:checked')].map((x) => x.dataset.stUse)}))
+  );
+  $('st-univ')?.addEventListener('change', (e) => save({university: e.target.value}));
   document.querySelectorAll('[data-login]').forEach((b) =>
     b.addEventListener('click', async () => {
       b.disabled = true;

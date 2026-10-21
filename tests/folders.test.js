@@ -6,7 +6,7 @@ import path from 'node:path';
 import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
 import {FileManager} from '../src/main/sync/files.js';
-import {createFolders, listFiles, MY_FOLDER, TERM_FOLDERS} from '../src/main/folders.js';
+import {createFolders, listFiles, renameCourse, MY_FOLDER, TERM_FOLDERS} from '../src/main/folders.js';
 
 async function setup(t) {
   const base = await mkdtemp(path.join(tmpdir(), 'dn-folders-'));
@@ -142,4 +142,61 @@ test('LMS をつながずに（学期がないまま）フォルダを作ると�
   assert.equal(f.dir, path.join(base, '2026_秋学期', TERM_FOLDERS, 'ゼミ'));
   await folders.create({name: '就活', scope: 'always', mode: 'new'});
   assert.equal(repo.listTerms().length, 1, '2 つ目からは同じ学期を使う');
+});
+
+test('名前を変える：パソコンのフォルダの名前も変わり、同じ親フォルダの中のまま。中のファイルは動かさず、記録は引き継ぐ', async (t) => {
+  const {root, repo, folders, live} = await setup(t);
+  const c = await folders.create({name: 'ゼミ', scope: 'always', mode: 'new'});
+  await mkdir(path.join(c.dir, '資料'));
+  await writeFile(path.join(c.dir, '資料', 'a.pdf'), 'A');
+  await writeFile(path.join(c.dir, 'b.txt'), 'B');
+  await folders.scan(c.id);
+  const before = live(c.id);
+  repo.updateMaterial(before.find((m) => m.name === 'a.pdf').id, {read_at: null});
+
+  // フォルダ全体の名前
+  const r = await folders.rename(c.id, '卒論ゼミ');
+  const parent = path.join(root, MY_FOLDER);
+  assert.equal(r.name, '卒論ゼミ');
+  assert.equal(r.dir, path.join(parent, '卒論ゼミ'));
+  assert.deepEqual((await readdir(parent)).sort(), ['卒論ゼミ']);
+  assert.deepEqual((await readdir(r.dir)).sort(), ['b.txt', '資料']);
+  const after = live(c.id);
+  assert.deepEqual(after.map((m) => m.id).sort(), before.map((m) => m.id).sort());
+  assert.equal(after.find((m) => m.name === 'a.pdf').path, path.join(r.dir, '資料', 'a.pdf'));
+
+  // 中の小さなフォルダの名前
+  await folders.renameSub(c.id, '資料', '配付資料');
+  assert.deepEqual((await readdir(r.dir)).sort(), ['b.txt', '配付資料']);
+  const a = live(c.id).find((m) => m.name === 'a.pdf');
+  assert.equal(a.id, before.find((m) => m.name === 'a.pdf').id); // 記録（注釈・しおり・未読）はそのまま
+  assert.equal(a.read_at, null);
+  assert.equal(a.path, path.join(r.dir, '配付資料', 'a.pdf'));
+  assert.equal(live(c.id).length, 2);
+
+  // 同じ名前がもうあれば変えない。外へ出る名前は使えない
+  await mkdir(path.join(r.dir, '別'));
+  await assert.rejects(folders.renameSub(c.id, '配付資料', '別'), /もうあります/);
+  await assert.rejects(folders.renameSub(c.id, '配付資料', '../x'), /使えない文字/);
+  await assert.rejects(folders.renameSub(c.id, '../..', 'x'), /不正/);
+});
+
+test('LMS を使わない授業の名前を変える：授業フォルダの名前も変わり、学期のフォルダの中のまま', async (t) => {
+  const {root, repo, files, live} = await setup(t);
+  const conn = repo.createConnection({kind: 'manual', connector_id: 'manual', label: '手動'});
+  const c = repo.createCourse({term_id: '2026-fall', connection_id: conn.id, name: '英語', folder_name: '英語'});
+  const other = repo.createCourse({term_id: '2026-fall', connection_id: conn.id, name: '数学', folder_name: '数学'});
+  await files.addOwn({term: repo.get('term', '2026-fall'), course: c, round: null, name: 'w.pdf', data: Buffer.from('W')});
+  const m = live(c.id)[0];
+  const ctx = {repo, courseDir: (term, course) => files.courseDir(term, course)};
+  const r = await renameCourse(ctx, c.id, '英語Ⅰ');
+  assert.equal(r.name, '英語Ⅰ');
+  assert.equal(r.folder_name, '英語Ⅰ');
+  const termDir = path.join(root, '2026_秋学期');
+  assert.ok((await readdir(termDir)).includes('英語Ⅰ'));
+  assert.ok(!(await readdir(termDir)).includes('英語'));
+  const m2 = repo.get('material', m.id);
+  assert.equal(m2.path, m.path.replace(path.join(termDir, '英語'), path.join(termDir, '英語Ⅰ')));
+  assert.equal(await (await import('node:fs/promises')).readFile(m2.path, 'utf8'), 'W');
+  await assert.rejects(renameCourse(ctx, c.id, other.name), /もうあります/);
 });
