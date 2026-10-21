@@ -280,6 +280,12 @@ document.addEventListener('click', async (e) => {
       });
       if (r?.ok) await api['sync.run']({connectionId: el.dataset.id});
       reload();
+    } else if (action === 'own-color') {
+      // 「付箋を追加」の色。選んでいる色をもう一度押すと元の白に戻す
+      const index = el.dataset.index === '' ? null : Number(el.dataset.index);
+      const r = await api['settings.update']({patch: {ownColor: {courseId: el.dataset.courseId, index}}});
+      if (r?.error) return toast(r.error, {error: true});
+      await reload();
     } else if (action === 'upload') {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
       if (r?.error) toast(r.error, {error: true});

@@ -77,6 +77,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         everyHours: repo.getSetting('sync.everyHours', 0),
         theme: repo.getSetting('ui.theme', 'system'),
         rules: repo.getSetting('ui.rules', 'normal'),
+        ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「付箋を追加」の色（付箋の 5 色の何番目か）
         openAtLogin: loginItem()
       },
       skin: {
@@ -741,6 +742,16 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if ([0, 1, 3, 6].includes(patch.everyHours)) repo.setSetting('sync.everyHours', patch.everyHours);
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
+    // 「付箋を追加」の色：付箋の 5 色の何番目か（0〜4）。null で元の白に戻す
+    if (patch.ownColor && typeof patch.ownColor === 'object') {
+      const cid = id(patch.ownColor.courseId) ?? bad('授業が不正です');
+      const i = patch.ownColor.index;
+      if (i !== null && !(Number.isInteger(i) && i >= 0 && i < 5)) bad('色が不正です');
+      const map = {...repo.getSetting('ui.ownColors', {})};
+      if (i === null) delete map[cid];
+      else map[cid] = i;
+      repo.setSetting('ui.ownColors', map);
+    }
     if (patch.resetRoot === true) repo.setSetting('storage.root', null);
     if (patch.skipSetup === true) repo.setSetting('setup.skipped', true); // 初回のセットアップを終えた（次から起動時に出さない。LMS は任意で、設定からつなぐ）
     if (typeof patch.openAtLogin === 'boolean') {

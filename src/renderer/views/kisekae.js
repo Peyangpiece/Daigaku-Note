@@ -39,9 +39,11 @@ const api = window.daigaku;
 const LIGHT = ['#ffffff', '#fbf8f1', '#fffaf0', '#fff6f8', '#f4fbf7', '#f3f8ff', '#f8f5ff', '#efe6d6'];
 const VIVID = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70', '#6fd3e6', '#f7a1c4', '#2c4a7a', '#3a3a3a'];
 const RECENT_MAX = 4;
+// 見本の授業名は実際の名前を出さず「（授業名）」とする（色やテープは実際の授業のものを使う）
+const SAMPLE_NAME = '（授業名）';
 const SAMPLE = [
-  {id: 'sample-1', name: '管理会計Ⅱ', color: 1, tape_pattern: 'plain', weekday: '金', period: 2},
-  {id: 'sample-2', name: 'マーケティング', color: 4, tape_pattern: 'stripe', weekday: '月', period: 1}
+  {id: 'sample-1', name: SAMPLE_NAME, color: 1, tape_pattern: 'plain', weekday: '金', period: 2},
+  {id: 'sample-2', name: SAMPLE_NAME, color: 4, tape_pattern: 'stripe', weekday: '月', period: 1}
 ];
 
 // 画面の状態（描き直しても残す）。draft は直している途中のテンプレート（baseId は元のテンプレート）。
@@ -54,7 +56,7 @@ const samples = (data, course) => {
   const list = courses(data);
   const first = course ?? list[0] ?? SAMPLE[0];
   const second = list.find((c) => c.id !== first.id) ?? SAMPLE[1];
-  return [first, second];
+  return [first, second].map((c) => ({...c, name: SAMPLE_NAME}));
 };
 /** 今その対象に当たっているテンプレートの id（授業で「全体と同じ」なら null） */
 const currentId = (data) => {

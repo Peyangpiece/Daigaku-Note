@@ -697,7 +697,33 @@ h2[tabindex='-1']:focus {
 }
 .round-note--own .round-note__head {
   align-items: center;
-  justify-content: space-between;
+}
+.round-note--own .round-note__round {
+  flex: 1;
+  white-space: nowrap;
+}
+/* 色を選んだときは回の付箋と同じ色の混ぜ方にする（罫線は残す） */
+.round-note--own-colored {
+  --note-bg: color-mix(in srgb, var(--note-color) 55%, var(--note-mix, #fff));
+}
+/* 色の選択は付箋の下に小さく */
+.own-colors {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+.own-color {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 30%, transparent);
+  border-radius: 50%;
+  background: var(--sw);
+  cursor: pointer;
+}
+.own-color[aria-pressed='true'] {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 1px;
 }
 /* ドラッグで上に来た付箋 */
 .round-note--drop {

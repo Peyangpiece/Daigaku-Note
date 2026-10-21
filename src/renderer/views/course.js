@@ -90,14 +90,22 @@ export function fileCard(m, course, places) {
   </div>`;
 }
 
-// 付箋を追加：授業画面で入れたファイルが最初に置かれる。回の付箋と同じ大きさで、ここから回の付箋へ振り分ける
+// 付箋を追加：授業画面で入れたファイルが最初に置かれる。回の付箋と同じ大きさで、ここから回の付箋へ振り分ける。
+// 色は回の付箋の 5 色から選べる（選ばなければ罫線入りの白）
 function ownNote(course, list, places) {
-  return `<section class="round-note round-note--own" data-drop="own" data-course-id="${esc(course.id)}" aria-label="付箋を追加">
+  const sk = skinOf(state.data, course);
+  const colors = [0, 1, 2, 3, 4].map((i) => (sk.sticky.round === 'default' ? `var(--pop${i + 1})` : sk.sticky.round[i]));
+  const picked = state.data.settings?.ownColors?.[course.id];
+  const color = Number.isInteger(picked) ? colors[picked] : null;
+  const dot = (c, i) =>
+    `<button type="button" class="own-color" style="--sw: ${c}" data-action="own-color" data-course-id="${esc(course.id)}" data-index="${i === picked ? '' : i}" aria-pressed="${i === picked}" title="${i + 1} 番目の色" aria-label="付箋の色：${i + 1} 番目"></button>`;
+  return `<section class="round-note round-note--own${color ? ' round-note--own-colored' : ''}" data-drop="own" data-course-id="${esc(course.id)}"${color ? ` style="--note-color: ${color}"` : ''} aria-label="付箋を追加">
     <header class="round-note__head">
       <span class="round-note__round">付箋を追加</span>
       <button class="btn btn--small" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
     </header>
     ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course, places)).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグ<br>（元のファイルは残ります）</p>'}
+    <span class="own-colors" role="group" aria-label="付箋の色">${colors.map(dot).join('')}</span>
   </section>`;
 }
 
