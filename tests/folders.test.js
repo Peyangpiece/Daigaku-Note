@@ -200,3 +200,30 @@ test('LMS を使わない授業の名前を変える：授業フォルダの名�
   assert.equal(await (await import('node:fs/promises')).readFile(m2.path, 'utf8'), 'W');
   await assert.rejects(renameCourse(ctx, c.id, other.name), /もうあります/);
 });
+
+test('授業フォルダを取り込む：中のフォルダを 1 つずつ今学期のフォルダとして登録する（コピーしない）。中になければそのもの', async (t) => {
+  const {base, repo, folders, live} = await setup(t);
+  const src = path.join(base, '授業');
+  await mkdir(path.join(src, '経済学'), {recursive: true});
+  await mkdir(path.join(src, '統計学'));
+  await mkdir(path.join(src, '.hidden'));
+  await writeFile(path.join(src, '経済学', 'a.pdf'), 'A');
+  await writeFile(path.join(src, 'メモ.txt'), 'M');
+  const r = await folders.importCourses(src);
+  assert.deepEqual(r.added.map((c) => c.name), ['経済学', '統計学']);
+  assert.deepEqual(r.failed, []);
+  for (const c of r.added) assert.equal(c.scope, 'term');
+  assert.equal(r.added[0].dir, path.join(src, '経済学'));
+  assert.deepEqual(live(r.added[0].id).map((m) => m.name), ['a.pdf']);
+  assert.deepEqual(await readdir(path.join(src, '経済学')), ['a.pdf']); // 元のフォルダはそのまま
+  // 同じフォルダをもう一度取り込んでも、増えない
+  const again = await folders.importCourses(src);
+  assert.equal(again.added.length, 2);
+  assert.equal(repo.listCourses().filter((c) => c.kind === 'folder').length, 2);
+  // 中にフォルダがなければ、選んだフォルダそのものを登録する
+  const one = path.join(base, '一つ');
+  await mkdir(one);
+  const r2 = await folders.importCourses(one);
+  assert.deepEqual(r2.added.map((c) => c.dir), [one]);
+  await assert.rejects(folders.importCourses(path.join(base, 'ない')), /見つかりません/);
+});

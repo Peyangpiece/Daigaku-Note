@@ -289,6 +289,13 @@ document.addEventListener('click', async (e) => {
       const r = await api['settings.update']({patch: {ownColor: {courseId: el.dataset.courseId, index}}});
       if (r?.error) return toast(r.error, {error: true});
       await reload();
+    } else if (action === 'import-courses') {
+      // パソコンの授業フォルダを取り込む（中のフォルダを 1 つずつ今学期のフォルダとして登録）
+      const r = await api['folder.importCourses']();
+      if (r?.error) return toast(r.error, {error: true});
+      if (r.canceled) return;
+      toast(r.added.length ? `${r.added.length} 個の授業フォルダを取り込みました${r.failed.length ? `（${r.failed.length} 個は取り込めませんでした）` : ''}` : '取り込めるフォルダがありませんでした', {error: !r.added.length});
+      await reload();
     } else if (action === 'upload') {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
       if (r?.error) toast(r.error, {error: true});

@@ -271,5 +271,29 @@ export function createFolders({
     return scan(c.id);
   }
 
-  return {create, scan, rename, renameSub, roundOf, folderCourse, termNow};
+  /**
+   * パソコンの授業フォルダを取り込む：dir の中のフォルダを 1 つずつ今学期のフォルダとして登録する（コピーしない）。
+   * 中にフォルダがなければ dir そのものを登録する。戻り：{added: [course], failed: [{name, message}]}
+   */
+  async function importCourses(dir) {
+    const base = path.resolve(String(dir ?? ''));
+    const entries = await fsp.readdir(base, {withFileTypes: true}).catch(() => null);
+    if (!entries) throw err('フォルダが見つかりません');
+    const subs = entries.filter((e) => e.isDirectory() && !SKIP.test(e.name)).sort((a, b) => a.name.localeCompare(b.name, 'ja', {numeric: true}));
+    const dirs = subs.length ? subs.map((e) => path.join(base, e.name)) : [base];
+    const added = [],
+      failed = [];
+    for (const d of dirs) {
+      try {
+        const c = await create({name: path.basename(d), scope: 'term', mode: 'link', dir: d});
+        await scan(c.id);
+        added.push(c);
+      } catch (e) {
+        failed.push({name: path.basename(d), message: e.message});
+      }
+    }
+    return {added, failed};
+  }
+
+  return {create, scan, rename, renameSub, importCourses, roundOf, folderCourse, termNow};
 }
