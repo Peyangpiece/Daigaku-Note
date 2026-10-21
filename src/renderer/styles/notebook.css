@@ -2836,8 +2836,8 @@ textarea.input {
 }
 .ks-notes {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
 }
 .ks-note {
   position: relative;
@@ -2845,11 +2845,17 @@ textarea.input {
   align-content: start;
   gap: 8px;
   min-height: 150px;
-  padding: 14px 10px;
+  padding: 12px 8px;
   background: color-mix(in srgb, var(--note-color) 55%, var(--note-mix, #fff));
   color: #2b2b2b;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
   cursor: pointer;
+}
+.ks-sw-named {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  font-size: 11px;
 }
 .ks-note__files {
   display: flex;

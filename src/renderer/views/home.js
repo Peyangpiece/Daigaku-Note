@@ -47,6 +47,10 @@ const longestRun = (html) => Math.max(...html.split('<wbr>').map((s) => [...s.re
  * 着せ替えページの見本では skin（直している途中の見た目）を渡し、edit で貼ったシールを選べるようにする（ボタンにしない）。
  * edit.still は動かない見本（テンプレートの一覧）
  */
+// 新着のバッジの色：授業の曜日ごと（曜日のない授業・自分のフォルダは授業の色）
+const WEEKDAY_BADGE = {月: 'var(--c2)', 火: 'var(--c6)', 水: 'var(--c1)', 木: 'var(--c3)', 金: 'var(--c4)', 土: 'var(--c5)', 日: 'var(--c8)'};
+export const badgeColor = (course) => WEEKDAY_BADGE[course.weekday] ?? `var(--c${course.color ?? 1})`;
+
 export function folderCard(course, {today = false, data = null, skin = null, edit = null} = {}) {
   const sub = course.kind === 'folder' ? scopeLabel(course) : course.weekday ? slotOf(course) : '';
   const name = jaWrap(course.name);
@@ -56,7 +60,7 @@ export function folderCard(course, {today = false, data = null, skin = null, edi
   const stickers = sk.stickers.filter((s) => s.place === 'folder').map((s) => [s]); // 直している見本では s.index が直しているテンプレートの何枚目か
   const badges = [
     course.unread
-      ? `<span class="badge" style="--badge-color: var(--c${course.color})">新着 ${course.unread}</span>`
+      ? `<span class="badge" style="--badge-color: ${badgeColor(course)}">新着 ${course.unread}</span>`
       : '',
     course.review ? `<span class="badge">復習 ${course.review}</span>` : ''
   ].join('');

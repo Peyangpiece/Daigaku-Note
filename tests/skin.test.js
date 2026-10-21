@@ -5,6 +5,7 @@ import {
   CLASSIC_ID,
   FORMAT,
   ROTATION,
+  roundColorIndex,
   contrast,
   darken,
   inkOn,
@@ -153,7 +154,7 @@ test('ファイル・付箋・しおり：種類ごとの色、色の並び、�
   assert.equal(t.parts.file.pdf, '#ff0000');
   assert.equal(t.parts.file.slide, 'default');
   assert.equal('nope' in t.parts.file, false);
-  assert.equal(t.parts.sticky.round.length, 8);
+  assert.equal(t.parts.sticky.round.length, 5, '前の版の 8 色は、先頭の 5 色を引き継ぐ');
   assert.equal(t.parts.sticky.pdf, 'default', '数が合わない並びは、はじめの色に');
   assert.deepEqual(t.parts.bookmark, {color: '#00ff00', shape: 'tag'});
 });
@@ -194,4 +195,13 @@ test('1 か所に 1 枚のシール：動かしたもの（moved）だけ位置�
   });
   assert.deepEqual(t.stickers.map((s) => s.moved ?? false), [true, false, false]);
   assert.equal(t.stickers[0].x, 0.3);
+});
+
+test('回の付箋の色：第 1 回から順に 5 色。6 回目からはまた 1 色目、「その他」（第 0 回）は 1 色目', () => {
+  assert.equal(roundColorIndex(1), 0);
+  assert.equal(roundColorIndex(5), 4);
+  assert.equal(roundColorIndex(6), 0);
+  assert.equal(roundColorIndex(0), 0);
+  assert.equal(normalizeTemplate({parts: {sticky: {round: Array(5).fill('#abcdef')}}}).parts.sticky.round.length, 5);
+  assert.equal(normalizeTemplate({parts: {sticky: {round: Array(15).fill('#abcdef')}}}).parts.sticky.round, 'default', '数が合わない並びは、はじめの色に');
 });
