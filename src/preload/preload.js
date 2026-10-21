@@ -2,7 +2,7 @@
 const {contextBridge, ipcRenderer, webFrame} = require('electron');
 
 const INVOKE = [
-  'state.get', 'setup.detect', 'setup.createConnection', 'setup.excludeCourses', 'connection.login', 'connection.savePassword', 'connection.forgetPassword', 'connection.remove',
+  'state.get', 'setup.detect', 'setup.createConnection', 'setup.excludeCourses', 'connection.login', 'connection.update', 'connection.savePassword', 'connection.forgetPassword', 'connection.remove',
   'term.save', 'courses.list', 'course.update', 'sync.run', 'material.open', 'material.reveal', 'material.move', 'material.upload', 'material.uploadData', 'material.remove', 'folder.create', 'folder.scan', 'folder.reveal', 'folder.update', 'folder.renameSub', 'folder.importCourses', 'round.update',
   'quiz.status', 'quiz.setKey', 'quiz.removeKey', 'quiz.settings', 'quiz.generate', 'quiz.list', 'quiz.questions', 'quiz.answer', 'quiz.review', 'question.update',
   'pdf.open', 'pdf.asset', 'pdf.export', 'pdf.save', 'annotation.save', 'annotation.remove', 'bookmark.save', 'bookmark.remove',

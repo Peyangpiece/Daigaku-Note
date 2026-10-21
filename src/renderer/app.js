@@ -441,6 +441,15 @@ function renameCourse(course, target) {
   if (course.kind === 'folder') return renameAt(target, course.name, (name) => api['folder.update']({courseId: course.id, name}));
   return renameAt(target, course.name, (name) => api['course.update']({courseId: course.id, patch: {name}}));
 }
+// 名前をダブルクリックしても変えられる（そばに ✎ のある名前だけ）
+document.addEventListener('dblclick', (e) => {
+  const target = e.target.closest?.('[data-rename-target]');
+  const btn = target?.closest('[data-rename-box]')?.querySelector('[data-action="rename"]');
+  if (!btn) return;
+  e.preventDefault();
+  window.getSelection()?.removeAllRanges(); // ダブルクリックで選ばれた文字を外す
+  renameFrom(btn);
+});
 function renameFrom(el) {
   const target = el.closest('[data-rename-box]')?.querySelector('[data-rename-target]') ?? el;
   const {what, id, sub, value} = el.dataset;
@@ -449,6 +458,7 @@ function renameFrom(el) {
     if (course) renameCourse(course, target);
   } else if (what === 'round') renameAt(target, value, (title) => api['round.update']({roundId: id, title}));
   else if (what === 'sub') renameAt(target, value, (name) => api['folder.renameSub']({courseId: id, sub, name}));
+  else if (what === 'conn') renameAt(target, value, (label) => api['connection.update']({connectionId: id, label}));
 }
 
 let cardMenu = null;
