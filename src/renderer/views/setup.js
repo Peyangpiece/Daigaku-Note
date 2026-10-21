@@ -3,7 +3,7 @@
 // （Moodle の ID・パスワードと画面操作型のブラウザ窓。学期がまだなければ学期の設定も挟む）
 import {esc, reload, toast} from '../app.js';
 import {termForm, readTermForm} from './term.js';
-import {SCHOOLS} from '../../shared/school.js';
+import {SCHOOLS, isSecondary} from '../../shared/school.js';
 
 const api = window.daigaku;
 const FLOWS = {
@@ -113,7 +113,7 @@ function stepSchool(data, n) {
 }
 function stepTerm(data, n) {
   return `<h2>${n}. 学期の設定</h2>
-    <p class="muted">学期の名前と期間、回数、時限の開始時刻を入れます（あとから 設定 → 学期 で直せます）。</p>
+    <p class="muted">学期の名前と期間${isSecondary(data.settings.school) ? '' : '、回数、時限の開始時刻'}を入れます（あとから 設定 → 学期 で直せます）。</p>
     ${termForm(data, null)}
     <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : ''}<button class="btn btn--primary" id="su-next4">保存して次へ</button></div>`;
 }

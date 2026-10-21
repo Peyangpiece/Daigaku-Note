@@ -1,6 +1,6 @@
 // 設定（SPEC §12.2）。学期・授業・保存先・クイズ・見た目、下に LMS との連携（任意）と同期。変更はすぐ保存する。
 import {esc, reload, toast} from '../app.js';
-import {SCHOOLS} from '../../shared/school.js';
+import {SCHOOLS, isSecondary} from '../../shared/school.js';
 
 const api = window.daigaku;
 const KIND_LABEL = {api: 'API で読む', recipe: '画面を読む', generic: '汎用の読み取り', manual: '手動で取り込む'};
@@ -100,7 +100,7 @@ export function renderSettings({data}, route = '/settings') {
         </div>
       </section>
       <section class="card"><h3>学期</h3>
-        ${data.terms.length ? `<ul style="padding-left: 1.2em">${data.terms.map((t) => `<li>${t.year} ${esc(t.label)} <span class="muted">${esc(t.start_date)}〜${esc(t.end_date)}・${t.rounds} 回${t.periods_json ? '・時限あり' : '・時限未設定'}</span></li>`).join('')}</ul>` : '<p class="muted">学期の設定がありません。</p>'}
+        ${data.terms.length ? `<ul style="padding-left: 1.2em">${data.terms.map((t) => `<li>${t.year} ${esc(t.label)} <span class="muted">${esc(t.start_date)}〜${esc(t.end_date)}${isSecondary(s.school) ? '' : `・${t.rounds} 回${t.periods_json ? '・時限あり' : '・時限未設定'}`}</span></li>`).join('')}</ul>` : '<p class="muted">学期の設定がありません。</p>'}
         <button class="btn" data-action="nav" data-route="/settings/term">${data.terms.length ? '学期を編集・追加' : '学期を設定'}</button>
       </section>
       <section class="card"><h3>保存先</h3>

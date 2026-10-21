@@ -1,6 +1,6 @@
 // 学期の設定（SPEC §6.14・§12.2）。セットアップの手順 4 と、設定 → 学期 の編集画面で同じ入力欄を使う。
 import {esc, navigate, reload, toast} from '../app.js';
-import {presetFor, roundsFor, termLabelFor, termLabelsFor} from '../../shared/school.js';
+import {isSecondary, roundsFor, termLabelFor, termLabelsFor} from '../../shared/school.js';
 
 const api = window.daigaku;
 let editingId; // undefined = いちばん新しい学期、null = 新しい学期を追加
@@ -28,29 +28,30 @@ export function termForm(data, term) {
   const labels = termLabelsFor(school);
   const LABELS = labels.includes(label) ? labels : [label, ...labels];
   const rounds = term?.rounds ?? roundsFor(school, label);
-  const preset = term ? '' : presetFor(school);
-  const three = labels.includes('1学期');
-  return `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
+  // 高校・中学は回数と時限を尋ねない（回数は学期名から決め、時限は決めない）
+  const secondary = isSecondary(school);
+  return `<div data-term-school="${esc(school)}" style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
       <label>年度<input class="input" id="tm-year" type="number" value="${esc(year)}"></label>
       <label>学期<select class="input" id="tm-label">${LABELS.map((l) => `<option ${l === label ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>開始日<input class="input" id="tm-start" type="date" value="${esc(term?.start_date ?? '')}"></label>
       <label>終了日<input class="input" id="tm-end" type="date" value="${esc(term?.end_date ?? '')}"></label>
-      <label>回数<select class="input" id="tm-rounds">${[15, 14, 10, 8, 7].map((n) => `<option ${n === rounds ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-      <label>時限の開始時刻<select class="input" id="tm-preset"><option value="">${term?.periods_json ? '（いまの設定のまま）' : '（あとで設定）'}</option>${(data.presets ?? []).map((p) => `<option ${p === preset ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
+      ${secondary ? '' : `<label>回数<select class="input" id="tm-rounds">${[15, 14, 10, 8, 7].map((n) => `<option ${n === rounds ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label>時限の開始時刻<select class="input" id="tm-preset"><option value="">${term?.periods_json ? '（いまの設定のまま）' : '（あとで設定）'}</option>${(data.presets ?? []).map((p) => `<option>${esc(p)}</option>`).join('')}</select></label>`}
     </div>
-    <p class="muted">開始日・終了日を空にすると、学期名から決まります（${three ? THIRDS : HALVES}）。</p>`;
+    <p class="muted">開始日・終了日を空にすると、学期名から決まります（${secondary ? THIRDS : HALVES}）。</p>`;
 }
 
 /** 入力欄から term.save に渡す値。時限と休みの日は、選び直さなければいまの設定を引き継ぐ */
 export function readTermForm(term) {
   const $ = (id) => document.getElementById(id);
-  const preset = $('tm-preset').value;
+  const preset = $('tm-preset')?.value ?? '';
+  const school = document.querySelector('[data-term-school]')?.dataset.termSchool;
   return {
     year: Number($('tm-year').value),
     label: $('tm-label').value,
     start: $('tm-start').value,
     end: $('tm-end').value,
-    rounds: Number($('tm-rounds').value),
+    rounds: $('tm-rounds') ? Number($('tm-rounds').value) : roundsFor(school, $('tm-label').value),
     preset,
     periods: !preset && term?.periods_json ? JSON.parse(term.periods_json) : undefined,
     holidays: term?.holidays_json ? JSON.parse(term.holidays_json) : []
