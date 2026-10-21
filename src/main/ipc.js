@@ -9,6 +9,7 @@ import {courseFolderName} from '../shared/naming.js';
 import {currentTerm, defaultTermDates, termFolder, termId} from '../shared/term.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
 import {cleanUses, isRole} from '../shared/profile.js';
+import {LMS_TERMS_VERSION} from '../shared/lms-terms.js';
 import {createRequire} from 'node:module';
 import {isOpenable, sha256} from './sync/files.js';
 import {renameCourse} from './folders.js';
@@ -83,6 +84,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         role: repo.getSetting('profile.role', null), // 使う人（profile.js の ROLES）。まだ選んでいなければ null
         uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）
         university: repo.getSetting('profile.university', ''),
+        lmsTerms: repo.getSetting('lms.terms', null), // 大学サービスとの連携の利用規約に同意した版と日時
         openAtLogin: loginItem()
       },
       skin: {
@@ -119,6 +121,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   handle('setup.createConnection', ({connectorId, kind, baseUrl, label}) => {
     const cid = str(connectorId, 32) ?? bad('コネクタが不正です');
     if (!['api', 'recipe', 'generic', 'manual'].includes(kind)) bad('接続の種類が不正です');
+    // 大学サービスとつなぐのは、いまの版の利用規約に同意してから
+    if (kind !== 'manual' && repo.getSetting('lms.terms', null)?.version !== LMS_TERMS_VERSION) bad('先に利用規約に同意してください');
     const base = kind === 'manual' ? null : httpsUrl(baseUrl) ?? bad('URL が不正です');
     const recipe = registry.recipes.find((r) => r.id === cid);
     // 同じ LMS への接続がもうあれば、それを使う（作り直すと授業が 2 つずつできてしまう）
@@ -701,6 +705,15 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     const scanned = await folders.scan(course.id);
     return {courseId: course.id, ...scanned};
   });
+  // パソコンの授業フォルダを取り込む（中のフォルダを 1 つずつ今学期のフォルダとして登録。コピーしない）
+  handle('folder.importCourses', async () => {
+    const win = getWindow();
+    const opts = {title: '授業ごとのフォルダが入っているフォルダ', properties: ['openDirectory']};
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    if (r.canceled || !r.filePaths.length) return {canceled: true};
+    const out = await folders.importCourses(r.filePaths[0]);
+    return {added: out.added.map((c) => c.name), failed: out.failed};
+  });
   handle('folder.scan', async ({courseId}) => folders.scan(id(courseId) ?? bad('フォルダが不正です')));
   // 自分のフォルダの中の下のフォルダ（付箋 1 枚）の名前を変える：パソコンのフォルダの名前を変えて、読み直す（中身の記録は SHA-256 で付いていく）
   handle('folder.renameSub', async ({courseId, sub, name}) => {
@@ -744,6 +757,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       repo.setSetting('profile.role', patch.role);
       repo.setSetting('profile.uses', cleanUses(patch.role, patch.uses ?? repo.getSetting('profile.uses', [])));
     } else if (patch.uses !== undefined) repo.setSetting('profile.uses', cleanUses(repo.getSetting('profile.role', null), patch.uses));
+    if (patch.acceptLmsTerms === LMS_TERMS_VERSION) repo.setSetting('lms.terms', {version: LMS_TERMS_VERSION, at: new Date().toISOString()});
     if (typeof patch.university === 'string') repo.setSetting('profile.university', patch.university.trim().slice(0, 60));
     // 「付箋を追加」の色：付箋の 5 色の何番目か（0〜4）。null で元の白に戻す
     if (patch.ownColor && typeof patch.ownColor === 'object') {

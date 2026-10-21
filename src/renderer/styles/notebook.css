@@ -1002,6 +1002,46 @@ h2[tabindex='-1']:focus {
 .use-pick__item[aria-pressed='true'] strong::before {
   content: '☑ ';
 }
+.use-pick--one .use-pick__item strong::before {
+  content: '○ ';
+}
+.use-pick--one .use-pick__item[aria-checked='true'] {
+  border-color: currentColor;
+  background: color-mix(in srgb, var(--c1) 30%, var(--card));
+}
+.use-pick--one .use-pick__item[aria-checked='true'] strong::before {
+  content: '● ';
+}
+/* 大学サービスとの連携の注意書きと利用規約（規約は枠の中で読む） */
+.lms-notice {
+  max-width: none;
+  --sticky-angle: -0.5deg;
+}
+.lms-notice ul {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+}
+.lms-terms {
+  max-height: 280px;
+  overflow: auto;
+  margin: var(--space-2) 0;
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 20%, transparent);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: var(--fs-small);
+}
+.lms-terms h3 {
+  margin-top: 0;
+}
+.lms-terms li p {
+  margin: 2px 0 8px;
+}
+.lms-terms__agree {
+  display: block;
+  margin: var(--space-2) 0;
+  font-weight: 700;
+}
 .role-pick__item {
   padding: var(--space-3) var(--space-2);
   border: 2px solid color-mix(in srgb, var(--paper-ink) 20%, transparent);
