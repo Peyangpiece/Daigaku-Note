@@ -1732,6 +1732,8 @@ textarea.input {
   margin-bottom: 4px;
 }
 .round-note--folder {
+  /* 自分のフォルダの付箋は、回の付箋の 1 色目（授業ページの第 1 回と同じ色） */
+  --note-bg: color-mix(in srgb, var(--note-color) 55%, var(--note-mix, #fff));
   margin-top: var(--space-2);
 }
 .folder-page__sub {
