@@ -35,7 +35,18 @@ export const FILE_KINDS = ['pdf', 'slide', 'doc', 'sheet', 'image', 'video', 'au
 export const FILE_KIND_LABEL = {pdf: 'PDF', slide: 'スライド', doc: '文書', sheet: '表', image: '画像', video: '動画', audio: '音声', zip: '圧縮', other: 'その他'};
 export const BOOKMARK_SHAPES = ['tag', 'ribbon', 'round'];
 export const BOOKMARK_SHAPE_LABEL = {tag: 'タグ', ribbon: 'リボン（切れ込み）', round: '丸'};
-export const ROUND_COLORS = 8; // 回の付箋の色の並び（第 1 回から順に。9 回目からはまた 1 色目）
+export const ROUND_COLORS = 5; // 回の付箋の色の並び（曜日ごと：月〜金）
+export const ROUND_WEEKDAYS = ['月', '火', '水', '木', '金'];
+/** 回の付箋の色の番号（0〜4）：回の日付の曜日。日付がない・土日なら授業の曜日、それもなければ 0（月の色） */
+export function roundColorIndex(date, weekday = null) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date ?? '');
+  if (m) {
+    const dow = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay(); // 0 が日曜
+    if (dow >= 1 && dow <= 5) return dow - 1;
+  }
+  const i = ROUND_WEEKDAYS.indexOf(weekday);
+  return i >= 0 ? i : 0;
+}
 export const PDF_NOTE_COLORS = 6; // PDF に貼る付箋の色の候補
 export const SHAPES = ['cut', 'square', 'round', 'circle', 'framed'];
 export const SHAPE_LABEL = {cut: '形どおり', square: 'そのまま', round: '角丸', circle: '丸', framed: '白いふち付き'};
@@ -104,7 +115,8 @@ export function normalizeParts(raw = {}) {
     tape: tape(t),
     file: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.file?.[k], 'default')])),
     fileArt: fileArtParts(raw.fileArt),
-    sticky: {round: colorList(raw.sticky?.round, ROUND_COLORS), pdf: colorList(raw.sticky?.pdf, PDF_NOTE_COLORS)},
+    // 前の版の 8 色の並び（第 1 回から順に）は、先頭の 5 色を月〜金の色として引き継ぐ
+    sticky: {round: colorList(Array.isArray(raw.sticky?.round) && raw.sticky.round.length === 8 ? raw.sticky.round.slice(0, ROUND_COLORS) : raw.sticky?.round, ROUND_COLORS), pdf: colorList(raw.sticky?.pdf, PDF_NOTE_COLORS)},
     bookmark: {color: color(raw.bookmark?.color, 'default'), shape: oneOf(raw.bookmark?.shape, BOOKMARK_SHAPES, 'tag')}
   };
 }
