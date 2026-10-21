@@ -12,7 +12,7 @@ export const NOTE_GAP_LABEL = {narrow: '狭い', normal: 'ふつう', wide: '広
 export const TAPE_PATTERNS = ['plain', 'stripe', 'dot', 'check', 'image'];
 export const TAPE_PATTERN_LABEL = {plain: '無地', stripe: 'ストライプ', dot: 'ドット', check: 'チェック', image: '画像', course: '授業ごと'};
 export const LICENSES = ['personal', 'share', 'remix'];
-export const LICENSE_LABEL = {personal: '自分で使うだけ', share: 'そのまま配ってよい', remix: '改変して配ってよい'};
+export const LICENSE_LABEL = {personal: '配らない（自分だけで使う）', share: 'そのまま配ってよい', remix: '手を加えて配ってよい'};
 export const STICKER_MODES = ['global', 'course', 'both'];
 // シールを貼れる場所（SPEC-KISEKAE §5）。home（ホームの余白）は全体のテンプレートだけから貼る。
 // round（回の付箋の角）・file（資料のイラスト。種類 kind ごと）・bookmark（しおりのリボンの先）は 1 枚ずつで、貼る位置は決まっている
@@ -34,7 +34,7 @@ export const placeMax = (place) => (FIXED_PLACES.includes(place) ? 1 : STICKERS_
 export const FILE_KINDS = ['pdf', 'slide', 'doc', 'sheet', 'image', 'video', 'audio', 'zip', 'other'];
 export const FILE_KIND_LABEL = {pdf: 'PDF', slide: 'スライド', doc: '文書', sheet: '表', image: '画像', video: '動画', audio: '音声', zip: '圧縮', other: 'その他'};
 export const BOOKMARK_SHAPES = ['tag', 'ribbon', 'round'];
-export const BOOKMARK_SHAPE_LABEL = {tag: 'タグ', ribbon: 'リボン（切れ込み）', round: '丸'};
+export const BOOKMARK_SHAPE_LABEL = {tag: 'タグ', ribbon: 'リボン', round: '丸'};
 export const ROUND_COLORS = 5; // 回の付箋の色の並び（第 1 回から順に。6 回目からはまた 1 色目）
 // 回の付箋のはじめの色（tokens.css の --pop1〜5 と同じ）
 export const ROUND_DEFAULTS = ['#ffe14d', '#ff9ec4', '#6fe3b8', '#7cccff', '#ffad5c'];

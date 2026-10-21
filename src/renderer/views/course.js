@@ -1,6 +1,6 @@
 // 授業画面（SPEC §8.2）：回ごとの付箋に、資料がイラスト付きの紙で貼ってある。
 // 自分のファイルは「自分の付箋」に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
-import {esc, jaWrap, progressText, state} from '../app.js';
+import {canRename, esc, jaWrap, progressText, state} from '../app.js';
 import {extOf, fileArt, kindOf} from './file-art.js';
 import {bookmarkLook, fixedSticker, skinOf, stickerLayer} from '../skin.js';
 import {roundColorIndex} from '../../shared/skin.js';
@@ -189,9 +189,10 @@ function roundNote(round, list, course, today, quizzes = {}, places = []) {
   const noteColor = sk.sticky.round === 'default' ? `var(--pop${i + 1})` : sk.sticky.round[i];
   return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: ${noteColor}" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}">
     ${fixedSticker(sk.stickers.find((st) => st.place === 'round'), state.data, {x: 0.95, y: 0.04, base: 44})}
-    <header class="round-note__head">
+    <header class="round-note__head" data-rename-box>
       <span class="round-note__round">${esc(head)}</span>
-      <span class="round-note__title">${esc(title)}</span>
+      <span class="round-note__title" data-rename-target>${esc(title)}</span>
+      <button type="button" class="rename-btn" data-action="rename" data-what="round" data-id="${esc(round.id)}" data-value="${esc(title)}" title="付箋の名前を変える" aria-label="${esc(head)}の名前を変える">✎</button>
       ${isToday ? '<span class="round-note__today">今日</span>' : ''}
       <span class="round-note__date">${esc(fmtDate(round.date))}</span>
     </header>
@@ -245,7 +246,7 @@ export function renderCourse({data, progress}, courseId) {
     <nav class="page-nav page-nav--stickers">
       ${stickerLayer(skinOf(data, course).stickers, 'heading', data)}
       <button class="btn" data-action="nav" data-route="/">← ホーム</button>
-      <h2 class="ja-wrap">${jaWrap(course.name)} <span class="muted">${esc(slot)}</span></h2>
+      <h2 class="ja-wrap" data-rename-box><span data-rename-target>${jaWrap(course.name)}</span>${canRename(course) ? ` <button type="button" class="rename-btn" data-action="rename" data-what="course" data-id="${esc(course.id)}" title="名前を変える" aria-label="授業の名前を変える">✎</button>` : ''} <span class="muted">${esc(slot)}</span></h2>
     </nav>
     <div class="course-actions">
       <button class="btn btn--primary" data-action="sync" data-course-id="${esc(courseId)}" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : 'この授業を同期'}</button>

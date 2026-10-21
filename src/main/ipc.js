@@ -273,7 +273,20 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     }
     if (patch.font && typeof patch.font === 'object') allowed.font_json = JSON.stringify(patch.font);
     if (patch.quiz && typeof patch.quiz === 'object') allowed.quiz_json = JSON.stringify(patch.quiz);
+    // 名前を変えられるのは、LMS を使わない授業（手動でつくった授業）だけ。LMS の授業名は同期で LMS に合わせる
+    if (patch.name !== undefined) {
+      const conn = repo.get('connection', repo.get('course', cid)?.connection_id);
+      if (conn?.kind !== 'manual') bad('LMS の授業の名前は変えられません');
+      allowed.name = (str(patch.name, 200) ?? '').trim().slice(0, 80) || bad('名前を入れてください');
+    }
     return {course: repo.updateCourse(cid, allowed)};
+  });
+
+  // 回の名前（付箋の題）：自分で変える。空なら LMS の題に戻す
+  handle('round.update', ({roundId, title}) => {
+    const rid = id(roundId) ?? bad('回が不正です');
+    if (!repo.get('round', rid)) bad('回がありません');
+    return {round: repo.updateRound(rid, {title_user: (str(title, 200) ?? '').trim().slice(0, 80) || null})};
   });
 
   // ---- 着せ替え（SPEC-KISEKAE.md）：テンプレートは値だけを持つ。保存のたびに normalizeTemplate を通す ----
@@ -682,6 +695,20 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return {courseId: course.id, ...scanned};
   });
   handle('folder.scan', async ({courseId}) => folders.scan(id(courseId) ?? bad('フォルダが不正です')));
+  // 自分のフォルダの中の下のフォルダ（付箋 1 枚）の名前を変える：パソコンのフォルダの名前を変えて、読み直す（中身の記録は SHA-256 で付いていく）
+  handle('folder.renameSub', async ({courseId, sub, name}) => {
+    const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
+    const to = (str(name, 200) ?? '').trim();
+    if (!to || to.length > 80 || /[\\/:*?"<>|]/.test(to) || to === '.' || to === '..') bad('フォルダの名前に使えない文字があります');
+    const rel = str(sub, 1000) ?? bad('フォルダが不正です');
+    const from = path.resolve(c.dir, rel);
+    if (!from.startsWith(path.resolve(c.dir) + path.sep)) bad('フォルダが不正です');
+    const dest = path.join(path.dirname(from), to);
+    if (dest === from) return {ok: true};
+    if (await fsp.stat(dest).catch(() => null)) bad(`「${to}」はもうあります`);
+    await fsp.rename(from, dest);
+    return {ok: true, ...(await folders.scan(c.id))};
+  });
   handle('folder.reveal', async ({courseId}) => {
     const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
     const e = await shell.openPath(c.dir);

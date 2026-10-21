@@ -2106,27 +2106,48 @@ textarea.input {
 .ks-card:not(:hover, :focus-within, .is-current) .ks-card__tools {
   opacity: 0;
 }
-.ks-mine {
-  display: grid;
+/* 着せ替えページ：上に題と「使う授業」、マイノート（＋ 新しく作る）、おすすめ */
+.ks-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
 }
-.ks-mine > h3,
-.ks-mine > p {
+.ks-head h2,
+.ks-lead {
   margin: 0;
 }
-.ks-mine__empty {
-  padding: var(--space-2);
-  border: 1.5px dashed color-mix(in srgb, var(--paper-ink) 25%, transparent);
-  border-radius: var(--radius);
+.ks-sechead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
 }
-.ks-tolab {
+.ks-sechead h3 {
+  margin: 0;
+}
+.ks-card__new {
   display: grid;
-  justify-items: start;
-  gap: 6px;
-  margin-top: var(--space-1);
+  place-content: center;
+  justify-items: center;
+  min-height: 186px;
+  border: 2px dashed color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
 }
-.ks-tolab > * {
-  margin: 0;
+.ks-card__new:hover {
+  border-color: var(--paper-ink);
+}
+.ks-card__plus {
+  font-size: 40px;
+  line-height: 1;
+}
+.ks-hint2 {
+  margin: 0 0 6px;
+  font-size: var(--fs-small);
 }
 .kisekae--edit {
   max-width: 1280px;
@@ -3082,4 +3103,36 @@ textarea.input {
 }
 .ks-stage .ks-place .ks-st {
   pointer-events: auto;
+}
+
+/* 名前を変える：✎ は乗せたときに出す。押すと名前の上に入力欄を重ねる */
+.rename-btn {
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--paper-ink-weak);
+  font-size: 0.85em;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--motion, 0.15s);
+}
+[data-rename-box]:hover .rename-btn,
+.rename-btn:focus-visible {
+  opacity: 1;
+}
+.rename-btn:hover {
+  background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
+  color: var(--paper-ink);
+}
+.rename-pop {
+  position: fixed;
+  z-index: 100;
+  transform: translateY(-50%);
+  padding: 2px 6px;
+  border: 2px solid var(--paper-ink);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow-hover);
 }
