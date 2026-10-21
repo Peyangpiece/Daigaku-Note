@@ -256,7 +256,8 @@ function stickerControls(data) {
     <label class="ks-range">傾き<input type="range" min="-180" max="180" step="1" value="${sel.rotate}" data-ks-range="rotate" /><output>${sel.rotate}°</output></label>
     ${isBuiltinSticker(sel.asset) ? '' : `<label class="ks-field">形<select class="input" data-ks-shape="${sel.asset}">${SHAPES.map((x) => `<option value="${x}" ${shape === x ? 'selected' : ''}>${SHAPE_LABEL[x]}</option>`).join('')}</select></label>`}
     <div class="actions">
-      ${FIXED_PLACES.includes(sel.place) ? '' : '<button type="button" class="btn btn--small" data-ks="z" data-dir="1">前へ</button><button type="button" class="btn btn--small" data-ks="z" data-dir="-1">後ろへ</button><button type="button" class="btn btn--small" data-ks="straight">まっすぐに</button>'}
+      ${FIXED_PLACES.includes(sel.place) ? (sel.moved ? '<button type="button" class="btn btn--small" data-ks="unmove">元の位置に</button>' : '') : '<button type="button" class="btn btn--small" data-ks="z" data-dir="1">前へ</button><button type="button" class="btn btn--small" data-ks="z" data-dir="-1">後ろへ</button>'}
+      <button type="button" class="btn btn--small" data-ks="straight">まっすぐに</button>
       <button type="button" class="btn btn--small btn--danger" data-ks="peel">はがす</button>
     </div>
     ${mode}`;
@@ -335,8 +336,8 @@ function stageSticker(data, st, {base, fixed = null}) {
   const url = stickerUrl(st.asset);
   if (!url) return '';
   const shape = shapesOf(data)[st.asset] ?? 'cut';
-  const x = fixed ? fixed.x : st.x,
-    y = fixed ? fixed.y : st.y;
+  const x = fixed && !st.moved ? fixed.x : st.x,
+    y = fixed && !st.moved ? fixed.y : st.y;
   const mine = st.index != null;
   const sel = mine && ui.selected === st.index;
   const style = `left: ${(x * 100).toFixed(2)}%; top: ${(y * 100).toFixed(2)}%; width: ${Math.round(base * st.scale)}px; transform: translate(-50%, -50%) rotate(${st.rotate}deg); z-index: ${sel ? 50 : st.z}`;
@@ -346,7 +347,7 @@ function stageSticker(data, st, {base, fixed = null}) {
        <button type="button" class="ks-h ks-h--del" data-h="del" title="はがす（Delete）" aria-label="はがす">×</button>
        ${fixed ? '' : '<button type="button" class="ks-h ks-h--dup" data-h="dup" title="もう 1 枚貼る" aria-label="複製">＋</button>'}`
     : '';
-  return `<span class="ks-st${sel ? ' is-selected' : ''}${mine ? '' : ' is-locked'}"${mine ? ` data-sticker-index="${st.index}"` : ''}${fixed ? ' data-fixed' : ''} data-base="${base}" style="${style}" title="${mine ? (fixed ? '押して選ぶ' : 'ドラッグで動かす・押して選ぶ') : '全体のシール（ここでは動かせません）'}">
+  return `<span class="ks-st${sel ? ' is-selected' : ''}${mine ? '' : ' is-locked'}"${mine ? ` data-sticker-index="${st.index}"` : ''}${fixed ? ' data-fixed' : ''} data-base="${base}" style="${style}" title="${mine ? 'ドラッグで動かす・押して選ぶ' : '全体のシール（ここでは動かせません）'}">
     <img class="sticker sticker--${shape}" src="${url}" alt="" draggable="false" />${handles}</span>`;
 }
 const stageLayer = (data, stickers, place) =>
@@ -754,6 +755,9 @@ document.addEventListener('click', async (e) => {
       if (ks === 'art-reset') Object.assign(a, {dx: 0, dy: 0});
       else a.on = ks === 'art-show';
       if (ks === 'art-hide' && ui.art === el.dataset.artItem) ui.art = null;
+    } else if (ks === 'unmove' && ui.selected != null) {
+      remember();
+      delete ui.draft.stickers[ui.selected].moved;
     } else if (ks === 'straight' && ui.selected != null) {
       remember();
       ui.draft.stickers[ui.selected].rotate = 0;
@@ -943,11 +947,17 @@ document.addEventListener('pointerdown', (e) => {
     const r = st.getBoundingClientRect();
     const cx = r.left + r.width / 2,
       cy = r.top + r.height / 2;
+    const box0 = st.closest('.folder')?.getBoundingClientRect() ?? box;
     grip = {
       i,
       el: st,
-      mode: h ?? (st.hasAttribute('data-fixed') ? 'none' : 'move'),
-      box: st.closest('.folder') ? st.closest('.folder').getBoundingClientRect() : box,
+      mode: h ?? 'move',
+      // 掴んだ所とシールの中心のずれ（掴み直しても跳ばないように）
+      sx: (cx - box0.left) / box0.width,
+      sy: (cy - box0.top) / box0.height,
+      x0: e.clientX,
+      y0: e.clientY,
+      box: box0,
       cx,
       cy,
       dist: Math.hypot(e.clientX - cx, e.clientY - cy) || 1,
@@ -997,8 +1007,9 @@ document.addEventListener('pointermove', (e) => {
   if (!grip.moved) remember();
   grip.moved = true;
   if (grip.mode === 'move') {
-    s.x = clamp01((e.clientX - grip.box.left) / grip.box.width);
-    s.y = clamp01((e.clientY - grip.box.top) / grip.box.height);
+    s.x = clamp01(grip.sx + (e.clientX - grip.x0) / grip.box.width);
+    s.y = clamp01(grip.sy + (e.clientY - grip.y0) / grip.box.height);
+    if (FIXED_PLACES.includes(s.place)) s.moved = true;
     grip.el.style.left = `${(s.x * 100).toFixed(2)}%`;
     grip.el.style.top = `${(s.y * 100).toFixed(2)}%`;
   } else if (grip.mode === 'scale') {
@@ -1076,9 +1087,11 @@ document.addEventListener('keydown', (e) => {
   }
   const step = e.shiftKey ? 0.05 : 0.01;
   const move = {ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step]}[e.key];
-  if (move && !FIXED_PLACES.includes(s.place)) {
+  if (move) {
     e.preventDefault();
     remember();
+    if (FIXED_PLACES.includes(s.place) && !s.moved) Object.assign(s, {x: FIXED_AT[s.place].x, y: FIXED_AT[s.place].y, moved: true});
+    else if (FIXED_PLACES.includes(s.place)) s.moved = true;
     s.x = clamp01(s.x + move[0]);
     s.y = clamp01(s.y + move[1]);
     refresh();
