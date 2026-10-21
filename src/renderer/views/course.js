@@ -231,6 +231,9 @@ export function renderCourse({data, progress}, courseId) {
   const shown = rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length);
   // 今週の回を左上に。前の回は「これまでの回」として第 1 回から順に後ろへ
   const order = orderRounds(shown, today);
+  // 同期できるのは LMS の接続がある授業だけ（LMS を使わない授業・接続を削除した授業には同期のボタンを出さない）
+  const conn = data.connections.find((c) => c.id === course.connection_id);
+  const syncable = !!conn && conn.kind !== 'manual';
   const syncing = !!progress || (data.jobs ?? []).some((j) => j.kind === 'sync');
   const running = (data.jobs ?? []).some((j) => j.kind === 'sync' && j.status === 'running');
   const quizzes = data.quizzes?.[courseId] ?? [];
@@ -264,8 +267,12 @@ export function renderCourse({data, progress}, courseId) {
       <h2 class="ja-wrap" data-rename-box><span data-rename-target>${jaWrap(course.name)}</span>${canRename(course) ? ` <button type="button" class="rename-btn" data-action="rename" data-what="course" data-id="${esc(course.id)}" title="名前を変える" aria-label="授業の名前を変える">✎</button>` : ''} <span class="muted">${esc(slot)}</span></h2>
     </nav>
     <div class="course-actions">
-      <button class="btn btn--primary" data-action="sync" data-course-id="${esc(courseId)}" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : 'この授業を同期'}</button>
-      <button class="btn btn--quiet" data-action="sync" data-course-id="${esc(courseId)}" data-full="1" ${syncing ? 'disabled' : ''} title="ふだんの同期は今日の前後 7 日の回だけを見ます。前の回の資料が足りないときに押してください（数分かかります）">過去の回も全部確かめる</button>
+      ${
+        syncable
+          ? `<button class="btn btn--primary" data-action="sync" data-course-id="${esc(courseId)}" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : 'この授業を同期'}</button>
+      <button class="btn btn--quiet" data-action="sync" data-course-id="${esc(courseId)}" data-full="1" ${syncing ? 'disabled' : ''} title="ふだんの同期は今日の前後 7 日の回だけを見ます。前の回の資料が足りないときに押してください（数分かかります）">過去の回も全部確かめる</button>`
+          : ''
+      }
       ${course.lms_url ? `<button class="btn btn--quiet" data-action="open-external" data-url="${esc(course.lms_url)}">LMS で開く</button>` : ''}
       ${quizInfo.hasKey || quizzes.length || !features(data.settings).quiz ? '' : '<button class="btn btn--quiet" data-action="nav" data-route="/settings?focus=quiz" title="資料から復習のクイズを作れます（自分の Claude API キーが要ります）">クイズを使う…</button>'}
       <span class="muted" id="sync-status" role="status">${esc(status)}</span>
@@ -277,5 +284,5 @@ export function renderCourse({data, progress}, courseId) {
       ${order.other.map(note).join('')}
       ${ownNote(course, own, places)}
     </div>
-    ${shown.length ? '' : `<div class="empty"><p>まだ回がありません。同期すると、回ごとの付箋がここに並びます。</p></div>`}`;
+    ${shown.length ? '' : `<div class="empty"><p>${syncable ? 'まだ回がありません。同期すると、回ごとの付箋がここに並びます。' : 'ファイルは「付箋を追加」へドラッグするか、「ファイルを追加…」で入れます。'}</p></div>`}`;
 }

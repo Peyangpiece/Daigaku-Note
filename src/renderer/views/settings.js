@@ -149,7 +149,7 @@ export function renderSettings({data}, route = '/settings') {
       <h3 class="settings__group">LMS</h3>
       <div class="settings__grid">
       <section class="card" id="st-lms"><h3>LMS との連携</h3>
-        <p class="muted">つなぐと授業の資料を自動で集めます（Moodle・manaba・WebClass・manabo など）。</p>
+        <p class="muted">つなぐと授業の資料を自動で集めます（いま使えるのは Moodle と manabo（試験中））。</p>
         ${
           lmsConns.length
             ? `<ul style="padding-left: 1.2em">${lmsConns
@@ -283,7 +283,9 @@ function bind() {
   document.querySelectorAll('[data-remove-conn]').forEach((b) =>
     b.addEventListener('click', async () => {
       if (!confirm('この接続を削除しますか？ 授業・資料・注釈は残ります。')) return;
-      await api['connection.remove']({connectionId: b.dataset.removeConn});
+      const r = await api['connection.remove']({connectionId: b.dataset.removeConn});
+      if (r?.error) toast(r.error, {error: true});
+      else toast('接続を削除しました');
       reload();
     })
   );

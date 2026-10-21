@@ -71,7 +71,7 @@ export function createRegistry({fetch: fetchImpl, secrets, log, recipes = loadRe
         if (score > 0) out.push({connectorId: r.id, kind: 'recipe', name: r.name, score});
       }
       out.sort((a, b) => b.score - a.score);
-      out.push({connectorId: 'generic', kind: 'generic', name: '汎用（授業ページの URL を登録）', score: 0});
+      // 汎用型（授業ページの URL を登録）はまだ同期できないので、候補に出さない（SPEC §6.9）
       return out;
     }
   };

@@ -401,14 +401,23 @@ export class Repo {
     const t = now();
     return this.insert('job', {id: ulid(), kind, payload_json: JSON.stringify(payload), status: 'pending', tries: 0, created_at: t, updated_at: t});
   }
-  claimJob() {
-    const j = this.db.prepare("SELECT * FROM job WHERE status IN ('pending','waiting') ORDER BY created_at LIMIT 1").get();
+  /**
+   * 次に動かすジョブ。pending はすぐに、waiting（やり直し待ち）は retryDelays[tries - 1] ミリ秒たってから拾う。
+   * waiting をすぐ拾うと、失敗したジョブが待たずに何度も回る（オフラインのあいだずっと）
+   */
+  claimJob({retryDelays = [], at = Date.now()} = {}) {
+    const due = (j) => j.status === 'pending' || (retryDelays[j.tries - 1] != null && Date.parse(j.updated_at) + retryDelays[j.tries - 1] <= at);
+    const j = this.db.prepare("SELECT * FROM job WHERE status IN ('pending','waiting') ORDER BY created_at").all().find(due);
     if (!j) return null;
     this.update('job', j.id, {status: 'running', tries: j.tries + 1, updated_at: now()});
     return {...j, status: 'running', tries: j.tries + 1, payload: JSON.parse(j.payload_json)};
   }
   finishJob(id, status, result = null) {
     this.update('job', id, {status, result_json: result == null ? null : JSON.stringify(result), updated_at: now()});
+  }
+  /** 前に落ちたときに「実行中」のまま残ったジョブを、やり直せるよう pending に戻す（起動のときに呼ぶ） */
+  resetRunningJobs() {
+    return this.db.prepare("UPDATE job SET status = 'pending', updated_at = ? WHERE status = 'running'").run(now()).changes;
   }
   pendingJobs() {
     return this.db.prepare("SELECT * FROM job WHERE status IN ('pending','waiting','running') ORDER BY created_at").all();

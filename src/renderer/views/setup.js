@@ -41,6 +41,7 @@ const blank = () => ({
   university: null,
   materials: null, // 授業の資料の集め方：'folder'（PC の授業フォルダ）・'service'（大学サービスとの連携）・'later'
   imported: null, // 取り込んだ授業フォルダの結果
+  detected: false, // 「種類を判定」を押した（候補がなければ、まだ対応していないと知らせる）
   label: null, // 学習支援サービスの名前（自分で付ける。空なら判定した種類の名前）
   agreed: false // この回のセットアップで利用規約に同意した（同意したあとも手順の番号がずれないよう、規約の手順は残す）
 });
@@ -92,13 +93,13 @@ export function renderSetup({data}) {
 
 function stepUrl(data, n) {
   return `<h2>${n}. LMS の URL を入れる</h2>
-    <p class="muted">大学の LMS（Moodle・manaba・WebClass・manabo など）のトップページの URL を入れて「種類を判定」を押します。LMS をつなぐと、授業の資料を自動で集めます。</p>
+    <p class="muted">大学の LMS のトップページの URL を入れて「種類を判定」を押します。いま使えるのは Moodle と manabo（試験中）です。LMS をつなぐと、授業の資料を自動で集めます。</p>
     <label class="sr-only" for="su-url">LMS の URL</label>
     <input class="input" id="su-url" type="url" placeholder="https://lms.example-u.ac.jp/" value="${esc(draft.url)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)} <span class="muted">${esc(KIND_LABEL[c.kind] ?? c.kind)}${c.score ? ` ・ 確からしさ ${Math.round(c.score * 100)}%` : ''}</span></label>`).join('')}</div>
     ${draft.connectorId ? `<label class="su-label">学習支援サービスの名前<input class="input" id="su-label" maxlength="60" placeholder="例：manaba・〇〇大学 LMS" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
     <div class="actions"><button class="btn" data-action="nav" data-route="/settings">やめる</button><button class="btn" id="su-detect">種類を判定</button><button class="btn btn--primary" id="su-next1" ${draft.connectorId ? '' : 'disabled'}>次へ</button></div>
-    ${draft.connectorId ? '' : '<p class="muted">先に「種類を判定」を押すと「次へ」が押せます。</p>'}`;
+    ${draft.connectorId ? '' : draft.detected ? '<p role="status">この LMS には、まだ対応していません（いま使えるのは Moodle と manabo（試験中）です）。URL がトップページかどうかも確かめてください。</p>' : '<p class="muted">先に「種類を判定」を押すと「次へ」が押せます。</p>'}`;
 }
 function stepLogin(data, n) {
   const body =
@@ -228,6 +229,7 @@ function bind() {
     const top = r.candidates[0];
     draft.connectorId = top?.connectorId ?? null;
     draft.kind = top?.kind ?? null;
+    draft.detected = true;
     reload();
   };
   document.querySelectorAll('[data-role]').forEach(

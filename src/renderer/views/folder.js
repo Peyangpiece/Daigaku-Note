@@ -98,6 +98,6 @@ export function renderFolder({data}, course) {
       ${features(data.settings).terms ? `<button class="btn btn--quiet" data-action="folder-scope" data-course-id="${esc(course.id)}" data-scope="${course.scope === 'always' ? 'term' : 'always'}">${course.scope === 'always' ? '今学期のフォルダにする' : 'マイフォルダにする'}</button>` : ''}
       <button class="btn btn--quiet" data-action="folder-hide" data-course-id="${esc(course.id)}">ホームから外す</button>
     </div>
-    <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です。名前の変更や削除は Finder（Windows はエクスプローラー）で行い、「読み直す」で反映します。</p>
+    <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です。フォルダの名前は ✎ かダブルクリックで変えられます。ファイルの削除は Finder（Windows はエクスプローラー）で行い、「読み直す」で反映します。</p>
     <div class="round-notes round-notes--folder">${notes}</div>`;
 }
