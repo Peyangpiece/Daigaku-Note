@@ -1,5 +1,5 @@
 # Microsoft Store で配る形（MSIX）で大学ノートが動くかを確かめる（公開はしない）。
-# Windows の作業機で MSIX を作り、試験用の自己署名の証明書で署名して入れ、パッケージの中で --self-test を動かす（src/main/self-test.js）。
+# Windows の作業機で MSIX を作り、試験用の自己署名の証明書で署名して入れ、パッケージの中で --self-test を動かす（src/main/self-check.js）。
 # 確かめること：userData・保存先（デスクトップ）への書き込み、SQLite、秘密の暗号化、LMS 用のブラウザ（Chromium）の取り込みと起動。
 # Store に出すときの名前・発行者（publisher）はパートナーセンターで決まるので、ここでは試験用の値を使う
 name: MSIX check
@@ -9,12 +9,12 @@ on:
   pull_request:
     paths:
       - '.github/workflows/msix-check.yml'
-      - 'src/main/self-test.js'
+      - 'src/main/self-check.js'
   push:
     branches: ['claude/**']
     paths:
       - '.github/workflows/msix-check.yml'
-      - 'src/main/self-test.js'
+      - 'src/main/self-check.js'
 
 permissions:
   contents: read

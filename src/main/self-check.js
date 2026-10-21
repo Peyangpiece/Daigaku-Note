@@ -1,3 +1,4 @@
+// ファイル名は self-test.js にしない（node --test が *-test.js をテストとして読み込むため）
 // 配布物の動作確認（Microsoft Store 向けの MSIX など、パッケージの中で動くかを確かめる。.github/workflows/msix-check.yml）。
 // `大学ノート.exe --self-test=<結果の JSON のパス>` で起動すると、窓を開かずに次を順に確かめ、結果を書いて終わる。
 // ふだんのデータには触らない（userData の self-test フォルダと、保存先の下の一時ファイルだけを使う）

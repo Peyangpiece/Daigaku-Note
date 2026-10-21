@@ -22,7 +22,7 @@ import {defaultRoot} from '../shared/paths.js';
 import {createUpdater} from './updater.js';
 import {createFolders} from './folders.js';
 import {createQuizService} from './quiz/service.js';
-import {runSelfTest, selfTestPath} from './self-test.js';
+import {runSelfTest, selfTestPath} from './self-check.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(here, '..', 'renderer', 'index.html');
@@ -52,7 +52,7 @@ function devBuild() {
 }
 const BUILD = devBuild();
 
-// 配布物の動作確認（--self-test=<結果のパス>）。窓は開かず、確かめて終わる（self-test.js）
+// 配布物の動作確認（--self-test=<結果のパス>）。窓は開かず、確かめて終わる（self-check.js）
 const SELF_TEST = selfTestPath();
 
 // 2 つ目の起動はすぐに終わる（app.quit() は非同期で、そのまま起動の処理が進んでデータベースまで開いていた）
