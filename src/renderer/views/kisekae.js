@@ -1,5 +1,6 @@
 // 着せ替えページ（SPEC-KISEKAE.md §3.2）と、フォルダの右クリックから出す選択パネル（§3.3）。
-// 1 段目「おすすめから選ぶ」：押すとすぐ当たる。2 段目「細かく直す」：見本を見ながら直し、自作のテンプレートとして保存する
+// 着せ替えページ（#/kisekae）「おすすめから選ぶ」：押すとすぐ当たる。
+// 細かい編集のページ（#/kisekae/edit）：見本を見ながら直し、自作のテンプレートとして保存する
 import {esc, navigate, refresh, reload, state, toast} from '../app.js';
 import {folderCard} from './home.js';
 import {
@@ -43,8 +44,8 @@ const SAMPLE = [
 ];
 
 // 画面の状態（描き直しても残す）。draft は直している途中のテンプレート（baseId は元のテンプレート）。
-// 対象・細かく直す・名前などは ui が決めるので、描き直しのときに前の値へ戻さない（data-keep="off"）
-const ui = {target: '', part: 'note', scene: 'home', history: [], future: [], fileKind: 'pdf', book: 'all', open: false, draft: null, selected: null, confirm: null, route: null};
+// 対象・名前などは ui が決めるので、描き直しのときに前の値へ戻さない（data-keep="off"）
+const ui = {target: '', part: 'note', scene: 'home', history: [], future: [], fileKind: 'pdf', book: 'all', draft: null, selected: null, confirm: null, route: null};
 
 const courses = (data) => data.courses.filter((c) => !c.hidden);
 const targetCourse = (data) => (ui.target ? (data.courses.find((c) => c.id === ui.target) ?? null) : null);
@@ -65,6 +66,7 @@ function startDraft(data, template, {asNew = false, name = null} = {}) {
   const n = (data.skin?.templates ?? []).length + 1;
   ui.draft = {
     baseId: asNew || isBuiltin(t.id) ? null : t.id,
+    from: t.name,
     name: name ?? (asNew || isBuiltin(t.id) ? `わたしの ${n}` : t.name),
     license: asNew || isBuiltin(t.id) ? 'personal' : t.license,
     parts: structuredClone(t.parts),
@@ -72,7 +74,6 @@ function startDraft(data, template, {asNew = false, name = null} = {}) {
   };
   ui.selected = null;
   ui.confirm = null;
-  ui.open = true;
   ui.history = [];
   ui.future = [];
 }
@@ -456,42 +457,53 @@ function editor(data) {
         <div class="ks-stagewrap" tabindex="0" aria-label="見本。部分を押すと右で変えられます。シールは矢印キーで動かし、Delete ではがせます">${stage(data, {course, first, second, note, skin1, skin2})}</div>
         <p class="muted ks-hint">見本の上の部分を押すと、右でその部分を変えられます。シールは下のシール帳から見本へドラッグして貼り、そのまま動かせます（角の ◢ で大きさ、上の ↻ で傾き）。</p>
         ${tray(data)}
+        <div class="ks-save">
+          <label>名前<input class="input" id="ks-name" data-keep="off" maxlength="40" value="${esc(ui.draft.name)}" /></label>
+          <label>利用条件<select class="input" id="ks-license" data-keep="off">${LICENSES.map((l) => `<option value="${l}" ${ui.draft.license === l ? 'selected' : ''}>${LICENSE_LABEL[l]}</option>`).join('')}</select></label>
+          <button type="button" class="btn btn--primary" data-ks="save">${ui.draft.baseId ? '保存して当てる' : '新しいテンプレートとして保存して当てる'}</button>
+          ${ui.draft.baseId ? '<button type="button" class="btn" data-ks="save-new">別のテンプレートとして保存</button>' : ''}
+          <button type="button" class="btn" data-ks="discard">やめる</button>
+        </div>
+        ${
+          c
+            ? `<div class="ks-confirm sticky" role="alertdialog" aria-labelledby="ks-confirm-text"><p id="ks-confirm-text">このテンプレートは${esc(c.text)}で使っています。保存すると、すべて変わります。</p>
+            <div class="actions"><button type="button" class="btn btn--primary" data-ks="save-confirm">保存</button>${course ? '<button type="button" class="btn" data-ks="save-course">この授業用に複製</button>' : ''}<button type="button" class="btn" data-ks="confirm-cancel">やめる</button></div></div>`
+            : ''
+        }
       </div>
       ${inspector(data)}
-    </div>
-    <div class="ks-save">
-      <label>名前<input class="input" id="ks-name" data-keep="off" maxlength="40" value="${esc(ui.draft.name)}" /></label>
-      <label>利用条件<select class="input" id="ks-license" data-keep="off">${LICENSES.map((l) => `<option value="${l}" ${ui.draft.license === l ? 'selected' : ''}>${LICENSE_LABEL[l]}</option>`).join('')}</select></label>
-      <button type="button" class="btn btn--primary" data-ks="save">${ui.draft.baseId ? '保存して当てる' : '新しいテンプレートとして保存して当てる'}</button>
-      ${ui.draft.baseId ? '<button type="button" class="btn" data-ks="save-new">別のテンプレートとして保存</button>' : ''}
-      <button type="button" class="btn" data-ks="discard">やめる</button>
-    </div>
-    ${
-      c
-        ? `<div class="ks-confirm sticky" role="alertdialog" aria-labelledby="ks-confirm-text"><p id="ks-confirm-text">このテンプレートは${esc(c.text)}で使っています。保存すると、すべて変わります。</p>
-        <div class="actions"><button type="button" class="btn btn--primary" data-ks="save-confirm">保存</button>${course ? '<button type="button" class="btn" data-ks="save-course">この授業用に複製</button>' : ''}<button type="button" class="btn" data-ks="confirm-cancel">やめる</button></div></div>`
-        : ''
-    }`;
+    </div>`;
 }
 
-/** 着せ替えページ。#/kisekae?course=<id>&new=1 で、その授業を対象に「新しく作成」から始める */
+/** ページの行き先。target は授業の id（空ならすべての授業） */
+const query = (params) => {
+  const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v));
+  return q.size ? `?${q}` : '';
+};
+const galleryRoute = () => `/kisekae${query({course: ui.target})}`;
+const editRoute = (extra = {}) => `/kisekae/edit${query({course: ui.target, ...extra})}`;
+
+/** 着せ替えページ（#/kisekae?course=<id>）と、細かい編集のページ（#/kisekae/edit?course=<id>&id=<テンプレート>、new=1 なら新しく作成） */
 export function renderKisekae({data}, route) {
+  const editing = route.split('?')[0] === '/kisekae/edit';
   if (route !== ui.route) {
     ui.route = route;
     const q = new URLSearchParams(route.split('?')[1] ?? '');
     const cid = q.get('course');
     ui.target = cid && data.courses.some((c) => c.id === cid) ? cid : '';
     ui.draft = null;
-    ui.open = false;
-    if (q.get('new') === '1') {
+    if (editing && q.get('new') === '1') {
       const c = targetCourse(data);
       startDraft(data, null, {asNew: true, name: c ? `${c.name} 用` : null});
       ui.part = 'folder';
-    }
+    } else if (editing) startDraft(data, allTemplates(data).find((t) => t.id === q.get('id')) ?? null);
   }
   const course = targetCourse(data);
   if (ui.target && !course) ui.target = '';
-  if (ui.open && !ui.draft) startDraft(data, null);
+  if (editing) {
+    if (!ui.draft) startDraft(data, null);
+    return editPage(data, course);
+  }
   const current = currentId(data);
   const [first] = samples(data, course);
   const templates = allTemplates(data);
@@ -518,10 +530,25 @@ export function renderKisekae({data}, route) {
           ${templates.map((t) => galleryCard(data, t, first, current)).join('')}
         </div>
       </section>
-      <details class="ks-detail" id="ks-detail" data-keep="off" ${ui.open ? 'open' : ''}>
-        <summary>細かく直す</summary>
-        ${ui.open && ui.draft ? editor(data) : ''}
-      </details>
+      <section class="ks-tolab" aria-labelledby="ks-tolab-title">
+        <h3 id="ks-tolab-title">自分で作る</h3>
+        <p class="muted">今の${course ? `「${esc(course.name)}」の` : ''}テンプレートをもとに、紙・フォルダ・テープ・シールなどを見本の上で直せます。</p>
+        <button type="button" class="btn btn--primary" data-ks="open-editor">細かい編集へ →</button>
+      </section>
+    </div>`;
+}
+
+
+/** 細かい編集のページ */
+function editPage(data, course) {
+  return `
+    <div class="kisekae kisekae--edit">
+      <div class="ks-editbar">
+        <button type="button" class="btn" data-ks="back">← 着せ替えへ</button>
+        <h2>細かい編集</h2>
+        <span class="muted">対象：${course ? `「${esc(course.name)}」` : 'すべての授業'}・「${esc(ui.draft.from)}」${ui.draft.baseId ? 'を直しています' : 'をもとに新しく作ります'}</span>
+      </div>
+      ${editor(data)}
     </div>`;
 }
 
@@ -571,8 +598,8 @@ async function save({asNew = false, forCourse = false, confirmed = false} = {}) 
   const a = await api['skin.apply']({courseId: course?.id, templateId: r.template.id, stickerMode: course ? stickerModeFor(course) : undefined});
   if (a?.error) return toast(a.error, {error: true});
   ui.draft = null;
-  ui.open = false;
   ui.confirm = null;
+  navigate(galleryRoute());
   await reload();
   toast(`「${r.template.name}」を保存して当てました`);
 }
@@ -649,11 +676,8 @@ document.addEventListener('click', async (e) => {
       await reload();
       return toast(`「${r.template.name}」を読み込みました（作った人：${r.template.author}・${LICENSE_LABEL[r.template.license]}）`);
     }
-    if (ks === 'edit') {
-      startDraft(data, allTemplates(data).find((t) => t.id === el.dataset.id));
-      refresh();
-      return document.getElementById('ks-detail')?.scrollIntoView({behavior: 'smooth', block: 'start'});
-    }
+    if (ks === 'edit') return navigate(editRoute({id: el.dataset.id}));
+    if (ks === 'open-editor') return navigate(editRoute());
     if (ks === 'dup') {
       const t = allTemplates(data).find((x) => x.id === el.dataset.id);
       const r = await api['skin.save']({template: {...t, id: undefined, name: `${t.name} のコピー`}});
@@ -672,6 +696,11 @@ document.addEventListener('click', async (e) => {
       return toast(`「${t.name}」を消しました`);
     }
     if (!ui.draft) return;
+    if (ks === 'back' || ks === 'discard') {
+      if (ui.history.length && !window.confirm('直した内容は保存されていません。捨てて戻りますか？')) return;
+      ui.draft = null;
+      return navigate(galleryRoute());
+    }
     if (ks === 'part') selectPart(el.dataset.part);
     else if (ks === 'scene') {
       ui.scene = el.dataset.scene;
@@ -728,10 +757,6 @@ document.addEventListener('click', async (e) => {
     else if (ks === 'save-confirm') return await save({confirmed: true});
     else if (ks === 'save-course') return await save({forCourse: true});
     else if (ks === 'confirm-cancel') ui.confirm = null;
-    else if (ks === 'discard') {
-      ui.draft = null;
-      ui.open = false;
-    }
     refresh();
   } catch (err) {
     toast(err.message, {error: true});
@@ -743,10 +768,7 @@ document.addEventListener('change', async (e) => {
   if (!inKisekae(el)) return;
   if (el.id === 'ks-target') {
     ui.target = el.value;
-    ui.draft = null;
-    ui.selected = null;
-    ui.confirm = null;
-    return refresh();
+    return navigate(galleryRoute());
   }
   if (!ui.draft) return;
   if (el.id === 'ks-name') ui.draft.name = el.value;
@@ -1017,15 +1039,6 @@ document.addEventListener('drop', (e) => {
   const r = box.getBoundingClientRect();
   addSticker(sid, box.dataset.dropPlace, [clamp01((e.clientX - r.left) / r.width), clamp01((e.clientY - r.top) / r.height)], box.dataset.kind ?? box.closest('[data-kind]')?.dataset.kind);
 });
-document.addEventListener('toggle', (e) => {
-  if (e.target.id !== 'ks-detail') return;
-  ui.open = e.target.open;
-  if (ui.open && !ui.draft) {
-    startDraft(state.data, null);
-    refresh();
-    document.getElementById('ks-detail')?.scrollIntoView({behavior: 'smooth', block: 'start'});
-  }
-}, true);
 
 // ---- フォルダの右クリック →「着せ替え…」：その場の選択パネル（SPEC-KISEKAE §3.3） ----
 let picker = null;
@@ -1088,7 +1101,7 @@ export function openSkinPicker(course, card, x, y) {
   el.addEventListener('click', async (e) => {
     if (e.target.closest('[data-pick-new]')) {
       closeSkinPicker();
-      return navigate(`/kisekae?course=${encodeURIComponent(course.id)}&new=1`);
+      return navigate(`/kisekae/edit?course=${encodeURIComponent(course.id)}&new=1`);
     }
     const b = e.target.closest('[data-pick]');
     if (!b) return;
@@ -1115,7 +1128,3 @@ document.addEventListener('pointerdown', (e) => picker && !picker.el.contains(e.
 document.addEventListener('keydown', (e) => e.key === 'Escape' && picker && closeSkinPicker());
 window.addEventListener('hashchange', closeSkinPicker);
 
-// 「＋ 新しく作成」から開いたときは、直す所まで送る
-document.getElementById('view')?.addEventListener('rendered', (e) => {
-  if (e.detail.fresh && e.detail.route.startsWith('/kisekae') && ui.open) document.getElementById('ks-detail')?.scrollIntoView({block: 'start'});
-});

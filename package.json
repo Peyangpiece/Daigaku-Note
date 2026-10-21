@@ -1,7 +1,7 @@
 {
   "name": "daigaku-note",
   "productName": "大学ノート",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "大学の LMS の授業資料を授業ごと・回ごとのフォルダにそろえ、PDF に書き込み、資料からクイズを作って復習する電子ノート",
   "private": true,
   "type": "module",

@@ -2091,11 +2091,25 @@ textarea.input {
   flex-wrap: wrap;
   gap: 4px;
 }
-.ks-detail > summary {
-  cursor: pointer;
-  font-family: var(--font-head);
-  font-size: var(--fs-h3);
-  font-weight: 700;
+.ks-tolab {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+.ks-tolab > * {
+  margin: 0;
+}
+.kisekae--edit {
+  max-width: 1280px;
+}
+.ks-editbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ks-editbar h2 {
+  margin: 0;
 }
 .ks-choice {
   padding: 6px 12px;
