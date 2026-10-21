@@ -2090,11 +2090,30 @@ textarea.input {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  transition: opacity var(--motion, 0.15s);
+}
+/* カードの道具は、乗せたとき・キーボードで選んだときと、今当たっているカードだけ見せる（一覧をすっきりさせる） */
+.ks-card:not(:hover, :focus-within, .is-current) .ks-card__tools {
+  opacity: 0;
+}
+.ks-mine {
+  display: grid;
+  gap: var(--space-2);
+}
+.ks-mine > h3,
+.ks-mine > p {
+  margin: 0;
+}
+.ks-mine__empty {
+  padding: var(--space-2);
+  border: 1.5px dashed color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  border-radius: var(--radius);
 }
 .ks-tolab {
   display: grid;
   justify-items: start;
   gap: 6px;
+  margin-top: var(--space-1);
 }
 .ks-tolab > * {
   margin: 0;
@@ -2276,6 +2295,14 @@ textarea.input {
   background: var(--card);
   border-radius: var(--radius);
   box-shadow: var(--card-shadow-hover);
+}
+.skin-picker__group {
+  margin: 6px 0 2px;
+  padding: 4px 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--paper-ink) 12%, transparent);
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+  font-weight: 700;
 }
 .skin-picker__head {
   padding: 4px 8px 6px;
@@ -2630,12 +2657,38 @@ textarea.input {
     grid-template-columns: 1fr;
   }
 }
-/* 右の欄が長くても見本が見えたままになるように。窓が低いと見本の列が収まらないので固定しない */
+/* 見本と右の欄は、スクロールしても見えたままに。右の欄は窓の高さに収めて、中でスクロールする */
+@media (min-width: 1001px) {
+  .ks-inspector {
+    position: sticky;
+    top: 84px; /* 上の固定ボタンの下 */
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
 @media (min-width: 1001px) and (min-height: 860px) {
   .ks-stagecol {
     position: sticky;
-    top: 84px; /* 上の固定ボタンの下 */
+    top: 84px;
   }
+}
+/* 狭い窓：右の欄は見本の下に回るので、窓の下に貼り付けて、見本を押した結果がすぐ見えるようにする */
+@media (max-width: 1000px) {
+  .ks-inspector {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    max-height: 45vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
+  }
+}
+.ks-dirty {
+  color: var(--rule-margin, #d9534f);
+  font-size: var(--fs-small);
+  font-weight: 700;
 }
 .ks-stagecol {
   display: grid;
@@ -2858,8 +2911,8 @@ textarea.input {
 .ks-h {
   position: absolute;
   z-index: 1;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 1.5px solid #fff;
   border-radius: 50%;
