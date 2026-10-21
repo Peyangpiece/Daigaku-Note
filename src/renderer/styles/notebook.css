@@ -66,6 +66,10 @@ html.paper-canvas body,
 .paper.paper--viewer {
   padding-left: var(--space-6);
 }
+/* 編集画面は紙だけ（アプリ名・学期・日付は出さない。ツールバーの下からのぞかないように） */
+.paper--viewer .notebook-head {
+  display: none;
+}
 
 /* 上余白（ノートの上部）：アプリ名・学期・日付 */
 .notebook-head {
