@@ -43,16 +43,26 @@ jobs:
           Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP\msix-test.cer" | Out-Null
           Import-Certificate -FilePath "$env:RUNNER_TEMP\msix-test.cer" -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
       # PowerShell は -c.appx.… の引数を分けてしまうので bash で動かす
+      # 署名は electron-builder に任せない（同梱の signtool がこの Windows で動かない：A required function is not present）。
+      # 署名なしで作って、下で Windows SDK の signtool で署名する
       - name: MSIX（appx）を作る
         shell: bash
         env:
-          CSC_LINK: ${{ runner.temp }}\msix-test.pfx
-          CSC_KEY_PASSWORD: msix-test
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           npx electron-builder --win appx --x64 --publish never \
             -c.appx.identityName=DaigakuNote.Test -c.appx.applicationId=DaigakuNote \
             '-c.appx.publisher=CN=DaigakuNoteTest' '-c.appx.publisherDisplayName=Daigaku Note Test'
           ls -la release/*.appx
+      - name: Windows SDK の signtool で試験用の証明書の署名をする
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          "signtool：$($signtool.FullName)"
+          $appx = Get-ChildItem release -Filter *.appx | Select-Object -First 1
+          & $signtool.FullName sign /fd SHA256 /f "$env:RUNNER_TEMP\msix-test.pfx" /p msix-test $appx.FullName
+          if ($LASTEXITCODE -ne 0) { Write-Error '署名できませんでした'; exit 1 }
       - name: 入れて、パッケージの中で動作確認を動かす
         shell: pwsh
         run: |
@@ -79,7 +89,5 @@ jobs:
         if: always()
         with:
           name: msix-check
-          path: |
-            ${{ runner.temp }}\self-test\result.json
-            release/*.appx
+          path: ${{ runner.temp }}\self-test\result.json
           if-no-files-found: ignore
