@@ -2,16 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase, migrate} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
+import {normalizeTemplate, rotationFor} from '../src/shared/skin.js';
 
 test('マイグレーションが当たり、2 回当てても変わらない', async () => {
   const {db, applied} = await openDatabase(':memory:');
-  assert.deepEqual(applied, [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(applied, [1, 2, 3, 4, 5, 6, 7]);
   assert.deepEqual(migrate(db), []);
   const tables = db
     .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
     .all()
     .map((r) => r.name);
-  for (const t of ['connection', 'term', 'course', 'round', 'material', 'annotation', 'quiz', 'question', 'srs', 'sync_run', 'job', 'settings'])
+  for (const t of ['connection', 'term', 'course', 'round', 'material', 'annotation', 'quiz', 'question', 'srs', 'sync_run', 'job', 'settings', 'skin_template', 'sticker'])
     assert.ok(tables.includes(t), t);
 });
 
@@ -74,4 +75,25 @@ test('知らない表・列は拒む', async () => {
   assert.throws(() => repo.insert('evil', {id: 'x'}), /知らない表/);
   assert.throws(() => repo.insert('settings', {key: 'x', value: 'y'}), /知らない表/);
   assert.throws(() => repo.update('course', 'id', {'name = 1; DROP TABLE course; --': 1}), /列/);
+});
+
+test('着せ替え：新しい授業にはテンプレートを順に割り当て、消したテンプレートの授業は全体と同じに戻す', async () => {
+  const {db} = await openDatabase(':memory:');
+  const repo = new Repo(db);
+  const conn = repo.createConnection({kind: 'manual', connector_id: 'manual', label: '手動'});
+  const term = repo.upsertTerm({id: '2026-fall', label: '秋学期', year: 2026, folder: 'f', start_date: '2026-10-01', end_date: '2027-03-31', rounds: 15});
+  const a = repo.createCourse({term_id: term.id, connection_id: conn.id, lms_id: '1', name: 'A', folder_name: 'A'});
+  const b = repo.createCourse({term_id: term.id, connection_id: conn.id, lms_id: '2', name: 'B', folder_name: 'B'});
+  assert.equal(a.skin_template_id, rotationFor(0));
+  assert.equal(b.skin_template_id, rotationFor(1));
+  assert.notEqual(a.skin_template_id, b.skin_template_id);
+  assert.equal(repo.get('course', a.id).sticker_mode, 'global');
+  const t = normalizeTemplate({name: 'わたしの'}, {id: 'MINE'});
+  repo.saveSkinTemplate(t);
+  repo.saveSkinTemplate({...t, name: '直した'});
+  assert.deepEqual(repo.listSkinTemplates().map((x) => x.name), ['直した']);
+  repo.updateCourse(a.id, {skin_template_id: 'MINE'});
+  repo.removeSkinTemplate('MINE');
+  assert.equal(repo.get('course', a.id).skin_template_id, null);
+  assert.deepEqual(repo.listSkinTemplates(), []);
 });

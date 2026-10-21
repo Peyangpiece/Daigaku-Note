@@ -1,6 +1,8 @@
 // 画面の土台（DESIGN-M0 §10）。経路：#/setup（初回）・#/（ホーム）・#/course/<id>・#/viewer/<資料 id>・#/settings・#/settings/term・#/settings/lms（LMS とつなぐ）
 // ホーム（フォルダのグリッド）・授業（資料一覧）・PDF ビューア（文字入れ・付箋・文字隠し）・クイズ・設定・セットアップ。
 import {renderHome} from './views/home.js';
+import {closeSkinPicker, openSkinPicker, renderKisekae} from './views/kisekae.js';
+import {applySkin, setStickerReload, watchTheme} from './skin.js';
 import {renderCourse} from './views/course.js';
 import {renderFolder, renderFolderNew} from './views/folder.js';
 import {renderSettings} from './views/settings.js';
@@ -35,29 +37,53 @@ export async function reload() {
   if (state.data?.error) throw new Error(state.data.error);
   applyTheme();
   render();
+  // 着せ替えを入れた版に更新したあと 1 回だけ知らせる（SPEC-KISEKAE §4.4）
+  if (state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
+    state.data.skin.introduced = true;
+    api['skin.introduced']();
+    toast('着せ替えができるようになりました。上の「着せ替え」か、フォルダの右クリックから選べます', {
+      action: {label: '見てみる', run: () => navigate('/kisekae')}
+    });
+  }
 }
 
 function applyTheme() {
   const s = state.data?.settings ?? {};
   document.documentElement.dataset.theme = s.theme === 'system' ? '' : s.theme;
   document.documentElement.dataset.rules = s.rules ?? 'normal';
+  applySkin(state.data); // 着せ替えのノート（紙の種類・色。SPEC-KISEKAE）
 }
+watchTheme(() => state.data, () => render());
+setStickerReload(() => render()); // シールの画像が届いたら描き直す
 
 export function navigate(route) {
   location.hash = route.startsWith('#') ? route : '#' + route;
 }
 
 // トースト：画面下に積む（重ねない）。失敗の知らせは長めに残し、押すと消える。読み上げは #toasts の role=status で
-export function toast(message, {error = false} = {}) {
+// action：{label, run}。知らせの中にボタンを出す（「元に戻す」など。押すと run して消える。知らせは長めに残す）
+export function toast(message, {error = false, action = null} = {}) {
   const box = document.getElementById('toasts');
   const el = document.createElement('div');
   el.className = `toast${error ? ' toast--error' : ''}`;
   el.textContent = message;
   el.title = '押すと消えます';
   el.onclick = () => el.remove();
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toast__action';
+    b.textContent = action.label;
+    b.onclick = (e) => {
+      e.stopPropagation();
+      el.remove();
+      action.run();
+    };
+    el.append(b);
+  }
   box.append(el);
   while (box.children.length > 3) box.firstElementChild.remove();
-  setTimeout(() => el.remove(), error ? 8000 : 4000);
+  setTimeout(() => el.remove(), error || action ? 8000 : 4000);
 }
 
 function head() {
@@ -117,6 +143,9 @@ function render() {
   const app = document.getElementById('app');
   // 編集画面：紙（罫線・余白の縦線）はホームと同じものを窓いっぱいに敷く（拡大して横にはみ出しても途切れない）。
   // アプリ全体の拡大は 100% にする（PDF だけを拡大し、ツールバーや背景は拡大しない）
+  // 上の固定ボタン（ホーム・着せ替え）：今いる画面を押した状態に
+  for (const b of document.querySelectorAll('.topnav [data-nav]'))
+    b.setAttribute('aria-current', (b.dataset.nav === 'kisekae' ? route.startsWith('/kisekae') : route === '/') ? 'page' : 'false');
   const inViewer = route.startsWith('/viewer/');
   app.classList.toggle('paper--viewer', inViewer);
   document.documentElement.classList.toggle('paper-canvas', inViewer);
@@ -154,6 +183,7 @@ function render() {
   else if (route.startsWith('/quiz-edit/')) view.innerHTML = renderQuizEdit(state, route.slice('/quiz-edit/'.length));
   else if (route.startsWith('/quiz') || route.startsWith('/review')) view.innerHTML = renderQuiz(state, route);
   else if (route === '/settings' || route.startsWith('/settings?')) view.innerHTML = renderSettings(state, route);
+  else if (route === '/kisekae' || route.startsWith('/kisekae?')) view.innerHTML = renderKisekae(state, route);
   else view.innerHTML = renderHome(state);
   lastRoute = route;
   if (snap) restore(view, snap);
@@ -349,6 +379,7 @@ const closeCardMenu = () => {
 document.addEventListener('contextmenu', (e) => {
   const card = e.target.closest?.('.folder[data-action="open-course"]');
   closeCardMenu();
+  closeSkinPicker();
   if (!card) return;
   const course = state.data?.courses.find((c) => c.id === card.dataset.id);
   if (!course) return;
@@ -357,7 +388,7 @@ document.addEventListener('contextmenu', (e) => {
   cardMenu.className = 'card-menu';
   cardMenu.setAttribute('role', 'menu');
   cardMenu.setAttribute('aria-label', course.name);
-  cardMenu.innerHTML = `<button type="button" role="menuitem" data-card-menu="open">開く</button><button type="button" role="menuitem" class="card-menu__danger" data-card-menu="remove">消去…</button>`;
+  cardMenu.innerHTML = `<button type="button" role="menuitem" data-card-menu="open">開く</button><button type="button" role="menuitem" data-card-menu="skin">着せ替え…</button><button type="button" role="menuitem" class="card-menu__danger" data-card-menu="remove">消去…</button>`;
   document.body.append(cardMenu);
   const {width, height} = cardMenu.getBoundingClientRect();
   cardMenu.style.left = `${Math.min(e.clientX, window.innerWidth - width - 8)}px`;
@@ -368,6 +399,10 @@ document.addEventListener('contextmenu', (e) => {
     if (!what) return;
     closeCardMenu();
     if (what === 'open') navigate(`/course/${course.id}`);
+    else if (what === 'skin') {
+      const r = card.getBoundingClientRect();
+      openSkinPicker(course, card, r.right + 8, r.top);
+    }
     else removeCourse(course).catch((err) => toast(err.message, {error: true}));
   };
 });

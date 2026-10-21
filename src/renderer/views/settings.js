@@ -107,13 +107,7 @@ export function renderSettings({data}, route = '/settings') {
           ]
             .map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`)
             .join('')}</select></label>
-          <label>罫線<select class="input" id="st-rules">${[
-            ['normal', '標準'],
-            ['light', '薄い'],
-            ['none', 'なし']
-          ]
-            .map(([v, l]) => `<option value="${v}" ${s.rules === v ? 'selected' : ''}>${l}</option>`)
-            .join('')}</select></label>
+          <p class="muted" style="align-self:end">ノートの種類・色・線の濃さは<button class="btn btn--small" data-action="nav" data-route="/kisekae">着せ替え</button>で変えられます</p>
         </div>
       </section>
         ${
@@ -215,7 +209,6 @@ function bind() {
   $('st-class')?.addEventListener('change', (e) => save({classStart: e.target.checked}));
   $('st-login')?.addEventListener('change', (e) => save({openAtLogin: e.target.checked}));
   $('st-theme')?.addEventListener('change', (e) => save({theme: e.target.value}));
-  $('st-rules')?.addEventListener('change', (e) => save({rules: e.target.value}));
   document.querySelectorAll('[data-login]').forEach((b) =>
     b.addEventListener('click', async () => {
       b.disabled = true;
