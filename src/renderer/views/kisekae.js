@@ -19,9 +19,16 @@ import {
   TAPE_PATTERN_LABEL,
   isBuiltin,
   normalizeTemplate,
-  usage
+  usage,
+  BOOKMARK_SHAPES,
+  BOOKMARK_SHAPE_LABEL,
+  FILE_KINDS,
+  FILE_KIND_LABEL,
+  FIXED_PLACES,
+  placeMax
 } from '../../shared/skin.js';
-import {STICKER_BASE, allTemplates, forgetSticker, globalId, noteVars, shapesOf, skinOf, stickerImg, stickerUrl} from '../skin.js';
+import {STICKER_BASE, allTemplates, bookmarkLook, forgetSticker, globalId, noteVars, shapesOf, skinOf, stickerImg, stickerUrl} from '../skin.js';
+import {fileArt} from './file-art.js';
 import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, isBuiltinSticker} from '../../shared/stickers.js';
 
 const api = window.daigaku;
@@ -39,7 +46,7 @@ const SAMPLE = [
 
 // 画面の状態（描き直しても残す）。draft は直している途中のテンプレート（baseId は元のテンプレート）。
 // 対象・細かく直す・名前などは ui が決めるので、描き直しのときに前の値へ戻さない（data-keep="off"）
-const ui = {target: '', part: 'note', place: 'folder', book: 'all', open: false, draft: null, selected: null, confirm: null, route: null};
+const ui = {target: '', part: 'note', place: 'folder', fileKind: 'pdf', book: 'all', open: false, draft: null, selected: null, confirm: null, route: null};
 
 const courses = (data) => data.courses.filter((c) => !c.hidden);
 const targetCourse = (data) => (ui.target ? (data.courses.find((c) => c.id === ui.target) ?? null) : null);
@@ -80,12 +87,12 @@ function draftSkin(data, course) {
   const mode = target ? stickerModeFor(target) : 'course';
   const global = target && mode !== 'course' ? skinOf(data).stickers.map((s) => ({...s, z: s.z - 100})) : [];
   const own = d.stickers.map((s, i) => ({...s, index: i}));
-  return {template: null, own: true, note, folder: d.parts.folder, tape: d.parts.tape, stickers: [...global, ...own].sort((a, b) => a.z - b.z)};
+  return {template: null, own: true, ...d.parts, note, stickers: [...global, ...own].sort((a, b) => a.z - b.z)};
 }
 const stickerModeFor = (course) => (course.sticker_mode === 'global' && ui.draft?.stickers.length ? 'both' : course.sticker_mode || 'global');
 /** テンプレートの見た目（一覧の見本） */
 function templateSkin(data, t) {
-  return {template: t, own: true, note: targetCourse(data) ? skinOf(data).note : t.parts.note, folder: t.parts.folder, tape: t.parts.tape, stickers: t.stickers};
+  return {template: t, own: true, ...t.parts, note: targetCourse(data) ? skinOf(data).note : t.parts.note, stickers: t.stickers};
 }
 
 const styleOf = (vars) => Object.entries(vars).map(([k, v]) => `${k}: ${v}`).join('; ');
@@ -116,7 +123,7 @@ function galleryCard(data, t, course, current) {
     </button>
     <div class="ks-card__tools">
       <button type="button" class="btn btn--small" data-ks="edit" data-id="${esc(t.id)}">${isBuiltin(t.id) ? 'もとにして作る' : '直す'}</button>
-      ${isBuiltin(t.id) ? '' : `<button type="button" class="btn btn--small" data-ks="dup" data-id="${esc(t.id)}">複製</button><button type="button" class="btn btn--small btn--danger" data-ks="remove" data-id="${esc(t.id)}">消す</button>`}
+      ${isBuiltin(t.id) ? '' : `<button type="button" class="btn btn--small" data-ks="dup" data-id="${esc(t.id)}">複製</button><button type="button" class="btn btn--small" data-ks="export" data-id="${esc(t.id)}" title="ファイル（.dnskin）に書き出して、ほかのパソコンや友だちに渡せます">書き出す</button><button type="button" class="btn btn--small btn--danger" data-ks="remove" data-id="${esc(t.id)}">消す</button>`}
     </div>
   </div>`;
 }
@@ -228,7 +235,8 @@ function stickerControls(data) {
     <fieldset class="ks-field"><legend>貼る場所</legend>
       ${choice('place', ui.place, places(data), PLACE_LABEL)}
     </fieldset>
-    <p class="muted">シール帳のシールを押すか、見本へドラッグすると貼れます（1 か所に ${STICKERS_PER_PLACE} 枚まで）。貼ったシールは見本の上で動かせます。${course ? '全体のシールの上に重ねて見せています（全体のシールはここでは動かせません）。' : ''}</p>
+    ${ui.place === 'file' ? kindChoice() : ''}
+    <p class="muted">シール帳のシールを押すか、見本へドラッグすると貼れます（1 か所に ${placeMax(ui.place)} 枚まで${FIXED_PLACES.includes(ui.place) ? '。貼る位置は決まっていて、貼り直すと入れ替わります' : ''}）。貼ったシールは見本の上で動かせます。${course ? '全体のシールの上に重ねて見せています（全体のシールはここでは動かせません）。' : ''}</p>
     <fieldset class="ks-field"><legend>シール帳</legend>
       <div class="ks-choices ks-book__filters">${bookFilters(data)}</div>
       <div class="ks-book">
@@ -252,11 +260,43 @@ const PARTS = [
   ['note', 'ノート'],
   ['folder', 'フォルダ'],
   ['tape', 'マスキングテープ'],
+  ['file', 'ファイル'],
+  ['sticky', '付箋'],
+  ['bookmark', 'しおり'],
   ['sticker', 'シール']
 ];
 
+// 付箋のはじめの色（tokens.css の --pop1〜8 と viewer.js の NOTE_COLORS と同じ）
+const POP = ['#ffe14d', '#ff9ec4', '#6fe3b8', '#7cccff', '#ffad5c', '#c3a6ff', '#c2f06a', '#ff8a7a'];
+const PDF_NOTE = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70'];
+// 資料の種類ごとの見本の名前（file-art.js の拡張子から種類が決まる）
+const SAMPLE_FILE = {pdf: 'a.pdf', slide: 'a.pptx', doc: 'a.docx', sheet: 'a.xlsx', image: 'a.png', video: 'a.mp4', audio: 'a.mp3', zip: 'a.zip', other: 'a.abc'};
+const kindChoice = () => `<fieldset class="ks-field"><legend>資料の種類</legend>${choice('fileKind', ui.fileKind, FILE_KINDS, FILE_KIND_LABEL)}</fieldset>`;
+
+function fileControls(data) {
+  const f = ui.draft.parts.file;
+  return `${kindChoice()}${colorField(`file.${ui.fileKind}`, `${FILE_KIND_LABEL[ui.fileKind]}の色`, f[ui.fileKind], {recent: data.skin?.recent ?? []})}`;
+}
+/** 色の並び（回の付箋の 8 色・PDF の付箋の色の候補 6 色）。1 つずつ色の選び器で変える */
+function colorRow(key, list, defaults, label) {
+  const colors = list === 'default' ? defaults : list;
+  return `<fieldset class="ks-field"><legend>${label}</legend><div class="ks-swatches">
+    ${colors.map((c, i) => `<label class="ks-sw ks-sw--pick" style="--sw: ${c}" title="${i + 1}"><input type="color" data-ks-list="${key}" data-i="${i}" value="${c}" aria-label="${label}：${i + 1} つ目" /></label>`).join('')}
+    <button type="button" class="ks-sw ks-sw--text" data-ks="set" data-key="${key}" data-value="default" aria-pressed="${list === 'default'}">はじめの色</button>
+  </div></fieldset>`;
+}
+function stickyControls() {
+  const st = ui.draft.parts.sticky;
+  return `${colorRow('sticky.round', st.round, POP, '回の付箋の色（第 1 回から順に）')}${colorRow('sticky.pdf', st.pdf, PDF_NOTE, 'PDF に貼る付箋の色の候補')}`;
+}
+function bookmarkControls(data) {
+  const b = ui.draft.parts.bookmark;
+  return `${colorField('bookmark.color', 'リボンの色', b.color, {recent: data.skin?.recent ?? []})}
+    <fieldset class="ks-field"><legend>形</legend>${choice('bookmark.shape', b.shape, BOOKMARK_SHAPES, BOOKMARK_SHAPE_LABEL)}</fieldset>`;
+}
+
 // 見本の中のシールの大きさ：ホームと PDF 編集画面は、窓（幅 1200px ほど）を半分ほどに縮めた見本なので基準も半分
-const PREVIEW_SCALE = {folder: 1, home: 0.5, heading: 1, viewer: 0.5};
+const PREVIEW_SCALE = {folder: 1, home: 0.5, heading: 1, viewer: 0.5, round: 1, file: 1, bookmark: 1};
 /** 場所の見本に貼るシール（直しているテンプレートのものだけ動かせる） */
 function placeLayer(data, stickers, place) {
   const shapes = shapesOf(data);
@@ -267,8 +307,38 @@ function placeLayer(data, stickers, place) {
     .join('');
 }
 /** 真ん中の見本。シールの欄では、選んだ貼る場所の見本にする */
+/** 決まった位置のシール（見本では押して選べる） */
+function fixedPreview(data, st, opts) {
+  if (!st) return '';
+  const img = stickerImg({...st, x: opts.x, y: opts.y}, shapesOf(data), {base: opts.base, ...(st.index != null ? {index: st.index, selected: ui.selected === st.index} : {})});
+  return `<span class="sticker-layer sticker-layer--fixed" data-preview-place="${st.place}" data-preview-fixed>${img}</span>`;
+}
+/** ファイル・付箋・しおりの見本 */
+function partPreview(data, kind, note, skin) {
+  const find = (place, k) => skin.stickers.find((st) => st.place === place && (!k || st.kind === k));
+  if (kind === 'file')
+    return noteSwatch(note, 'ks-preview', `<div class="ks-files">${FILE_KINDS.map(
+      (k) => `<div class="ks-file${ui.fileKind === k ? ' is-current' : ''}"><span class="file__art">${fileArt(SAMPLE_FILE[k], {colors: skin.file})}${fixedPreview(data, find('file', k), {x: 0.12, y: 0.16, base: 30})}</span><span class="muted">${FILE_KIND_LABEL[k]}</span></div>`
+    ).join('')}</div>`);
+  if (kind === 'round') {
+    const colors = skin.sticky.round === 'default' ? POP : skin.sticky.round;
+    return noteSwatch(note, 'ks-preview', `<div class="ks-notes">${[1, 2, 3, 4].map(
+      (n) => `<div class="ks-note" style="--note-color: ${colors[n - 1]}">${fixedPreview(data, find('round'), {x: 0.92, y: 0.06, base: 44})}<strong>第${n}回</strong><span class="muted">資料なし</span></div>`
+    ).join('')}</div>${colorChips(skin.sticky.pdf === 'default' ? PDF_NOTE : skin.sticky.pdf, 'PDF の付箋')}`);
+  }
+  const look = bookmarkLook(skin);
+  const sticker = fixedPreview(data, find('bookmark'), {x: 0, y: 0.5, base: 28});
+  return noteSwatch(note, 'ks-preview ks-preview--wide', `<div class="ks-pdf ks-pdf--bm" aria-hidden="true"><span></span><span></span><span></span>
+    <span class="bookmark-ribbon bm ${look.cls}" style="${look.style}; top: 30%">${sticker}<span class="bookmark-ribbon__text">しおり1</span></span>
+    <span class="bookmark-ribbon bm ${look.cls}" style="${look.style}; top: 62%"><span class="bookmark-ribbon__text">テストに出る</span></span></div>`);
+}
+const colorChips = (colors, label) => `<p class="ks-chips"><span class="muted">${label}</span>${colors.map((c) => `<span class="ks-chip" style="--sw: ${c}"></span>`).join('')}</p>`;
+
 function preview(data, {first, second, note, skin1, skin2}) {
+  const part = {file: 'file', sticky: 'round', bookmark: 'bookmark'}[ui.part];
+  if (part) return partPreview(data, part, note, skin1);
   const place = ui.part === 'sticker' ? ui.place : 'folder';
+  if (FIXED_PLACES.includes(place)) return partPreview(data, place, note, skin1);
   const folders = `<div class="folders ks-preview__folders">${folderCard(first, {data, skin: skin1, edit: {selected: place === 'folder' ? ui.selected : null}})}${folderCard(second, {data, skin: skin2, edit: {still: true}})}</div>`;
   if (place === 'folder') return noteSwatch(note, 'ks-preview', folders);
   const layer = `<div class="ks-place ks-place--${place}" data-preview-place="${place}">${placeLayer(data, skin1.stickers, place)}`;
@@ -284,7 +354,7 @@ function editor(data) {
   const note = course ? skinOf(data, course).note : ui.draft.parts.note;
   const skin1 = draftSkin(data, first);
   const skin2 = course ? skinOf(data, second) : draftSkin(data, second);
-  const controls = {note: noteControls, folder: folderControls, tape: tapeControls, sticker: stickerControls}[ui.part](data);
+  const controls = {note: noteControls, folder: folderControls, tape: tapeControls, file: fileControls, sticky: stickyControls, bookmark: bookmarkControls, sticker: stickerControls}[ui.part](data);
   const c = ui.confirm;
   return `
     <div class="ks-editor">
@@ -339,7 +409,7 @@ export function renderKisekae({data}, route) {
       </select></label>
       <section aria-labelledby="ks-gallery-title">
         <h3 id="ks-gallery-title">おすすめから選ぶ</h3>
-        <p class="muted">押すとすぐに${course ? `「${esc(course.name)}」` : 'すべての授業'}に当たります。</p>
+        <p class="muted ks-gallery__lead">押すとすぐに${course ? `「${esc(course.name)}」` : 'すべての授業'}に当たります。<button type="button" class="btn btn--small" data-ks="import">テンプレートを読み込む…</button></p>
         <div class="ks-gallery">
           ${
             course
@@ -437,8 +507,16 @@ async function importSticker(file) {
 
 // 貼る場所ごとの、はじめに置く位置（見本の真ん中を避ける）
 const START = {folder: [0.72, 0.62], home: [0.9, 0.85], heading: [0.85, 0.5], viewer: [0.03, 0.9]};
-function addSticker(asset, place = ui.place, at = START[place]) {
+function addSticker(asset, place = ui.place, at = START[place] ?? [0.5, 0.5]) {
   const d = ui.draft;
+  // 決まった位置の場所（回の付箋の角・資料のイラスト・しおり）は 1 枚だけ。貼り直すと入れ替える
+  if (FIXED_PLACES.includes(place)) {
+    const kind = place === 'file' ? ui.fileKind : undefined;
+    d.stickers = d.stickers.filter((s) => !(s.place === place && (place !== 'file' || s.kind === kind)));
+    d.stickers.push({place, ...(kind ? {kind} : {}), asset, x: 0.5, y: 0.5, scale: 1, rotate: 0, z: 0});
+    ui.selected = d.stickers.length - 1;
+    return refresh();
+  }
   if (d.stickers.filter((s) => s.place === place).length >= STICKERS_PER_PLACE)
     return toast(`${PLACE_LABEL[place]}に貼れるシールは ${STICKERS_PER_PLACE} 枚までです`, {error: true});
   // 押して貼るときは、前に貼ったシールと重ならないように少しずつずらす
@@ -457,6 +535,19 @@ document.addEventListener('click', async (e) => {
   const {ks} = el.dataset;
   try {
     if (ks === 'apply') return await applyTemplate(data, el.dataset.id);
+    if (ks === 'export') {
+      const r = await api['skin.export']({id: el.dataset.id});
+      if (r?.error) return toast(r.error, {error: true});
+      if (r?.ok) toast(`「${r.name}」に書き出しました`);
+      return;
+    }
+    if (ks === 'import') {
+      const r = await api['skin.import']();
+      if (r?.error) return toast(r.error, {error: true});
+      if (!r?.ok) return;
+      await reload();
+      return toast(`「${r.template.name}」を読み込みました（作った人：${r.template.author}・${LICENSE_LABEL[r.template.license]}）`);
+    }
     if (ks === 'edit') {
       startDraft(data, allTemplates(data).find((t) => t.id === el.dataset.id));
       refresh();
@@ -489,7 +580,8 @@ document.addEventListener('click', async (e) => {
       if (el.dataset.key === 'place') {
         ui.place = el.dataset.value;
         ui.selected = null;
-      } else setPath(ui.draft.parts, el.dataset.key, el.dataset.value);
+      } else if (el.dataset.key === 'fileKind') ui.fileKind = el.dataset.value;
+      else setPath(ui.draft.parts, el.dataset.key, el.dataset.value);
     } else if (ks === 'book') ui.book = el.dataset.value;
     else if (ks === 'tape-image') ui.draft.parts.tape.image = el.dataset.id;
     else if (ks === 'sticker-fav' || ks === 'sticker-folder') {
@@ -546,7 +638,10 @@ document.addEventListener('change', async (e) => {
   if (!ui.draft) return;
   if (el.id === 'ks-name') ui.draft.name = el.value;
   else if (el.id === 'ks-license') ui.draft.license = el.value;
-  else if (el.dataset.ksColor) {
+  else if (el.dataset.ksList) {
+    setListColor(el);
+    refresh();
+  } else if (el.dataset.ksColor) {
     setPath(ui.draft.parts, el.dataset.ksColor, el.value.toLowerCase());
     const r = await api['skin.recentColor']({color: el.value});
     if (r?.recent && state.data.skin) state.data.skin.recent = r.recent;
@@ -571,7 +666,10 @@ document.addEventListener('change', async (e) => {
 document.addEventListener('input', (e) => {
   const el = e.target;
   if (!inKisekae(el) || !ui.draft) return;
-  if (el.dataset.ksColor) {
+  if (el.dataset.ksList) {
+    setListColor(el);
+    repaintPreview();
+  } else if (el.dataset.ksColor) {
     setPath(ui.draft.parts, el.dataset.ksColor, el.value.toLowerCase());
     repaintPreview();
   } else if (el.dataset.ksRange && ui.selected != null) {
@@ -581,6 +679,14 @@ document.addEventListener('input', (e) => {
     repaintPreview();
   }
 });
+/** 色の並びの 1 つを変える（はじめの色のままなら、はじめの色を写してから） */
+function setListColor(el) {
+  const [a, b] = el.dataset.ksList.split('.');
+  const defaults = el.dataset.ksList === 'sticky.round' ? POP : PDF_NOTE;
+  const list = ui.draft.parts[a][b] === 'default' ? [...defaults] : [...ui.draft.parts[a][b]];
+  list[Number(el.dataset.i)] = el.value.toLowerCase();
+  ui.draft.parts[a][b] = list;
+}
 function repaintPreview() {
   const old = document.querySelector('.kisekae .ks-preview');
   if (!old) return;
@@ -604,6 +710,10 @@ document.addEventListener('pointerdown', (e) => {
   }
   e.preventDefault();
   const i = Number(img.dataset.stickerIndex);
+  if (folder.hasAttribute('data-preview-fixed')) {
+    ui.selected = i;
+    return refresh();
+  }
   drag = {i, folder, img, moved: false};
   img.setPointerCapture?.(e.pointerId);
   if (ui.selected !== i) {

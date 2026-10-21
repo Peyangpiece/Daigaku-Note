@@ -141,3 +141,37 @@ test('はじめから入っているシール：20 枚ほど、意味のある�
   for (const n of ['試験', '課題', '小テスト', '重要', '休講']) assert.ok(BUILTIN_STICKERS.some((s) => s.name === n && s.kind === 'mark'), n);
   for (const s of BUILTIN_STICKERS) assert.match(builtinStickerUrl(s.id), /^data:image\/svg\+xml/);
 });
+
+test('ファイル・付箋・しおり：種類ごとの色、色の並び、リボンの形', () => {
+  const t = normalizeTemplate({
+    parts: {
+      file: {pdf: '#FF0000', slide: 'red', nope: '#000000'},
+      sticky: {round: Array(8).fill('#123456'), pdf: ['#111111']},
+      bookmark: {color: '#00ff00', shape: 'star'}
+    }
+  });
+  assert.equal(t.parts.file.pdf, '#ff0000');
+  assert.equal(t.parts.file.slide, 'default');
+  assert.equal('nope' in t.parts.file, false);
+  assert.equal(t.parts.sticky.round.length, 8);
+  assert.equal(t.parts.sticky.pdf, 'default', '数が合わない並びは、はじめの色に');
+  assert.deepEqual(t.parts.bookmark, {color: '#00ff00', shape: 'tag'});
+});
+
+test('決まった位置のシール：回の付箋・しおりは 1 枚、資料のイラストは種類ごとに 1 枚', () => {
+  const t = normalizeTemplate({
+    stickers: [
+      {place: 'round', asset: 'builtin-star'},
+      {place: 'round', asset: 'builtin-heart'},
+      {place: 'file', kind: 'pdf', asset: 'builtin-exam'},
+      {place: 'file', kind: 'pdf', asset: 'builtin-task'},
+      {place: 'file', kind: 'slide', asset: 'builtin-task'},
+      {place: 'file', kind: 'movie', asset: 'builtin-task'},
+      {place: 'bookmark', asset: 'builtin-crown'}
+    ]
+  });
+  assert.deepEqual(
+    t.stickers.map((s) => `${s.place}${s.kind ? `:${s.kind}` : ''}:${s.asset}`),
+    ['round:builtin-star', 'file:pdf:builtin-exam', 'file:slide:builtin-task', 'bookmark:builtin-crown']
+  );
+});

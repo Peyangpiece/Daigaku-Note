@@ -14,11 +14,29 @@ export const TAPE_PATTERN_LABEL = {plain: '無地', stripe: 'ストライプ', d
 export const LICENSES = ['personal', 'share', 'remix'];
 export const LICENSE_LABEL = {personal: '自分で使うだけ', share: 'そのまま配ってよい', remix: '改変して配ってよい'};
 export const STICKER_MODES = ['global', 'course', 'both'];
-// シールを貼れる場所（SPEC-KISEKAE §5）。home（ホームの余白）は全体のテンプレートだけから貼る
-export const STICKER_PLACES = ['folder', 'home', 'heading', 'viewer'];
-export const PLACE_LABEL = {folder: 'フォルダ', home: 'ホームの余白', heading: '授業ページの見出し', viewer: 'PDF 編集画面の余白'};
+// シールを貼れる場所（SPEC-KISEKAE §5）。home（ホームの余白）は全体のテンプレートだけから貼る。
+// round（回の付箋の角）・file（資料のイラスト。種類 kind ごと）・bookmark（しおりのリボンの先）は 1 枚ずつで、貼る位置は決まっている
+export const STICKER_PLACES = ['folder', 'home', 'heading', 'viewer', 'round', 'file', 'bookmark'];
+export const PLACE_LABEL = {
+  folder: 'フォルダ',
+  home: 'ホームの余白',
+  heading: '授業ページの見出し',
+  viewer: 'PDF 編集画面の余白',
+  round: '回の付箋の角',
+  file: '資料のイラスト',
+  bookmark: 'しおりのリボンの先'
+};
 export const GLOBAL_ONLY_PLACES = ['home'];
+export const FIXED_PLACES = ['round', 'file', 'bookmark'];
 export const STICKERS_PER_PLACE = 5;
+export const placeMax = (place) => (FIXED_PLACES.includes(place) ? 1 : STICKERS_PER_PLACE);
+// 資料の種類（file-art.js の印と同じ）
+export const FILE_KINDS = ['pdf', 'slide', 'doc', 'sheet', 'image', 'video', 'audio', 'zip', 'other'];
+export const FILE_KIND_LABEL = {pdf: 'PDF', slide: 'スライド', doc: '文書', sheet: '表', image: '画像', video: '動画', audio: '音声', zip: '圧縮', other: 'その他'};
+export const BOOKMARK_SHAPES = ['tag', 'ribbon', 'round'];
+export const BOOKMARK_SHAPE_LABEL = {tag: 'タグ', ribbon: 'リボン（切れ込み）', round: '丸'};
+export const ROUND_COLORS = 8; // 回の付箋の色の並び（第 1 回から順に。9 回目からはまた 1 色目）
+export const PDF_NOTE_COLORS = 6; // PDF に貼る付箋の色の候補
 export const SHAPES = ['cut', 'square', 'round', 'circle', 'framed'];
 export const SHAPE_LABEL = {cut: '形どおり', square: 'そのまま', round: '角丸', circle: '丸', framed: '白いふち付き'};
 export const CLASSIC_ID = 'builtin-classic';
@@ -39,8 +57,14 @@ const text = (v, max, fallback = '') => (typeof v === 'string' ? v.replace(/[\u0
 export const DEFAULT_PARTS = {
   note: {type: 'ruled', paper: 'default', line: 'default', gap: 'normal', margin: true},
   folder: {card: 'default', tab: 'default'},
-  tape: {color: 'course', pattern: 'course', image: null}
+  tape: {color: 'course', pattern: 'course', image: null},
+  file: Object.fromEntries(FILE_KINDS.map((k) => [k, 'default'])),
+  sticky: {round: 'default', pdf: 'default'},
+  bookmark: {color: 'default', shape: 'tag'}
 };
+
+// 色の並び：default（はじめの色）か、#rrggbb を n 個（足りなければ default）
+const colorList = (v, n) => (Array.isArray(v) && v.length === n && v.every(isHex) ? v.map((c) => c.toLowerCase()) : 'default');
 
 // テープ：柄が画像（image）のときは、シールの素を 1 つ柄にする。画像がなければ無地
 function tape(t) {
@@ -66,20 +90,26 @@ export function normalizeParts(raw = {}) {
       margin: typeof n.margin === 'boolean' ? n.margin : d.note.margin
     },
     folder: {card: color(f.card, d.folder.card), tab: color(f.tab, d.folder.tab)},
-    tape: tape(t)
+    tape: tape(t),
+    file: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.file?.[k], 'default')])),
+    sticky: {round: colorList(raw.sticky?.round, ROUND_COLORS), pdf: colorList(raw.sticky?.pdf, PDF_NOTE_COLORS)},
+    bookmark: {color: color(raw.bookmark?.color, 'default'), shape: oneOf(raw.bookmark?.shape, BOOKMARK_SHAPES, 'tag')}
   };
 }
 
-/** 貼ったシール。位置はフォルダの大きさに対する割合（0〜1） */
+/** 貼ったシール。位置は貼る先の大きさに対する割合（0〜1）。資料のイラストは種類（kind）ごとに 1 枚 */
 export function normalizeStickers(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   const count = {};
   for (const s of raw) {
     if (!s || !STICKER_PLACES.includes(s.place) || !isAssetId(s.asset)) continue;
-    if ((count[s.place] = (count[s.place] ?? 0) + 1) > STICKERS_PER_PLACE) continue;
+    if (s.place === 'file' && !FILE_KINDS.includes(s.kind)) continue;
+    const key = s.place === 'file' ? `file:${s.kind}` : s.place;
+    if ((count[key] = (count[key] ?? 0) + 1) > placeMax(s.place)) continue;
     out.push({
       place: s.place,
+      ...(s.place === 'file' ? {kind: s.kind} : {}),
       asset: s.asset,
       x: num(s.x, 0, 1, 0.5),
       y: num(s.y, 0, 1, 0.5),
@@ -188,6 +218,9 @@ export function resolveSkin(templates, globalId, course = null) {
     note: global.parts.note,
     folder: (own ?? global).parts.folder,
     tape: (own ?? global).parts.tape,
+    file: (own ?? global).parts.file,
+    sticky: (own ?? global).parts.sticky,
+    bookmark: (own ?? global).parts.bookmark,
     stickers: stickers.slice().sort((a, b) => a.z - b.z)
   };
 }
