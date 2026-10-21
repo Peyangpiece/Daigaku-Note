@@ -1731,15 +1731,23 @@ textarea.input {
 .folder-new__scope legend {
   margin-bottom: 4px;
 }
-.round-note--folder {
-  /* 自分のフォルダの付箋は、回の付箋の 1 色目（授業ページの第 1 回と同じ色） */
-  --note-bg: color-mix(in srgb, var(--note-color) 55%, var(--note-mix, #fff));
+/* 自分のフォルダ：直下と下のフォルダごとの付箋を、横に 5 枚まで（狭い窓では少なく） */
+.round-notes--folder {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin-top: var(--space-2);
 }
-.folder-page__sub {
-  margin: var(--space-2) 0 4px;
-  font-size: 0.9rem;
-  color: var(--paper-ink-weak);
+@media (max-width: 1100px) {
+  .round-notes--folder {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .round-notes--folder {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.round-note--folder .round-note__files {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
 }
 
 /* しおり：ツールバーの一覧と、ページの右端のリボン */

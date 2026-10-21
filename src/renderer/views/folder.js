@@ -3,6 +3,7 @@
 import {esc, jaWrap} from '../app.js';
 import {fileCard, quizLine} from './course.js';
 import {skinOf, stickerLayer} from '../skin.js';
+import {roundColorIndex} from '../../shared/skin.js';
 
 const SCOPE_LABEL = {term: '今学期のフォルダ', always: 'マイフォルダ'};
 export const scopeLabel = (c) => SCOPE_LABEL[c.scope] ?? SCOPE_LABEL.always;
@@ -66,15 +67,19 @@ export function renderFolder({data}, course) {
   const quizzes = data.quizzes?.[course.id] ?? [];
   const quiz = round ? quizzes.find((z) => z.round_id === round.id) : null;
   const gen = round ? data.quiz?.generating?.[round.id] : null;
-  const files = groups(list)
+  // 付箋：フォルダの直下と、下のフォルダごとに 1 枚ずつ、横に 5 枚まで並べる。色は着せ替えの回の付箋と同じく 1 枚目から順に
+  const sk = skinOf(data, course);
+  const colorOf = (i) => (sk.sticky.round === 'default' ? `var(--pop${roundColorIndex(i + 1) + 1})` : sk.sticky.round[roundColorIndex(i + 1)]);
+  const parts = list.length ? groups(list) : [['', []]];
+  const notes = parts
     .map(
-      ([sub, ms]) =>
-        `${sub ? `<h3 class="folder-page__sub">📁 ${esc(sub)}</h3>` : ''}<div class="round-note__files">${ms.map((m) => fileCard(m, course, [])).join('')}</div>`
+      ([sub, ms], i) => `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i)}" data-drop="own" data-course-id="${esc(course.id)}" aria-label="${esc(sub || course.name)} のファイル">
+      <header class="round-note__head"><span class="round-note__round">${sub ? `📁 ${esc(sub)}` : 'このフォルダ'}</span></header>
+      ${ms.length ? `<div class="round-note__files">${ms.map((m) => fileCard(m, course, [])).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグして入れます。</p>'}
+      ${i === 0 && round ? quizLine(round, list, course, quiz, gen, !!data.quiz?.key?.set, 'このフォルダ') : ''}
+    </section>`
     )
     .join('');
-  // 付箋の色：着せ替えの回の付箋の 1 色目（自分のフォルダは付箋が 1 枚なので）
-  const sk = skinOf(data, course);
-  const noteColor = sk.sticky.round === 'default' ? 'var(--pop1)' : sk.sticky.round[0];
   return `
     <nav class="page-nav page-nav--stickers">
       ${stickerLayer(sk.stickers, 'heading', data)}
@@ -89,8 +94,5 @@ export function renderFolder({data}, course) {
       <button class="btn btn--quiet" data-action="folder-hide" data-course-id="${esc(course.id)}">ホームから外す</button>
     </div>
     <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です。名前の変更や削除は Finder（Windows はエクスプローラー）で行い、「読み直す」で反映します。</p>
-    <section class="round-note round-note--own round-note--folder" style="--note-color: ${noteColor}" data-drop="own" data-course-id="${esc(course.id)}" aria-label="${esc(course.name)} のファイル">
-      ${list.length ? files : '<p class="round-note__none">ここにファイルをドラッグして入れます。</p>'}
-      ${round ? quizLine(round, list, course, quiz, gen, !!data.quiz?.key?.set, 'このフォルダ') : ''}
-    </section>`;
+    <div class="round-notes round-notes--folder">${notes}</div>`;
 }
