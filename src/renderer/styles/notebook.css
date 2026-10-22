@@ -121,7 +121,7 @@ html.paper-canvas body,
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 0 calc(var(--space-6) + 236px) 0 var(--space-6); /* 右は上の固定ボタンの分 */
+  padding: 0 calc(var(--space-6) + 276px) 0 var(--space-6); /* 右は上の固定ボタン（ホーム・着せ替え・筆箱）の分 */
 }
 h1,
 h2,
@@ -1565,6 +1565,10 @@ textarea.input {
 }
 /* 文字隠しの道具では 1 本指でなぞる。注釈は指で動かせるように（どちらもスクロールにしない。スクロールは 2 本指で） */
 .viewer-pages[data-tool='mask'] .pdf-page,
+.viewer-pages[data-tool='ink'] .pdf-page,
+.viewer-pages[data-tool='line'] .pdf-page,
+.viewer-pages[data-tool='eraser'] .pdf-page,
+.anno-line,
 .anno-text,
 .anno-note,
 .anno-mask {
@@ -1703,7 +1707,7 @@ textarea.input {
 /* 文字隠し：水色のマーカー。赤の成分が 0 の色を乗算で重ねるので、下の文字は読め、赤シートの下では黒くなる */
 .anno-mask {
   position: absolute;
-  background: #00d2ff; /* main/pdf-export.js の MARKER_HEX と同じ */
+  background: var(--mask, #00d2ff); /* 既定は main/pdf-export.js の MARKER_HEX と同じ。文字隠しペンの色（赤の成分が 0） */
   mix-blend-mode: multiply;
   border-radius: 2px;
   cursor: move;
@@ -1718,6 +1722,141 @@ textarea.input {
 }
 .viewer-pages[data-tool='mask'] .pdf-page {
   cursor: crosshair;
+}
+
+/* ボールペンの線（§9.8）：ページの上の SVG。PDF の座標のまま描き、g の変換で拡大に合わせる。押しても選ばない */
+.pdf-page__ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.viewer-pages[data-tool='ink'] .pdf-page {
+  cursor: crosshair;
+}
+/* マーカー（アンダーライン）：文字の下の線。乗算で重ねるので下の文字は読める */
+.anno-line {
+  position: absolute;
+  background: var(--line, #ffe14d);
+  mix-blend-mode: multiply;
+  border-radius: 999px;
+  cursor: move;
+}
+.anno-line--draft {
+  opacity: 0.75;
+  pointer-events: none;
+}
+.anno-line.is-selected {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 1px;
+}
+.viewer-pages[data-tool='line'] .pdf-page {
+  cursor: text;
+}
+.viewer-pages[data-tool='ink'] .anno-line,
+.viewer-pages[data-tool='line'] .anno-line,
+.viewer-pages[data-tool='eraser'] .anno-line,
+.viewer-pages[data-tool='ink'] .anno-mask,
+.viewer-pages[data-tool='line'] .anno-mask,
+.viewer-pages[data-tool='eraser'] .anno-mask {
+  cursor: inherit;
+}
+/* 消しゴム：指・ペンの下の丸 */
+.viewer-pages[data-tool='eraser'] .pdf-page {
+  cursor: none;
+}
+.eraser-ring {
+  position: fixed;
+  z-index: 40;
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 70%, transparent);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* 筆箱のペン（上の帯）：筆箱に入れた 6 本。押すとそのペンを持つ */
+.pen-tray {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px 4px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--paper-ink) 5%, transparent);
+}
+.viewer-bar button.pen-tray__slot {
+  width: 54px;
+  min-width: 54px;
+  padding: 0 3px;
+}
+.pen-tray__slot .st-art {
+  display: block;
+  width: 100%;
+  height: 16px;
+  transition: transform 0.12s ease;
+}
+.viewer-bar button.pen-tray__slot[aria-pressed='true'] {
+  border-color: var(--ink);
+}
+.pen-tray__slot[aria-pressed='true'] .st-art {
+  transform: translateX(-3px) scale(1.08);
+}
+.pen-tray__slot.is-empty {
+  border: 1.5px dashed color-mix(in srgb, var(--paper-ink) 25%, transparent) !important;
+}
+.viewer-bar__case {
+  position: relative;
+}
+.case-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 340px;
+  max-height: 65vh;
+  overflow: auto;
+  padding: 10px 12px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow-hover);
+}
+.case-panel__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.case-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.viewer-bar .case-panel button.case-panel__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: auto;
+  padding: 4px 6px;
+  text-align: left;
+}
+.case-panel__item .st-art {
+  flex: none;
+  width: 72px;
+  height: 15px;
+}
+.case-panel__item.is-in span::after {
+  content: '（筆箱の中）';
+  color: var(--muted, #888);
+  font-size: 0.85em;
+}
+.case-panel__foot {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* 赤シート：赤を乗算で重ねる（白い紙 → 赤、黒い文字 → 黒、水色のマーカー → 黒）。ツールバーより下 */
@@ -3217,4 +3356,179 @@ textarea.input {
   background: var(--card);
   color: var(--paper-ink);
   box-shadow: var(--card-shadow-hover);
+}
+
+/* ---- 筆箱のページ（SPEC §15）：わたしの筆箱・ショップ ---- */
+.fb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.fb-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--paper-ink) 6%, transparent);
+}
+.fb-tab {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.fb-tab[aria-selected='true'] {
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  font-weight: 700;
+}
+.fb-case {
+  position: relative;
+  max-width: 640px;
+  margin: 0 auto var(--space-4);
+  padding: var(--space-3);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--case-base) 22%, var(--card));
+  box-shadow: var(--card-shadow);
+}
+.fb-case__art .st-art {
+  display: block;
+  width: 180px;
+  height: 72px;
+  margin: 0 auto var(--space-2);
+}
+.fb-case__slots {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.fb-slot {
+  position: relative;
+  display: flex;
+}
+.fb-slot__pick {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 10px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--paper-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.fb-slot.is-empty .fb-slot__pick {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--paper-ink) 25%, transparent);
+}
+.fb-slot.is-on .fb-slot__pick {
+  border-color: var(--paper-ink);
+}
+.fb-slot__pick .st-art {
+  flex: 1;
+  height: 22px;
+}
+.fb-slot__num {
+  flex: none;
+  width: 1.4em;
+  font-weight: 700;
+  color: var(--paper-ink-weak);
+}
+.fb-slot__out {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--paper-ink);
+  color: var(--card);
+  font-size: 13px;
+  line-height: 22px;
+  cursor: pointer;
+}
+.fb-case__hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-small);
+}
+.fb-group h3 {
+  margin: var(--space-4) 0 var(--space-2);
+}
+.fb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-2);
+}
+.fb-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  color: var(--paper-ink);
+  font: inherit;
+  text-align: left;
+}
+.fb-card.is-in {
+  border-color: color-mix(in srgb, var(--paper-ink) 45%, transparent);
+}
+button.fb-card {
+  cursor: pointer;
+}
+.fb-card__art {
+  width: 100%;
+}
+.fb-card__art .st-art {
+  display: block;
+  width: 100%;
+  height: 26px;
+}
+.fb-card--case .fb-card__art .st-art,
+.fb-grid .fb-card__art .st-art--case {
+  height: 64px;
+}
+.fb-card__name {
+  font-weight: 700;
+}
+.fb-card__spec,
+.fb-card__state {
+  font-size: var(--fs-small);
+}
+.fb-sample {
+  width: 100%;
+  height: 26px;
+  border-radius: 6px;
+  background: #fff;
+}
+.fb-card__buy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 2px;
+}
+.fb-price {
+  font-weight: 700;
+  color: var(--paper-ink);
+}
+.fb-note {
+  margin: 0 0 var(--space-2);
+}
+.fb-more {
+  margin-top: var(--space-4);
+  text-align: center;
 }

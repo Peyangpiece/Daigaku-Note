@@ -7,7 +7,8 @@ const INVOKE = [
   'quiz.status', 'quiz.setKey', 'quiz.removeKey', 'quiz.settings', 'quiz.generate', 'quiz.list', 'quiz.questions', 'quiz.answer', 'quiz.review', 'question.update',
   'pdf.open', 'pdf.asset', 'pdf.export', 'pdf.save', 'annotation.save', 'annotation.remove', 'bookmark.save', 'bookmark.remove',
   'settings.pickDownloadDir', 'settings.update', 'shell.openExternal', 'shell.openRoot', 'app.version', 'app.openWindow', 'browser.install',
-  'skin.save', 'skin.remove', 'skin.apply', 'skin.recentColor', 'skin.introduced', 'sticker.add', 'sticker.update', 'sticker.remove', 'sticker.data', 'skin.export', 'skin.import'
+  'skin.save', 'skin.remove', 'skin.apply', 'skin.recentColor', 'skin.introduced', 'sticker.add', 'sticker.update', 'sticker.remove', 'sticker.data', 'skin.export', 'skin.import',
+  'stationery.acquire', 'stationery.arrange'
 ];
 const ON = ['quiz.progress', 'quiz.finished', 'state.changed', 'sync.progress', 'sync.finished', 'attention.changed', 'login.required', 'route', 'zoom'];
 

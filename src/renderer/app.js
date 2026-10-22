@@ -3,6 +3,7 @@
 import {features} from '../shared/profile.js';
 import {renderHome} from './views/home.js';
 import {closeSkinPicker, openSkinPicker, renderKisekae} from './views/kisekae.js';
+import {renderFudebako} from './views/fudebako.js';
 import {applySkin, setStickerReload, skinOf, stickerLayer, watchTheme} from './skin.js';
 import {renderCourse} from './views/course.js';
 import {renderFolder, renderFolderNew} from './views/folder.js';
@@ -146,9 +147,9 @@ function render() {
   const app = document.getElementById('app');
   // 編集画面：紙（罫線・余白の縦線）はホームと同じものを窓いっぱいに敷く（拡大して横にはみ出しても途切れない）。
   // アプリ全体の拡大は 100% にする（PDF だけを拡大し、ツールバーや背景は拡大しない）
-  // 上の固定ボタン（ホーム・着せ替え）：今いる画面を押した状態に
+  // 上の固定ボタン（ホーム・着せ替え・筆箱）：今いる画面を押した状態に
   for (const b of document.querySelectorAll('.topnav [data-nav]'))
-    b.setAttribute('aria-current', (b.dataset.nav === 'kisekae' ? route.startsWith('/kisekae') : route === '/') ? 'page' : 'false');
+    b.setAttribute('aria-current', (b.dataset.nav === 'home' ? route === '/' : route.startsWith(`/${b.dataset.nav}`)) ? 'page' : 'false');
   const inViewer = route.startsWith('/viewer/');
   app.classList.toggle('paper--viewer', inViewer);
   document.documentElement.classList.toggle('paper-canvas', inViewer);
@@ -195,6 +196,7 @@ function render() {
   else if (route.startsWith('/quiz') || route.startsWith('/review')) view.innerHTML = renderQuiz(state, route);
   else if (route === '/settings' || route.startsWith('/settings?')) view.innerHTML = renderSettings(state, route);
   else if (/^\/kisekae(\/edit)?(\?|$)/.test(route)) view.innerHTML = renderKisekae(state, route);
+  else if (/^\/fudebako(\?|$)/.test(route)) view.innerHTML = renderFudebako(state, route);
   else view.innerHTML = renderHome(state);
   lastRoute = route;
   if (snap) restore(view, snap);

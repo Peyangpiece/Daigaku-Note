@@ -3,16 +3,22 @@
 // 文字隠しは水色のマーカー。ふだんは下の文字が読め、赤シートをかぶせたところだけ黒くつぶれて読めなくなる。
 //   仕組み：マーカーの水色は赤の成分が 0（#00d2ff）で、ページに「乗算」で重ねる。赤シートも赤（赤だけ通す）を乗算で重ねるので、
 //   マーカーの部分は 赤 0 × … = 黒 になる。白い紙は赤に、黒い文字は黒のままになり、本物の赤シートと同じ見え方になる
+// 筆箱（§9.8）：ボールペン（手書きの線）・マーカー（文字の下に引く線）・文字隠しペンを 6 本まで入れて、上の帯に並べる。
+//   どれを入れるかは「筆箱」のページで変える（文房具は shared/stationery.js）。消しゴムはペンの線・マーカーを消す。
+//   ボールペンの書き味：なぞった点を間引かず受け取り（getCoalescedEvents）、筆圧で太さを変える（shared/ink.js）。
+//   ペン（スタイラス）を一度使ったら、指で触れても書かない（手のひらが当たっても線にならない。指 1 本はスクロール）
 // 取り消し・やり直し（§9.1：200 手まで。履歴はメモリだけ）。注釈付きの PDF を別のファイルに書き出せる（§9.7）。
 // 元の PDF は変えない（§9.1）。注釈はページ座標（PDF のユーザー空間、左下原点、pt）でメインの DB に保存する。
 // ほかの画面と違い、状態が変わるたびに描き直さない（app.js が mount / unmount だけ呼ぶ）。
 // pdf.js は互換版（legacy）を使う。通常版は Map.prototype.getOrInsertComputed などの新しい機能を前提にしており、
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
-import {state, toast} from '../app.js';
+import {navigate, state, toast} from '../app.js';
 import {bookmarkLook, fixedSticker, skinOf} from '../skin.js';
 import {ROUND_DEFAULTS} from '../../shared/skin.js';
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
+import {boundsOf, createCapture, decodePoints, encodePoints, speedPressure, strokePath, touchesStroke} from '../../shared/ink.js';
+import {DEFAULT_HIDER, KIND_OF, TYPE_LABEL, TOOL_TYPES, itemOf, stationeryState, toolArt} from '../../shared/stationery.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -44,6 +50,10 @@ const isFlat = (d, line) => Math.abs(d.y1 - d.y0) < 12 || (!!line && d.y1 >= lin
 const LINE_HEIGHT = 1.4; // notebook.css の .anno-text と同じ
 const EXPORT_PX_PER_PT = 4; // 書き出す文字入れの画像の細かさ（1pt = 4px、288dpi）
 const HISTORY_MAX = 200;
+const MASK_HEX = '#00d2ff'; // 文字隠しの既定の色（shared/annotation.js の MASK_COLOR）
+const ERASER_PX = 9; // 消しゴムの半径（画面の px）
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const DRAW_TOOLS = ['ink', 'line', 'eraser']; // なぞって書く道具（注釈の上でも書く。動かさない）
 const TEXT_COLORS = ['#2b2b2b', '#d93025', '#1a73e8', '#188038', '#e37400', '#9334e6', '#c2185b', '#ffffff'];
 // 付箋は 6 色（tokens.css の --c1〜--c6 の明るい側の値）。既定は授業の色
 // PDF のメモ（付箋）の色：授業ページの付箋と同じ 5 色（着せ替えで変えられる）
@@ -92,7 +102,12 @@ const BAR = `
       <button type="button" data-tool="select" title="選択・移動（V）">選択</button>
       <button type="button" data-tool="text" title="文字入れ（T）">文字</button>
       <button type="button" data-tool="note" title="付箋（M）">付箋</button>
-      <button type="button" data-tool="mask" title="文字隠し：文字の上をなぞって水色のマーカーを引く（H）">文字隠し</button>
+    </div>
+    <div class="pen-tray" role="group" aria-label="筆箱のペン" data-v="slots"></div>
+    <button type="button" class="pen-tray__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカーをなぞって消す（E）">消しゴム</button>
+    <div class="viewer-bar__case">
+      <button type="button" data-v="case" aria-expanded="false" aria-haspopup="true" title="筆箱を開いて、ペンを入れ替える">筆箱</button>
+      <div class="case-panel" data-v="case-panel" hidden></div>
     </div>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
@@ -141,7 +156,9 @@ const BAR = `
       <div class="help-panel" data-v="help-panel" hidden>
         <strong>キーボードの操作</strong>
         <dl>
-          <dt>V・T・M・H</dt><dd>選択・文字・付箋・文字隠し</dd>
+          <dt>V・T・M</dt><dd>選択・文字・付箋</dd>
+          <dt>1〜6</dt><dd>筆箱の 1〜6 本目のペン</dd>
+          <dt>H・E</dt><dd>文字隠しペン・消しゴム</dd>
           <dt>B</dt><dd>今の場所にしおり</dd>
           <dt>R</dt><dd>赤シートを出す・しまう</dd>
           <dt>Delete</dt><dd>選んだ注釈を消す</dd>
@@ -209,6 +226,11 @@ class Viewer {
     this.undoStack = [];
     this.redoStack = [];
     this.sheet = null;
+    // 筆箱（§9.8）：中身は 6 本。slot は今使っているペンの場所（筆箱にない文字隠しペンを H で使うときは null）
+    this.st = stationeryState(state.data?.stationery);
+    this.slot = null;
+    this.penItem = null;
+    this.penSeen = false; // ペン（スタイラス）を使ったか。使ったら指では書かない
   }
 
   $(name) {
@@ -226,6 +248,8 @@ class Viewer {
     this.bindBar();
     this.bindPages();
     this.bindBookmarks();
+    this.bindCase();
+    this.renderSlots();
     this.setTool('select');
     const r = await api['pdf.open']({materialId: this.materialId});
     if (this.destroyed) return;
@@ -261,7 +285,7 @@ class Viewer {
       const el = document.createElement('div');
       el.className = 'pdf-page';
       el.dataset.page = String(i);
-      el.innerHTML = `<canvas class="pdf-page__canvas"></canvas><div class="pdf-page__layer"></div><span class="pdf-page__num muted">${i} / ${this.doc.numPages}</span>`;
+      el.innerHTML = `<canvas class="pdf-page__canvas"></canvas><div class="pdf-page__layer"><svg class="pdf-page__ink" aria-hidden="true"><g></g></svg></div><span class="pdf-page__num muted">${i} / ${this.doc.numPages}</span>`;
       this.pagesEl.append(el);
       this.pages.push({
         num: i,
@@ -269,6 +293,7 @@ class Viewer {
         el,
         canvas: el.querySelector('canvas'),
         layer: el.querySelector('.pdf-page__layer'),
+        ink: el.querySelector('.pdf-page__ink g'), // ペンの線（PDF の座標のまま描き、拡大は g の変換で合わせる）
         viewport: null,
         rendered: false,
         visible: false
@@ -457,6 +482,7 @@ class Viewer {
       p.viewport = p.page.getViewport({scale: this.zoom * CSS_UNITS});
       p.el.style.width = `${Math.floor(p.viewport.width)}px`;
       p.el.style.height = `${Math.floor(p.viewport.height)}px`;
+      p.ink.setAttribute('transform', `matrix(${p.viewport.transform.join(',')})`);
       p.rendered = false;
       if (p.visible) this.renderPage(p);
     }
@@ -530,7 +556,7 @@ class Viewer {
   // タッチ画面の 2 本指で拡大・縮小する（Electron はブラウザのピンチ拡大を切っているので、自分で受ける）。
   // 基準は 2 本の指の真ん中。指をそろえて動かすとスクロールにもなる（文字隠しの道具では 1 本指がなぞりになるため）
   onTouchStart(e) {
-    if (e.touches.length !== 2 || !this.pages.length || (this.pinch && !this.pinch.touch)) return;
+    if (e.touches.length !== 2 || !this.pages.length || (this.pinch && !this.pinch.touch) || this.drawing?.byPen) return;
     e.preventDefault(); // ブラウザのスクロールに渡さない（あとの touchmove を止められるように）
     this.cancelPointer();
     clearTimeout(this.pinchTimer);
@@ -559,8 +585,14 @@ class Viewer {
   /** 1 本目の指で始めたこと（なぞり中のマーカー・動かし中の注釈・置く前の文字入れや付箋）を取りやめる。2 本目の指が来たときなど */
   cancelPointer() {
     this.tap = null;
-    if (this.drawing) {
-      this.drawing.el.remove();
+    this.pan = null;
+    const dr = this.drawing;
+    if (dr?.kind === 'eraser') {
+      // 消しかけたものは戻さず、1 手として残す（取り消しで戻せる）
+      this.drawing = null;
+      this.recordGroup(dr.steps);
+    } else if (dr) {
+      if (dr.el !== this.ring) dr.el.remove();
       this.drawing = null;
     }
     const d = this.drag;
@@ -611,9 +643,22 @@ class Viewer {
   // ---- 注釈 ----
   addAnno(a) {
     const p = this.pages[a.page - 1];
+    if (a.kind === 'ink') {
+      // ペンの線：ページの SVG に path を足す（押しても選ばれない。消しゴムで消す）
+      a.points = decodePoints(a.body) ?? [];
+      a.el = document.createElementNS(SVG_NS, 'path');
+      a.el.dataset.key = a.key;
+      p.ink.append(a.el);
+      this.annos.set(a.key, a);
+      this.applyStyle(a);
+      return a;
+    }
     const el = document.createElement('div');
     el.dataset.key = a.key;
-    if (a.kind === 'text') {
+    if (a.kind === 'line') {
+      el.className = 'anno-line';
+      el.title = 'マーカー';
+    } else if (a.kind === 'text') {
       el.className = 'anno-text';
       el.textContent = a.body;
     } else if (a.kind === 'mask') {
@@ -651,7 +696,13 @@ class Viewer {
   }
 
   applyStyle(a) {
-    if (a.kind === 'text') {
+    if (a.kind === 'ink') {
+      a.points = decodePoints(a.body) ?? a.points ?? [];
+      a.el.setAttribute('fill', a.style.color);
+      a.el.setAttribute('d', strokePath(a.points, a.style.width, {pressure: a.style.pressure !== false}));
+    } else if (a.kind === 'line') a.el.style.setProperty('--line', a.style.color);
+    else if (a.kind === 'mask') a.el.style.setProperty('--mask', a.style.color ?? MASK_HEX);
+    else if (a.kind === 'text') {
       a.el.style.fontWeight = a.style.bold ? '700' : '400';
       a.el.style.color = a.style.color;
     } else if (a.kind === 'note') {
@@ -689,17 +740,17 @@ class Viewer {
   /** PDF 座標 → 画面の位置 */
   place(a) {
     const vp = this.pages[a.page - 1].viewport;
-    if (!vp) return;
+    if (!vp || a.kind === 'ink') return; // ペンの線はページの g の変換で合う
     const s = this.toScreen(a.page, a.rect);
     a.el.style.left = `${s.left}px`;
     a.el.style.top = `${s.top}px`;
     if (a.kind === 'text') {
       a.el.style.fontSize = `${a.style.size * vp.scale}px`;
       a.el.style.maxWidth = `${Math.max(40, vp.width - s.left)}px`;
-    } else if (a.kind === 'mask') {
+    } else if (a.kind === 'mask' || a.kind === 'line') {
       a.el.style.width = `${s.width}px`;
       a.el.style.height = `${s.height}px`;
-      this.syncCovers();
+      if (a.kind === 'mask') this.syncCovers();
     } else a.el.style.setProperty('--note-size', `${NOTE_SIZE * vp.scale}px`);
   }
 
@@ -892,7 +943,15 @@ class Viewer {
 
   record(key, before, after) {
     if (JSON.stringify(before) === JSON.stringify(after)) return;
-    this.undoStack.push({key, before, after});
+    this.pushStep({key, before, after});
+  }
+  /** いくつかの注釈の変更を 1 手にまとめる（消しゴムでひとなぞりに消した線など）。steps は {key, before, after} の並び */
+  recordGroup(steps) {
+    if (steps.length === 1) return this.record(steps[0].key, steps[0].before, steps[0].after);
+    if (steps.length) this.pushStep({group: steps});
+  }
+  pushStep(step) {
+    this.undoStack.push(step);
     if (this.undoStack.length > HISTORY_MAX) this.undoStack.shift();
     this.redoStack = [];
     this.updateHistory();
@@ -902,7 +961,7 @@ class Viewer {
     this.finishEdit();
     const step = this.undoStack.pop();
     if (!step) return;
-    this.restore(step.key, step.before);
+    for (const st of step.group ? [...step.group].reverse() : [step]) this.restore(st.key, st.before);
     this.redoStack.push(step);
     this.updateHistory();
   }
@@ -911,7 +970,7 @@ class Viewer {
     this.finishEdit();
     const step = this.redoStack.pop();
     if (!step) return;
-    this.restore(step.key, step.after);
+    for (const st of step.group ?? [step]) this.restore(st.key, st.after);
     this.undoStack.push(step);
     this.updateHistory();
   }
@@ -926,14 +985,14 @@ class Viewer {
     const data = structuredClone(snap);
     if (!a) a = this.addAnno({key, id: null, ...data});
     else {
-      if (a.page !== data.page) this.pages[data.page - 1].layer.append(a.el);
+      if (a.page !== data.page) (a.kind === 'ink' ? this.pages[data.page - 1].ink : this.pages[data.page - 1].layer).append(a.el);
       Object.assign(a, data);
       if (a.kind === 'text') a.el.textContent = a.body;
       else if (a.kind === 'note') a.el.querySelector('textarea').value = a.body;
       this.applyStyle(a);
       this.place(a);
     }
-    this.select(a);
+    if (a.kind !== 'ink') this.select(a); // ペンの線は選ばない（押しても選べないので）
     this.scheduleSave(a, 0);
   }
 
@@ -967,6 +1026,7 @@ class Viewer {
   // ---- 操作 ----
   setTool(tool) {
     this.tool = tool;
+    if (!['ink', 'line', 'mask'].includes(tool)) this.slot = null;
     if (tool !== 'select') {
       this.finishEdit();
       if (this.selected && this.selected.kind !== tool) this.select(null);
@@ -974,7 +1034,98 @@ class Viewer {
     this.pagesEl.dataset.tool = tool;
     for (const b of this.root.querySelectorAll('[data-tool]'))
       b.setAttribute('aria-pressed', String(b.dataset.tool === tool));
+    for (const b of this.root.querySelectorAll('[data-slot]'))
+      b.setAttribute('aria-pressed', String(this.slot !== null && Number(b.dataset.slot) === this.slot));
+    if (tool !== 'eraser') this.ring?.remove();
     this.updateBar();
+  }
+
+  // ---- 筆箱（§9.8）----
+  /** 筆箱の i 本目（null なら筆箱の外の品）のペンを持つ */
+  usePen(item, i = null) {
+    if (!item) return;
+    this.penItem = item;
+    this.slot = i;
+    this.setTool(KIND_OF[item.type]);
+    this.slot = i; // setTool が外したのを戻す
+    for (const b of this.root.querySelectorAll('[data-slot]'))
+      b.setAttribute('aria-pressed', String(i !== null && Number(b.dataset.slot) === i));
+  }
+  /** 筆箱の i 本目を持つ（空なら何もしない） */
+  useSlot(i) {
+    const item = itemOf(this.st.slots[i]);
+    if (item) this.usePen(item, i);
+  }
+  /** 文字隠しペン（H）：筆箱の中の最初の文字隠しペン。なければ水色 */
+  useHider() {
+    const i = this.st.slots.findIndex((id) => itemOf(id)?.type === 'hider');
+    if (i >= 0) this.useSlot(i);
+    else this.usePen(itemOf(DEFAULT_HIDER));
+  }
+  renderSlots() {
+    const box = this.$('slots');
+    box.innerHTML = this.st.slots
+      .map((id, i) => {
+        const it = itemOf(id);
+        if (!it) return `<button type="button" class="pen-tray__slot is-empty" data-slot="${i}" disabled title="空き（筆箱を開いて入れる）" aria-label="${i + 1} 本目：空き"></button>`;
+        const tip = `${it.name}（${TYPE_LABEL[it.type]}・${i + 1}）`;
+        return `<button type="button" class="pen-tray__slot" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${it.color}">${toolArt(it, {label: false})}</button>`;
+      })
+      .join('');
+    // 使っていたペンが筆箱から出たら、選択に戻す
+    if (this.slot !== null && this.st.slots[this.slot] !== this.penItem?.id) this.setTool('select');
+    else this.setTool(this.tool);
+  }
+  openCase(open) {
+    const panel = this.$('case-panel');
+    panel.hidden = !open;
+    this.$('case').setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    const at = this.slot ?? Math.max(0, this.st.slots.indexOf(null));
+    const groups = TOOL_TYPES.map((type) => {
+      const items = this.st.owned.map(itemOf).filter((it) => it?.type === type);
+      return `<div class="case-panel__group"><span class="muted">${TYPE_LABEL[type]}</span>
+        ${items
+          .map((it) => {
+            const where = this.st.slots.indexOf(it.id);
+            return `<button type="button" class="case-panel__item${where >= 0 ? ' is-in' : ''}" data-case-item="${it.id}" title="${it.name}${where >= 0 ? `（${where + 1} 本目）` : ''}">${toolArt(it, {label: false})}<span>${it.name}</span></button>`;
+          })
+          .join('')}</div>`;
+    });
+    panel.innerHTML = `<div class="case-panel__head"><strong>筆箱</strong><span class="muted">押したペンを ${at + 1} 本目に入れて持ちます</span></div>
+      ${groups.join('')}
+      <div class="case-panel__foot"><button type="button" class="btn btn--small" data-case-go>筆箱を整理する・ショップ →</button></div>`;
+    panel.dataset.at = String(at);
+  }
+  /** 筆箱の外のペンを、at 本目に入れて持つ（入っていたペンは出す）。もう入っていればそのまま持つ */
+  async putInCase(id, at) {
+    const now = this.st.slots.indexOf(id);
+    if (now >= 0) return this.useSlot(now);
+    const slots = [...this.st.slots];
+    slots[at] = id;
+    const r = await api['stationery.arrange']({slots});
+    if (r?.error) return toast(r.error, {error: true});
+    this.st = r.stationery;
+    if (state.data) state.data.stationery = r.stationery;
+    this.renderSlots();
+    this.useSlot(at);
+  }
+  bindCase() {
+    const panel = this.$('case-panel');
+    this.on(panel, 'click', (e) => {
+      const item = e.target.closest('[data-case-item]');
+      if (item) {
+        this.openCase(false);
+        return void this.putInCase(item.dataset.caseItem, Number(panel.dataset.at ?? 0));
+      }
+      if (e.target.closest('[data-case-go]')) {
+        this.openCase(false);
+        navigate('/fudebako');
+      }
+    });
+    this.on(document, 'pointerdown', (e) => {
+      if (!panel.hidden && !e.target.closest('.viewer-bar__case')) this.openCase(false);
+    });
   }
 
   /** 選んだ注釈に書式を当てる。何も選んでいなければ次に置く注釈の書式にする */
@@ -1044,6 +1195,8 @@ class Viewer {
       const t = e.target.closest('button');
       if (!t) return;
       if (t.dataset.tool) this.setTool(t.dataset.tool);
+      else if (t.dataset.slot !== undefined) this.useSlot(Number(t.dataset.slot));
+      else if (t.dataset.v === 'case') this.openCase(this.$('case-panel').hidden);
       else if (t.dataset.textColor) this.setTextStyle({color: t.dataset.textColor});
       else if (t.dataset.noteColor) this.setNoteColor(t.dataset.noteColor);
       else if (t.dataset.v === 'bold')
@@ -1113,7 +1266,7 @@ class Viewer {
     this.on(el, 'pointermove', (e) => this.onPointerMove(e));
     this.on(el, 'pointerup', (e) => this.onPointerUp(e));
     this.on(el, 'pointercancel', (e) => {
-      if ([this.drawing, this.drag, this.tap].some((t) => t?.pointer === e.pointerId)) this.cancelPointer();
+      if ([this.drawing, this.drag, this.tap, this.pan].some((t) => t?.pointer === e.pointerId)) this.cancelPointer();
     });
     // 画面に触れている指（ページの外で離したときも数え落とさないよう window で受ける）
     this.touchIds = new Set();
@@ -1148,10 +1301,18 @@ class Viewer {
   onPointerDown(e) {
     if (e.pointerType === 'touch') {
       this.touchIds.add(e.pointerId);
-      // 2 本目の指は書き込みに使わない（ピンチ）。1 本目で始めたことも取りやめる
+      // 2 本目の指は書き込みに使わない（ピンチ）。1 本目で始めたことも取りやめる（ペンで書いている間の手のひらは無視）
+      if (this.drawing?.byPen) return;
       if (this.touchIds.size > 1) return this.cancelPointer();
     }
+    if (e.pointerType === 'pen' && !this.penSeen) {
+      this.penSeen = true;
+      this.pagesEl.dataset.pen = 'seen';
+    }
     if (e.target.closest('.bookmark-ribbon')) return; // しおりのリボンは押しても書き込まない
+    // ペンの消しゴムの側（スタイラスの後ろ・消しゴムのボタン）は、どの道具のときも消しゴム
+    const penEraser = e.pointerType === 'pen' && (e.button === 5 || (e.buttons & 32) !== 0);
+    if (penEraser || DRAW_TOOLS.includes(this.tool)) return this.startDraw(e, penEraser);
     if (e.button !== 0) return;
     if (e.target.closest('.anno-note__pop')) return; // 付箋の本文は普通に打てる
     const a = this.annoOf(e.target);
@@ -1185,12 +1346,226 @@ class Viewer {
     this.createAt(this.tool, p, e.clientX - box.left, e.clientY - box.top);
   }
 
+  // ---- ペン・マーカー・消しゴム（§9.8）----
+  startDraw(e, penEraser = false) {
+    if (e.button !== 0 && !penEraser) return;
+    if (e.target.closest('.anno-note__pop')) return;
+    const pageEl = e.target.closest('.pdf-page');
+    if (!pageEl) return;
+    // ペンを使ったあとの指：書かずに、1 本指でスクロールする（手のひらが当たっても線にならない）
+    if (e.pointerType === 'touch' && this.penSeen) {
+      if (!this.drawing) this.pan = {pointer: e.pointerId, x: e.clientX, y: e.clientY};
+      return;
+    }
+    e.preventDefault();
+    this.finishEdit();
+    this.select(null);
+    this.openCase(false);
+    const p = this.pages[Number(pageEl.dataset.page) - 1];
+    const tool = penEraser ? 'eraser' : this.tool;
+    try {
+      this.pagesEl.setPointerCapture(e.pointerId); // ページの外へはみ出しても、離すまで受け取る
+    } catch {
+      // 指がもう離れていた（押してすぐ離した）など。受け取れる間だけ書く
+    }
+    const byPen = e.pointerType === 'pen';
+    if (tool === 'eraser') {
+      this.drawing = {kind: 'eraser', p, pointer: e.pointerId, byPen, steps: [], el: this.eraserRing()};
+      return this.eraseAt(e);
+    }
+    if (tool === 'line') {
+      this.startLine(e, p, pageEl.getBoundingClientRect());
+      this.drawing.byPen = byPen;
+      return;
+    }
+    const box = pageEl.getBoundingClientRect();
+    const pressure = e.pointerType === 'pen';
+    const vp = p.viewport;
+    const el = document.createElementNS(SVG_NS, 'path');
+    el.setAttribute('fill', this.penItem.color);
+    el.classList.add('ink-draft');
+    p.ink.append(el);
+    // 間引き：画面で 0.3px より近い点は捨てる。なめらかさ：ペンは控えめ（遅れを小さく）、指・マウスは強め（手ぶれを抑える）
+    const cap = createCapture({minGap: 0.3 / vp.scale, streamline: pressure ? 0.2 : 0.4});
+    const d = (this.drawing = {kind: 'ink', p, el, cap, box, pressure, byPen: pressure, pointer: e.pointerId, item: this.penItem, sim: 0.5, last: null, extra: []});
+    this.addInkPoint(d, e);
+    this.drawInk();
+  }
+
+  /** 画面の点 → PDF の点と筆圧。筆圧の取れない道具では動く速さから作る */
+  inkPoint(d, ev) {
+    const [x, y] = d.p.viewport.convertToPdfPoint(ev.clientX - d.box.left, ev.clientY - d.box.top);
+    let pr;
+    if (d.pressure) pr = ev.pressure > 0 ? ev.pressure : 0.5;
+    else {
+      const t = ev.timeStamp;
+      if (d.last) {
+        const dt = Math.max(1, t - d.last.t);
+        d.sim = speedPressure(d.sim, Math.hypot(x - d.last.x, y - d.last.y) / dt);
+      }
+      d.last = {x, y, t};
+      pr = d.sim;
+    }
+    return [x, y, pr];
+  }
+  addInkPoint(d, e) {
+    // 間の点（画面の描き直しより細かく来る点）もすべて使う。線がかくかくしない
+    const evs = e.getCoalescedEvents?.() ?? [];
+    for (const ev of evs.length ? evs : [e]) {
+      const [x, y, pr] = this.inkPoint(d, ev);
+      if (!d.cap.add(x, y, pr) && d.cap.points.length >= 5000) return this.finishInk(e);
+    }
+    // この先に来そうな点（予測）。線の先が指・ペンに遅れて見えないように、下書きにだけ足す
+    d.extra = (e.getPredictedEvents?.() ?? []).slice(0, 2).map((ev) => {
+      const [x, y] = d.p.viewport.convertToPdfPoint(ev.clientX - d.box.left, ev.clientY - d.box.top);
+      return [x, y, d.cap.points.at(-1)?.[2] ?? 0.5];
+    });
+  }
+  drawInk() {
+    if (this.inkFrame) return;
+    this.inkFrame = requestAnimationFrame(() => {
+      this.inkFrame = 0;
+      const d = this.drawing;
+      if (d?.kind !== 'ink') return;
+      d.el.setAttribute('d', strokePath([...d.cap.points, ...d.extra], d.item.width, {pressure: d.pressure}));
+    });
+  }
+  finishInk(e) {
+    const d = this.drawing;
+    this.drawing = null;
+    cancelAnimationFrame(this.inkFrame);
+    this.inkFrame = 0;
+    d.el.remove();
+    const [x, y, pr] = this.inkPoint(d, e);
+    const points = d.cap.finish(x, y, pr);
+    if (!points.length) return;
+    const style = {color: d.item.color, width: d.item.width, ...(d.pressure ? {} : {pressure: false})};
+    const a = this.addAnno({
+      key: `k${this.seq++}`,
+      id: null,
+      page: d.p.num,
+      kind: 'ink',
+      rect: boundsOf(points, d.item.width),
+      body: encodePoints(points),
+      style
+    });
+    this.record(a.key, null, this.snap(a));
+    this.scheduleSave(a, 0);
+  }
+
+  // マーカー（アンダーライン）：なぞった横の範囲に、文字の行の下へまっすぐな線を引く。文字のない所では、なぞった高さに引く
+  startLine(e, p, box) {
+    p.textPromise ??= this.textItems(p);
+    const el = document.createElement('div');
+    el.className = 'anno-line anno-line--draft';
+    el.style.setProperty('--line', this.penItem.color);
+    p.layer.append(el);
+    const x = e.clientX - box.left,
+      y = e.clientY - box.top;
+    const d = (this.drawing = {kind: 'line', p, el, box, item: this.penItem, x0: x, y0: y, x1: x, y1: y, pointer: e.pointerId, line: null});
+    p.textPromise
+      .then((raw) => {
+        const onLine = this.screenItems(p, raw).filter((it) => y >= it.hitTop && y <= it.hitBottom);
+        if (!onLine.length || this.drawing !== d) return;
+        d.line = lineOf(onLine);
+        this.drawLineDraft();
+      })
+      .catch(() => {});
+    this.drawLineDraft();
+  }
+  /** マーカーの線の箱（ページの中の px）。文字の行の上なら字の下端に、そうでなければなぞり始めの高さに */
+  lineBox(d, x1 = Math.min(d.x0, d.x1), x2 = Math.max(d.x0, d.x1)) {
+    const h = Math.max(2, d.item.width * d.p.viewport.scale);
+    const mid = d.line ? d.line.bottom : d.y0;
+    return {left: x1, top: mid - h / 2, width: x2 - x1, height: h};
+  }
+  drawLineDraft() {
+    const d = this.drawing;
+    const b = this.lineBox(d);
+    Object.assign(d.el.style, {left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px`});
+  }
+  async finishLine() {
+    const d = this.drawing;
+    this.drawing = null;
+    d.el.remove();
+    let x1 = Math.min(d.x0, d.x1),
+      x2 = Math.max(d.x0, d.x1);
+    if (x2 - x1 < 3) return;
+    const raw = await d.p.textPromise.catch(() => []);
+    if (this.destroyed) return;
+    // 文字の行の上なら、端を字の切れ目に合わせる（字の途中で切らない）
+    const onLine = this.screenItems(d.p, raw).filter((it) => d.y0 >= it.hitTop && d.y0 <= it.hitBottom);
+    if (onLine.length) {
+      d.line = lineOf(onLine);
+      const hit = onLine.filter((it) => it.left < x2 && it.right > x1);
+      const snapped = hit.length && snapRange(hit, x1, x2, this.measureChar);
+      if (snapped) {
+        x1 = snapped.left;
+        x2 = snapped.right;
+      }
+    }
+    const a = this.addAnno({
+      key: `k${this.seq++}`,
+      id: null,
+      page: d.p.num,
+      kind: 'line',
+      rect: this.fromScreen(d.p.num, this.lineBox(d, x1, x2)),
+      body: '',
+      style: {color: d.item.color, width: d.item.width}
+    });
+    this.record(a.key, null, this.snap(a));
+    this.scheduleSave(a, 0);
+  }
+
+  // 消しゴム：なぞったところに触れたペンの線・マーカー・文字隠しを消す。ひとなぞりで消したものは 1 手で取り消せる
+  eraserRing() {
+    this.ring ??= Object.assign(document.createElement('div'), {className: 'eraser-ring'});
+    this.ring.style.setProperty('--r', `${ERASER_PX}px`);
+    if (!this.ring.isConnected) this.root.append(this.ring);
+    return this.ring;
+  }
+  moveRing(e) {
+    const ring = this.eraserRing();
+    ring.style.left = `${e.clientX}px`;
+    ring.style.top = `${e.clientY}px`;
+  }
+  eraseAt(e) {
+    const d = this.drawing;
+    this.moveRing(e);
+    const p = d.p;
+    const box = p.el.getBoundingClientRect();
+    const evs = e.getCoalescedEvents?.() ?? [];
+    for (const ev of evs.length ? evs : [e]) {
+      const sx = ev.clientX - box.left,
+        sy = ev.clientY - box.top;
+      const [x, y] = p.viewport.convertToPdfPoint(sx, sy);
+      const r = ERASER_PX / p.viewport.scale;
+      for (const a of [...this.annos.values()]) {
+        if (a.page !== p.num || a.removed) continue;
+        let hit = false;
+        if (a.kind === 'ink') {
+          const b = a.rect;
+          hit = x >= b.x - r && x <= b.x + b.w + r && y >= b.y - r && y <= b.y + b.h + r && touchesStroke(a.points, a.style.width, x, y, r);
+        } else if (a.kind === 'line' || a.kind === 'mask') {
+          const s = this.toScreen(a.page, a.rect);
+          const nx = Math.max(s.left, Math.min(sx, s.left + s.width)),
+            ny = Math.max(s.top, Math.min(sy, s.top + s.height));
+          hit = Math.hypot(sx - nx, sy - ny) <= ERASER_PX;
+        }
+        if (!hit) continue;
+        d.steps.push({key: a.key, before: this.snap(a), after: null});
+        this.removeAnno(a, false);
+      }
+    }
+  }
+
   // ---- 文字隠し：文字の上をなぞって水色のマーカーを引く。文字の行に高さを合わせる ----
   startMask(e, p, box) {
     this.select(null);
     p.textPromise ??= this.textItems(p);
     const el = document.createElement('div');
     el.className = 'anno-mask anno-mask--draft';
+    el.style.setProperty('--mask', this.maskColor());
     p.layer.append(el);
     const x = e.clientX - box.left,
       y = e.clientY - box.top;
@@ -1305,6 +1680,11 @@ class Viewer {
       .filter(Boolean);
   }
 
+  /** 今の文字隠しペンの色（筆箱の外で H を押したときなどは水色） */
+  maskColor() {
+    return this.penItem?.type === 'hider' ? this.penItem.color : MASK_HEX;
+  }
+
   async finishMask() {
     const d = this.drawing;
     this.drawing = null;
@@ -1372,7 +1752,7 @@ class Viewer {
       kind: 'mask',
       rect: this.fromScreen(p.num, box),
       body: (hidden ?? '').slice(0, 2000),
-      style: {}
+      style: this.maskColor() === MASK_HEX ? {} : {color: this.maskColor()}
     });
     this.record(a.key, null, this.snap(a));
     this.scheduleSave(a, 0);
@@ -1602,6 +1982,27 @@ class Viewer {
   }
 
   onPointerMove(e) {
+    if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);
+    const pan = this.pan;
+    if (pan?.pointer === e.pointerId) {
+      if (this.drawing) return; // ペンで書いている間の手のひら
+      window.scrollBy(pan.x - e.clientX, pan.y - e.clientY);
+      pan.x = e.clientX;
+      pan.y = e.clientY;
+      return;
+    }
+    const dr = this.drawing;
+    if (dr?.pointer === e.pointerId && dr.kind === 'ink') {
+      this.addInkPoint(dr, e);
+      return this.drawInk();
+    }
+    if (dr?.pointer === e.pointerId && dr.kind === 'eraser') return this.eraseAt(e);
+    if (dr?.pointer === e.pointerId && dr.kind === 'line') {
+      const box = dr.p.el.getBoundingClientRect();
+      dr.x1 = Math.min(Math.max(e.clientX - box.left, 0), box.width);
+      dr.y1 = e.clientY - box.top;
+      return this.drawLineDraft();
+    }
     if (this.drawing?.pointer === e.pointerId) {
       const box = this.drawing.p.el.getBoundingClientRect();
       this.drawing.x1 = Math.min(Math.max(e.clientX - box.left, 0), box.width);
@@ -1621,6 +2022,15 @@ class Viewer {
   }
 
   onPointerUp(e) {
+    if (this.pan?.pointer === e.pointerId) this.pan = null;
+    const dr = this.drawing;
+    if (dr?.pointer === e.pointerId && dr.kind === 'ink') return void this.finishInk(e);
+    if (dr?.pointer === e.pointerId && dr.kind === 'line') return void this.finishLine();
+    if (dr?.pointer === e.pointerId && dr.kind === 'eraser') {
+      this.drawing = null;
+      if (this.tool !== 'eraser') this.ring?.remove();
+      return void this.recordGroup(dr.steps);
+    }
     if (this.drawing?.pointer === e.pointerId) return void this.finishMask();
     const t = this.tap;
     if (t?.pointer === e.pointerId) {
@@ -1673,10 +2083,13 @@ class Viewer {
     else if (k === 'v') this.setTool('select');
     else if (k === 't') this.setTool('text');
     else if (k === 'm') this.setTool('note');
-    else if (k === 'h') this.setTool('mask');
+    else if (k === 'h') this.useHider();
+    else if (k === 'e') this.setTool('eraser');
+    else if (/^[1-6]$/.test(e.key)) this.useSlot(Number(e.key) - 1);
     else if (k === 'r') this.toggleSheet();
     else if (e.key === 'Escape') {
       this.openHelp(false);
+      this.openCase(false);
       this.select(null);
       this.setTool('select');
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.selected) {
@@ -1695,7 +2108,9 @@ class Viewer {
     this.observer?.disconnect();
     this.barObserver?.disconnect();
     this.toggleSheet(false);
+    this.ring?.remove();
     cancelAnimationFrame(this.coverFrame);
+    cancelAnimationFrame(this.inkFrame);
     for (const p of this.pages) p.renderTask?.cancel();
     this.task?.destroy();
     document.title = '大学ノート';
