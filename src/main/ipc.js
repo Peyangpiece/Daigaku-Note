@@ -18,6 +18,7 @@ import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
 import {annotationToClient, normalizeAnnotation} from '../shared/annotation.js';
 import {normalizeBookmark} from '../shared/bookmark.js';
+import {acquire, arrange, stationeryState} from '../shared/stationery.js';
 
 const str = (v, max = 500) => (typeof v === 'string' && v.length <= max ? v : null);
 const id = (v) => (isUlid(v) ? v : null);
@@ -96,6 +97,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         recent: repo.getSetting('skin.recentColors', []),
         introduced: repo.getSetting('skin.introduced', false)
       },
+      stationery: stationeryState(repo.getSetting('stationery', null)), // 文房具：持ち物・筆箱の中身・ペンケース（shared/stationery.js）
       lastSync: repo.lastSyncRun(),
       browser: ctx.browser ?? {state: 'pending', message: ''},
       status: ctx.status ?? '',
@@ -363,6 +365,18 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   handle('skin.introduced', () => {
     repo.setSetting('skin.introduced', true);
     return {ok: true};
+  });
+
+  // ---- 文房具（SPEC §15）：ショップで入手する（いまは無料の品だけ）・筆箱の中身とペンケースを変える ----
+  handle('stationery.acquire', ({itemId}) => {
+    const st = acquire(repo.getSetting('stationery', null), String(itemId ?? ''));
+    repo.setSetting('stationery', st);
+    return {stationery: st};
+  });
+  handle('stationery.arrange', ({slots, caseId}) => {
+    const st = arrange(repo.getSetting('stationery', null), {slots, caseId});
+    repo.setSetting('stationery', st);
+    return {stationery: st};
   });
 
   // シールの素：レンダラで長辺 512px 以内の PNG に描き直したもの（画像の中の付加情報を落とす）を受け取り、

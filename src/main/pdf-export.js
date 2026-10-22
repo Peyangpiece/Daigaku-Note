@@ -4,14 +4,18 @@
 // - 文字入れ：画面と同じヒラギノ角ゴで描いた画像（レンダラが 288dpi で作る）を貼る。
 //   フォントそのものは埋め込まない（ヒラギノは OS のフォントで、埋め込みの可否と .ttc の扱いが確かめられていないため）
 // - 付箋：PDF の「テキスト注釈」（ほかの PDF アプリでもメモとして開ける）
+// - ボールペン：画面と同じ輪郭（shared/ink.js）を、塗りつぶした図形として描く（拡大しても粗くならない）
+// - アンダーライン：マーカーの色を乗算で重ねる（文字隠しと同じ。下の文字は読める）
 import {BlendMode, PDFDocument, PDFHexString, PDFString, degrees, rgb} from 'pdf-lib';
+import {decodePoints, strokePath} from '../shared/ink.js';
 
 export const MARKER_HEX = '#00d2ff'; // レンダラの表示と同じ。赤の成分が 0 なので赤シートの下で黒になる
 const hexToRgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 };
-const ORDER = {mask: 0, text: 1, note: 2}; // マーカーの上に文字、いちばん上に付箋
+const ORDER = {mask: 0, line: 0, ink: 1, text: 2, note: 3}; // マーカーの上にペンの線と文字、いちばん上に付箋
+const isHex = (v) => /^#[0-9a-f]{6}$/i.test(v ?? '');
 
 /**
  * 回転したページ（/Rotate。時計回り）でも、画面で見たとおりの向きで画像を置く位置と角度。
@@ -64,9 +68,24 @@ export async function exportAnnotatedPdf(
           y,
           width: w,
           height: h,
-          color: rgb(...hexToRgb(MARKER_HEX)),
+          color: rgb(...hexToRgb(isHex(a.style?.color) ? a.style.color : MARKER_HEX)),
           blendMode: BlendMode.Multiply
         });
+    } else if (a.kind === 'line') {
+      page.drawRectangle({
+        x,
+        y,
+        width: w,
+        height: h,
+        color: rgb(...hexToRgb(isHex(a.style?.color) ? a.style.color : '#ffe14d')),
+        blendMode: BlendMode.Multiply
+      });
+    } else if (a.kind === 'ink') {
+      const points = decodePoints(a.body);
+      if (!points) continue;
+      // drawSvgPath は y が下向きなので、上下を返したパスを原点に置く（PDF の座標そのままで描かれる）
+      const d = strokePath(points, a.style?.width ?? 1.1, {pressure: a.style?.pressure !== false, flipY: true});
+      if (d) page.drawSvgPath(d, {x: 0, y: 0, color: rgb(...hexToRgb(isHex(a.style?.color) ? a.style.color : '#222222'))});
     } else if (a.kind === 'text') {
       const png = images.get(a.id);
       if (!png) continue;

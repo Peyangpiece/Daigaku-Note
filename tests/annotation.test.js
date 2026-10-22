@@ -43,7 +43,7 @@ test('付箋：大きさは 20pt 角に固定、色は既定あり', () => {
 
 test('不正な注釈は通さない', () => {
   assert.throws(() => normalizeAnnotation(null), /注釈/);
-  assert.throws(() => normalizeAnnotation(text({kind: 'ink'})), /種類/);
+  assert.throws(() => normalizeAnnotation(text({kind: 'pencil'})), /種類/);
   assert.throws(() => normalizeAnnotation(text({page: 0})), /ページ/);
   assert.throws(() => normalizeAnnotation(text({page: 3}), {pageCount: 2}), /ページ/);
   assert.throws(() => normalizeAnnotation(text({rect: {x: NaN, y: 0, w: 1, h: 1}})), /位置/);
@@ -88,7 +88,7 @@ test('repo：注釈はファイルの SHA-256 に結び付き、別のファイ�
   );
 });
 
-test('文字隠し：色は持たず、下の文字を body に入れる。大きさ 0 は通さない', () => {
+test('文字隠し：暗い色は持たず（下の字が読めない）、下の文字を body に入れる。大きさ 0 は通さない', () => {
   const r = normalizeAnnotation({
     kind: 'mask',
     page: 1,
@@ -100,4 +100,27 @@ test('文字隠し：色は持たず、下の文字を body に入れる。大�
   assert.equal(r.body, '原価企画');
   assert.deepEqual(JSON.parse(r.rect_json), {x: 10, y: 20, w: 80, h: 14});
   assert.throws(() => normalizeAnnotation({kind: 'mask', page: 1, rect: {x: 0, y: 0, w: 0, h: 10}}), /大きさ/);
+});
+
+test('ボールペン：点から四角を作り直し、色・太さ・筆圧の有無を残す。点が不正なら断る', async () => {
+  const {encodePoints} = await import('../src/shared/ink.js');
+  const body = encodePoints([
+    [100, 200, 0.5],
+    [110, 205, 0.6]
+  ]);
+  const r = normalizeAnnotation({kind: 'ink', page: 1, rect: {x: 0, y: 0, w: 1, h: 1}, body, style: {color: '#D93025', width: 2, pressure: false, x: 1}});
+  assert.deepEqual(JSON.parse(r.rect_json), {x: 99, y: 199, w: 12, h: 7});
+  assert.deepEqual(JSON.parse(r.style_json), {color: '#d93025', width: 2, pressure: false});
+  const thick = normalizeAnnotation({kind: 'ink', page: 1, rect: {x: 0, y: 0, w: 1, h: 1}, body, style: {width: 99}});
+  assert.deepEqual(JSON.parse(thick.style_json), {color: '#2b2b2b', width: 12});
+  assert.throws(() => normalizeAnnotation({kind: 'ink', page: 1, rect: {x: 0, y: 0, w: 1, h: 1}, body: '[1,2]', style: {}}), /線が不正/);
+});
+
+test('マーカー（アンダーライン）と文字隠しの色：文字隠しは赤の成分が 0 の色だけ', () => {
+  const line = normalizeAnnotation({kind: 'line', page: 1, rect: {x: 10, y: 10, w: 50, h: 2.5}, body: '', style: {color: '#FFE14D', width: 2.5}});
+  assert.deepEqual(JSON.parse(line.style_json), {color: '#ffe14d', width: 2.5});
+  const mask = (color) => JSON.parse(normalizeAnnotation({kind: 'mask', page: 1, rect: {x: 1, y: 1, w: 5, h: 5}, body: '', style: {color}}).style_json);
+  assert.deepEqual(mask('#00C98D'), {color: '#00c98d'});
+  assert.deepEqual(mask('#00d2ff'), {}, '既定の水色は保存しない');
+  assert.deepEqual(mask('#ff0000'), {}, '赤を含む色は使わない（赤シートで隠れない）');
 });

@@ -105,3 +105,22 @@ test('回転したページの文字入れの画像は、画面と同じ向き�
   const r270 = uprightImage(-90, r);
   assert.deepEqual([r270.x, r270.y, r270.width, r270.height, r270.rotate.angle], [10, 60, 40, 30, 270]);
 });
+
+test('書き出し：ボールペンの線は塗りつぶした図形、マーカーは乗算の四角、文字隠しは選んだ色', async () => {
+  const {encodePoints} = await import('../src/shared/ink.js');
+  const body = encodePoints(Array.from({length: 10}, (_, i) => [100 + i * 3, 500, 0.5]));
+  const list = [
+    {id: 'I1', page: 1, kind: 'ink', rect: {x: 99, y: 499, w: 30, h: 2}, body, style: {color: '#d93025', width: 1.1}},
+    {id: 'L1', page: 1, kind: 'line', rect: {x: 72, y: 300, w: 80, h: 2.5}, body: '', style: {color: '#ff9ec7', width: 2.5}},
+    {id: 'M2', page: 1, kind: 'mask', rect: {x: 72, y: 200, w: 80, h: 12}, body: '', style: {color: '#00c98d'}}
+  ];
+  const out = await exportAnnotatedPdf(await source(1), list);
+  const p1 = await contentOf(out, 0);
+  assert.match(p1.text, /0\.8509\d* 0\.1882\d* 0\.1450\d* rg/); // #d93025 の線
+  assert.match(p1.text, /1 0 0 -1 0 0 cm/); // 上下を返して PDF の座標そのままに描く
+  assert.match(p1.text, /101\.5 -500\.\d+ m\n/); // 線の始まり（y は上下を返した値）
+  assert.match(p1.text, / -500\.\d+ v\n/); // 曲線でつなぐ
+  assert.match(p1.text, /\nf\n/); // 塗りつぶし
+  assert.match(p1.text, /1 0\.6196\d* 0\.7803\d* rg/); // #ff9ec7 のマーカー
+  assert.match(p1.text, /0 0\.7882\d* 0\.5529\d* rg/); // #00c98d の文字隠し
+});
