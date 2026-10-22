@@ -3,7 +3,9 @@
 // 文字隠しは水色のマーカー。ふだんは下の文字が読め、赤シートをかぶせたところだけ黒くつぶれて読めなくなる。
 //   仕組み：マーカーの水色は赤の成分が 0（#00d2ff）で、ページに「乗算」で重ねる。赤シートも赤（赤だけ通す）を乗算で重ねるので、
 //   マーカーの部分は 赤 0 × … = 黒 になる。白い紙は赤に、黒い文字は黒のままになり、本物の赤シートと同じ見え方になる
-// 筆箱（§9.8）：ボールペン（手書きの線）・マーカー（文字の下に引く線）・文字隠しペンを 6 本まで入れて、PDF の右横にいつも出す。
+// 筆箱（§9.8）：ボールペン（手書きの線）・マーカー（文字の下に引く線）・文字隠しペンを 6 本まで入れて、画面の右に出す。
+//   ペンを選ぶときは筆箱を開いて大きく出し、ペンを持ったら画面の右の外へしまう（書く邪魔にならない）。
+//   出すとき：マウスを画面の右端へ動かす・右端の「筆箱」のつまみを押す・指（ペン）で画面の右端から左へなでる
 //   どれを入れるかは「筆箱」のページで変える（文房具は shared/stationery.js）。消しゴムはペンの線・マーカーを消す。
 //   ボールペンの書き味：なぞった点を間引かず受け取り（getCoalescedEvents）、筆圧で太さを変える（shared/ink.js）。
 //   ペン（スタイラス）を一度使ったら、指で触れても書かない（手のひらが当たっても線にならない。指 1 本はスクロール）
@@ -180,7 +182,8 @@ const BAR = `
       </div>
     </form>
   </dialog>
-  <aside class="fude-side" data-v="side" aria-label="筆箱">
+  <aside class="fude-side is-tucked" data-v="side" aria-label="筆箱">
+    <button type="button" class="fude-side__tab" data-v="side-tab" title="筆箱を出す（マウスを画面の右端へ・右端から左へなでる）" aria-label="筆箱を出す"><span>筆箱</span></button>
     <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span></div>
     <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン（キーの 1〜6）"></div>
     <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカー・文字隠しをなぞって消す（E）">
@@ -255,6 +258,7 @@ class Viewer {
     this.bindPages();
     this.bindBookmarks();
     this.bindCase();
+    this.bindSide();
     this.renderSlots();
     this.setTool('select');
     const r = await api['pdf.open']({materialId: this.materialId});
@@ -475,7 +479,7 @@ class Viewer {
   fitZoom() {
     const first = this.pages[0]?.page.getViewport({scale: CSS_UNITS});
     if (!first) return 1;
-    const avail = this.pagesEl.clientWidth - parseFloat(window.getComputedStyle(this.pagesEl).paddingRight || '0') - 32; // 筆箱の分を除く
+    const avail = this.pagesEl.clientWidth - 32;
     return Math.min(2, Math.max(0.5, Math.floor((avail / first.width) * 100) / 100));
   }
 
@@ -1043,6 +1047,9 @@ class Viewer {
     for (const b of this.root.querySelectorAll('[data-slot]'))
       b.setAttribute('aria-pressed', String(this.slot !== null && Number(b.dataset.slot) === this.slot));
     if (tool !== 'eraser') this.ring?.remove();
+    // しまった筆箱のつまみに、今持っているペンの色を出す
+    const pen = ['ink', 'line', 'mask'].includes(tool) ? this.penItem?.color : tool === 'eraser' ? '#2f6fb5' : null;
+    this.$('side')?.style.setProperty('--current', pen ?? 'transparent');
     this.updateBar();
   }
 
@@ -1119,6 +1126,55 @@ class Viewer {
     if (state.data) state.data.stationery = r.stationery;
     this.renderSlots();
     this.useSlot(at);
+  }
+  /** 筆箱を出す（true）・しまう（false） */
+  openSide(open) {
+    clearTimeout(this.tuckTimer);
+    if (this.sideOpen === open) return;
+    this.sideOpen = open;
+    const side = this.$('side');
+    side.classList.toggle('is-tucked', !open);
+    this.$('side-tab').setAttribute('aria-expanded', String(open));
+    if (!open) this.openCase(false);
+  }
+  tuckSoon() {
+    clearTimeout(this.tuckTimer);
+    this.tuckTimer = setTimeout(() => !this.destroyed && this.openSide(false), 350);
+  }
+  bindSide() {
+    const side = this.$('side');
+    const EDGE = 10; // 画面の右端から何 px でマウスを寄せたとみなすか
+    // マウス：右端へ寄せたら出し、筆箱から離れたらしまう
+    this.on(document, 'pointermove', (e) => {
+      if (e.pointerType !== 'mouse' || this.drawing || this.drag) return;
+      if (!this.sideOpen && e.clientX >= document.documentElement.clientWidth - EDGE) this.openSide(true);
+    });
+    this.on(side, 'pointerleave', (e) => {
+      if (e.pointerType === 'mouse' && this.sideOpen && this.$('case-panel').hidden) this.tuckSoon();
+    });
+    this.on(side, 'pointerenter', () => clearTimeout(this.tuckTimer));
+    // 指・ペン：画面の右端から左へなでたら出す。筆箱の外を押したらしまう
+    this.on(document, 'pointerdown', (e) => {
+      if (e.pointerType === 'mouse') {
+        if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
+        return;
+      }
+      if (e.clientX >= document.documentElement.clientWidth - 24 && !e.target.closest('.fude-side')) {
+        this.edge = {pointer: e.pointerId, x: e.clientX, y: e.clientY};
+      } else if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
+    }, {capture: true});
+    this.on(document, 'pointermove', (e) => {
+      const g = this.edge;
+      if (!g || g.pointer !== e.pointerId) return;
+      if (g.x - e.clientX > 30 && Math.abs(e.clientY - g.y) < 60) {
+        this.edge = null;
+        this.cancelPointer(); // 書きかけの線にしない
+        this.openSide(true);
+      }
+    });
+    const endEdge = (e) => this.edge?.pointer === e.pointerId && (this.edge = null);
+    this.on(document, 'pointerup', endEdge);
+    this.on(document, 'pointercancel', endEdge);
   }
   bindCase() {
     const panel = this.$('case-panel');
@@ -1208,6 +1264,8 @@ class Viewer {
     const onClick = (e) => {
       const t = e.target.closest('button');
       if (!t || t.closest('.case-panel')) return;
+      const fromSide = !!t.closest('.fude-side');
+      if (t.dataset.v === 'side-tab') return this.openSide(true);
       if (t.dataset.tool) this.setTool(t.dataset.tool);
       else if (t.dataset.slot !== undefined) this.useSlot(Number(t.dataset.slot));
       else if (t.dataset.v === 'case') this.openCase(this.$('case-panel').hidden);
@@ -1227,6 +1285,8 @@ class Viewer {
       else if (t.dataset.v === 'sheet') this.toggleSheet();
       else if (t.dataset.v === 'export') this.openExport();
       else if (t.dataset.v === 'help') this.openHelp(this.$('help-panel').hidden);
+      // 筆箱からペン（消しゴム）を持ったら、少し見せてから画面の外へしまう
+      if (fromSide && (t.dataset.slot !== undefined || t.dataset.tool === 'eraser')) this.tuckSoon();
     };
     this.on(bar, 'click', onClick);
     this.on(side, 'click', onClick);
@@ -1329,6 +1389,8 @@ class Viewer {
       this.pagesEl.dataset.pen = 'seen';
     }
     if (e.target.closest('.bookmark-ribbon')) return; // しおりのリボンは押しても書き込まない
+    // 画面の右端（指・ペン）は筆箱を出すなでる操作の始まり。書き始めない
+    if (e.pointerType !== 'mouse' && e.clientX >= document.documentElement.clientWidth - 24) return;
     // ペンの消しゴムの側（スタイラスの後ろ・消しゴムのボタン）は、どの道具のときも消しゴム
     const penEraser = e.pointerType === 'pen' && (e.button === 5 || (e.buttons & 32) !== 0);
     if (penEraser || DRAW_TOOLS.includes(this.tool)) return this.startDraw(e, penEraser);
@@ -2127,6 +2189,7 @@ class Viewer {
     this.observer?.disconnect();
     this.barObserver?.disconnect();
     this.sideObserver?.disconnect();
+    clearTimeout(this.tuckTimer);
     this.toggleSheet(false);
     this.ring?.remove();
     cancelAnimationFrame(this.coverFrame);

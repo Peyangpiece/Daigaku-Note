@@ -1779,16 +1779,15 @@ textarea.input {
   pointer-events: none;
 }
 
-/* 筆箱（§9.8）：PDF の横にいつも出しておく。開いたペンケースに 6 本のペンが寝ていて、押すとそのペンを持つ（少し引き出される） */
-.viewer-pages {
-  padding-right: 236px; /* 筆箱の分（ページが筆箱の下に隠れないように） */
-}
+/* 筆箱（§9.8）：画面の右。開くと 6 本のペンが寝ていて、押すとそのペンを持つ（少し引き出される）。
+   ペンを持ったら画面の右の外へしまい、つまみ（「筆箱」）だけ端に残す */
 .fude-side {
   position: fixed;
   right: 16px;
   top: 120px;
   z-index: 20;
-  width: 212px;
+  width: 320px;
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
   max-height: calc(100vh - 140px);
   overflow: visible;
   padding: 10px 10px 12px;
@@ -1797,6 +1796,38 @@ textarea.input {
   box-shadow:
     0 6px 18px rgba(0, 0, 0, 0.22),
     inset 0 2px 0 rgba(255, 255, 255, 0.18);
+}
+.fude-side.is-tucked {
+  transform: translateX(calc(100% + 16px));
+  box-shadow: none;
+}
+/* つまみ：しまっているときだけ、画面の右端に見せる */
+.fude-side__tab {
+  position: absolute;
+  top: 24px;
+  left: -30px;
+  width: 30px;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 10px 0 0 10px;
+  background: var(--case-base, #2e3f66);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  writing-mode: vertical-rl;
+  letter-spacing: 0.2em;
+  box-shadow:
+    inset 4px 0 0 var(--current, transparent),
+    -2px 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.fude-side.is-tucked .fude-side__tab {
+  opacity: 0.92;
+  pointer-events: auto;
 }
 .fude-side__head {
   display: flex;
@@ -1829,8 +1860,8 @@ textarea.input {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
-  height: 32px;
+  gap: 6px;
+  height: 46px;
   padding: 0 2px;
   border: 0;
   border-radius: 8px;
@@ -1838,8 +1869,8 @@ textarea.input {
   cursor: pointer;
 }
 .fude-side__pen .st-art {
-  width: 172px;
-  height: 25px;
+  width: 268px;
+  height: 38px;
   transition: transform 0.15s ease;
 }
 .fude-side__pen:hover .st-art {
@@ -1865,7 +1896,7 @@ textarea.input {
 }
 .fude-side__num {
   flex: none;
-  width: 12px;
+  width: 14px;
   color: rgba(0, 0, 0, 0.45);
   font-size: 11px;
   font-weight: 700;
@@ -1901,15 +1932,12 @@ textarea.input {
   margin-top: 8px;
   text-align: center;
 }
-@media (max-width: 900px) {
-  .viewer-pages {
-    padding-right: 168px;
-  }
+@media (max-width: 700px) {
   .fude-side {
-    width: 150px;
+    width: 250px;
   }
   .fude-side__pen .st-art {
-    width: 116px;
+    width: 200px;
   }
 }
 .case-panel {
