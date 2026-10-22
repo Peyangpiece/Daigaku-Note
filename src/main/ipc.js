@@ -6,13 +6,14 @@ import {isUlid, ulid} from '../shared/ids.js';
 import {CLASSIC_ID, FORMAT, SHAPES, STICKER_MODES, isBuiltin, isHex, normalizeTemplate} from '../shared/skin.js';
 import {checkDownloadDir, defaultRoot} from '../shared/paths.js';
 import {courseFolderName} from '../shared/naming.js';
-import {currentTerm, defaultTermDates, termFolder, termId} from '../shared/term.js';
+import {currentTerm} from '../shared/term.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
 import {cleanUses, isRole} from '../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../shared/lms-terms.js';
 import {createRequire} from 'node:module';
 import {isOpenable, sha256} from './sync/files.js';
 import {renameCourse} from './folders.js';
+import {removeTerm, saveTerm} from './terms.js';
 import {exportAnnotatedPdf, isPng} from './pdf-export.js';
 import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
@@ -260,28 +261,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return {ok: true};
   });
 
-  handle('term.save', ({term}) => {
-    const label = str(term?.label, 20) ?? bad('学期名を入れてください');
-    const year = Number(term?.year);
-    if (!(year >= 2000 && year <= 2100)) bad('年度が不正です');
-    const d = defaultTermDates(label, year);
-    const start = /^\d{4}-\d{2}-\d{2}$/.test(term.start) ? term.start : d.start;
-    const end = /^\d{4}-\d{2}-\d{2}$/.test(term.end) ? term.end : d.end;
-    if (start >= end) bad('終了日は開始日より後にしてください');
-    const rounds = [15, 14, 8, 7].includes(Number(term.rounds)) ? Number(term.rounds) : 15;
-    const periods = term.preset && PERIOD_PRESETS[term.preset] ? PERIOD_PRESETS[term.preset] : term.periods && typeof term.periods === 'object' ? term.periods : null;
-    const row = repo.upsertTerm({
-      id: termId(year, label),
-      label,
-      year,
-      folder: termFolder(year, label),
-      start_date: start,
-      end_date: end,
-      rounds,
-      holidays_json: JSON.stringify(Array.isArray(term.holidays) ? term.holidays.filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)) : []),
-      periods_json: periods ? JSON.stringify(periods) : null,
-      source: 'user'
-    });
+  // 学期の保存（main/terms.js）。term.id があればその学期を直す（学期名・年度を変えても同じ学期のまま）
+  handle('term.save', async ({term}) => {
+    const input = {...(term ?? {}), id: typeof term?.id === 'string' && /^[\w-]{1,40}$/.test(term.id) ? term.id : null};
+    const row = await saveTerm({repo, rootDir: ctx.rootDir()}, input);
+    const {start_date: start, end_date: end} = row;
     // LMS をつなぐ前にフォルダのために作った仮の学期が同じ時期にあれば、フォルダをこの学期へ移して仮の学期を消す
     for (const t of repo.listTerms())
       if (t.source === 'auto' && t.id !== row.id && t.start_date <= end && start <= t.end_date) {
@@ -289,6 +273,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         repo.remove('term', t.id);
       }
     return {ok: true, term: row};
+  });
+
+  handle('term.remove', ({termId}) => {
+    removeTerm(repo, typeof termId === 'string' ? termId : '');
+    return {ok: true};
   });
 
   handle('course.update', async ({courseId, patch}) => {

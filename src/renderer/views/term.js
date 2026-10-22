@@ -1,18 +1,10 @@
 // 学期の設定（SPEC §6.14・§12.2）。セットアップの手順 4 と、設定 → 学期 の編集画面で同じ入力欄を使う。
+// 学期名は候補から選ぶか、自由に入力する（大学によって「1学期」「Fall」などがあるため）
 import {esc, navigate, reload, toast} from '../app.js';
+import {TERM_LABELS} from '../../shared/term.js';
 
 const api = window.daigaku;
-const LABELS = [
-  '前期',
-  '後期',
-  '春学期',
-  '秋学期',
-  '第1クォーター',
-  '第2クォーター',
-  '第3クォーター',
-  '第4クォーター',
-  '通年'
-];
+const ROUNDS = [15, 14, 8, 7];
 let editingId; // undefined = いちばん新しい学期、null = 新しい学期を追加
 
 /** 設定から入り直したときは、いちばん新しい学期から（app.js が呼ぶ） */
@@ -34,13 +26,13 @@ export function termForm(data, term) {
   const label = term?.label ?? d.label;
   return `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
       <label>年度<input class="input" id="tm-year" type="number" value="${esc(year)}"></label>
-      <label>学期<select class="input" id="tm-label">${LABELS.map((l) => `<option ${l === label ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label>学期名<input class="input" id="tm-label" list="tm-labels" maxlength="20" value="${esc(label)}" placeholder="例：前期・秋学期" autocomplete="off"><datalist id="tm-labels">${TERM_LABELS.map((l) => `<option value="${esc(l)}"></option>`).join('')}</datalist></label>
       <label>開始日<input class="input" id="tm-start" type="date" value="${esc(term?.start_date ?? '')}"></label>
       <label>終了日<input class="input" id="tm-end" type="date" value="${esc(term?.end_date ?? '')}"></label>
-      <label>回数<select class="input" id="tm-rounds">${[15, 14, 8, 7].map((n) => `<option ${n === (term?.rounds ?? 15) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label>回数<select class="input" id="tm-rounds">${[...new Set([...ROUNDS, term?.rounds ?? 15])].map((n) => `<option ${n === (term?.rounds ?? 15) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       <label>時限の開始時刻<select class="input" id="tm-preset"><option value="">${term?.periods_json ? '（いまの設定のまま）' : '（あとで設定）'}</option>${(data.presets ?? []).map((p) => `<option>${esc(p)}</option>`).join('')}</select></label>
     </div>
-    <p class="muted">開始日・終了日を空にすると学期名からの既定（春・前期 4/1〜9/30、秋・後期 10/1〜3/31）になります。</p>`;
+    <p class="muted">開始日・終了日を空にすると学期名からの既定（春・前期 4/1〜9/30、秋・後期 10/1〜3/31）になります。学期名を変えても日付は変わらないので、時期も変わるときは開始日・終了日を直してください。</p>`;
 }
 
 /** 入力欄から term.save に渡す値。時限と休みの日は、選び直さなければいまの設定を引き継ぐ */
@@ -48,6 +40,7 @@ export function readTermForm(term) {
   const $ = (id) => document.getElementById(id);
   const preset = $('tm-preset').value;
   return {
+    id: term?.id ?? null, // 直している学期（学期名・年度を変えても同じ学期のまま）
     year: Number($('tm-year').value),
     label: $('tm-label').value,
     start: $('tm-start').value,
@@ -72,8 +65,12 @@ export function renderTerm({data}) {
     <section class="card" style="max-width: 760px">
       <label style="display:block; margin-bottom: var(--space-2)">編集する学期<select class="input" id="tm-pick" data-keep="off">${terms.map((t) => `<option value="${esc(t.id)}" ${t.id === editingId ? 'selected' : ''}>${t.year} ${esc(t.label)}</option>`).join('')}<option value="" ${editingId === null ? 'selected' : ''}>＋ 新しい学期を追加</option></select></label>
       <div data-form="${esc(editingId ?? 'new')}">${termForm(data, term)}</div>
-      ${term ? '<p class="muted">年度か学期名を変えて保存すると、別の学期として追加されます（いまの学期はそのまま残ります）。</p>' : ''}
-      <div class="actions"><button class="btn btn--primary" id="tm-save">保存</button></div>
+      ${term ? '<p class="muted">年度・学期名を変えると、パソコンの学期フォルダ（例：2026_秋学期）の名前も変わります。授業や資料はこの学期に付いたままです。</p>' : ''}
+      <div class="actions"><button class="btn btn--primary" id="tm-save">保存</button>${
+        term && terms.length > 1 && !(data.courses ?? []).some((c) => c.term_id === term.id)
+          ? '<button class="btn btn--quiet" id="tm-remove" title="授業・フォルダのない学期だけ消せます">この学期を消す</button>'
+          : ''
+      }</div>
     </section>`;
 }
 
@@ -89,7 +86,18 @@ function bind(term) {
       const r = await api['term.save']({term: readTermForm(term)});
       if (r.error) return toast(r.error, {error: true});
       editingId = r.term?.id ?? editingId;
+      // 画面の学期の一覧・上の学期名を読み直してから戻る（読み直さないと、前の名前のまま見える）
+      await reload();
       toast('学期を保存しました');
       navigate('/settings');
+    };
+  if ($('tm-remove'))
+    $('tm-remove').onclick = async () => {
+      if (!window.confirm(`${term.year} ${term.label} を消しますか？（授業・フォルダはありません）`)) return;
+      const r = await api['term.remove']({termId: term.id});
+      if (r.error) return toast(r.error, {error: true});
+      editingId = undefined;
+      toast('学期を消しました');
+      reload();
     };
 }
