@@ -3,7 +3,9 @@
 // 文字隠しは水色のマーカー。ふだんは下の文字が読め、赤シートをかぶせたところだけ黒くつぶれて読めなくなる。
 //   仕組み：マーカーの水色は赤の成分が 0（#00d2ff）で、ページに「乗算」で重ねる。赤シートも赤（赤だけ通す）を乗算で重ねるので、
 //   マーカーの部分は 赤 0 × … = 黒 になる。白い紙は赤に、黒い文字は黒のままになり、本物の赤シートと同じ見え方になる
-// 筆箱（§9.8）：ボールペン（手書きの線）・マーカー（文字の下に引く線）・文字隠しペンを 6 本まで入れて、上の帯に並べる。
+// 筆箱（§9.8）：ボールペン（手書きの線）・マーカー（文字の下に引く線）・文字隠しペンを 6 本まで入れて、画面の右に出す。
+//   ペンを選ぶときは筆箱を開いて大きく出し、ペンを持ったら画面の右の外へしまう（書く邪魔にならない）。
+//   出すとき：マウスを画面の右端へ動かす・右端の「筆箱」のつまみを押す・指（ペン）で画面の右端から左へなでる
 //   どれを入れるかは「筆箱」のページで変える（文房具は shared/stationery.js）。消しゴムはペンの線・マーカーを消す。
 //   ボールペンの書き味：なぞった点を間引かず受け取り（getCoalescedEvents）、筆圧で太さを変える（shared/ink.js）。
 //   ペン（スタイラス）を一度使ったら、指で触れても書かない（手のひらが当たっても線にならない。指 1 本はスクロール）
@@ -103,12 +105,6 @@ const BAR = `
       <button type="button" data-tool="text" title="文字入れ（T）">文字</button>
       <button type="button" data-tool="note" title="付箋（M）">付箋</button>
     </div>
-    <div class="pen-tray" role="group" aria-label="筆箱のペン" data-v="slots"></div>
-    <button type="button" class="pen-tray__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカーをなぞって消す（E）">消しゴム</button>
-    <div class="viewer-bar__case">
-      <button type="button" data-v="case" aria-expanded="false" aria-haspopup="true" title="筆箱を開いて、ペンを入れ替える">筆箱</button>
-      <div class="case-panel" data-v="case-panel" hidden></div>
-    </div>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
       <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="しおり（B で今の場所にしおりを足す）">しおり</button>
@@ -186,6 +182,19 @@ const BAR = `
       </div>
     </form>
   </dialog>
+  <aside class="fude-side is-tucked" data-v="side" aria-label="筆箱">
+    <button type="button" class="fude-side__tab" data-v="side-tab" title="筆箱を出す（マウスを画面の右端へ・右端から左へなでる）" aria-label="筆箱を出す"><span>筆箱</span></button>
+    <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span></div>
+    <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン（キーの 1〜6）"></div>
+    <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカー・文字隠しをなぞって消す（E）">
+      <svg viewBox="0 0 64 28" aria-hidden="true"><rect x="2" y="5" width="40" height="18" rx="3" fill="#fbfbf8" stroke="#c9c6bd"/><rect x="26" y="4" width="36" height="20" rx="2" fill="#2f6fb5"/><rect x="30" y="9" width="28" height="10" rx="1" fill="#fff" opacity="0.9"/></svg>
+      <span>消しゴム</span>
+    </button>
+    <div class="fude-side__swap">
+      <button type="button" class="btn btn--small" data-v="case" aria-expanded="false" aria-haspopup="true" title="持っているペンを出して、入れ替える">ペンを入れ替える</button>
+      <div class="case-panel" data-v="case-panel" hidden></div>
+    </div>
+  </aside>
   <div class="viewer-pages" data-v="pages"><p class="muted">読み込み中…</p></div>`;
 
 class Viewer {
@@ -249,6 +258,7 @@ class Viewer {
     this.bindPages();
     this.bindBookmarks();
     this.bindCase();
+    this.bindSide();
     this.renderSlots();
     this.setTool('select');
     const r = await api['pdf.open']({materialId: this.materialId});
@@ -1037,6 +1047,9 @@ class Viewer {
     for (const b of this.root.querySelectorAll('[data-slot]'))
       b.setAttribute('aria-pressed', String(this.slot !== null && Number(b.dataset.slot) === this.slot));
     if (tool !== 'eraser') this.ring?.remove();
+    // しまった筆箱のつまみに、今持っているペンの色を出す
+    const pen = ['ink', 'line', 'mask'].includes(tool) ? this.penItem?.color : tool === 'eraser' ? '#2f6fb5' : null;
+    this.$('side')?.style.setProperty('--current', pen ?? 'transparent');
     this.updateBar();
   }
 
@@ -1064,12 +1077,16 @@ class Viewer {
   }
   renderSlots() {
     const box = this.$('slots');
+    const kase = itemOf(this.st.caseId);
+    this.$('side').style.setProperty('--case-base', kase.base);
+    this.$('side').style.setProperty('--case-trim', kase.trim);
+    this.$('case-name').textContent = kase.name;
     box.innerHTML = this.st.slots
       .map((id, i) => {
         const it = itemOf(id);
-        if (!it) return `<button type="button" class="pen-tray__slot is-empty" data-slot="${i}" disabled title="空き（筆箱を開いて入れる）" aria-label="${i + 1} 本目：空き"></button>`;
-        const tip = `${it.name}（${TYPE_LABEL[it.type]}・${i + 1}）`;
-        return `<button type="button" class="pen-tray__slot" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${it.color}">${toolArt(it, {label: false})}</button>`;
+        if (!it) return `<button type="button" class="fude-side__pen is-empty" data-slot="${i}" disabled title="空き（「ペンを入れ替える」で入れる）" aria-label="${i + 1} 本目：空き"><span class="fude-side__num">${i + 1}</span></button>`;
+        const tip = `${it.name}（${TYPE_LABEL[it.type]}・キー ${i + 1}）`;
+        return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${it.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
       })
       .join('');
     // 使っていたペンが筆箱から出たら、選択に戻す
@@ -1110,6 +1127,55 @@ class Viewer {
     this.renderSlots();
     this.useSlot(at);
   }
+  /** 筆箱を出す（true）・しまう（false） */
+  openSide(open) {
+    clearTimeout(this.tuckTimer);
+    if (this.sideOpen === open) return;
+    this.sideOpen = open;
+    const side = this.$('side');
+    side.classList.toggle('is-tucked', !open);
+    this.$('side-tab').setAttribute('aria-expanded', String(open));
+    if (!open) this.openCase(false);
+  }
+  tuckSoon() {
+    clearTimeout(this.tuckTimer);
+    this.tuckTimer = setTimeout(() => !this.destroyed && this.openSide(false), 350);
+  }
+  bindSide() {
+    const side = this.$('side');
+    const EDGE = 10; // 画面の右端から何 px でマウスを寄せたとみなすか
+    // マウス：右端へ寄せたら出し、筆箱から離れたらしまう
+    this.on(document, 'pointermove', (e) => {
+      if (e.pointerType !== 'mouse' || this.drawing || this.drag) return;
+      if (!this.sideOpen && e.clientX >= document.documentElement.clientWidth - EDGE) this.openSide(true);
+    });
+    this.on(side, 'pointerleave', (e) => {
+      if (e.pointerType === 'mouse' && this.sideOpen && this.$('case-panel').hidden) this.tuckSoon();
+    });
+    this.on(side, 'pointerenter', () => clearTimeout(this.tuckTimer));
+    // 指・ペン：画面の右端から左へなでたら出す。筆箱の外を押したらしまう
+    this.on(document, 'pointerdown', (e) => {
+      if (e.pointerType === 'mouse') {
+        if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
+        return;
+      }
+      if (e.clientX >= document.documentElement.clientWidth - 24 && !e.target.closest('.fude-side')) {
+        this.edge = {pointer: e.pointerId, x: e.clientX, y: e.clientY};
+      } else if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
+    }, {capture: true});
+    this.on(document, 'pointermove', (e) => {
+      const g = this.edge;
+      if (!g || g.pointer !== e.pointerId) return;
+      if (g.x - e.clientX > 30 && Math.abs(e.clientY - g.y) < 60) {
+        this.edge = null;
+        this.cancelPointer(); // 書きかけの線にしない
+        this.openSide(true);
+      }
+    });
+    const endEdge = (e) => this.edge?.pointer === e.pointerId && (this.edge = null);
+    this.on(document, 'pointerup', endEdge);
+    this.on(document, 'pointercancel', endEdge);
+  }
   bindCase() {
     const panel = this.$('case-panel');
     this.on(panel, 'click', (e) => {
@@ -1124,7 +1190,7 @@ class Viewer {
       }
     });
     this.on(document, 'pointerdown', (e) => {
-      if (!panel.hidden && !e.target.closest('.viewer-bar__case')) this.openCase(false);
+      if (!panel.hidden && !e.target.closest('.fude-side__swap')) this.openCase(false);
     });
   }
 
@@ -1191,9 +1257,15 @@ class Viewer {
     this.on(bar, 'pointerdown', (e) => {
       if (this.editing && e.target.closest('button, .swatch')) e.preventDefault();
     });
-    this.on(bar, 'click', (e) => {
+    const side = this.$('side');
+    // 筆箱（横）が見えている場所：ツールバーの下から
+    this.sideObserver = new ResizeObserver(() => (side.style.top = `${bar.getBoundingClientRect().bottom + 16}px`));
+    this.sideObserver.observe(bar);
+    const onClick = (e) => {
       const t = e.target.closest('button');
-      if (!t) return;
+      if (!t || t.closest('.case-panel')) return;
+      const fromSide = !!t.closest('.fude-side');
+      if (t.dataset.v === 'side-tab') return this.openSide(true);
       if (t.dataset.tool) this.setTool(t.dataset.tool);
       else if (t.dataset.slot !== undefined) this.useSlot(Number(t.dataset.slot));
       else if (t.dataset.v === 'case') this.openCase(this.$('case-panel').hidden);
@@ -1213,6 +1285,13 @@ class Viewer {
       else if (t.dataset.v === 'sheet') this.toggleSheet();
       else if (t.dataset.v === 'export') this.openExport();
       else if (t.dataset.v === 'help') this.openHelp(this.$('help-panel').hidden);
+      // 筆箱からペン（消しゴム）を持ったら、少し見せてから画面の外へしまう
+      if (fromSide && (t.dataset.slot !== undefined || t.dataset.tool === 'eraser')) this.tuckSoon();
+    };
+    this.on(bar, 'click', onClick);
+    this.on(side, 'click', onClick);
+    this.on(side, 'pointerdown', (e) => {
+      if (this.editing && e.target.closest('button')) e.preventDefault();
     });
     // ページ番号を入れて移る。スクロールしたら今のページを出す
     const page = this.$('page');
@@ -1310,6 +1389,8 @@ class Viewer {
       this.pagesEl.dataset.pen = 'seen';
     }
     if (e.target.closest('.bookmark-ribbon')) return; // しおりのリボンは押しても書き込まない
+    // 画面の右端（指・ペン）は筆箱を出すなでる操作の始まり。書き始めない
+    if (e.pointerType !== 'mouse' && e.clientX >= document.documentElement.clientWidth - 24) return;
     // ペンの消しゴムの側（スタイラスの後ろ・消しゴムのボタン）は、どの道具のときも消しゴム
     const penEraser = e.pointerType === 'pen' && (e.button === 5 || (e.buttons & 32) !== 0);
     if (penEraser || DRAW_TOOLS.includes(this.tool)) return this.startDraw(e, penEraser);
@@ -2107,6 +2188,8 @@ class Viewer {
     for (const off of this.listeners) off();
     this.observer?.disconnect();
     this.barObserver?.disconnect();
+    this.sideObserver?.disconnect();
+    clearTimeout(this.tuckTimer);
     this.toggleSheet(false);
     this.ring?.remove();
     cancelAnimationFrame(this.coverFrame);
