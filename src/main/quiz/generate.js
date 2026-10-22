@@ -9,6 +9,7 @@ export const MODELS = {
   'claude-opus-5-5': {label: '高精度（Claude Opus 5.5）', input: 4, output: 20, cacheRead: 0.2}
 };
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
+export const EFFORT = 'medium';
 const BETAS = ['server-side-fallback-2026-07-01'];
 const err = (code, message) => Object.assign(new Error(message), {code});
 
@@ -190,7 +191,8 @@ export async function generateQuiz(deps, opts) {
       betas: BETAS,
       fallbacks: 'default',
       system: [{type: 'text', text: SYSTEM, cache_control: {type: 'ephemeral'}}],
-      output_config: {format: {type: 'json_schema', schema}},
+      // effort は medium：既定より出力（考える分を含む）が半分ほどになり、費用と時間がおよそ半分。品質の機械的な確かめでは差がなかった
+      output_config: {format: {type: 'json_schema', schema}, effort: EFFORT},
       messages
     });
     const msg = await stream.finalMessage();

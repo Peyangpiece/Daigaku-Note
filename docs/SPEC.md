@@ -1082,7 +1082,7 @@ flowchart TD
 | 項目 | 決まり |
 |---|---|
 | モデル | 既定 `claude-sonnet-5-5`（入力 $2／出力 $10 per MTok）。設定で `claude-opus-5-5`（$4／$20）を「高精度」として選べる。モデル ID に日付接尾辞を付けない |
-| 出力形式 | `output_config.format` に JSON Schema（`additionalProperties: false`、`required` を全部指定）。`max_tokens` 16,000。思考は既定（adaptive） |
+| 出力形式 | `output_config.format` に JSON Schema（`additionalProperties: false`、`required` を全部指定）。`max_tokens` 16,000。思考は既定（adaptive）。`effort` は `medium`（既定より費用・時間がおよそ半分。試した資料では品質の機械的な確かめに差がなかった） |
 | system | 固定文（§18.3）。`cache_control: {type: 'ephemeral'}` |
 | 拒否への備え | `fallbacks: 'default'`（beta `server-side-fallback-2026-07-01`） |
 | 再試行 | 429・5xx・通信は 1 分・5 分・15 分の間をあけて 3 回まで。形の不備は 1 回だけ出し直し |
