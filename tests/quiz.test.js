@@ -261,6 +261,7 @@ test('生成：構造化出力・根拠のない問題は捨てる・検算の�
   const first = client.calls[0];
   assert.equal(first.model, 'claude-sonnet-5-5');
   assert.deepEqual(first.output_config.format, {type: 'json_schema', schema: SCHEMA});
+  assert.equal(first.output_config.effort, 'medium');
   assert.equal(first.fallbacks, 'default');
   assert.deepEqual(first.system[0].cache_control, {type: 'ephemeral'});
   assert.match(first.messages[0].content, /\[p\.1\] 原価企画とは/);
