@@ -70,3 +70,16 @@ test('LMS をつながずに使い始めたときの仮の学期：4〜9 月は�
   assert.equal(spring.start_date, '2026-04-01');
   assert.equal(spring.end_date, '2026-09-30');
 });
+
+test('期間が重なる学期（通年と前期）では、期間の短い学期を今の学期にする', async () => {
+  const {overlapping} = await import('../src/shared/term.js');
+  const terms = [
+    {id: 'year', start_date: '2026-04-01', end_date: '2027-03-31'},
+    {id: 'spring', start_date: '2026-04-01', end_date: '2026-09-30'},
+    {id: 'fall', start_date: '2026-10-01', end_date: '2027-03-31'}
+  ];
+  assert.equal(currentTerm(terms, '2026-05-01').id, 'spring');
+  assert.equal(currentTerm(terms, '2026-11-01').id, 'fall');
+  assert.deepEqual(overlapping(terms, terms[1]).map((t) => t.id), ['year']);
+  assert.deepEqual(overlapping(terms, terms[0]).map((t) => t.id), ['spring', 'fall']);
+});

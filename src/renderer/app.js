@@ -93,8 +93,8 @@ function head() {
   document.getElementById('head-date').textContent =
     `${d.getMonth() + 1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`;
   const terms = state.data?.terms ?? [];
-  const today = d.toLocaleDateString('sv-SE');
-  const term = terms.find((t) => t.start_date <= today && today <= t.end_date) ?? terms.at(-1);
+  // 今の学期はメインと同じ決め方（期間の重なる学期では短いほう。shared/term.js の currentTerm）
+  const term = terms.find((t) => t.id === state.data?.currentTermId) ?? terms.at(-1);
   // 学期を使わない人（社会人）には学期名を出さない
   const useTerms = features(state.data?.settings ?? {}).terms;
   document.getElementById('head-term').textContent = term && useTerms ? `${term.year} ${term.label}` : '';

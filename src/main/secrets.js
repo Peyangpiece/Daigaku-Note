@@ -32,7 +32,7 @@ export function createSecrets(file, log, safeStorageImpl = null) {
         const value = JSON.parse(s.decryptString(Buffer.from(all[key], 'base64')));
         locked.delete(key);
         return value;
-      } catch (e) {
+      } catch {
         locked.add(key);
         log?.warn?.(`秘密を復号できません: ${key}`);
         return null;

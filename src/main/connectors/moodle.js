@@ -13,7 +13,7 @@ export class MoodleApiError extends Error {
 const SERVICE = 'moodle_mobile_app';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function createMoodleConnector({fetch: fetchImpl = globalThis.fetch, secrets, log = () => {}, retryDelays = [1000, 5000, 15000]} = {}) {
+export function createMoodleConnector({fetch: fetchImpl = globalThis.fetch, secrets, retryDelays = [1000, 5000, 15000]} = {}) {
   const normBase = (u) => String(u).replace(/\/+$/, '').replace(/\/(login\/index\.php|my\/?|course\/.*)$/, '');
 
   async function call(ctx, wsfunction, params = {}) {
