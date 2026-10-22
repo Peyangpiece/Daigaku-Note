@@ -25,6 +25,21 @@ const marker = (id, name, color, thick = false) => ({
 });
 const hider = (id, name, color) => ({id, type: 'hider', name, color, body: '#ffffff', accent: color, price: 0});
 const pencase = (id, name, style, base, trim) => ({id, type: 'case', name, style, base, trim, price: 0});
+/** 既製品の見た目のペン（実験）。art で絵を分ける。ゲルインク（サラサ）は少し太く濃い線 */
+const maker = (id, name, makerName, art, color, body, accent) => ({
+  id,
+  type: 'pen',
+  name,
+  color,
+  width: art === 'sarasa' ? 1.25 : 1.1,
+  mm: '0.5',
+  body,
+  accent,
+  price: 0,
+  maker: makerName,
+  art,
+  experimental: true
+});
 
 // ボールペンの字幅（mm）→ 線の太さ（pt。1pt ≒ 0.35mm）。紙に書いた線の太さに近づける
 const PEN_WIDTH = {'0.38': 0.8, '0.5': 1.1, '0.7': 1.5, '1.0': 2};
@@ -61,7 +76,13 @@ export const CATALOG = [
   pencase('case-leather-brown', '革のペンケース（茶）', 'leather', '#8a5a3b', '#e8c9a0'),
   pencase('case-pastel-pink', 'パステルの筆箱（桃）', 'pouch', '#f6c9d6', '#ffffff'),
   pencase('case-sage', 'くすみグリーンの筆箱', 'pouch', '#a9bfa8', '#f3efe4'),
-  pencase('case-clear', 'クリアケース', 'clear', '#e9f3f8', '#9fb7c4')
+  pencase('case-clear', 'クリアケース', 'clear', '#e9f3f8', '#9fb7c4'),
+  // 実験：既製品の見た目のペン（個人の試作。メーカーの許しを得ていないので一般には出さない。
+  // ショップに出すのは設定の「実験」をオンにしたときだけ）
+  maker('maker-jetstream-black', 'ジェットストリーム 黒 0.5', '三菱鉛筆', 'jetstream', '#1f1f22', '#1d1e21', '#121214'),
+  maker('maker-jetstream-red', 'ジェットストリーム 赤 0.5', '三菱鉛筆', 'jetstream', '#d0202e', '#c8102e', '#121214'),
+  maker('maker-sarasa-black', 'サラサクリップ 黒 0.5', 'ゼブラ', 'sarasa', '#141414', '#e8eef2', '#1b1b1b'),
+  maker('maker-sarasa-red', 'サラサクリップ 赤 0.5', 'ゼブラ', 'sarasa', '#e4002b', '#e8eef2', '#e4002b')
 ];
 const ITEMS = new Map(CATALOG.map((it) => [it.id, it]));
 export const itemOf = (id) => ITEMS.get(id) ?? null;
@@ -100,10 +121,10 @@ export function stationeryState(raw) {
 }
 
 /** ショップで入手する。無料の品だけ（有料の品はまだない）。新しい状態を返す。入手できなければ Error */
-export function acquire(raw, id) {
+export function acquire(raw, id, {experiments = false} = {}) {
   const st = stationeryState(raw);
   const item = itemOf(id);
-  if (!item) throw new Error('その文房具はありません');
+  if (!item || (item.experimental && !experiments)) throw new Error('その文房具はありません');
   if (item.price !== 0) throw new Error('この文房具はまだ入手できません');
   if (st.owned.includes(id)) return st;
   return stationeryState({...st, owned: [...st.owned, id]});
@@ -121,6 +142,9 @@ export function arrange(raw, {slots, caseId} = {}) {
   if (caseId !== undefined && (!has.has(caseId) || itemOf(caseId)?.type !== 'case')) throw new Error('持っていないペンケースです');
   return stationeryState({...st, ...(slots !== undefined ? {slots} : {}), ...(caseId !== undefined ? {caseId} : {})});
 }
+
+/** ショップに出す品か（実験の品は、設定の実験をオンにしたときだけ） */
+export const listed = (item, {experiments = false} = {}) => !item.experimental || experiments;
 
 /** 値段の表示。無料は「無料」 */
 export const priceLabel = (item) => (item.price === 0 ? '無料' : `¥${item.price}`);
@@ -155,6 +179,8 @@ export function toolArt(item, {label = true} = {}) {
   const title = label ? `<title>${esc(item.name)}</title>` : '';
   const g = `st-${item.id}`; // グラデーションの id（品ごと）
   const open = `<svg class="st-art st-art--${item.type === 'pen' ? 'pen' : 'marker'}" viewBox="0 0 200 28" aria-hidden="${label ? 'false' : 'true'}" role="img">${title}`;
+  if (item.art === 'jetstream') return `${open}${jetstreamArt(item, g)}</svg>`;
+  if (item.art === 'sarasa') return `${open}${sarasaArt(item, g)}</svg>`;
   if (item.type === 'pen') {
     const ridges = Array.from({length: 12}, (_, i) => `<rect x="${33 + i * 3.4}" y="8.2" width="1.2" height="11.6" fill="#000" opacity="0.13"/>`).join('');
     return `${open}<defs>${tube(`${g}-b`, item.body)}${tube(`${g}-a`, item.accent)}${METAL(`${g}-m`)}
@@ -186,6 +212,55 @@ export function toolArt(item, {label = true} = {}) {
       <rect x="66" y="${y + 2}" width="124" height="1.6" rx="0.8" fill="#fff" opacity="0.6"/>${tag}</svg>`;
   }
   return '';
+}
+
+// ---- 実験：既製品の見た目（個人の試作。写真を見ながら直す前提のおおよその形）----
+const SHADOW = '<ellipse cx="104" cy="24.6" rx="94" ry="2" fill="#000" opacity="0.14"/>';
+const TIP = (g, ink) => `<path d="M1.2 14 L9.5 12.2 L9.5 15.8 Z" fill="url(#${g}-m)"/><circle cx="1.5" cy="14" r="0.85" fill="${ink}"/>`;
+
+/** 油性のノック式（不透明の軸・黒いゴムのグリップに細かい粒・軸と同じ色のクリップ・白い文字） */
+function jetstreamArt(item, g) {
+  const dots = Array.from({length: 13}, (_, i) =>
+    [9.6, 12.4, 15.2, 18].map((y, j) => `<circle cx="${32 + i * 3.1 + (j % 2) * 1.5}" cy="${y}" r="0.55" fill="#000" opacity="0.55"/>`).join('')
+  ).join('');
+  return `<defs>${tube(`${g}-b`, item.body)}${METAL(`${g}-m`)}${tube(`${g}-r`, '#26272a')}
+      <linearGradient id="${g}-f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa0a6" stop-opacity="0.8"/><stop offset="0.45" stop-color="#4a4d52" stop-opacity="0.55"/><stop offset="1" stop-color="#1c1d20" stop-opacity="0.85"/></linearGradient></defs>
+    ${SHADOW}${TIP(g, item.color)}
+    <path d="M9.5 11.5 L30 8.3 L30 19.7 L9.5 16.5 Z" fill="url(#${g}-f)"/>
+    <rect x="12" y="13.5" width="18" height="1" fill="${item.color}" opacity="0.8"/>
+    <rect x="30" y="7.9" width="42" height="12.2" rx="4" fill="url(#${g}-r)"/>${dots}
+    <rect x="72" y="7.4" width="2.4" height="13.2" fill="url(#${g}-m)"/>
+    <rect x="74.4" y="6.9" width="99" height="14.2" rx="3" fill="url(#${g}-b)"/>
+    <rect x="78" y="9" width="92" height="1.4" rx="0.7" fill="#fff" opacity="0.35"/>
+    <text x="84" y="17" font-size="6.2" font-style="italic" font-weight="700" letter-spacing="0.6" fill="#fff" opacity="0.92" font-family="Arial, Helvetica, sans-serif">JETSTREAM</text>
+    <text x="134" y="17" font-size="4.4" fill="#fff" opacity="0.8" font-family="Arial, Helvetica, sans-serif">0.5</text>
+    <path d="M173.4 7.6 L184 8.6 L184 19.4 L173.4 20.4 Z" fill="url(#${g}-b)"/>
+    <rect x="184" y="9.2" width="13" height="9.6" rx="3.2" fill="url(#${g}-b)"/>
+    <rect x="186" y="10.4" width="9" height="1.2" rx="0.6" fill="#fff" opacity="0.3"/>
+    <path d="M132 6.9 H181 Q186 6.9 186 4.2 V3.4 Q186 1.6 184 1.6 H140 Q135 1.6 133.4 3.6 Z" fill="url(#${g}-b)" stroke="${shade(item.body, -0.4)}" stroke-width="0.4"/>
+    <rect x="150" y="2.6" width="22" height="1.2" rx="0.6" fill="#fff" opacity="0.5"/>`;
+}
+
+/** ゲルのノック式（透明の軸の中に替え芯が見える・すけたグリップ・インクと同じ色の大きなクリップとノック） */
+function sarasaArt(item, g) {
+  const ridges = Array.from({length: 14}, (_, i) => `<rect x="${31 + i * 2.9}" y="8.4" width="0.9" height="11.2" fill="#6b7680" opacity="0.28"/>`).join('');
+  return `<defs>${METAL(`${g}-m`)}${tube(`${g}-c`, item.accent)}${tube(`${g}-i`, item.color)}
+      <linearGradient id="${g}-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/><stop offset="0.2" stop-color="#eef3f6" stop-opacity="0.55"/><stop offset="0.6" stop-color="#d7e0e6" stop-opacity="0.35"/><stop offset="1" stop-color="#9aa8b2" stop-opacity="0.75"/></linearGradient>
+      <linearGradient id="${g}-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f7f9" stop-opacity="0.9"/><stop offset="0.5" stop-color="#c9d3da" stop-opacity="0.55"/><stop offset="1" stop-color="#8d9aa4" stop-opacity="0.85"/></linearGradient></defs>
+    ${SHADOW}${TIP(g, item.color)}
+    <rect x="12" y="12.9" width="160" height="2.2" rx="1.1" fill="#e9edf0" stroke="#b7c1c8" stroke-width="0.3"/>
+    <rect x="12" y="12.9" width="95" height="2.2" rx="1.1" fill="url(#${g}-i)"/>
+    <rect x="166" y="12.4" width="10" height="3.2" rx="1" fill="#f7f7f7" stroke="#b7c1c8" stroke-width="0.3"/>
+    <path d="M9.5 11.6 L30 8.5 L30 19.5 L9.5 16.4 Z" fill="url(#${g}-g)" stroke="#a5b0b8" stroke-width="0.35"/>
+    <rect x="30" y="8" width="42" height="12" rx="4" fill="url(#${g}-g)" stroke="#a5b0b8" stroke-width="0.35"/>${ridges}
+    <rect x="72" y="7" width="104" height="14" rx="3" fill="url(#${g}-b)" stroke="#a9b4bc" stroke-width="0.4"/>
+    <rect x="76" y="8.6" width="96" height="1.4" rx="0.7" fill="#fff" opacity="0.9"/>
+    <text x="88" y="19.4" font-size="5" font-weight="700" letter-spacing="0.8" fill="#4b5560" opacity="0.85" font-family="Arial, Helvetica, sans-serif">SARASA</text>
+    <rect x="176" y="7.6" width="9" height="12.8" rx="1.5" fill="url(#${g}-c)"/>
+    <rect x="185" y="9" width="12.5" height="10" rx="2.6" fill="url(#${g}-c)"/>
+    <path d="M118 7 H178 Q186 7 186 3.6 V2.8 Q186 0.9 183.8 0.9 H126 Q120 0.9 118.6 3.4 Z" fill="url(#${g}-c)" stroke="${shade(item.accent, -0.35)}" stroke-width="0.4"/>
+    <path d="M118 7 Q115.4 7 115.4 9.2" fill="none" stroke="${shade(item.accent, -0.2)}" stroke-width="1"/>
+    <rect x="132" y="2" width="40" height="1.1" rx="0.55" fill="#fff" opacity="0.55"/>`;
 }
 
 /** ペンケースの絵。viewBox 0 0 200 80 */

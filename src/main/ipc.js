@@ -88,6 +88,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）
         university: repo.getSetting('profile.university', ''),
         lmsTerms: repo.getSetting('lms.terms', null), // 大学サービスとの連携の利用規約に同意した版と日時
+        experiments: repo.getSetting('experiments.makerPens', false), // 実験：既製品の見た目のペンをショップに出す（個人の試作）
         openAtLogin: loginItem()
       },
       skin: {
@@ -369,7 +370,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
 
   // ---- 文房具（SPEC §15）：ショップで入手する（いまは無料の品だけ）・筆箱の中身とペンケースを変える ----
   handle('stationery.acquire', ({itemId}) => {
-    const st = acquire(repo.getSetting('stationery', null), String(itemId ?? ''));
+    const st = acquire(repo.getSetting('stationery', null), String(itemId ?? ''), {experiments: repo.getSetting('experiments.makerPens', false) === true});
     repo.setSetting('stationery', st);
     return {stationery: st};
   });
@@ -787,6 +788,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if ([0, 1, 3, 6].includes(patch.everyHours)) repo.setSetting('sync.everyHours', patch.everyHours);
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
+    if (typeof patch.experiments === 'boolean') repo.setSetting('experiments.makerPens', patch.experiments);
     // 使う人・使い方・大学名（大学名はいまは記録するだけ）。人を変えたら、その人の使い方に合わないものは外す
     if (isRole(patch.role)) {
       repo.setSetting('profile.role', patch.role);

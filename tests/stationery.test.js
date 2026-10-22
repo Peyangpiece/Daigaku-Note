@@ -65,3 +65,16 @@ test('絵：道具とペンケースの SVG に名前が入る（名前は文字
   assert.doesNotMatch(toolArt(itemOf('pen-black-05'), {label: false}), /<title>/);
   for (const id of ['case-canvas-navy', 'case-tin-silver', 'case-leather-brown', 'case-clear']) assert.match(caseArt(itemOf(id)), /<svg/);
 });
+
+test('実験：既製品の見た目のペンは、実験をオンにしたときだけショップに出て入手できる', async () => {
+  const {listed} = await import('../src/shared/stationery.js');
+  const js = itemOf('maker-jetstream-black');
+  assert.equal(js.experimental, true);
+  assert.equal(listed(js), false);
+  assert.equal(listed(js, {experiments: true}), true);
+  assert.equal(listed(itemOf('pen-black-05')), true);
+  assert.throws(() => acquire(null, 'maker-sarasa-red'), /ありません/);
+  assert.ok(acquire(null, 'maker-sarasa-red', {experiments: true}).owned.includes('maker-sarasa-red'));
+  assert.match(toolArt(js), /JETSTREAM/);
+  assert.match(toolArt(itemOf('maker-sarasa-red')), /SARASA/);
+});

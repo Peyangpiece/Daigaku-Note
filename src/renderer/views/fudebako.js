@@ -4,7 +4,7 @@
 // 持ち物・筆箱の中身はメインの設定（stationery）に保存する（ipc.js の stationery.acquire・stationery.arrange）
 import {esc, navigate, refresh, state, toast} from '../app.js';
 import {strokePath} from '../../shared/ink.js';
-import {CATALOG, SLOTS, TOOL_TYPES, TYPES, TYPE_LABEL, caseArt, itemOf, priceLabel, stationeryState, toolArt} from '../../shared/stationery.js';
+import {CATALOG, SLOTS, TOOL_TYPES, TYPES, TYPE_LABEL, caseArt, itemOf, listed, priceLabel, stationeryState, toolArt} from '../../shared/stationery.js';
 
 const api = window.daigaku;
 const ui = {slot: 0}; // わたしの筆箱：入れ替える場所（何本目か）
@@ -27,6 +27,7 @@ function sample(item) {
 
 /** 品の説明（色・太さ） */
 function spec(item) {
+  if (item.experimental) return `${esc(item.maker)}・${item.mm} mm・試作（実験）`;
   if (item.type === 'pen') return `${item.mm} mm`;
   if (item.type === 'marker') return item.thick ? '太め' : 'ふつう';
   if (item.type === 'hider') return '赤シートで隠れる色';
@@ -104,7 +105,7 @@ function shop(s) {
   return `<p class="muted fb-note">公式の文房具をそろえています。いまはすべて無料です。入手したペンは「わたしの筆箱」で筆箱に入れると、PDF の編集画面で使えます。</p>
     ${TYPES.map(
       (type) => `<section class="fb-group"><h3>${TYPE_LABEL[type]}</h3><div class="fb-grid">
-        ${CATALOG.filter((it) => it.type === type)
+        ${CATALOG.filter((it) => it.type === type && listed(it, {experiments: state.data?.settings?.experiments === true}))
           .map(
             (it) => `<div class="fb-card${has.has(it.id) ? ' is-owned' : ''}">
               <div class="fb-card__art">${art(it)}</div>
