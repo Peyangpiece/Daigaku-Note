@@ -371,7 +371,7 @@ export class SyncEngine {
   }
 
   /** 1 授業分：回 → 対象の回のファイル → お知らせの添付 → 取り込み。戻りは保存した件数 */
-  async syncCourse({ctx, connector, connection, term, course, fullCrawl, event, touch = () => {}}) {
+  async syncCourse({ctx, connector, term, course, fullCrawl, event, touch = () => {}}) {
     const lmsRounds = await connector.listRounds(ctx, course);
     touch();
     const {mapped, byNumber, ensure} = await this.reconcileRounds(term, course, lmsRounds);

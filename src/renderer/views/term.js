@@ -1,7 +1,7 @@
 // 学期の設定（SPEC §6.14・§12.2）。セットアップの手順 4 と、設定 → 学期 の編集画面で同じ入力欄を使う。
 // 学期名は候補から選ぶか、自由に入力する（大学によって「1学期」「Fall」などがあるため）
 import {esc, navigate, reload, toast} from '../app.js';
-import {TERM_LABELS} from '../../shared/term.js';
+import {TERM_LABELS, overlapping} from '../../shared/term.js';
 
 const api = window.daigaku;
 const ROUNDS = [15, 14, 8, 7];
@@ -65,6 +65,12 @@ export function renderTerm({data}) {
     <section class="card" style="max-width: 760px">
       <label style="display:block; margin-bottom: var(--space-2)">編集する学期<select class="input" id="tm-pick" data-keep="off">${terms.map((t) => `<option value="${esc(t.id)}" ${t.id === editingId ? 'selected' : ''}>${t.year} ${esc(t.label)}</option>`).join('')}<option value="" ${editingId === null ? 'selected' : ''}>＋ 新しい学期を追加</option></select></label>
       <div data-form="${esc(editingId ?? 'new')}">${termForm(data, term)}</div>
+      ${(() => {
+        const over = term ? overlapping(terms, term) : [];
+        return over.length
+          ? `<p class="muted">この学期は ${over.map((t) => `${t.year} ${esc(t.label)}`).join('・')} と期間が重なっています。重なっている日は、期間の短い学期を「今の学期」として使います。</p>`
+          : '';
+      })()}
       ${term ? '<p class="muted">年度・学期名を変えると、パソコンの学期フォルダ（例：2026_秋学期）の名前も変わります。授業や資料はこの学期に付いたままです。</p>' : ''}
       <div class="actions"><button class="btn btn--primary" id="tm-save">保存</button>${
         term && terms.length > 1 && !(data.courses ?? []).some((c) => c.term_id === term.id)

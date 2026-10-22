@@ -13,7 +13,7 @@ import {LMS_TERMS_VERSION} from '../shared/lms-terms.js';
 import {createRequire} from 'node:module';
 import {isOpenable, sha256} from './sync/files.js';
 import {renameCourse} from './folders.js';
-import {removeTerm, saveTerm} from './terms.js';
+import {mergeAutoTerms, removeTerm, saveTerm} from './terms.js';
 import {exportAnnotatedPdf, isPng} from './pdf-export.js';
 import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
@@ -58,7 +58,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
 
   handle('state.get', async () => {
     const terms = repo.listTerms();
-    const connections = repo.listConnections().map(({session_json, ...c}) => c);
+    const connections = repo.listConnections().map(({session_json: _session, ...c}) => c); // ログインの記録は渡さない
     const courses = repo.listCourses().map((c) => ({...c, unread: repo.countUnread(c.id)}));
     const rounds = Object.fromEntries(courses.map((c) => [c.id, repo.listRounds(c.id)]));
     // 自分のフォルダの資料は、フォルダの中のどの下のフォルダにあるか（sub）も渡す。パスそのものは渡さない
@@ -265,13 +265,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   handle('term.save', async ({term}) => {
     const input = {...(term ?? {}), id: typeof term?.id === 'string' && /^[\w-]{1,40}$/.test(term.id) ? term.id : null};
     const row = await saveTerm({repo, rootDir: ctx.rootDir()}, input);
-    const {start_date: start, end_date: end} = row;
-    // LMS をつなぐ前にフォルダのために作った仮の学期が同じ時期にあれば、フォルダをこの学期へ移して仮の学期を消す
-    for (const t of repo.listTerms())
-      if (t.source === 'auto' && t.id !== row.id && t.start_date <= end && start <= t.end_date) {
-        for (const c of repo.listCourses({termId: t.id})) repo.updateCourse(c.id, {term_id: row.id});
-        repo.remove('term', t.id);
-      }
+    // LMS をつなぐ前に作った仮の学期が同じ時期にあれば、授業・フォルダとパソコンのフォルダをこの学期へまとめる
+    await mergeAutoTerms({repo, rootDir: ctx.rootDir()}, row);
     return {ok: true, term: row};
   });
 

@@ -6,7 +6,6 @@ import path from 'node:path';
 import {promises as fsp} from 'node:fs';
 import {defaultTermDates, termFolder, termId} from '../shared/term.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
-import {renameFolder} from './folders.js';
 
 export const ROUNDS = [15, 14, 8, 7];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -91,7 +90,8 @@ export async function moveTermFolder({repo, rootDir}, fromName, toName) {
   const root = path.resolve(rootDir);
   const from = path.join(root, fromName);
   const to = path.join(root, toName);
-  if (await fsp.stat(from).catch(() => null)) await renameFolder(from, to);
+  if (from === to) return;
+  await moveDir(from, to);
   const a = from + path.sep;
   const b = to + path.sep;
   repo.transaction(() => {
@@ -99,4 +99,48 @@ export async function moveTermFolder({repo, rootDir}, fromName, toName) {
     repo.db.prepare('UPDATE course SET dir = ? WHERE dir = ?').run(to, from);
     repo.db.prepare('UPDATE course SET dir = ? || substr(dir, ?) WHERE substr(dir, 1, ?) = ?').run(b, a.length + 1, a.length, a);
   });
+}
+
+const exists = (p) => fsp.stat(p).catch(() => null);
+
+/**
+ * フォルダ from を to へ移す。to がなければ名前を変えるだけ。to がもうあれば中身を 1 つずつ移して合わせる
+ * （同じ名前のフォルダはその中で合わせる。同じ名前のファイルがあれば止める）。空になった from は消す。
+ * 大文字・小文字だけの違いは Mac・Windows では同じ名前なので、そのまま名前を変える
+ */
+export async function moveDir(from, to) {
+  const src = await exists(from);
+  if (!src) return;
+  if (!src.isDirectory()) throw err('パソコンのフォルダが見つかりません');
+  const dst = await exists(to);
+  if (!dst || from.toLowerCase() === to.toLowerCase()) return fsp.rename(from, to);
+  if (!dst.isDirectory()) throw err(`「${path.basename(to)}」という名前のファイルがあるので、フォルダを移せません`);
+  for (const name of await fsp.readdir(from)) {
+    const a = path.join(from, name),
+      b = path.join(to, name);
+    const there = await exists(b);
+    if (!there) await fsp.rename(a, b);
+    else if (there.isDirectory() && (await fsp.stat(a)).isDirectory()) await moveDir(a, b);
+    else throw err(`「${path.basename(to)}」の中に同じ名前の「${name}」があるので、移せません`);
+  }
+  await fsp.rmdir(from).catch(() => {});
+}
+
+/**
+ * 仮の学期（LMS をつなぐ前に自動で作った学期）を、時期の重なる学期 row へまとめる。
+ * 授業・フォルダを row に付け替え、パソコンの仮の学期フォルダの中身も row の学期フォルダへ移す
+ */
+export async function mergeAutoTerms({repo, rootDir}, row) {
+  for (const t of repo.listTerms()) {
+    if (t.source !== 'auto' || t.id === row.id || !(t.start_date <= row.end_date && row.start_date <= t.end_date)) continue;
+    // 同じ名前の授業フォルダが両方の学期にあれば、まとめずに知らせる（上書きしない）
+    const names = new Set(repo.listCourses({termId: row.id}).map((c) => c.folder_name));
+    const same = repo.listCourses({termId: t.id}).find((c) => names.has(c.folder_name));
+    if (same) throw err(`「${same.folder_name}」が ${t.label} と ${row.label} の両方にあるので、学期をまとめられません。どちらかの名前を変えてください`);
+    if (t.folder !== row.folder) await moveTermFolder({repo, rootDir}, t.folder, row.folder);
+    repo.transaction(() => {
+      for (const c of repo.listCourses({termId: t.id})) repo.updateCourse(c.id, {term_id: row.id});
+      repo.remove('term', t.id);
+    });
+  }
 }

@@ -67,9 +67,19 @@ export function roundDates({start, end, weekday, rounds = 15, holidays = [], inc
 const startOf = (t) => t.start ?? t.start_date;
 const endOf = (t) => t.end ?? t.end_date;
 
-/** 今日を含む学期を返す（なければ null）。terms は {start,end} か DB の行 {start_date,end_date} */
+/**
+ * 今日を含む学期を返す（なければ null）。terms は {start,end} か DB の行 {start_date,end_date}。
+ * 期間の重なる学期が 2 つ以上あれば（通年と前期など）、期間のいちばん短い学期（同じなら後に始まる学期）を選ぶ
+ */
 export function currentTerm(terms, today) {
-  return terms.find((t) => startOf(t) <= today && today <= endOf(t)) ?? null;
+  const hits = terms.filter((t) => startOf(t) <= today && today <= endOf(t));
+  const span = (t) => Date.parse(endOf(t)) - Date.parse(startOf(t));
+  return hits.sort((a, b) => span(a) - span(b) || (startOf(b) > startOf(a) ? 1 : startOf(b) < startOf(a) ? -1 : 0))[0] ?? null;
+}
+
+/** 期間が重なるほかの学期（学期の編集で知らせる） */
+export function overlapping(terms, term) {
+  return terms.filter((t) => t.id !== term.id && startOf(t) <= endOf(term) && startOf(term) <= endOf(t));
 }
 
 /** 学期の終わり 30 日前からは「次の学期の設定」を促す */

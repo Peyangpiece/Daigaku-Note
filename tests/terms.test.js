@@ -88,3 +88,41 @@ test('授業・フォルダのない学期だけ消せる。最後の 1 つは�
   assert.deepEqual(repo.listTerms().map((x) => x.id), [b.id]);
   assert.throws(() => removeTerm(repo, 'nope'), /見つかりません/);
 });
+
+test('学期フォルダの移し先がもうあれば中身を合わせる。空のフォルダが残っていても名前を変えられる', async (t) => {
+  const {moveDir} = await import('../src/main/terms.js');
+  const {root, repo} = await setup(t);
+  const a = await saveTerm({repo, rootDir: root}, fall);
+  await mkdir(path.join(root, '2026_秋学期', '会計'), {recursive: true});
+  await writeFile(path.join(root, '2026_秋学期', '会計', 'a.pdf'), 'a');
+  await mkdir(path.join(root, '2026_前期', '自分のフォルダ'), {recursive: true}); // 前の不具合で残った空のフォルダ
+  await saveTerm({repo, rootDir: root}, {...fall, id: a.id, label: '前期'});
+  assert.equal(await readFile(path.join(root, '2026_前期', '会計', 'a.pdf'), 'utf8'), 'a');
+  await assert.rejects(stat(path.join(root, '2026_秋学期')));
+  // 同じ名前のファイルがあれば止める（上書きしない）
+  await mkdir(path.join(root, 'x', 'c'), {recursive: true});
+  await writeFile(path.join(root, 'x', 'c', 'f.txt'), '1');
+  await mkdir(path.join(root, 'y', 'c'), {recursive: true});
+  await writeFile(path.join(root, 'y', 'c', 'f.txt'), '2');
+  await assert.rejects(moveDir(path.join(root, 'x'), path.join(root, 'y')), /同じ名前/);
+  assert.equal(await readFile(path.join(root, 'y', 'c', 'f.txt'), 'utf8'), '2');
+});
+
+test('仮の学期をまとめるとき、授業とパソコンのフォルダ・資料の記録も新しい学期へ移す', async (t) => {
+  const {mergeAutoTerms} = await import('../src/main/terms.js');
+  const {autoTerm} = await import('../src/shared/term.js');
+  const {root, repo} = await setup(t);
+  const auto = repo.upsertTerm(autoTerm('2026-10-22')); // 2026_秋学期
+  const dir = path.join(root, auto.folder, '会計');
+  await mkdir(dir, {recursive: true});
+  await writeFile(path.join(dir, 'a.pdf'), 'a');
+  const c = repo.createCourse({term_id: auto.id, name: '会計', folder_name: '会計'});
+  const m = repo.createMaterial({course_id: c.id, name: 'a.pdf', path: path.join(dir, 'a.pdf'), sha256: 'x', size: 1, source: 'lms'});
+  const row = await saveTerm({repo, rootDir: root}, {year: 2026, label: '後期', start: '2026-09-21', end: '2027-02-10', rounds: 15});
+  assert.notEqual(row.id, auto.id);
+  await mergeAutoTerms({repo, rootDir: root}, row);
+  assert.deepEqual(repo.listTerms().map((x) => x.id), [row.id]);
+  assert.equal(repo.get('course', c.id).term_id, row.id);
+  assert.equal(repo.get('material', m.id).path, path.join(root, '2026_後期', '会計', 'a.pdf'));
+  assert.equal(await readFile(repo.get('material', m.id).path, 'utf8'), 'a');
+});

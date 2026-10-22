@@ -12,8 +12,9 @@ export function parseField(expr) {
   const s = String(expr ?? '').trim();
   const m = s.match(/^(.*?)(?:@([A-Za-z_:-][\w:-]*))?(?::\/(.+)\/([a-z]*))?$/s);
   if (!m) throw new Error(`式を読めません: ${expr}`);
-  let [, selector, attr, re, flags] = m;
-  selector = selector.trim();
+  const [, rawSelector, rawAttr, re, flags] = m;
+  let selector = rawSelector.trim();
+  let attr = rawAttr;
   // '@href' だけの式（selector が空）を許す
   if (!attr && selector.startsWith('@')) {
     attr = selector.slice(1);
