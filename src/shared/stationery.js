@@ -1,6 +1,6 @@
 // 文房具（SPEC §9.8・§15）：ボールペン・マーカー（アンダーライン用）・文字隠しペン・ペンケース。副作用なし。
 // 品ぞろえはアプリに入っている（公式のみ。いまはすべて無料）。持ち物と筆箱の中身は設定（stationery）に保存する。
-// 筆箱には道具（ペン・マーカー・文字隠しペン）を 6 本まで入れられ、編集画面の上の帯に並ぶ。
+// 筆箱には道具（ペン・マーカー・文字隠しペン）を 6 本まで入れられ、編集画面の PDF の横に出る。
 // 道具ごとに、書いた線の色・太さが決まる（軸の色は見た目だけ）。
 // 文字隠しペンの色は赤の成分が 0 のものに限る（赤シートを乗算で重ねたとき黒くなって隠れる。viewer.js の冒頭）
 
@@ -30,9 +30,9 @@ const pencase = (id, name, style, base, trim) => ({id, type: 'case', name, style
 const PEN_WIDTH = {'0.38': 0.8, '0.5': 1.1, '0.7': 1.5, '1.0': 2};
 
 export const CATALOG = [
-  pen('pen-black-05', '黒のボールペン 0.5', '#222222', '0.5', '#f2f2f0', '#222222'),
-  pen('pen-red-05', '赤のボールペン 0.5', '#d93025', '0.5', '#f2f2f0'),
-  pen('pen-blue-05', '青のボールペン 0.5', '#1a5fd0', '0.5', '#f2f2f0'),
+  pen('pen-black-05', '黒のボールペン 0.5', '#222222', '0.5', '#2c2d30', '#55575c'),
+  pen('pen-red-05', '赤のボールペン 0.5', '#d93025', '0.5', '#c9262c', '#7d1a1e'),
+  pen('pen-blue-05', '青のボールペン 0.5', '#1a5fd0', '0.5', '#1f4fb3', '#183a7f'),
   pen('pen-black-038', '黒のボールペン 0.38', '#222222', '0.38', '#3b3b3b', '#222222'),
   pen('pen-black-07', '黒のボールペン 0.7', '#222222', '0.7', '#e6e2d8', '#222222'),
   pen('pen-green-05', '緑のボールペン 0.5', '#188038', '0.5', '#f2f2f0'),
@@ -128,26 +128,62 @@ export const priceLabel = (item) => (item.price === 0 ? '無料' : `¥${item.pri
 // ---- 見た目（SVG。画像ファイルを持たない）----
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
 
-/** 道具の絵（横向き。左がペン先）。viewBox 0 0 120 24 */
+/** 色を白（amt > 0）か黒（amt < 0）へ寄せる。立体の陰影に使う */
+export function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const to = amt > 0 ? 255 : 0;
+  const k = Math.abs(amt);
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v + (to - v) * k));
+  return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** 円筒の陰影（上が明るく、下が暗い）のグラデーション */
+const tube = (id, color) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="${shade(color, -0.25)}"/><stop offset="0.18" stop-color="${shade(color, 0.55)}"/>
+  <stop offset="0.42" stop-color="${color}"/><stop offset="0.85" stop-color="${shade(color, -0.22)}"/>
+  <stop offset="1" stop-color="${shade(color, -0.45)}"/></linearGradient>`;
+const METAL = (id) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#8e949b"/><stop offset="0.25" stop-color="#f7f8f9"/><stop offset="0.55" stop-color="#c3c8ce"/>
+  <stop offset="1" stop-color="#7d838a"/></linearGradient>`;
+
+/**
+ * 道具の絵（横向き。左がペン先）。viewBox 0 0 200 28。
+ * ボールペンはノック式：金属のペン先・透けた先の部品・すべり止めのグリップ・軸・金属のクリップ・ノック。
+ * 軸の色・グリップ（accent）・インクの色（ペン先とグリップの下の輪）が品ごとに変わる
+ */
 export function toolArt(item, {label = true} = {}) {
   const title = label ? `<title>${esc(item.name)}</title>` : '';
-  if (item.type === 'pen')
-    return `<svg class="st-art st-art--pen" viewBox="0 0 120 24" aria-hidden="${label ? 'false' : 'true'}" role="img">${title}
-      <path d="M2 12 L14 9 L14 15 Z" fill="#9aa0a6"/><circle cx="3" cy="12" r="1.6" fill="${item.color}"/>
-      <rect x="14" y="7.5" width="22" height="9" rx="2" fill="${item.accent}" opacity="0.9"/>
-      <rect x="34" y="6" width="74" height="12" rx="4" fill="${item.body}" stroke="rgba(0,0,0,.18)"/>
-      <rect x="100" y="4.5" width="16" height="15" rx="4" fill="${item.accent}"/>
-      <rect x="72" y="3" width="30" height="3" rx="1.5" fill="${item.accent}"/>
-      <rect x="40" y="9" width="40" height="2" rx="1" fill="#fff" opacity="0.55"/></svg>`;
+  const g = `st-${item.id}`; // グラデーションの id（品ごと）
+  const open = `<svg class="st-art st-art--${item.type === 'pen' ? 'pen' : 'marker'}" viewBox="0 0 200 28" aria-hidden="${label ? 'false' : 'true'}" role="img">${title}`;
+  if (item.type === 'pen') {
+    const ridges = Array.from({length: 12}, (_, i) => `<rect x="${33 + i * 3.4}" y="8.2" width="1.2" height="11.6" fill="#000" opacity="0.13"/>`).join('');
+    return `${open}<defs>${tube(`${g}-b`, item.body)}${tube(`${g}-a`, item.accent)}${METAL(`${g}-m`)}
+      <linearGradient id="${g}-t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="0.5" stop-color="${shade(item.body, 0.2)}" stop-opacity="0.45"/><stop offset="1" stop-color="${shade(item.body, -0.3)}" stop-opacity="0.7"/></linearGradient></defs>
+      <ellipse cx="104" cy="23.5" rx="92" ry="2.2" fill="#000" opacity="0.12"/>
+      <path d="M1.5 14 L9 12.3 L9 15.7 Z" fill="url(#${g}-m)"/><circle cx="1.8" cy="14" r="0.9" fill="${item.color}"/>
+      <path d="M9 11.6 L28 8.6 L28 19.4 L9 16.4 Z" fill="url(#${g}-t)" stroke="${shade(item.body, -0.35)}" stroke-width="0.4"/>
+      <rect x="12" y="13.4" width="16" height="1.2" fill="${item.color}" opacity="0.7"/>
+      <rect x="28" y="7.6" width="44" height="12.8" rx="3" fill="url(#${g}-a)"/>${ridges}
+      <rect x="72" y="7" width="3" height="14" fill="${item.color}"/>
+      <rect x="75" y="6.6" width="101" height="14.8" rx="2.5" fill="url(#${g}-b)"/>
+      <rect x="80" y="9" width="90" height="1.6" rx="0.8" fill="#fff" opacity="0.45"/>
+      <rect x="176" y="7.2" width="9" height="13.6" rx="1.5" fill="url(#${g}-a)"/>
+      <rect x="185" y="8.6" width="12" height="10.8" rx="2.5" fill="url(#${g}-b)"/>
+      <path d="M128 6.8 H178 Q183 6.8 183 4.4 V3.2 Q183 1.8 181.4 1.8 H136 Q131 1.8 129 4 Z" fill="url(#${g}-m)" stroke="#6f757c" stroke-width="0.4"/>
+      <path d="M130 7 Q127 7 127 8.6" fill="none" stroke="#6f757c" stroke-width="0.6"/></svg>`;
+  }
   if (item.type === 'marker' || item.type === 'hider') {
-    const h = item.thick ? 16 : 14;
-    const y = (24 - h) / 2;
-    const tag = item.type === 'hider' ? `<text x="62" y="15.5" font-size="8" text-anchor="middle" fill="#1d3557" font-family="sans-serif">隠</text>` : '';
-    return `<svg class="st-art st-art--marker" viewBox="0 0 120 24" aria-hidden="${label ? 'false' : 'true'}" role="img">${title}
-      <path d="M2 9 L12 ${y + 1} L12 ${y + h - 1} L2 15 Z" fill="${item.color}"/>
-      <rect x="12" y="${y}" width="26" height="${h}" rx="3" fill="${item.color}"/>
-      <rect x="36" y="${y}" width="82" height="${h}" rx="5" fill="${item.body}" stroke="rgba(0,0,0,.18)"/>
-      <rect x="44" y="${y + 3}" width="36" height="${h - 6}" rx="2" fill="${item.color}" opacity="0.55"/>${tag}</svg>`;
+    const h = item.thick ? 17 : 15;
+    const y = (28 - h) / 2;
+    const tag = item.type === 'hider' ? `<text x="120" y="${y + h / 2 + 3}" font-size="8.5" text-anchor="middle" fill="#1d3557" font-family="sans-serif" font-weight="700">隠</text>` : '';
+    return `${open}<defs>${tube(`${g}-b`, item.body)}${tube(`${g}-c`, item.color)}</defs>
+      <ellipse cx="104" cy="${y + h + 2}" rx="92" ry="2.2" fill="#000" opacity="0.12"/>
+      <path d="M2 ${14 - h * 0.18} L14 ${y + 2} L14 ${y + h - 2} L4 ${14 + h * 0.22} Z" fill="${shade(item.color, -0.12)}"/>
+      <rect x="14" y="${y}" width="44" height="${h}" rx="4" fill="url(#${g}-c)"/>
+      <rect x="58" y="${y - 0.6}" width="4" height="${h + 1.2}" rx="1" fill="${shade(item.color, -0.3)}"/>
+      <rect x="62" y="${y}" width="134" height="${h}" rx="6" fill="url(#${g}-b)" stroke="rgba(0,0,0,.12)" stroke-width="0.5"/>
+      <rect x="86" y="${y + 3.5}" width="70" height="${h - 7}" rx="2" fill="${item.color}" opacity="0.75"/>
+      <rect x="66" y="${y + 2}" width="124" height="1.6" rx="0.8" fill="#fff" opacity="0.6"/>${tag}</svg>`;
   }
   return '';
 }

@@ -1,5 +1,5 @@
 // 筆箱のページ（SPEC §15）。上の切り替えタブの「筆箱」。
-// 「わたしの筆箱」：筆箱に入れる 6 本（編集画面の上の帯に並ぶ）とペンケースを選ぶ。持っている文房具の一覧。
+// 「わたしの筆箱」：筆箱に入れる 6 本（編集画面の PDF の横に出る）とペンケースを選ぶ。持っている文房具の一覧。
 // 「ショップ」：新しい文房具を入手する。いまは公式の品だけで、すべて無料（「無料で入手」）。
 // 持ち物・筆箱の中身はメインの設定（stationery）に保存する（ipc.js の stationery.acquire・stationery.arrange）
 import {esc, navigate, refresh, state, toast} from '../app.js';
@@ -83,7 +83,7 @@ function mine(s) {
     <div class="fb-case" style="--case-base: ${kase.base}; --case-trim: ${kase.trim}">
       <div class="fb-case__art">${caseArt(kase)}</div>
       <div class="fb-case__slots">${slots}</div>
-      <p class="muted fb-case__hint">筆箱のペンは、PDF の編集画面の上に並びます（キーの 1〜6 でも持てます）。場所を押してから、下の一覧で「入れる」を押すと入れ替わります。</p>
+      <p class="muted fb-case__hint">筆箱のペンは、PDF の編集画面の横に出ます（キーの 1〜6 でも持てます）。場所を押してから、下の一覧で「入れる」を押すと入れ替わります。</p>
     </div>
     <section class="fb-group"><h3>ペンケース</h3><div class="fb-grid fb-grid--cases">
       ${cases

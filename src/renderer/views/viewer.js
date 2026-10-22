@@ -3,7 +3,7 @@
 // 文字隠しは水色のマーカー。ふだんは下の文字が読め、赤シートをかぶせたところだけ黒くつぶれて読めなくなる。
 //   仕組み：マーカーの水色は赤の成分が 0（#00d2ff）で、ページに「乗算」で重ねる。赤シートも赤（赤だけ通す）を乗算で重ねるので、
 //   マーカーの部分は 赤 0 × … = 黒 になる。白い紙は赤に、黒い文字は黒のままになり、本物の赤シートと同じ見え方になる
-// 筆箱（§9.8）：ボールペン（手書きの線）・マーカー（文字の下に引く線）・文字隠しペンを 6 本まで入れて、上の帯に並べる。
+// 筆箱（§9.8）：ボールペン（手書きの線）・マーカー（文字の下に引く線）・文字隠しペンを 6 本まで入れて、PDF の右横にいつも出す。
 //   どれを入れるかは「筆箱」のページで変える（文房具は shared/stationery.js）。消しゴムはペンの線・マーカーを消す。
 //   ボールペンの書き味：なぞった点を間引かず受け取り（getCoalescedEvents）、筆圧で太さを変える（shared/ink.js）。
 //   ペン（スタイラス）を一度使ったら、指で触れても書かない（手のひらが当たっても線にならない。指 1 本はスクロール）
@@ -103,12 +103,6 @@ const BAR = `
       <button type="button" data-tool="text" title="文字入れ（T）">文字</button>
       <button type="button" data-tool="note" title="付箋（M）">付箋</button>
     </div>
-    <div class="pen-tray" role="group" aria-label="筆箱のペン" data-v="slots"></div>
-    <button type="button" class="pen-tray__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカーをなぞって消す（E）">消しゴム</button>
-    <div class="viewer-bar__case">
-      <button type="button" data-v="case" aria-expanded="false" aria-haspopup="true" title="筆箱を開いて、ペンを入れ替える">筆箱</button>
-      <div class="case-panel" data-v="case-panel" hidden></div>
-    </div>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
       <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="しおり（B で今の場所にしおりを足す）">しおり</button>
@@ -186,6 +180,18 @@ const BAR = `
       </div>
     </form>
   </dialog>
+  <aside class="fude-side" data-v="side" aria-label="筆箱">
+    <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span></div>
+    <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン（キーの 1〜6）"></div>
+    <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカー・文字隠しをなぞって消す（E）">
+      <svg viewBox="0 0 64 28" aria-hidden="true"><rect x="2" y="5" width="40" height="18" rx="3" fill="#fbfbf8" stroke="#c9c6bd"/><rect x="26" y="4" width="36" height="20" rx="2" fill="#2f6fb5"/><rect x="30" y="9" width="28" height="10" rx="1" fill="#fff" opacity="0.9"/></svg>
+      <span>消しゴム</span>
+    </button>
+    <div class="fude-side__swap">
+      <button type="button" class="btn btn--small" data-v="case" aria-expanded="false" aria-haspopup="true" title="持っているペンを出して、入れ替える">ペンを入れ替える</button>
+      <div class="case-panel" data-v="case-panel" hidden></div>
+    </div>
+  </aside>
   <div class="viewer-pages" data-v="pages"><p class="muted">読み込み中…</p></div>`;
 
 class Viewer {
@@ -469,7 +475,7 @@ class Viewer {
   fitZoom() {
     const first = this.pages[0]?.page.getViewport({scale: CSS_UNITS});
     if (!first) return 1;
-    const avail = this.pagesEl.clientWidth - 32;
+    const avail = this.pagesEl.clientWidth - parseFloat(window.getComputedStyle(this.pagesEl).paddingRight || '0') - 32; // 筆箱の分を除く
     return Math.min(2, Math.max(0.5, Math.floor((avail / first.width) * 100) / 100));
   }
 
@@ -1064,12 +1070,16 @@ class Viewer {
   }
   renderSlots() {
     const box = this.$('slots');
+    const kase = itemOf(this.st.caseId);
+    this.$('side').style.setProperty('--case-base', kase.base);
+    this.$('side').style.setProperty('--case-trim', kase.trim);
+    this.$('case-name').textContent = kase.name;
     box.innerHTML = this.st.slots
       .map((id, i) => {
         const it = itemOf(id);
-        if (!it) return `<button type="button" class="pen-tray__slot is-empty" data-slot="${i}" disabled title="空き（筆箱を開いて入れる）" aria-label="${i + 1} 本目：空き"></button>`;
-        const tip = `${it.name}（${TYPE_LABEL[it.type]}・${i + 1}）`;
-        return `<button type="button" class="pen-tray__slot" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${it.color}">${toolArt(it, {label: false})}</button>`;
+        if (!it) return `<button type="button" class="fude-side__pen is-empty" data-slot="${i}" disabled title="空き（「ペンを入れ替える」で入れる）" aria-label="${i + 1} 本目：空き"><span class="fude-side__num">${i + 1}</span></button>`;
+        const tip = `${it.name}（${TYPE_LABEL[it.type]}・キー ${i + 1}）`;
+        return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${it.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
       })
       .join('');
     // 使っていたペンが筆箱から出たら、選択に戻す
@@ -1124,7 +1134,7 @@ class Viewer {
       }
     });
     this.on(document, 'pointerdown', (e) => {
-      if (!panel.hidden && !e.target.closest('.viewer-bar__case')) this.openCase(false);
+      if (!panel.hidden && !e.target.closest('.fude-side__swap')) this.openCase(false);
     });
   }
 
@@ -1191,9 +1201,13 @@ class Viewer {
     this.on(bar, 'pointerdown', (e) => {
       if (this.editing && e.target.closest('button, .swatch')) e.preventDefault();
     });
-    this.on(bar, 'click', (e) => {
+    const side = this.$('side');
+    // 筆箱（横）が見えている場所：ツールバーの下から
+    this.sideObserver = new ResizeObserver(() => (side.style.top = `${bar.getBoundingClientRect().bottom + 16}px`));
+    this.sideObserver.observe(bar);
+    const onClick = (e) => {
       const t = e.target.closest('button');
-      if (!t) return;
+      if (!t || t.closest('.case-panel')) return;
       if (t.dataset.tool) this.setTool(t.dataset.tool);
       else if (t.dataset.slot !== undefined) this.useSlot(Number(t.dataset.slot));
       else if (t.dataset.v === 'case') this.openCase(this.$('case-panel').hidden);
@@ -1213,6 +1227,11 @@ class Viewer {
       else if (t.dataset.v === 'sheet') this.toggleSheet();
       else if (t.dataset.v === 'export') this.openExport();
       else if (t.dataset.v === 'help') this.openHelp(this.$('help-panel').hidden);
+    };
+    this.on(bar, 'click', onClick);
+    this.on(side, 'click', onClick);
+    this.on(side, 'pointerdown', (e) => {
+      if (this.editing && e.target.closest('button')) e.preventDefault();
     });
     // ページ番号を入れて移る。スクロールしたら今のページを出す
     const page = this.$('page');
@@ -2107,6 +2126,7 @@ class Viewer {
     for (const off of this.listeners) off();
     this.observer?.disconnect();
     this.barObserver?.disconnect();
+    this.sideObserver?.disconnect();
     this.toggleSheet(false);
     this.ring?.remove();
     cancelAnimationFrame(this.coverFrame);
