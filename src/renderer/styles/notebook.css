@@ -3833,11 +3833,109 @@ button.fb-card {
   width: 100%;
   height: 26px;
 }
-.model-view__hint {
-  display: block;
+.model-view__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
   margin-top: 2px;
   font-size: var(--fs-small);
+  white-space: nowrap;
+}
+/* 文房具の詳細ページ（#/fudebako/item/<id>） */
+.model-view--big {
+  height: min(56vh, 480px);
+  background: radial-gradient(ellipse at 50% 65%, rgba(0, 0, 0, 0.1), transparent 65%);
+}
+.fb-card--link {
+  cursor: pointer;
   text-align: center;
+}
+.fb-card--link .fb-card__name {
+  margin-top: 4px;
+}
+.fb-card--link .fb-card__state {
+  margin-top: 2px;
+}
+.fb-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .fb-detail {
+    grid-template-columns: 1fr;
+  }
+}
+.fb-detail__stage {
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.fb-detail__stage .st-art {
+  display: block;
+  width: 100%;
+  height: 80px;
+  margin: var(--space-3) 0;
+}
+.fb-detail__stage .st-art--case {
+  height: 160px;
+}
+.fb-detail__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: var(--fs-small);
+}
+.fb-detail__info h2 {
+  margin: 0 0 2px;
+}
+.fb-detail__maker {
+  margin: 0 0 var(--space-2);
+}
+.fb-spec {
+  margin: 0 0 var(--space-2);
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+}
+.fb-spec dt {
+  color: var(--muted, #888);
+  font-size: var(--fs-small);
+}
+.fb-spec dd {
+  margin: 0;
+}
+.fb-refills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.fb-refills li {
+  display: grid;
+  grid-template-columns: 9em 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.fb-refills .fb-sample {
+  height: 22px;
+}
+.fb-detail__buy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--space-2);
+}
+.fb-detail__note {
+  margin-top: var(--space-2);
 }
 .fb-card__buy {
   display: flex;

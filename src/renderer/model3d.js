@@ -2,9 +2,13 @@
 // three.js は大きいので、モデルの品が画面に出たときにだけ読み込む（model3d-three.js）。
 // 画面に出た要素を見張り、
 //   - svg[data-model]（stationery.js の toolArt）：モデルを横から描いた画像を <image> に入れる（小さな表示。筆箱・一覧）
-//   - .model-view[data-model]：ドラッグで回せる 3D 表示を中に作る（ショップ・わたしの筆箱の大きな札）
+//   - .model-view[data-model]：ドラッグで回せる 3D 表示を中に作る（わたしの筆箱の札。data-model-zoom="1" なら
+//     文房具の詳細ページの大きな表示：ホイールやピンチで近づけて細部を見られる）
+//   - [data-model-reset]：同じ [data-model-box] の中の 3D 表示の向きと距離を戻す
 // 描けないとき（WebGL が使えない・読み込めない）は、ふつうのペンの絵に置き換える
 import {CATALOG, toolArt} from '../shared/stationery.js';
+
+const handles = new WeakMap(); // .model-view → mount() の戻り（reset）
 
 let three = null;
 const loadThree = () => (three ??= import('./model3d-three.js'));
@@ -41,7 +45,7 @@ function hydrateArt(svg) {
 function hydrateView(el) {
   el.dataset.modelReady = '1';
   loadThree().then(
-    (m) => m.mount(el, el.dataset.model),
+    (m) => handles.set(el, m.mount(el, el.dataset.model, {zoom: el.dataset.modelZoom === '1'})),
     (e) => {
       console.warn('3D モデルを描けません', el.dataset.model, e);
       el.classList.add('is-failed');
@@ -65,4 +69,10 @@ export function watchModels() {
   new MutationObserver((muts) => {
     for (const m of muts) for (const n of m.addedNodes) hydrate(n);
   }).observe(document.body, {childList: true, subtree: true});
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-model-reset]');
+    if (!b) return;
+    const view = b.closest('[data-model-box]')?.querySelector('.model-view');
+    if (view) handles.get(view)?.reset();
+  });
 }

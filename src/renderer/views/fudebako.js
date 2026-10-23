@@ -1,6 +1,8 @@
 // 筆箱のページ（SPEC §15）。上の切り替えタブの「筆箱」。
 // 「わたしの筆箱」：筆箱に入れる 6 本（編集画面の PDF の横に出る）とペンケースを選ぶ。持っている文房具の一覧。
-// 「文房具をふやす」：新しい文房具を筆箱に足す。いまは公式の品だけで、すべて無料（値段は出さない）。
+// 「文房具をふやす」：品の絵と名前だけの一覧。押すと詳細ページ（#/fudebako/item/<id>）へ。
+// 詳細ページ：説明・線の見本・入手。3D モデルの品は、拡大・回転して細部を見られる（renderer/model3d.js）。
+// いまは公式の品だけで、すべて無料（値段は出さない）。
 // 持ち物・筆箱の中身はメインの設定（stationery）に保存する（ipc.js の stationery.acquire・stationery.arrange）
 import {esc, navigate, refresh, state, toast} from '../app.js';
 import {strokePath} from '../../shared/ink.js';
@@ -61,13 +63,19 @@ function spec(item) {
   return '';
 }
 
-/** 札の絵。3D モデルの品は、ドラッグで回せる 3D 表示（renderer/model3d.js が中を作る） */
-const art = (item) =>
+/** 札の絵。3D モデルの品は、ドラッグで回せる 3D 表示（renderer/model3d.js が中を作る）。big は詳細ページ（拡大もできる） */
+const art = (item, {big = false} = {}) =>
   item.type === 'case'
     ? caseArt(item)
     : item.art === 'model'
-      ? `<div class="model-view" data-model="${esc(item.model)}" role="img" aria-label="${esc(item.name)}の 3D モデル"></div><span class="muted model-view__hint">ドラッグで回せます</span>`
+      ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
+        <div class="${big ? 'fb-detail__foot' : 'model-view__foot'}"><span class="muted">${big ? 'ドラッグで回す・ホイールやピンチで近づける' : 'ドラッグで回せます'}</span>${
+          big
+            ? '<button type="button" class="btn btn--small btn--quiet" data-model-reset>向きを戻す</button>'
+            : `<button type="button" class="btn btn--small btn--quiet" data-action="nav" data-route="/fudebako/item/${esc(item.id)}">くわしく</button>`
+        }</div>`
       : toolArt(item);
+const detailRoute = (item) => `/fudebako/item/${encodeURIComponent(item.id)}`;
 
 function tabs(shop) {
   return `<div class="fb-tabs" role="tablist">
@@ -134,41 +142,95 @@ function mine(s) {
     <p class="fb-more"><button type="button" class="btn" data-action="nav" data-route="/fudebako?tab=shop">文房具をふやす →</button></p>`;
 }
 
-/** 文房具をふやす：公式の文房具。いまはすべて無料（無料のものは値段を出さない） */
+/** 文房具をふやす：品の絵と名前だけの一覧。押すと詳細ページへ */
 function shop(s) {
   const has = new Set(s.owned);
-  return `<p class="muted fb-note">公式の文房具をそろえています。足したペンは「わたしの筆箱」で筆箱に入れると、PDF の編集画面で使えます。</p>
+  const exp = state.data?.settings?.experiments === true;
+  return `<p class="muted fb-note">公式の文房具をそろえています。押すとくわしい説明が出ます。足したペンは「わたしの筆箱」で筆箱に入れると、PDF の編集画面で使えます。</p>
     ${TYPES.map(
       (type) => `<section class="fb-group"><h3>${TYPE_LABEL[type]}</h3><div class="fb-grid">
-        ${CATALOG.filter(
-          (it) => it.type === type && listed(it, {experiments: state.data?.settings?.experiments === true})
-        )
+        ${CATALOG.filter((it) => it.type === type && listed(it, {experiments: exp}))
           .map(
-            (it) => `<div class="fb-card${has.has(it.id) ? ' is-owned' : ''}">
-              <div class="fb-card__art">${art(it)}</div>
+            (
+              it
+            ) => `<button type="button" class="fb-card fb-card--link${has.has(it.id) ? ' is-owned' : ''}" data-action="nav" data-route="${detailRoute(it)}">
+              <div class="fb-card__art">${it.type === 'case' ? caseArt(it) : toolArt(it)}</div>
               <div class="fb-card__name">${esc(it.name)}</div>
-              <div class="muted fb-card__spec">${spec(it)}</div>
-              ${sample(it)}
-              <div class="fb-card__buy">${it.price === 0 ? '' : `<span class="fb-price">${priceLabel(it)}</span>`}
-                ${
-                  has.has(it.id)
-                    ? '<button type="button" class="btn btn--small" disabled>筆箱にあります</button>'
-                    : `<button type="button" class="btn btn--small btn--primary" data-fb="get" data-id="${it.id}">筆箱に足す</button>`
-                }</div>
-            </div>`
+              ${has.has(it.id) ? '<span class="muted fb-card__state">筆箱にあります</span>' : ''}
+            </button>`
           )
           .join('')}</div></section>`
     ).join('')}`;
 }
 
+/** 入手のボタン：持っていなければ「筆箱に足す」、持っていれば筆箱に入れる・入っている場所 */
+function buyButtons(s, it) {
+  if (!s.owned.includes(it.id))
+    return `<button type="button" class="btn btn--primary" data-fb="get" data-id="${it.id}">筆箱に足す</button>`;
+  if (it.type === 'case')
+    return it.id === s.caseId
+      ? '<span class="muted">このペンケースを使っています</span>'
+      : `<button type="button" class="btn" data-fb="case" data-id="${it.id}">このペンケースを使う</button>`;
+  const where = s.slots.indexOf(it.id);
+  if (where >= 0) return `<span class="muted">筆箱の ${where + 1} 本目に入っています</span>`;
+  const at = s.slots.indexOf(null);
+  return at >= 0
+    ? `<button type="button" class="btn btn--primary" data-fb="put" data-id="${it.id}" data-at="${at}">筆箱の ${at + 1} 本目に入れる</button>
+      <button type="button" class="btn" data-action="nav" data-route="/fudebako">わたしの筆箱で選ぶ</button>`
+    : `<span class="muted">筆箱はいっぱいです</span><button type="button" class="btn" data-action="nav" data-route="/fudebako">わたしの筆箱で入れ替える</button>`;
+}
+
+/** 文房具の詳細ページ：大きな絵（3D モデルは拡大・回転）・説明・線の見本・入手 */
+function detail(s, id) {
+  const it = itemOf(id);
+  const exp = state.data?.settings?.experiments === true;
+  if (!it || !listed(it, {experiments: exp}))
+    return `<p class="muted">その文房具はありません。</p><p><button type="button" class="btn" data-action="nav" data-route="/fudebako?tab=shop">← 文房具をふやす</button></p>`;
+  const rows = [];
+  rows.push(['種類', TYPE_LABEL[it.type]]);
+  if (it.maker) rows.push(['メーカー', esc(it.maker)]);
+  if (it.refills) {
+    rows.push([
+      'しくみ',
+      `${it.refills.length - it.refills.filter((r) => r.sharp).length}&${it.refills.filter((r) => r.sharp).length}（回転式の多機能ペン。持つと芯を選べ、同じ場所をもう一度押すと次の芯に回ります）`
+    ]);
+    rows.push(['替え芯', `${esc(it.refill)} 規格`]);
+  } else if (it.type === 'pen') rows.push(['字幅', `${it.mm} mm`]);
+  else if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
+  else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
+  if (it.art === 'model') rows.push(['見た目', '3D モデル（実物の形と材質）']);
+  if (it.experimental) rows.push(['注意', '既製品の見た目の試作（実験）。一般に配る版では出しません']);
+  rows.push(['値段', priceLabel(it)]);
+  const samples = it.refills
+    ? `<ul class="fb-refills">${it.refills
+        .map(
+          (r) =>
+            `<li><span>${esc(r.name)} ${r.mm} mm</span><svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><path fill="${r.color}" d="${strokePath(wave(6, 40), r.width * 1.6)}"/></svg></li>`
+        )
+        .join('')}</ul>`
+    : sample(it);
+  return `<p><button type="button" class="btn btn--small" data-action="nav" data-route="/fudebako?tab=shop">← 文房具をふやす</button></p>
+    <div class="fb-detail" data-model-box>
+      <div class="fb-detail__stage">${art(it, {big: true})}</div>
+      <div class="fb-detail__info">
+        <h2>${esc(it.name)}</h2>
+        ${it.maker ? `<p class="muted fb-detail__maker">${esc(it.maker)}</p>` : ''}
+        <dl class="fb-spec">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+        ${samples ? `<h3 class="fb-detail__sub">書いた線</h3>${samples}` : ''}
+        <div class="fb-detail__buy">${buyButtons(s, it)}</div>
+      </div>
+    </div>`;
+}
+
 /** 筆箱のページ（#/fudebako、文房具をふやすのは #/fudebako?tab=shop） */
 export function renderFudebako(_state, route) {
   const isShop = new URLSearchParams(route.split('?')[1] ?? '').get('tab') === 'shop';
+  const item = route.match(/^\/fudebako\/item\/([^?]+)/);
   const s = st();
   if (ui.slot < 0 || ui.slot >= SLOTS) ui.slot = 0;
   return `<div class="fudebako">
-    <div class="fb-head"><h2>筆箱</h2>${tabs(isShop)}</div>
-    ${isShop ? shop(s) : mine(s)}
+    <div class="fb-head"><h2>筆箱</h2>${tabs(isShop || !!item)}</div>
+    ${item ? detail(s, decodeURIComponent(item[1])) : isShop ? shop(s) : mine(s)}
   </div>`;
 }
 
@@ -196,17 +258,19 @@ document.addEventListener('click', (e) => {
     ui.slot = i;
     save('stationery.arrange', {slots});
   } else if (what === 'put') {
+    const at = b.dataset.at !== undefined ? Number(b.dataset.at) : ui.slot; // 詳細ページからは空きの場所へ
     const slots = [...s.slots];
-    slots[ui.slot] = id;
+    slots[at] = id;
     const next = slots.indexOf(null);
-    save('stationery.arrange', {slots}, `${itemOf(id).name} を ${ui.slot + 1} 本目に入れました`);
+    save('stationery.arrange', {slots}, `${itemOf(id).name} を ${at + 1} 本目に入れました`);
     if (next >= 0) ui.slot = next; // 空きがあれば、次はそこへ
   } else if (what === 'case') save('stationery.arrange', {caseId: id});
   else if (what === 'get') {
     const it = itemOf(id);
     save('stationery.acquire', {itemId: id}).then(() => {
       if (!st().owned.includes(id)) return;
-      const action = it.type === 'case' ? null : {label: '筆箱に入れる', run: () => navigate('/fudebako')};
+      const inDetail = !!b.closest('.fb-detail'); // 詳細ページでは、そのまま「筆箱に入れる」ボタンに変わる
+      const action = it.type === 'case' || inDetail ? null : {label: '筆箱に入れる', run: () => navigate('/fudebako')};
       toast(`${it.name} を筆箱に足しました`, {action});
     });
   }

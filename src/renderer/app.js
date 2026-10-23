@@ -281,7 +281,7 @@ function render() {
   else if (route.startsWith('/quiz') || route.startsWith('/review')) view.innerHTML = renderQuiz(state, route);
   else if (route === '/settings' || route.startsWith('/settings?')) view.innerHTML = renderSettings(state, route);
   else if (/^\/kisekae(\/edit)?(\?|$)/.test(route)) view.innerHTML = renderKisekae(state, route);
-  else if (/^\/fudebako(\?|$)/.test(route)) view.innerHTML = renderFudebako(state, route);
+  else if (/^\/fudebako(\/|\?|$)/.test(route)) view.innerHTML = renderFudebako(state, route);
   else view.innerHTML = renderHome(state);
   lastRoute = route;
   if (snap) restore(view, snap);
