@@ -24,7 +24,12 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
   async function open(connection, {allowedHosts, blockAssets = true} = {}) {
     const b = await browser();
     const storageState = (await secrets?.get(`conn:${connection.id}:cookies`)) ?? undefined;
-    const context = await b.newContext({storageState, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', acceptDownloads: false});
+    const context = await b.newContext({
+      storageState,
+      locale: 'ja-JP',
+      timezoneId: 'Asia/Tokyo',
+      acceptDownloads: false
+    });
     context.setDefaultTimeout(20000);
     context.setDefaultNavigationTimeout(30000);
     const hosts = allowedHosts ?? [];
@@ -65,11 +70,19 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
    *   入れるのは base（LMS）と同じ組織のドメインか hosts（レシピのホスト）のページだけ。
    *   本人が見ている窓なので統合認証のホストにも入れる。Google・Microsoft には入れない（SPEC §6.4）。https のページだけ
    */
-  async function loginVisible(connection, {url, isLoggedIn, capture = null, autofill = null, timeoutMs = 600000, onStatus = () => {}}) {
+  async function loginVisible(
+    connection,
+    {url, isLoggedIn, capture = null, autofill = null, timeoutMs = 600000, onStatus = () => {}}
+  ) {
     const {chromium} = await loadPw();
     const b = await chromium.launch(launchOptions(false));
     const storageState = (await secrets?.get(`conn:${connection.id}:cookies`)) ?? undefined;
-    const context = await b.newContext({storageState, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', viewport: {width: 1000, height: 760}});
+    const context = await b.newContext({
+      storageState,
+      locale: 'ja-JP',
+      timezoneId: 'Asia/Tokyo',
+      viewport: {width: 1000, height: 760}
+    });
     const visited = new Set();
     let captured = null;
     if (capture) {
@@ -83,7 +96,11 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
           const v = capture.extract({body, headers, url: route.request().url(), status: res.status()});
           if (v) {
             captured = v;
-            await route.fulfill({status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><meta charset="utf-8"><p style="font: 16px sans-serif; padding: 40px">ログインできました。この窓は自動で閉じます。</p>'});
+            await route.fulfill({
+              status: 200,
+              contentType: 'text/html; charset=utf-8',
+              body: '<!doctype html><meta charset="utf-8"><p style="font: 16px sans-serif; padding: 40px">ログインできました。この窓は自動で閉じます。</p>'
+            });
             return;
           }
           await route.fulfill({response: res, body});
@@ -102,12 +119,14 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
       await page.goto(url, {waitUntil: 'domcontentloaded'}).catch(() => {});
       onStatus('ログインできたら自動で閉じます');
       while (Date.now() - started < timeoutMs) {
-        if (page.isClosed() || !b.isConnected()) throw Object.assign(new Error('ログイン窓が閉じられました'), {code: 'login-cancelled'});
+        if (page.isClosed() || !b.isConnected())
+          throw Object.assign(new Error('ログイン窓が閉じられました'), {code: 'login-cancelled'});
         if (captured) break;
         if (await Promise.resolve(isLoggedIn?.(page)).catch(() => false)) break;
         await page.waitForTimeout(1000);
       }
-      if (!captured && Date.now() - started >= timeoutMs) throw Object.assign(new Error('ログインが 10 分以内に完了しませんでした'), {code: 'login-timeout'});
+      if (!captured && Date.now() - started >= timeoutMs)
+        throw Object.assign(new Error('ログインが 10 分以内に完了しませんでした'), {code: 'login-timeout'});
       const state = await context.storageState();
       if (secrets) await secrets.set(`conn:${connection.id}:cookies`, state);
       return {captured, visitedHosts: [...visited].filter(Boolean)};
@@ -122,7 +141,8 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     if (!credentialUrlAllowed(page.url(), {base, hosts})) return;
     const f = await page.evaluate(markLoginForm);
     if (f.user && !f.filledUser) await page.locator('[data-dn-login="user"]').first().fill(user);
-    if (f.password && !f.filledPassword && password) await page.locator('[data-dn-login="password"]').first().fill(password);
+    if (f.password && !f.filledPassword && password)
+      await page.locator('[data-dn-login="password"]').first().fill(password);
   }
 
   async function shutdown() {

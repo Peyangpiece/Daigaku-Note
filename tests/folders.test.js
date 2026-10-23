@@ -186,7 +186,13 @@ test('LMS を使わない授業の名前を変える：授業フォルダの名�
   const conn = repo.createConnection({kind: 'manual', connector_id: 'manual', label: '手動'});
   const c = repo.createCourse({term_id: '2026-fall', connection_id: conn.id, name: '英語', folder_name: '英語'});
   const other = repo.createCourse({term_id: '2026-fall', connection_id: conn.id, name: '数学', folder_name: '数学'});
-  await files.addOwn({term: repo.get('term', '2026-fall'), course: c, round: null, name: 'w.pdf', data: Buffer.from('W')});
+  await files.addOwn({
+    term: repo.get('term', '2026-fall'),
+    course: c,
+    round: null,
+    name: 'w.pdf',
+    data: Buffer.from('W')
+  });
   const m = live(c.id)[0];
   const ctx = {repo, courseDir: (term, course) => files.courseDir(term, course)};
   const r = await renameCourse(ctx, c.id, '英語Ⅰ');
@@ -210,11 +216,17 @@ test('授業フォルダを取り込む：中のフォルダを 1 つずつ今�
   await writeFile(path.join(src, '経済学', 'a.pdf'), 'A');
   await writeFile(path.join(src, 'メモ.txt'), 'M');
   const r = await folders.importCourses(src);
-  assert.deepEqual(r.added.map((c) => c.name), ['経済学', '統計学']);
+  assert.deepEqual(
+    r.added.map((c) => c.name),
+    ['経済学', '統計学']
+  );
   assert.deepEqual(r.failed, []);
   for (const c of r.added) assert.equal(c.scope, 'term');
   assert.equal(r.added[0].dir, path.join(src, '経済学'));
-  assert.deepEqual(live(r.added[0].id).map((m) => m.name), ['a.pdf']);
+  assert.deepEqual(
+    live(r.added[0].id).map((m) => m.name),
+    ['a.pdf']
+  );
   assert.deepEqual(await readdir(path.join(src, '経済学')), ['a.pdf']); // 元のフォルダはそのまま
   // 同じフォルダをもう一度取り込んでも、増えない
   const again = await folders.importCourses(src);
@@ -224,6 +236,9 @@ test('授業フォルダを取り込む：中のフォルダを 1 つずつ今�
   const one = path.join(base, '一つ');
   await mkdir(one);
   const r2 = await folders.importCourses(one);
-  assert.deepEqual(r2.added.map((c) => c.dir), [one]);
+  assert.deepEqual(
+    r2.added.map((c) => c.dir),
+    [one]
+  );
   await assert.rejects(folders.importCourses(path.join(base, 'ない')), /見つかりません/);
 });

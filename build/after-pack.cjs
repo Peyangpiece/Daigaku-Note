@@ -16,9 +16,19 @@ exports.default = async function afterPack(context) {
   codesign(['--force', '--deep', '--sign', identity, ...(keychain ? ['--keychain', keychain] : []), app]);
   codesign(['--verify', '--deep', '--strict', '--verbose=2', app]);
   const info = spawnSync('/usr/bin/codesign', ['-dv', '--verbose=2', app], {encoding: 'utf8'}).stderr || '';
-  console.log(info.split('\n').filter((l) => /^(Identifier|Authority|Signature|TeamIdentifier)=/.test(l)).join('\n'));
+  console.log(
+    info
+      .split('\n')
+      .filter((l) => /^(Identifier|Authority|Signature|TeamIdentifier)=/.test(l))
+      .join('\n')
+  );
   const req = spawnSync('/usr/bin/codesign', ['-d', '-r-', app], {encoding: 'utf8'});
-  console.log(`${req.stdout || ''}${req.stderr || ''}`.split('\n').filter((l) => l.startsWith('designated')).join('\n'));
+  console.log(
+    `${req.stdout || ''}${req.stderr || ''}`
+      .split('\n')
+      .filter((l) => l.startsWith('designated'))
+      .join('\n')
+  );
   if (identity !== '-' && /Signature=adhoc/.test(info)) throw new Error('証明書で署名したはずが ad-hoc のままです');
   console.log(`大学ノート: ${path.basename(app)} を${identity === '-' ? ' ad-hoc ' : '自分の証明書'}で署名しました`);
 };

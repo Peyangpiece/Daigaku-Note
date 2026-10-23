@@ -48,8 +48,14 @@
       "required": ["url", "items"],
       "properties": {
         "url": {"type": "string"},
-        "items": {"type": "string", "description": "項目のセレクタ。'auto' なら container の中の、開いた見出しごとの項目（container が要る）"},
-        "openBeforeRead": {"type": ["string", "null"], "description": "読む前に押す要素。'auto' なら container の中の折りたたみをすべて開く（container が要る）"},
+        "items": {
+          "type": "string",
+          "description": "項目のセレクタ。'auto' なら container の中の、開いた見出しごとの項目（container が要る）"
+        },
+        "openBeforeRead": {
+          "type": ["string", "null"],
+          "description": "読む前に押す要素。'auto' なら container の中の折りたたみをすべて開く（container が要る）"
+        },
         "container": {"type": "string", "description": "AJAX で後から入る欄。中身が入るまで待つ。auto の範囲"}
       },
       "additionalProperties": {"type": "string"}

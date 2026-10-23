@@ -57,7 +57,12 @@ export function resetSetup(kind = 'first', data = null) {
   // LMS とつなぐときの学期の設定は、学期がまだないときだけ
   // 社会人は学期を使わないので、学期の設定を挟まない
   const terms = features({role: data?.settings?.role, uses: []}).terms;
-  flow = kind === 'lms' ? FLOWS.lms.filter(([name]) => name !== '学期の設定' || (terms && !data?.terms?.length)) : kind === 'terms' ? FLOWS.terms : FLOWS.first;
+  flow =
+    kind === 'lms'
+      ? FLOWS.lms.filter(([name]) => name !== '学期の設定' || (terms && !data?.terms?.length))
+      : kind === 'terms'
+        ? FLOWS.terms
+        : FLOWS.first;
 }
 const termsAccepted = (data) => data.settings.lmsTerms?.version === LMS_TERMS_VERSION;
 /** 選んだものに合わせた手順。授業の資料は大学生で「授業の資料を活用」を選んだときだけ、利用規約は大学サービスとつなぐときだけ（同意済みなら出さない） */
@@ -139,7 +144,10 @@ function stepRole(data, n) {
   const university = draft.university ?? data.settings.university ?? '';
   return `<h2>${n}. あなたについて</h2>
     <div class="role-pick" role="radiogroup" aria-label="使う人">${Object.entries(ROLES)
-      .map(([k, l]) => `<button type="button" class="role-pick__item" role="radio" data-role="${k}" aria-checked="${role === k}">${l}</button>`)
+      .map(
+        ([k, l]) =>
+          `<button type="button" class="role-pick__item" role="radio" data-role="${k}" aria-checked="${role === k}">${l}</button>`
+      )
       .join('')}</div>
     ${role === 'student' ? `<label class="role-pick__univ">大学名<input class="input" id="su-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(university)}"></label>` : ''}
     <div class="actions"><button class="btn btn--primary" id="su-role" ${role ? '' : 'disabled'}>次へ</button></div>`;
@@ -160,17 +168,24 @@ function stepUses(data, n) {
 }
 // 授業の資料の集め方を選ぶ。PC の授業フォルダはその場で取り込む。大学サービスとの連携は、次の手順で利用規約に同意してから
 const MATERIALS = [
-  ['folder', 'PC内の授業フォルダを取り込む', '授業ごとのフォルダが入ったフォルダを選ぶと、そのまま使えます（コピーしません）'],
+  [
+    'folder',
+    'PC内の授業フォルダを取り込む',
+    '授業ごとのフォルダが入ったフォルダを選ぶと、そのまま使えます（コピーしません）'
+  ],
   ['service', LMS_FEATURE, '大学の LMS から授業の資料を自動でダウンロードします'],
   ['later', 'あとで設定', '設定からいつでも選べます']
 ];
 function stepMaterials(data, n) {
   const m = draft.materials;
   const r = draft.imported;
-  const done = r ? `<p role="status">${r.added.length ? `${r.added.length} 個の授業フォルダを取り込みました（${r.added.map(esc).join('・')}）` : '取り込めるフォルダがありませんでした'}${r.failed.length ? `<br><span class="muted">取り込めなかったもの：${r.failed.map((f) => `${esc(f.name)}（${esc(f.message)}）`).join('・')}</span>` : ''}</p>` : '';
+  const done = r
+    ? `<p role="status">${r.added.length ? `${r.added.length} 個の授業フォルダを取り込みました（${r.added.map(esc).join('・')}）` : '取り込めるフォルダがありませんでした'}${r.failed.length ? `<br><span class="muted">取り込めなかったもの：${r.failed.map((f) => `${esc(f.name)}（${esc(f.message)}）`).join('・')}</span>` : ''}</p>`
+    : '';
   return `<h2>${n}. 授業の資料をどうしますか</h2>
     <div class="use-pick use-pick--one" role="radiogroup" aria-label="授業の資料の集め方">${MATERIALS.map(
-      ([k, l, d]) => `<button type="button" class="use-pick__item" role="radio" data-materials="${k}" aria-checked="${m === k}"><strong>${esc(l)}</strong><span class="muted">${esc(d)}</span></button>`
+      ([k, l, d]) =>
+        `<button type="button" class="use-pick__item" role="radio" data-materials="${k}" aria-checked="${m === k}"><strong>${esc(l)}</strong><span class="muted">${esc(d)}</span></button>`
     ).join('')}</div>
     ${m === 'folder' ? `<div class="actions"><button class="btn" id="su-import">フォルダを選ぶ…</button></div>${done}` : ''}
     <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-materials" ${m ? '' : 'disabled'}>次へ</button></div>`;
@@ -301,16 +316,15 @@ function bind() {
     };
   if ($('su-detect')) $('su-detect').onclick = detect;
   if ($('su-url')) $('su-url').onkeydown = (e) => e.key === 'Enter' && detect();
-  document
-    .querySelectorAll('input[name=cand]')
-    .forEach(
-      (r) =>
-        (r.onchange = () => {
-          [draft.connectorId, draft.kind] = r.value.split('|');
-          // 名前を自分で入れていなければ、選んだ種類の名前にする
-          if (draft.label === null && $('su-label')) $('su-label').value = draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '';
-        })
-    );
+  document.querySelectorAll('input[name=cand]').forEach(
+    (r) =>
+      (r.onchange = () => {
+        [draft.connectorId, draft.kind] = r.value.split('|');
+        // 名前を自分で入れていなければ、選んだ種類の名前にする
+        if (draft.label === null && $('su-label'))
+          $('su-label').value = draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '';
+      })
+  );
   if ($('su-label')) $('su-label').oninput = (e) => (draft.label = e.target.value);
   if ($('su-next1'))
     $('su-next1').onclick = async () => {

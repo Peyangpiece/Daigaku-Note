@@ -98,7 +98,10 @@ function sandbox() {
     OPEN: fake('open', `echo "$1" >> "${opened}"`),
     XATTR: fake('xattr', 'exit 0'),
     // -R（要件）付きの確かめは、正しい指紋のときだけ通す
-    CODESIGN: fake('codesign', `for a; do case "$a" in -R=*) [ "$a" = '-R=certificate leaf = H"${GOOD_LEAF}"' ] || exit 1;; esac; done; exit 0`)
+    CODESIGN: fake(
+      'codesign',
+      `for a; do case "$a" in -R=*) [ "$a" = '-R=certificate leaf = H"${GOOD_LEAF}"' ] || exit 1;; esac; done; exit 0`
+    )
   };
   const run = (sum, leaf = GOOD_LEAF) => {
     const log = path.join(dir, 'updater.log');
@@ -151,13 +154,17 @@ test('入れ替え：sha512 が合わなければ元のまま開き直す', {ski
   assert.equal(s.opened(), s.app);
 });
 
-test('入れ替え：新しい版が大学ノートの証明書で署名されていなければ（指紋が違う・指紋がない）入れ替えない', {skip: noShell}, () => {
-  for (const leaf of ['0000000000000000000000000000000000000000', '']) {
-    const s = sandbox();
-    const {code, log} = s.run(s.sha, leaf);
-    assert.equal(code, 1);
-    assert.match(log, leaf ? /大学ノートの証明書で署名されていません/ : /証明書の指紋がありません/);
-    assert.match(s.version(), /CFBundleShortVersionString=0\.1\.0/);
-    assert.equal(s.opened(), s.app);
+test(
+  '入れ替え：新しい版が大学ノートの証明書で署名されていなければ（指紋が違う・指紋がない）入れ替えない',
+  {skip: noShell},
+  () => {
+    for (const leaf of ['0000000000000000000000000000000000000000', '']) {
+      const s = sandbox();
+      const {code, log} = s.run(s.sha, leaf);
+      assert.equal(code, 1);
+      assert.match(log, leaf ? /大学ノートの証明書で署名されていません/ : /証明書の指紋がありません/);
+      assert.match(s.version(), /CFBundleShortVersionString=0\.1\.0/);
+      assert.equal(s.opened(), s.app);
+    }
   }
-});
+);

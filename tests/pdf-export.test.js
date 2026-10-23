@@ -111,7 +111,14 @@ test('書き出し：ボールペンの線は塗りつぶした図形、マー�
   const body = encodePoints(Array.from({length: 10}, (_, i) => [100 + i * 3, 500, 0.5]));
   const list = [
     {id: 'I1', page: 1, kind: 'ink', rect: {x: 99, y: 499, w: 30, h: 2}, body, style: {color: '#d93025', width: 1.1}},
-    {id: 'L1', page: 1, kind: 'line', rect: {x: 72, y: 300, w: 80, h: 2.5}, body: '', style: {color: '#ff9ec7', width: 2.5}},
+    {
+      id: 'L1',
+      page: 1,
+      kind: 'line',
+      rect: {x: 72, y: 300, w: 80, h: 2.5},
+      body: '',
+      style: {color: '#ff9ec7', width: 2.5}
+    },
     {id: 'M2', page: 1, kind: 'mask', rect: {x: 72, y: 200, w: 80, h: 12}, body: '', style: {color: '#00c98d'}}
   ];
   const out = await exportAnnotatedPdf(await source(1), list);

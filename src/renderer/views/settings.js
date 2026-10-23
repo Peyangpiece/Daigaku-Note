@@ -97,7 +97,9 @@ export function renderSettings({data}, route = '/settings') {
       <div class="settings__grid">
       <section class="card" id="st-profile"><h3>使い方</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
-          <label>使う人<select class="input" id="st-role">${s.role ? '' : '<option value="">（未設定）</option>'}${Object.entries(ROLES)
+          <label>使う人<select class="input" id="st-role">${s.role ? '' : '<option value="">（未設定）</option>'}${Object.entries(
+            ROLES
+          )
             .map(([v, l]) => `<option value="${v}" ${s.role === v ? 'selected' : ''}>${l}</option>`)
             .join('')}</select></label>
           ${s.role === 'student' ? `<label>大学名<input class="input" id="st-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(s.university ?? '')}"></label>` : ''}
@@ -179,6 +181,7 @@ export function renderSettings({data}, route = '/settings') {
           <label>定期の確認<select class="input" id="st-every">${[0, 1, 3, 6].map((h) => `<option value="${h}" ${s.everyHours === h ? 'selected' : ''}>${h ? `${h} 時間ごと` : 'オフ'}</option>`).join('')}</select></label>
         </div>
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-class" ${s.classStart ? 'checked' : ''}> 授業の開始時刻に、その授業を同期する（学期の設定に時限の時刻が要ります）</label>
+        <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-notify" ${s.notifications === false ? '' : 'checked'}> 新しい資料・ログインの必要・クイズの完成・同期の失敗を、パソコンの通知で知らせる</label>
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-login" ${s.openAtLogin?.on ? 'checked' : ''} ${s.openAtLogin?.available ? '' : 'disabled'}> パソコンにログインしたら大学ノートを起動する（同期はアプリが起動している間だけ動きます）</label>
         ${s.openAtLogin?.available ? '' : '<p class="muted" style="margin-top: 4px">アプリとして入れたとき（Mac は <code>npm run install:mac</code>）に設定できます。</p>'}
       </section>
@@ -236,13 +239,18 @@ function bind() {
   $('st-time')?.addEventListener('change', (e) => save({syncTime: e.target.value}));
   $('st-every')?.addEventListener('change', (e) => save({everyHours: Number(e.target.value)}));
   $('st-class')?.addEventListener('change', (e) => save({classStart: e.target.checked}));
+  $('st-notify')?.addEventListener('change', (e) => save({notifications: e.target.checked}));
   $('st-login')?.addEventListener('change', (e) => save({openAtLogin: e.target.checked}));
   $('st-theme')?.addEventListener('change', (e) => save({theme: e.target.value}));
   $('st-experiments')?.addEventListener('change', (e) => save({experiments: e.target.checked}));
   $('st-role')?.addEventListener('change', (e) => e.target.value && save({role: e.target.value}));
-  document.querySelectorAll('[data-st-use]').forEach((c) =>
-    c.addEventListener('change', () => save({uses: [...document.querySelectorAll('[data-st-use]:checked')].map((x) => x.dataset.stUse)}))
-  );
+  document
+    .querySelectorAll('[data-st-use]')
+    .forEach((c) =>
+      c.addEventListener('change', () =>
+        save({uses: [...document.querySelectorAll('[data-st-use]:checked')].map((x) => x.dataset.stUse)})
+      )
+    );
   $('st-univ')?.addEventListener('change', (e) => save({university: e.target.value}));
   document.querySelectorAll('[data-login]').forEach((b) =>
     b.addEventListener('click', async () => {

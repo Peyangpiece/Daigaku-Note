@@ -55,15 +55,16 @@ export function fileCard(m, course, places) {
   const ok = m.status === 'ok';
   const unread = !m.read_at && ok;
   const here = m.round_id ?? 'own';
-  const move = ok && places.length
-    ? `<select class="file__move" data-move-material="${esc(m.id)}" aria-label="${esc(m.name)} を別の付箋へ移す">
+  const move =
+    ok && places.length
+      ? `<select class="file__move" data-move-material="${esc(m.id)}" aria-label="${esc(m.name)} を別の付箋へ移す">
         <option value="">移す…</option>
         ${places
           .filter((p) => p.value !== here)
           .map((p) => `<option value="${esc(p.value)}">${esc(p.label)}へ</option>`)
           .join('')}
       </select>`
-    : '';
+      : '';
   // PDF はアプリ内のビューアで開いて編集する。書き出した PDF（§9.7：注釈の対象にしない）とほかの種類は OS の既定のアプリで開く
   const action = extOf(m.name) === 'pdf' && m.source !== 'export' ? 'open-pdf' : 'open-material';
   // 着せ替え（SPEC-KISEKAE）：種類ごとの色とシール、しおりのある資料にはリボン
@@ -97,7 +98,9 @@ export function fileCard(m, course, places) {
 // 色は回の付箋の 5 色から選べる（選ばなければ罫線入りの白）
 function ownNote(course, list, places) {
   const sk = skinOf(state.data, course);
-  const colors = [0, 1, 2, 3, 4].map((i) => (sk.sticky.round === 'default' ? `var(--pop${i + 1})` : sk.sticky.round[i]));
+  const colors = [0, 1, 2, 3, 4].map((i) =>
+    sk.sticky.round === 'default' ? `var(--pop${i + 1})` : sk.sticky.round[i]
+  );
   const picked = state.data.settings?.ownColors?.[course.id];
   const color = Number.isInteger(picked) ? colors[picked] : null;
   const dot = (c, i) =>
@@ -199,7 +202,11 @@ function roundNote(round, list, course, today, quizzes = {}, places = []) {
   const i = roundColorIndex(round.number);
   const noteColor = sk.sticky.round === 'default' ? `var(--pop${i + 1})` : sk.sticky.round[i];
   return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: ${noteColor}" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}">
-    ${fixedSticker(sk.stickers.find((st) => st.place === 'round'), state.data, {x: 0.95, y: 0.04, base: 44})}
+    ${fixedSticker(
+      sk.stickers.find((st) => st.place === 'round'),
+      state.data,
+      {x: 0.95, y: 0.04, base: 44}
+    )}
     <header class="round-note__head" data-rename-box>
       ${
         other

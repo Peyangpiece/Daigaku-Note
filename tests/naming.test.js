@@ -54,9 +54,18 @@ test('授業フォルダ名・ファイル名', () => {
 
 test('同名の番号付け', () => {
   const taken = new Set(['a.pdf', 'a (2).pdf']);
-  assert.equal(uniqueName('a.pdf', (n) => taken.has(n)), 'a (3).pdf');
-  assert.equal(uniqueName('b.pdf', (n) => taken.has(n)), 'b.pdf');
-  assert.equal(uniqueName('noext', (n) => n === 'noext'), 'noext (2)');
+  assert.equal(
+    uniqueName('a.pdf', (n) => taken.has(n)),
+    'a (3).pdf'
+  );
+  assert.equal(
+    uniqueName('b.pdf', (n) => taken.has(n)),
+    'b.pdf'
+  );
+  assert.equal(
+    uniqueName('noext', (n) => n === 'noext'),
+    'noext (2)'
+  );
   assert.deepEqual(parseNumbered('a (2).pdf'), {base: 'a.pdf', n: 2});
   assert.equal(parseNumbered('a.pdf'), null);
 });

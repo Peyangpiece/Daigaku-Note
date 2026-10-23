@@ -57,7 +57,9 @@ function saved(key) {
 
 /** 解き始める（または続きから）。questions を読み込んでから描き直す */
 async function start(key, params) {
-  session = {
+  // 読み込み中に別のクイズへ移る（session が差し替わる・leaveQuiz で消える）ことがあるので、
+  // 自分のセッションを手元に持ち、応答が返ったときにまだ同じものか確かめてから書く
+  const mine = {
     key,
     loading: true,
     mode: params.mode,
@@ -68,14 +70,15 @@ async function start(key, params) {
     seed: Date.now() % 100000,
     startedAt: Date.now()
   };
+  session = mine;
   try {
     let qs;
+    let extra = {};
     if (params.mode === 'review') {
       const r = await api['quiz.review']();
       if (r?.error) throw new Error(r.error);
       qs = r.questions;
-      session.rest = r.rest;
-      session.next = r.next;
+      extra = {rest: r.rest, next: r.next};
     } else {
       const r = await api['quiz.questions'](params.quizzes ? {quizIds: params.quizzes} : {courseId: params.course});
       if (r?.error) throw new Error(r.error);
@@ -85,20 +88,21 @@ async function start(key, params) {
       if (params.mode !== 'card' && params.mode !== 'review')
         qs = qs.filter((q) => (params.mode === 'exam' ? q.type !== 'card' : true));
     }
+    if (session !== mine) return; // もう別のクイズに移った
+    Object.assign(mine, extra);
     const resume = saved(key);
     if (resume && resume.order.every((id) => qs.some((q) => q.id === id))) {
-      session.questions = resume.order.map((id) => qs.find((q) => q.id === id));
-      Object.assign(session, {i: resume.i, results: resume.results, seed: resume.seed, resumed: true});
+      mine.questions = resume.order.map((id) => qs.find((q) => q.id === id));
+      Object.assign(mine, {i: resume.i, results: resume.results, seed: resume.seed, resumed: true});
     } else {
-      session.questions =
-        params.mode === 'exam' || params.mode === 'review' || params.order === 'random'
-          ? shuffle(qs, session.seed)
-          : qs;
+      mine.questions =
+        params.mode === 'exam' || params.mode === 'review' || params.order === 'random' ? shuffle(qs, mine.seed) : qs;
     }
-    session.loading = false;
+    mine.loading = false;
   } catch (e) {
-    session.loading = false;
-    session.error = e.message;
+    if (session !== mine) return;
+    mine.loading = false;
+    mine.error = e.message;
   }
   refresh();
 }

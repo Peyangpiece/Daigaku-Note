@@ -77,7 +77,13 @@ export class FileManager {
       const existing = await fsp.readFile(path.join(dir, name)).catch(() => null);
       if (existing && sha256(existing) === hash) return {path: path.join(dir, name), existed: true};
     }
-    return {path: path.join(dir, uniqueName(name, (c) => taken.has(c))), existed: false};
+    return {
+      path: path.join(
+        dir,
+        uniqueName(name, (c) => taken.has(c))
+      ),
+      existed: false
+    };
   }
 
   /** 一時ファイルに書いてから rename（途中で落ちても壊れたファイルを残さない） */
@@ -119,13 +125,17 @@ export class FileManager {
     } catch (e) {
       return {result: 'failed', reason: 'download', error: e};
     }
-    if (!res?.ok || /text\/html/i.test(res.contentType ?? '')) return {result: 'failed', reason: 'download', status: res?.status};
+    if (!res?.ok || /text\/html/i.test(res.contentType ?? ''))
+      return {result: 'failed', reason: 'download', status: res?.status};
     const body = Buffer.isBuffer(res.body) ? res.body : Buffer.from(res.body);
 
     // 3. ハッシュ
     const h = sha256(body);
     const same = this.repo.findMaterialByHash(course.id, h);
     if (same && here(same)) return {result: 'dup', material: same};
+    // 同じ中身の記録が別の保存先（保存先を変える前の場所）にある：記録を新しい保存先へ付け替える（授業ごとに同じ中身の記録は 1 つ）。
+    // 回は LMS が言うとおりにし、本人が動かした回（round_from = 'user'）は保つ
+    const relink = same ?? null;
 
     // 4. 回フォルダ
     const dir = this.roundDir(term, course, round);
@@ -149,6 +159,19 @@ export class FileManager {
     }
 
     // 7. 記録
+    if (relink) {
+      const material = this.repo.updateMaterial(relink.id, {
+        ...(relink.round_from === 'user' ? {} : {round_id: round.id, round_from: roundFrom}),
+        url: fileRef.url ?? relink.url ?? null,
+        name: path.basename(file),
+        path: file,
+        size: body.length,
+        lms_modified: fileRef.modified != null ? String(fileRef.modified) : relink.lms_modified,
+        status: 'ok'
+      });
+      this.log(`[files] 別の保存先にあった記録を付け替えました: ${material.name}`);
+      return {result: 'saved', material};
+    }
     const material = this.repo.createMaterial({
       course_id: course.id,
       round_id: round.id,
@@ -210,7 +233,12 @@ export class FileManager {
     const {path: target, existed} = await this.uniquePath(dir, path.basename(material.path), material.sha256);
     if (!existed && target !== material.path) await fsp.rename(material.path, target);
     else if (existed && target !== material.path) await fsp.rm(material.path, {force: true}); // 同じ中身が移動先にある
-    return this.repo.updateMaterial(material.id, {path: target, name: path.basename(target), round_id: round?.id ?? null, round_from: 'user'});
+    return this.repo.updateMaterial(material.id, {
+      path: target,
+      name: path.basename(target),
+      round_id: round?.id ?? null,
+      round_from: 'user'
+    });
   }
 
   /** 授業フォルダ・回フォルダの改名（名前が変わったとき）。移動先があれば中身を合流させる */
@@ -268,7 +296,10 @@ export class FileManager {
       return scanned;
     };
     for (const m of materials) {
-      const exists = await fsp.access(m.path).then(() => true, () => false);
+      const exists = await fsp.access(m.path).then(
+        () => true,
+        () => false
+      );
       if (exists) {
         if (m.status === 'missing') {
           this.repo.updateMaterial(m.id, {status: 'ok'});
@@ -307,7 +338,10 @@ export class FileManager {
       const original = path.join(path.dirname(m.path), num.base);
       const [data, origExists] = await Promise.all([
         fsp.readFile(m.path).catch(() => null),
-        fsp.access(original).then(() => true, () => false)
+        fsp.access(original).then(
+          () => true,
+          () => false
+        )
       ]);
       if (!data || !origExists || sha256(data) !== m.sha256) continue;
       await this.trash(m.path);

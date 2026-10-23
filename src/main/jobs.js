@@ -3,20 +3,25 @@ import {autoTerm, currentTerm} from '../shared/term.js';
 import {LMS_TERMS_VERSION} from '../shared/lms-terms.js';
 
 const RETRY_DELAYS = [15 * 60e3];
-const TERMS_MESSAGE = '大学サービスとの連携の利用規約に同意してください（ホームの「要確認」か 設定 → LMS との連携 から）';
+const TERMS_MESSAGE =
+  '大学サービスとの連携の利用規約に同意してください（ホームの「要確認」か 設定 → LMS との連携 から）';
 /** いまの版の利用規約に同意しているか（版を上げたら、同意し直すまで同期とログインを止める） */
 const termsAccepted = (repo) => repo.getSetting('lms.terms', null)?.version === LMS_TERMS_VERSION; // 失敗した同期は 15 分後に 1 回だけやり直す
 
 /** 画面に出す文言（英語の例外をそのまま見せない。DESIGN-M0 §11） */
 export function friendlyError(e) {
   const m = String(e?.message ?? e ?? '');
-  if (/Executable doesn't exist|browserType\.launch/.test(m)) return 'LMS を読むためのブラウザの準備ができていません。設定の「ブラウザを準備し直す」を押すか、準備が終わるまで待ってください';
-  if (e?.code === 'login-required' || /login-required/.test(m)) return 'LMS へのログインが必要です（設定 → LMS との連携 → ログインし直す）';
-  if (e?.code === 'network' || /fetch failed|ENOTFOUND|ECONNREFUSED|ECONNRESET/.test(m)) return 'LMS に接続できませんでした。ネットワークを確かめてください';
+  if (/Executable doesn't exist|browserType\.launch/.test(m))
+    return 'LMS を読むためのブラウザの準備ができていません。設定の「ブラウザを準備し直す」を押すか、準備が終わるまで待ってください';
+  if (e?.code === 'login-required' || /login-required/.test(m))
+    return 'LMS へのログインが必要です（設定 → LMS との連携 → ログインし直す）';
+  if (e?.code === 'network' || /fetch failed|ENOTFOUND|ECONNREFUSED|ECONNRESET/.test(m))
+    return 'LMS に接続できませんでした。ネットワークを確かめてください';
   if (e?.code === 'selector-missing') return 'LMS の画面を読み取れませんでした（画面の構成が変わった可能性）';
   if (e?.code === 'blocked-navigation') return '想定外のページに移動したため中断しました';
   if (/ENOSPC|EACCES|EPERM/.test(m)) return '保存先に書き込めません';
-  if (/未対応の接続の種類/.test(m)) return 'この接続の種類はまだ同期できません。設定 → LMS との連携 から削除してください';
+  if (/未対応の接続の種類/.test(m))
+    return 'この接続の種類はまだ同期できません。設定 → LMS との連携 から削除してください';
   return `処理に失敗しました：${m.split('\n')[0].slice(0, 120)}`;
 }
 
@@ -40,7 +45,9 @@ export class JobRunner {
   }
   /** ジョブを積む。同じ kind と payload の pending があれば積まない。戻りは job */
   enqueue(kind, payload = {}) {
-    const same = this.ctx.repo.pendingJobs().find((j) => j.kind === kind && j.payload_json === JSON.stringify(payload) && j.status !== 'running');
+    const same = this.ctx.repo
+      .pendingJobs()
+      .find((j) => j.kind === kind && j.payload_json === JSON.stringify(payload) && j.status !== 'running');
     if (same) return same;
     const job = this.ctx.repo.enqueueJob(kind, payload);
     if (this.started) setTimeout(() => this.tick(), 0);
@@ -70,7 +77,8 @@ export class JobRunner {
       const message = friendlyError(e);
       this.ctx.repo.finishJob(job.id, 'failed', {message, raw: String(e.message).slice(0, 300)});
       this.notify('state.changed', {kind: job.kind, error: message});
-      if (job.kind === 'sync') this.notify('sync.finished', {jobId: job.id, status: 'failed', message, courses: 0, materials: 0, failures: 1});
+      if (job.kind === 'sync')
+        this.notify('sync.finished', {jobId: job.id, status: 'failed', message, courses: 0, materials: 0, failures: 1});
     } finally {
       this.running = false;
       this.ctx.status = '';
@@ -79,26 +87,45 @@ export class JobRunner {
     }
   }
   describe(job) {
-    return {sync: '同期中…', login: 'ログイン中…', move: '資料を移動中…', settings: '設定を保存中…', recipes: 'レシピを確認中…'}[job.kind] ?? '処理中…';
+    return (
+      {
+        sync: '同期中…',
+        login: 'ログイン中…',
+        move: '資料を移動中…',
+        settings: '設定を保存中…',
+        recipes: 'レシピを確認中…'
+      }[job.kind] ?? '処理中…'
+    );
   }
   async run(job) {
     const {repo, engine, registry, files} = this.ctx;
     switch (job.kind) {
       case 'sync': {
-        if (!termsAccepted(repo)) return {status: 'terms-required', message: TERMS_MESSAGE, courses: 0, materials: 0, failures: 0};
+        if (!termsAccepted(repo))
+          return {status: 'terms-required', message: TERMS_MESSAGE, courses: 0, materials: 0, failures: 0};
         const today = new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'});
         // 社会人は学期を設定しないので、学期がなければ今日の日付から仮の学期を作る（画面には出さない）
-        if (!repo.listTerms().length && repo.getSetting('profile.role', null) === 'worker') repo.upsertTerm(autoTerm(today));
+        if (!repo.listTerms().length && repo.getSetting('profile.role', null) === 'worker')
+          repo.upsertTerm(autoTerm(today));
         const terms = repo.listTerms();
         const term = currentTerm(terms, today) ?? terms.at(-1);
         if (!term) return {status: 'no-term', message: '学期の設定がありません'};
-        const connections = repo.listConnections().filter((c) => (job.payload.connectionId ? c.id === job.payload.connectionId : true) && c.status !== 'disabled' && c.kind !== 'manual');
+        const connections = repo
+          .listConnections()
+          .filter(
+            (c) =>
+              (job.payload.connectionId ? c.id === job.payload.connectionId : true) &&
+              c.status !== 'disabled' &&
+              c.kind !== 'manual'
+          );
         const totals = {courses: 0, materials: 0, failures: 0, status: 'ok', messages: []};
         for (const connection of connections) {
           if (connection.kind === 'recipe' && this.ctx.browser?.state !== 'ready') {
             totals.failures++;
             totals.status = 'browser-not-ready';
-            totals.messages.push(`${connection.label}：${this.ctx.browser?.state === 'failed' ? 'ブラウザの準備に失敗しています。設定の「ブラウザを準備し直す」を押してください' : 'ブラウザを準備中です。終わってからもう一度同期してください'}`);
+            totals.messages.push(
+              `${connection.label}：${this.ctx.browser?.state === 'failed' ? 'ブラウザの準備に失敗しています。設定の「ブラウザを準備し直す」を押してください' : 'ブラウザを準備中です。終わってからもう一度同期してください'}`
+            );
             continue;
           }
           // 1 つの接続の失敗（未対応の種類・例外）で、ほかの接続の同期を止めない
@@ -124,12 +151,16 @@ export class JobRunner {
           totals.failures += r.failures;
           if (r.status === 'login-required') {
             totals.status = 'login-required';
-            totals.messages.push(r.events.find((e) => e.code?.startsWith('login'))?.message ?? `${connection.label} へのログインが必要です`);
+            totals.messages.push(
+              r.events.find((e) => e.code?.startsWith('login'))?.message ?? `${connection.label} へのログインが必要です`
+            );
             this.notify('login.required', {connectionId: connection.id, label: connection.label});
           }
           if (r.status === 'failed') {
             totals.status = totals.status === 'ok' ? 'failed' : totals.status;
-            totals.messages.push(`${connection.label}：${r.events.find((e) => e.level === 'error')?.message ?? '同期に失敗しました'}`);
+            totals.messages.push(
+              `${connection.label}：${r.events.find((e) => e.level === 'error')?.message ?? '同期に失敗しました'}`
+            );
             if (r.events.some((e) => e.code === 'network')) totals.retry = true;
           }
         }
@@ -140,7 +171,8 @@ export class JobRunner {
         // 起動したとき（更新のあとを含む）：同期を待たずに、各接続のセッションを確かめて切れていれば自動でログインする
         const connections = repo.listConnections().filter((c) => c.status !== 'disabled' && c.kind !== 'manual');
         const result = {loggedIn: 0, failures: 0, messages: []};
-        if (connections.length && !termsAccepted(repo)) return {...result, status: 'terms-required', message: TERMS_MESSAGE};
+        if (connections.length && !termsAccepted(repo))
+          return {...result, status: 'terms-required', message: TERMS_MESSAGE};
         for (const connection of connections) {
           if (connection.kind === 'recipe' && this.ctx.browser?.state !== 'ready') continue; // ブラウザがなければ次の同期に任せる
           const r = await Promise.resolve()
@@ -155,7 +187,8 @@ export class JobRunner {
               ? `${connection.label} へのログインが必要です${r.error?.message ? `（${r.error.message}）` : ''}`
               : `${connection.label}：${friendlyError(r.error)}`;
           result.messages.push(message);
-          if (r.status === 'login-required') this.notify('login.required', {connectionId: connection.id, label: connection.label, message});
+          if (r.status === 'login-required')
+            this.notify('login.required', {connectionId: connection.id, label: connection.label, message});
         }
         result.message = result.messages.join(' / ');
         return result;
@@ -167,8 +200,17 @@ export class JobRunner {
         const term = repo.get('term', course.term_id);
         return {material: await files.relocate({term, course, material, round})};
       }
+      case 'backup': {
+        // 毎日 1 回（scheduler）：データベースの写しを 7 日分取り、古い記録を刈り込む（main/backup.js）
+        if (!this.ctx.backup) return {message: 'バックアップの仕組みがありません'};
+        const r = await this.ctx.backup();
+        this.ctx.log?.info?.(
+          `バックアップ: ${r.file}（${r.size} バイト。古いもの ${r.removed.length} 件を消去。刈り込み: 同期 ${r.pruned.syncRuns}・出来事 ${r.pruned.syncEvents}・ジョブ ${r.pruned.jobs}）`
+        );
+        return {file: r.file, removed: r.removed.length, pruned: r.pruned};
+      }
       default:
-        return {message: `未対応のジョブ: ${job.kind}`};
+        throw new Error(`未対応のジョブ: ${job.kind}`);
     }
   }
 }

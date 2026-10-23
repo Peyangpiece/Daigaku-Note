@@ -35,8 +35,14 @@ test('輪郭：線の両側を通って閉じる。太さは筆圧で変わり�
   assert.ok(o.length > 40);
   const ys = o.map((p) => p[1]);
   assert.ok(Math.max(...ys) <= 201.01 && Math.min(...ys) >= 198.99, '太さ 2 の線の上下に収まる');
-  const strong = strokeOutline(line().map(([x, y]) => [x, y, 1]), {size: 2, thinning: 0.5});
-  const weak = strokeOutline(line().map(([x, y]) => [x, y, 0]), {size: 2, thinning: 0.5});
+  const strong = strokeOutline(
+    line().map(([x, y]) => [x, y, 1]),
+    {size: 2, thinning: 0.5}
+  );
+  const weak = strokeOutline(
+    line().map(([x, y]) => [x, y, 0]),
+    {size: 2, thinning: 0.5}
+  );
   const spread = (o2) => Math.max(...o2.map((p) => p[1])) - Math.min(...o2.map((p) => p[1]));
   assert.ok(spread(strong) > spread(weak), '強く押すほど太い');
   const tapered = strokeOutline(line(), {size: 2, taperStart: 10, taperEnd: 10});

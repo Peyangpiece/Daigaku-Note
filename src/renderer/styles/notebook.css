@@ -21,17 +21,31 @@ body {
 [data-note] {
   --line: color-mix(in srgb, var(--rule) calc(var(--rule-alpha) * 100%), transparent);
   --margin-line: color-mix(in srgb, var(--rule-margin) calc(var(--rule-alpha) * 100%), transparent);
-  --note-margin: linear-gradient(to right, transparent 71px, var(--margin-line) 71px, var(--margin-line) 72px, transparent 72px);
+  --note-margin: linear-gradient(
+    to right,
+    transparent 71px,
+    var(--margin-line) 71px,
+    var(--margin-line) 72px,
+    transparent 72px
+  );
   --note-cue: none;
   --note-summary: none;
-  --note-pattern: linear-gradient(to bottom, transparent calc(var(--rule-gap) - 1px), var(--line) calc(var(--rule-gap) - 1px));
+  --note-pattern: linear-gradient(
+    to bottom,
+    transparent calc(var(--rule-gap) - 1px),
+    var(--line) calc(var(--rule-gap) - 1px)
+  );
   --note-pattern2: none;
 }
 [data-note][data-margin='off'] {
   --note-margin: none;
 }
 [data-note='grid'] {
-  --note-pattern2: linear-gradient(to right, transparent calc(var(--rule-gap) - 1px), var(--line) calc(var(--rule-gap) - 1px));
+  --note-pattern2: linear-gradient(
+    to right,
+    transparent calc(var(--rule-gap) - 1px),
+    var(--line) calc(var(--rule-gap) - 1px)
+  );
 }
 [data-note='dot'] {
   --note-pattern: radial-gradient(circle, var(--line) 0 1.7px, transparent 2.2px);
@@ -171,7 +185,10 @@ h2[tabindex='-1']:focus {
   height: 128px;
   margin-top: 24px; /* テープとタブの分 */
   padding: 20px 16px 14px;
-  background: var(--folder-card, var(--card)); /* 着せ替え（SPEC-KISEKAE）：カード・タブ・文字の色は skin.js の folderLook から */
+  background: var(
+    --folder-card,
+    var(--card)
+  ); /* 着せ替え（SPEC-KISEKAE）：カード・タブ・文字の色は skin.js の folderLook から */
   border-radius: var(--radius);
   box-shadow: var(--card-shadow);
   color: var(--folder-ink, inherit);
@@ -447,7 +464,10 @@ h2[tabindex='-1']:focus {
      （暗い表示では白の代わりに灰色と混ぜ、まぶしくないようにする：tokens.css の --note-mix） */
   --note-bg: color-mix(in srgb, var(--note-color, var(--pop1)) 55%, var(--note-mix, #fff));
   --paper-ink: #2b2b2b;
-  --paper-ink-weak: var(--note-ink-weak, #5c6068); /* 付箋は紙の色なので、暗い表示でも薄い文字は濃いまま（暗い表示の付箋はさらに濃く） */
+  --paper-ink-weak: var(
+    --note-ink-weak,
+    #5c6068
+  ); /* 付箋は紙の色なので、暗い表示でも薄い文字は濃いまま（暗い表示の付箋はさらに濃く） */
   --paper: #fffdf6;
   --card: #ffffff;
   --note-weak: 80%;
@@ -784,6 +804,12 @@ h2[tabindex='-1']:focus {
 .input:focus {
   outline: none;
   border-bottom-color: var(--accent, var(--c4));
+}
+/* キーボードで来たときは下線の色だけでなく枠も出す（どこにいるか分かるように） */
+.input:focus-visible {
+  outline: 2px solid var(--accent, var(--c4));
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* 紙片（資料の行・カード） */
@@ -1507,7 +1533,7 @@ textarea.input {
   background: var(--swatch);
   transform: scale(1.1);
 }
-.viewer-bar button.swatch[aria-pressed="true"] {
+.viewer-bar button.swatch[aria-pressed='true'] {
   box-shadow:
     0 0 0 2px var(--card),
     0 0 0 4px var(--paper-ink);
@@ -1707,7 +1733,10 @@ textarea.input {
 /* 文字隠し：水色のマーカー。赤の成分が 0 の色を乗算で重ねるので、下の文字は読め、赤シートの下では黒くなる */
 .anno-mask {
   position: absolute;
-  background: var(--mask, #00d2ff); /* 既定は main/pdf-export.js の MARKER_HEX と同じ。文字隠しペンの色（赤の成分が 0） */
+  background: var(
+    --mask,
+    #00d2ff
+  ); /* 既定は main/pdf-export.js の MARKER_HEX と同じ。文字隠しペンの色（赤の成分が 0） */
   mix-blend-mode: multiply;
   border-radius: 2px;
   cursor: move;
@@ -1925,7 +1954,9 @@ textarea.input {
   height: 22px;
 }
 .fude-side__eraser[aria-pressed='true'] {
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2f6fb5;
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px #2f6fb5;
 }
 .fude-side__swap {
   position: relative;
@@ -2083,7 +2114,6 @@ textarea.input {
   border-radius: inherit;
   pointer-events: none;
 }
-
 
 /* 自分のフォルダ（ホームの下の段・作る画面・中身の画面） */
 .my-folders {

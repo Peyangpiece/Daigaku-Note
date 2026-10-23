@@ -1,12 +1,12 @@
 # 大学ノート 詳細設計 M0（土台）
 
-| 項目 | 内容 |
-|---|---|
-| 版 | 0.2 |
-| 作成日 | 2026-10-17 |
-| 実装の状態 | §13 の 1〜7 と 8〜10 の骨格まで実装済み（テスト 62 件）。残りは実機での確認と配布物の作成 |
-| 元になる仕様 | [SPEC.md](SPEC.md) 0.4 |
-| 範囲 | §16 の M0：Electron の常駐・SQLite・コネクタの枠・汎用ログイン・Moodle（API）・レシピ実行器＋レシピ 1 本・学期の設定・保存先・回フォルダ・1up・複製整理・初回セットアップ・デザイントークンの土台 |
+| 項目         | 内容                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 版           | 0.2                                                                                                                                                                                               |
+| 作成日       | 2026-10-17                                                                                                                                                                                        |
+| 実装の状態   | §13 の 1〜7 と 8〜10 の骨格まで実装済み（テスト 62 件）。残りは実機での確認と配布物の作成                                                                                                         |
+| 元になる仕様 | [SPEC.md](SPEC.md) 0.4                                                                                                                                                                            |
+| 範囲         | §16 の M0：Electron の常駐・SQLite・コネクタの枠・汎用ログイン・Moodle（API）・レシピ実行器＋レシピ 1 本・学期の設定・保存先・回フォルダ・1up・複製整理・初回セットアップ・デザイントークンの土台 |
 
 本書は M0 を実装する人が読む文書。モジュールの切り方・関数の入出力・データの流れ・エラーの扱い・テストの方法を決める。仕様書に書いた決まりは繰り返さず、節番号で参照する。
 
@@ -72,11 +72,11 @@ Daigaku-Note/
 
 ## 2. プロセスと責務
 
-| プロセス | 持つもの | 持たないもの |
-|---|---|---|
-| メイン | DB・ファイル・LMS・Playwright・秘密・スケジューラ・ジョブ | 画面の状態 |
-| レンダラ | 画面・入力・表示用の状態（メインから受け取ったものの写し） | ファイルパスの組み立て・秘密・LMS の URL の生成 |
-| Playwright の Chromium | LMS のページ | 大学ノートのデータ |
+| プロセス               | 持つもの                                                   | 持たないもの                                    |
+| ---------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
+| メイン                 | DB・ファイル・LMS・Playwright・秘密・スケジューラ・ジョブ  | 画面の状態                                      |
+| レンダラ               | 画面・入力・表示用の状態（メインから受け取ったものの写し） | ファイルパスの組み立て・秘密・LMS の URL の生成 |
+| Playwright の Chromium | LMS のページ                                               | 大学ノートのデータ                              |
 
 レンダラは `sandbox: true`・`contextIsolation: true`。`nodeIntegration: false`。IPC は §4 の一覧にある種類だけを preload で公開する。
 
@@ -108,34 +108,34 @@ Daigaku-Note/
 
 preload が `window.daigaku` に次を出す。すべて `invoke`（往復）か `on`（メイン → レンダラの通知）。引数と戻りは JSON にできる値だけ。レンダラが渡した文字列はメインで必ず検査する（ID は ULID の形、URL は `https:` のみ、パスはレンダラから受け取らない）。
 
-| 呼び出し（invoke） | 引数 | 戻り | 内容 |
-|---|---|---|---|
-| `state.get` | — | `{ connections, terms, courses, rounds, materialsSummary, settings, attention, lastSync }` | 画面の初期描画に要るものを 1 回で返す |
-| `setup.detect` | `{ url }` | `{ candidates: [{connectorId, kind, score}], base }` | LMS の種類の判定（SPEC §6.3） |
-| `setup.createConnection` | `{ connectorId, baseUrl, label }` | `{ connectionId }` | 接続を作る（まだログインしない） |
-| `connection.login` | `{ connectionId }` | `{ ok, reason? }` | 見えるブラウザ窓でログイン（§8.5）。終わるまで返らない（最大 10 分） |
-| `connection.savePassword` | `{ connectionId, user, password }` | `{ ok }` | 単純なフォームのときだけ（SPEC §6.4）。メインが `login.form` の有無を確かめてから保存 |
-| `connection.remove` | `{ connectionId }` | `{ ok }` | Cookie・秘密も消す。授業・資料・注釈は残す |
-| `term.save` | `{ term }` | `{ ok, term }` | 学期の設定（SPEC §6.14）。フォルダ名はメインが作る |
-| `courses.list` | `{ connectionId }` | `[{ lmsId, name, url }]` | セットアップ手順 3 のための一覧（同期はしない） |
-| `courses.setEnabled` | `{ courseId, enabled }` | `{ ok }` | 同期する授業の選択 |
-| `course.update` | `{ courseId, patch }` | `{ course }` | 色・テープ・曜日時限・並び・非表示・フォント・クイズ設定 |
-| `sync.run` | `{ connectionId?, courseId? }` | `{ jobId }` | ジョブを積む。進み具合は `sync.progress` で届く |
-| `material.open` | `{ materialId }` | `{ ok }` | 既定のアプリで開く（書類・画像・音声・動画だけ） |
-| `material.reveal` | `{ materialId }` | `{ ok }` | Finder/エクスプローラーで表示 |
-| `material.move` | `{ materialId, roundId }` | `{ material }` | 回の変更（ファイルも移動。SPEC §8.3） |
-| `settings.pickDownloadDir` | — | `{ dir }` | OS のフォルダ選択。検査（shared/paths.js）して保存 |
-| `settings.update` | `{ patch }` | `{ settings }` | 同期時刻・テーマ・通知など |
-| `shell.openExternal` | `{ url }` | `{ ok }` | `https:` だけ。LMS を開くリンク用 |
-| `app.version` | — | `{ version, recipes: {id, version}[] }` | |
+| 呼び出し（invoke）         | 引数                               | 戻り                                                                                       | 内容                                                                                  |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `state.get`                | —                                  | `{ connections, terms, courses, rounds, materialsSummary, settings, attention, lastSync }` | 画面の初期描画に要るものを 1 回で返す                                                 |
+| `setup.detect`             | `{ url }`                          | `{ candidates: [{connectorId, kind, score}], base }`                                       | LMS の種類の判定（SPEC §6.3）                                                         |
+| `setup.createConnection`   | `{ connectorId, baseUrl, label }`  | `{ connectionId }`                                                                         | 接続を作る（まだログインしない）                                                      |
+| `connection.login`         | `{ connectionId }`                 | `{ ok, reason? }`                                                                          | 見えるブラウザ窓でログイン（§8.5）。終わるまで返らない（最大 10 分）                  |
+| `connection.savePassword`  | `{ connectionId, user, password }` | `{ ok }`                                                                                   | 単純なフォームのときだけ（SPEC §6.4）。メインが `login.form` の有無を確かめてから保存 |
+| `connection.remove`        | `{ connectionId }`                 | `{ ok }`                                                                                   | Cookie・秘密も消す。授業・資料・注釈は残す                                            |
+| `term.save`                | `{ term }`                         | `{ ok, term }`                                                                             | 学期の設定（SPEC §6.14）。フォルダ名はメインが作る                                    |
+| `courses.list`             | `{ connectionId }`                 | `[{ lmsId, name, url }]`                                                                   | セットアップ手順 3 のための一覧（同期はしない）                                       |
+| `courses.setEnabled`       | `{ courseId, enabled }`            | `{ ok }`                                                                                   | 同期する授業の選択                                                                    |
+| `course.update`            | `{ courseId, patch }`              | `{ course }`                                                                               | 色・テープ・曜日時限・並び・非表示・フォント・クイズ設定                              |
+| `sync.run`                 | `{ connectionId?, courseId? }`     | `{ jobId }`                                                                                | ジョブを積む。進み具合は `sync.progress` で届く                                       |
+| `material.open`            | `{ materialId }`                   | `{ ok }`                                                                                   | 既定のアプリで開く（書類・画像・音声・動画だけ）                                      |
+| `material.reveal`          | `{ materialId }`                   | `{ ok }`                                                                                   | Finder/エクスプローラーで表示                                                         |
+| `material.move`            | `{ materialId, roundId }`          | `{ material }`                                                                             | 回の変更（ファイルも移動。SPEC §8.3）                                                 |
+| `settings.pickDownloadDir` | —                                  | `{ dir }`                                                                                  | OS のフォルダ選択。検査（shared/paths.js）して保存                                    |
+| `settings.update`          | `{ patch }`                        | `{ settings }`                                                                             | 同期時刻・テーマ・通知など                                                            |
+| `shell.openExternal`       | `{ url }`                          | `{ ok }`                                                                                   | `https:` だけ。LMS を開くリンク用                                                     |
+| `app.version`              | —                                  | `{ version, recipes: {id, version}[] }`                                                    |                                                                                       |
 
-| 通知（on） | 内容 |
-|---|---|
-| `state.changed` | 授業・資料・設定が変わった。レンダラは `state.get` を呼び直す（差分は送らない。M0 では単純さを優先） |
-| `sync.progress` | `{ jobId, phase, current, total, courseName }`。「同期中 3/9（管理会計Ⅱ）」 |
-| `sync.finished` | `{ jobId, courses, materials, failures }` |
-| `attention.changed` | 要確認の一覧が変わった |
-| `login.required` | `{ connectionId, label }`。ホームに付箋を出す |
+| 通知（on）          | 内容                                                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `state.changed`     | 授業・資料・設定が変わった。レンダラは `state.get` を呼び直す（差分は送らない。M0 では単純さを優先） |
+| `sync.progress`     | `{ jobId, phase, current, total, courseName }`。「同期中 3/9（管理会計Ⅱ）」                          |
+| `sync.finished`     | `{ jobId, courses, materials, failures }`                                                            |
+| `attention.changed` | 要確認の一覧が変わった                                                                               |
+| `login.required`    | `{ connectionId, label }`。ホームに付箋を出す                                                        |
 
 ---
 
@@ -153,13 +153,13 @@ preload が `window.daigaku` に次を出す。すべて `invoke`（往復）か
 
 1 分ごとの tick で次を確かめる（タイマーは 1 本）。
 
-| 判定 | 動き |
-|---|---|
-| 今日の全体の同期がまだで、現在時刻 ≥ 設定の時刻（既定 16:30） | `sync` ジョブ（全体）を積む。`settings.lastFullSyncDay` を今日にする（積んだ時点で） |
-| 授業開始の同期（SPEC §6.5） | `shared/schedule.js` の `dueClassSyncs(state, now)` が返した授業ごとに `sync {courseId}` を積む。`settings.classSyncedDay[courseId]` を今日にする |
-| 定期の確認がオンで、前回から N 時間以上 | `sync`（全体） |
-| 日付が変わった | バックアップ（SPEC §12.3）を積む。`classSyncedDay` を消す |
-| 1 日 1 回 | `recipes` ジョブ（レシピの更新確認） |
+| 判定                                                          | 動き                                                                                                                                              |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 今日の全体の同期がまだで、現在時刻 ≥ 設定の時刻（既定 16:30） | `sync` ジョブ（全体）を積む。`settings.lastFullSyncDay` を今日にする（積んだ時点で）                                                              |
+| 授業開始の同期（SPEC §6.5）                                   | `shared/schedule.js` の `dueClassSyncs(state, now)` が返した授業ごとに `sync {courseId}` を積む。`settings.classSyncedDay[courseId]` を今日にする |
+| 定期の確認がオンで、前回から N 時間以上                       | `sync`（全体）                                                                                                                                    |
+| 日付が変わった                                                | バックアップ（SPEC §12.3）を積む。`classSyncedDay` を消す                                                                                         |
+| 1 日 1 回                                                     | `recipes` ジョブ（レシピの更新確認）                                                                                                              |
 
 パソコンが寝ていた場合：tick の間隔が 1 分より大きく空いたら「寝ていた」とみなし、その tick で上の判定を全部やり直す（取りこぼさない）。
 
@@ -167,12 +167,12 @@ preload が `window.daigaku` に次を出す。すべて `invoke`（往復）か
 
 ## 7. 秘密（secrets.js）
 
-| 鍵 | 中身 |
-|---|---|
-| `conn:<connectionId>:password` | `{ user, password }` の JSON |
-| `conn:<connectionId>:token` | API のトークン |
-| `conn:<connectionId>:cookies` | Playwright の `storageState()` の JSON |
-| `ai:apiKey` | Claude API キー（M3） |
+| 鍵                             | 中身                                   |
+| ------------------------------ | -------------------------------------- |
+| `conn:<connectionId>:password` | `{ user, password }` の JSON           |
+| `conn:<connectionId>:token`    | API のトークン                         |
+| `conn:<connectionId>:cookies`  | Playwright の `storageState()` の JSON |
+| `ai:apiKey`                    | Claude API キー（M3）                  |
 
 - 保存は `safeStorage.encryptString` → base64 を `<userData>/secrets.json` に。読むときは復号。ファイルのモードは 0600
 - 鍵の一覧は出せるが、値はメインの中だけ。IPC で値を返す API は作らない（`connection.savePassword` は受け取るだけ）
@@ -258,17 +258,17 @@ runSync:
 
 ### 8.3 API 型 Moodle（connectors/moodle.js）
 
-| 関数 | 実装 |
-|---|---|
-| `detect(url, html)` | URL に `/moodle` を含む、または HTML に `M.cfg` か `moodle` を含む `<meta name="keywords">`、または `<base>/login/index.php` が 200 で `loginform` を含む → 0.9。`<base>/lib/ajax/service.php` の応答が JSON → +0.05 |
-| `ensureSession(ctx)` | トークンがなければ `login-required`。あれば `core_webservice_get_site_info` を呼び、`userid` が返れば `ok`。`invalidtoken` → `login-required` |
-| `login(ctx, mode)` | (a) 保存したパスワードがあれば `login/token.php?username&password&service=moodle_mobile_app`（POST）。`token` が返れば保存。(b) なければ見えるブラウザ窓で `admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=<乱数>&urlscheme=daigakunote` を開き、ログイン後に `daigakunote://token=<base64>` への遷移を Playwright の `route`/`framenavigated` で捕まえ、base64 を復号（`passport のハッシュ:::token:::privatetoken`）してトークンを保存。10 分で諦める |
-| `listCourses(ctx)` | `core_enrol_get_users_courses(userid)`。`{ lmsId: id, name: fullname, url: <base>/course/view.php?id=, startDate: startdate }`。コース名の末尾の「（金2）」「金曜2限」から曜日・時限を試みる（rounds.js の隣に `slot.js`。取れなければ空） |
-| `listRounds(ctx, course)` | `core_course_get_contents(courseid)`。各 `section` → `{ number: section, title: name, lmsRef: id }`。番号は `rounds.parse(name)` が取れればそれ、取れなければ `section`（週形式のとき 1 始まり。`section=0` の「一般」は 0） |
-| `listFiles(ctx, course, round)` | その section の `modules[]` のうち `modname in ('resource','folder')` の `contents[]` で `type='file'` → `{ url: fileurl, name: filename, size: filesize, modified: timemodified, round }` |
-| `listNoticeFiles` | `mod_forum_get_forum_discussions` は M0 ではやらない（空配列） |
-| `fetchFile(ctx, ref)` | `GET fileurl?token=<token>`（`fileurl` に `?` があれば `&token=`）。`Content-Type`・本体を返す |
-| `openUrl(course, round)` | `course.url`（＋`#section-<n>`） |
+| 関数                            | 実装                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `detect(url, html)`             | URL に `/moodle` を含む、または HTML に `M.cfg` か `moodle` を含む `<meta name="keywords">`、または `<base>/login/index.php` が 200 で `loginform` を含む → 0.9。`<base>/lib/ajax/service.php` の応答が JSON → +0.05                                                                                                                                                                                                                                                     |
+| `ensureSession(ctx)`            | トークンがなければ `login-required`。あれば `core_webservice_get_site_info` を呼び、`userid` が返れば `ok`。`invalidtoken` → `login-required`                                                                                                                                                                                                                                                                                                                            |
+| `login(ctx, mode)`              | (a) 保存したパスワードがあれば `login/token.php?username&password&service=moodle_mobile_app`（POST）。`token` が返れば保存。(b) なければ見えるブラウザ窓で `admin/tool/mobile/launch.php?service=moodle_mobile_app&passport=<乱数>&urlscheme=daigakunote` を開き、ログイン後に `daigakunote://token=<base64>` への遷移を Playwright の `route`/`framenavigated` で捕まえ、base64 を復号（`passport のハッシュ:::token:::privatetoken`）してトークンを保存。10 分で諦める |
+| `listCourses(ctx)`              | `core_enrol_get_users_courses(userid)`。`{ lmsId: id, name: fullname, url: <base>/course/view.php?id=, startDate: startdate }`。コース名の末尾の「（金2）」「金曜2限」から曜日・時限を試みる（rounds.js の隣に `slot.js`。取れなければ空）                                                                                                                                                                                                                               |
+| `listRounds(ctx, course)`       | `core_course_get_contents(courseid)`。各 `section` → `{ number: section, title: name, lmsRef: id }`。番号は `rounds.parse(name)` が取れればそれ、取れなければ `section`（週形式のとき 1 始まり。`section=0` の「一般」は 0）                                                                                                                                                                                                                                             |
+| `listFiles(ctx, course, round)` | その section の `modules[]` のうち `modname in ('resource','folder')` の `contents[]` で `type='file'` → `{ url: fileurl, name: filename, size: filesize, modified: timemodified, round }`                                                                                                                                                                                                                                                                               |
+| `listNoticeFiles`               | `mod_forum_get_forum_discussions` は M0 ではやらない（空配列）                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `fetchFile(ctx, ref)`           | `GET fileurl?token=<token>`（`fileurl` に `?` があれば `&token=`）。`Content-Type`・本体を返す                                                                                                                                                                                                                                                                                                                                                                           |
+| `openUrl(course, round)`        | `course.url`（＋`#section-<n>`）                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 API の呼び出しは `POST <base>/webservice/rest/server.php` に `wstoken`・`wsfunction`・`moodlewsrestformat=json`。応答に `exception` があれば `MoodleApiError(errorcode)`。`invalidtoken`・`accessexception` は `login-required` に写す。429・5xx は 3 回まで指数で待つ。
 
@@ -311,7 +311,7 @@ login(visible): §8.5
 
 授業の時間切れ：合計ではなく「進みがない時間」（`courseTimeoutMs`、既定 2 分）で切る。回ごとの読み取りと保存のたびに `touch()` で延びるので、全部の回を確かめる初回に授業 1 つが数分かかっても切れない。
 
-値の式の候補（` || `）と歩き方（`^sel`・`<`・`>`）は SPEC §6.13。ページの中で候補ごとの生の値を配列で取り、正規表現と候補の選択は実行器側で行う（ページに渡す関数は外の変数を使えないため）。
+値の式の候補（`||`）と歩き方（`^sel`・`<`・`>`）は SPEC §6.13。ページの中で候補ごとの生の値を配列で取り、正規表現と候補の選択は実行器側で行う（ページに渡す関数は外の変数を使えないため）。
 
 ログイン済みの判定：`login.loggedIn.selector` が合えば済み。合わないときは予備の判定として「パスワード欄がなく、`a`/`button`/`input[type=submit]` 等の文字・href・onclick に ログアウト／logout／sign out／サインアウト がある」ならログイン済みとみなし、レシピの見直しを促すログを接続ごとに 1 回出す。未検証のレシピや LMS の改修で同期が止まらないようにするための保険で、レシピの修正を代わりにするものではない。
 
@@ -373,15 +373,15 @@ login(visible): §8.5
 
 ## 11. エラーコードと表示文言
 
-| code | いつ | 表示（要確認） |
-|---|---|---|
-| `network` | 接続できない・タイムアウト | 「LMS に接続できませんでした。ネットワークを確かめてください」 |
-| `login-required` | Cookie 切れ・トークン無効 | 「〈接続名〉へのログインが必要です」＋「ログインする」ボタン |
-| `selector-missing` | レシピの要素が見つからない | 「〈授業名〉を読み取れませんでした（画面の構成が変わった可能性）」。半数以上で「レシピの更新を確認」 |
-| `download` | ファイル取得の失敗 | 「〈資料名〉をダウンロードできませんでした」＋「LMS で開く」 |
-| `write` | 保存先に書けない | 「保存先に書き込めません：〈パス〉」 |
-| `timeout` | 1 授業 2 分超 | 「〈授業名〉の読み取りが時間切れになりました。次回また試します」 |
-| `blocked-navigation` | 許可外のホストへ飛んだ | 「想定外のページに移動したため中断しました」（ログに URL のホストだけ） |
+| code                 | いつ                       | 表示（要確認）                                                                                       |
+| -------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `network`            | 接続できない・タイムアウト | 「LMS に接続できませんでした。ネットワークを確かめてください」                                       |
+| `login-required`     | Cookie 切れ・トークン無効  | 「〈接続名〉へのログインが必要です」＋「ログインする」ボタン                                         |
+| `selector-missing`   | レシピの要素が見つからない | 「〈授業名〉を読み取れませんでした（画面の構成が変わった可能性）」。半数以上で「レシピの更新を確認」 |
+| `download`           | ファイル取得の失敗         | 「〈資料名〉をダウンロードできませんでした」＋「LMS で開く」                                         |
+| `write`              | 保存先に書けない           | 「保存先に書き込めません：〈パス〉」                                                                 |
+| `timeout`            | 1 授業 2 分超              | 「〈授業名〉の読み取りが時間切れになりました。次回また試します」                                     |
+| `blocked-navigation` | 許可外のホストへ飛んだ     | 「想定外のページに移動したため中断しました」（ログに URL のホストだけ）                              |
 
 英語のメッセージをそのまま画面に出さない。元のメッセージはログにだけ残す。
 
@@ -389,21 +389,21 @@ login(visible): §8.5
 
 ## 12. テスト計画（M0）
 
-| ファイル | 対象 | 方法 |
-|---|---|---|
-| `tests/naming.test.js` | 回フォルダ名の規則（40 文字・禁止文字・末尾・空白・予約名・衝突）、授業フォルダ名、ファイル名 | 入力と期待値の表 |
-| `tests/rounds.test.js` | 第N回・第三回・3回目・第3講・Week 3・Lecture 3・L03・#3・ファイル名、取れないもの | 表 |
-| `tests/layout.test.js` | 4up/2up/4in1/2分割/分割なし、組の 1up 優先 | 表 |
-| `tests/paths.test.js` | ホーム内・隠し・Library・`..`・相対 | 表 |
-| `tests/holidays.test.js` | 2026 年の祝日（振替・春分秋分） | 既知の日付 |
-| `tests/term.test.js` | 学期名からの既定期間、回の日付（祝日・休講を飛ばす）、学期フォルダ名 | 2026 秋学期の金曜 15 回 |
-| `tests/schedule.test.js` | 授業開始の同期の判定（時限の時刻・2 時間・1 日 1 回・曜日不明） | 時刻を与える |
-| `tests/srs.test.js` | 復習の段階の遷移・2 択・今日の復習の並びと上限 | 表 |
-| `tests/recipe.test.js` | 式の解釈・URL の差し込み・レシピの検査 | 表 |
-| `tests/db.test.js` | マイグレーションが当たる・2 回当てても変わらない・repo の往復 | `node:sqlite` の `:memory:` |
-| `tests/files.test.js` | ingest（新規・同 URL・同ハッシュ・同名別内容・HTML 応答・新しい版）、uniquePath、relocate、reconcileFiles | 偽のコネクタ＋一時フォルダ |
-| `tests/engine.test.js` | 授業の追加・改名・消失、対象の回の絞り込み、失敗の分類、並行 | 偽のコネクタ |
-| `tests/moodle.test.js` | 判定・サイト情報・授業一覧・セクション・ファイル・トークン無効・429 | `node:http` の模擬サーバー |
+| ファイル                 | 対象                                                                                                      | 方法                        |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `tests/naming.test.js`   | 回フォルダ名の規則（40 文字・禁止文字・末尾・空白・予約名・衝突）、授業フォルダ名、ファイル名             | 入力と期待値の表            |
+| `tests/rounds.test.js`   | 第N回・第三回・3回目・第3講・Week 3・Lecture 3・L03・#3・ファイル名、取れないもの                         | 表                          |
+| `tests/layout.test.js`   | 4up/2up/4in1/2分割/分割なし、組の 1up 優先                                                                | 表                          |
+| `tests/paths.test.js`    | ホーム内・隠し・Library・`..`・相対                                                                       | 表                          |
+| `tests/holidays.test.js` | 2026 年の祝日（振替・春分秋分）                                                                           | 既知の日付                  |
+| `tests/term.test.js`     | 学期名からの既定期間、回の日付（祝日・休講を飛ばす）、学期フォルダ名                                      | 2026 秋学期の金曜 15 回     |
+| `tests/schedule.test.js` | 授業開始の同期の判定（時限の時刻・2 時間・1 日 1 回・曜日不明）                                           | 時刻を与える                |
+| `tests/srs.test.js`      | 復習の段階の遷移・2 択・今日の復習の並びと上限                                                            | 表                          |
+| `tests/recipe.test.js`   | 式の解釈・URL の差し込み・レシピの検査                                                                    | 表                          |
+| `tests/db.test.js`       | マイグレーションが当たる・2 回当てても変わらない・repo の往復                                             | `node:sqlite` の `:memory:` |
+| `tests/files.test.js`    | ingest（新規・同 URL・同ハッシュ・同名別内容・HTML 応答・新しい版）、uniquePath、relocate、reconcileFiles | 偽のコネクタ＋一時フォルダ  |
+| `tests/engine.test.js`   | 授業の追加・改名・消失、対象の回の絞り込み、失敗の分類、並行                                              | 偽のコネクタ                |
+| `tests/moodle.test.js`   | 判定・サイト情報・授業一覧・セクション・ファイル・トークン無効・429                                       | `node:http` の模擬サーバー  |
 
 Playwright を使うテスト（レシピ実行器・ログイン窓）は `npm ci` 後に `tests/e2e/` で別に動かす（CI では Linux の headless）。M0 ではレシピ実行器の式の解釈だけを `tests/recipe.test.js` で押さえる。
 
@@ -411,19 +411,19 @@ Playwright を使うテスト（レシピ実行器・ログイン窓）は `npm 
 
 ## 13. M0 の作業の順番と状態
 
-| # | 作業 | 依存 | 確認 | 状態 |
-|---|---|---|---|---|
-| 1 | `shared/` の純粋モジュールとテスト | — | `npm test` が通る | 済 |
-| 2 | DB（マイグレーション・repo） | 1 | `tests/db.test.js` | 済 |
-| 3 | ファイル管理 | 1・2 | `tests/files.test.js` | 済（検疫属性は `sync/quarantine.js`。Mac・Windows の実機で確認が要る） |
-| 4 | 同期エンジン | 2・3 | `tests/engine.test.js` | 済 |
-| 5 | Moodle コネクタ | 4 | `tests/moodle.test.js`。本物の Moodle（デモサイト `school.moodledemo.net` など）で手動確認 | 済（模擬サーバーで検証。実物は未） |
-| 6 | Playwright の文脈・ログイン窓 | — | 手動 | 済（`browser/session.js`。見えるログイン窓は実機で確認が要る） |
-| 7 | レシピ実行器＋manabo レシピ | 1・6 | 模擬 HTML の e2e（`tests/e2e/`）。実物で確認 | 済（e2e 2 件。manabo の実物は未検証 `verified: false`） |
-| 8 | Electron の入口・トレイ・IPC・preload | 2〜7 | `npm start` で起動 | 骨格済（起動確認は実機） |
-| 9 | 画面の土台（トークン・部品・セットアップ・ホーム・授業・設定） | 8 | 目で確認。コントラストの検査 | 骨格済（ドラッグでの回の移動は M1） |
-| 10 | スケジューラ・秘密・ログ・Chromium の取り込み | 8 | 手動（時刻を変えて） | 骨格済 |
-| 11 | 配布物（electron-builder）・更新確認 | 8 | Mac・Windows で入れて起動 | 設定ファイルのみ（`electron-builder.yml`）。更新確認は未 |
+| #   | 作業                                                           | 依存 | 確認                                                                                       | 状態                                                                   |
+| --- | -------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| 1   | `shared/` の純粋モジュールとテスト                             | —    | `npm test` が通る                                                                          | 済                                                                     |
+| 2   | DB（マイグレーション・repo）                                   | 1    | `tests/db.test.js`                                                                         | 済                                                                     |
+| 3   | ファイル管理                                                   | 1・2 | `tests/files.test.js`                                                                      | 済（検疫属性は `sync/quarantine.js`。Mac・Windows の実機で確認が要る） |
+| 4   | 同期エンジン                                                   | 2・3 | `tests/engine.test.js`                                                                     | 済                                                                     |
+| 5   | Moodle コネクタ                                                | 4    | `tests/moodle.test.js`。本物の Moodle（デモサイト `school.moodledemo.net` など）で手動確認 | 済（模擬サーバーで検証。実物は未）                                     |
+| 6   | Playwright の文脈・ログイン窓                                  | —    | 手動                                                                                       | 済（`browser/session.js`。見えるログイン窓は実機で確認が要る）         |
+| 7   | レシピ実行器＋manabo レシピ                                    | 1・6 | 模擬 HTML の e2e（`tests/e2e/`）。実物で確認                                               | 済（e2e 2 件。manabo の実物は未検証 `verified: false`）                |
+| 8   | Electron の入口・トレイ・IPC・preload                          | 2〜7 | `npm start` で起動                                                                         | 骨格済（起動確認は実機）                                               |
+| 9   | 画面の土台（トークン・部品・セットアップ・ホーム・授業・設定） | 8    | 目で確認。コントラストの検査                                                               | 骨格済（ドラッグでの回の移動は M1）                                    |
+| 10  | スケジューラ・秘密・ログ・Chromium の取り込み                  | 8    | 手動（時刻を変えて）                                                                       | 骨格済                                                                 |
+| 11  | 配布物（electron-builder）・更新確認                           | 8    | Mac・Windows で入れて起動                                                                  | 設定ファイルのみ（`electron-builder.yml`）。更新確認は未               |
 
 実機での確認手順（Mac／Windows）：`npm ci` → `npm test`（e2e は `PLAYWRIGHT_BROWSERS_PATH` か `DAIGAKU_CHROMIUM` で Chromium を指す）→ `npm start` → セットアップ 6 手順 → デスクトップ `大学ノート/<学期>/<授業>/<回>/` に資料が入ることを確かめる。Moodle はデモサイト、manabo は在学中の大学のアカウントで。
 

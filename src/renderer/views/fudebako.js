@@ -4,7 +4,19 @@
 // 持ち物・筆箱の中身はメインの設定（stationery）に保存する（ipc.js の stationery.acquire・stationery.arrange）
 import {esc, navigate, refresh, state, toast} from '../app.js';
 import {strokePath} from '../../shared/ink.js';
-import {CATALOG, SLOTS, TOOL_TYPES, TYPES, TYPE_LABEL, caseArt, itemOf, listed, priceLabel, stationeryState, toolArt} from '../../shared/stationery.js';
+import {
+  CATALOG,
+  SLOTS,
+  TOOL_TYPES,
+  TYPES,
+  TYPE_LABEL,
+  caseArt,
+  itemOf,
+  listed,
+  priceLabel,
+  stationeryState,
+  toolArt
+} from '../../shared/stationery.js';
 
 const api = window.daigaku;
 const ui = {slot: 0}; // わたしの筆箱：入れ替える場所（何本目か）
@@ -15,7 +27,11 @@ const st = () => stationeryState(state.data?.stationery);
 function sample(item) {
   if (item.type === 'pen') {
     // ゆるい波を、筆圧が少しずつ変わる線で書く（見本なので太さは 2 倍に見せる）
-    const pts = Array.from({length: 40}, (_, i) => [6 + i * 2.8, 12 + Math.sin(i / 5) * 5, 0.35 + 0.3 * Math.sin(i / 9)]);
+    const pts = Array.from({length: 40}, (_, i) => [
+      6 + i * 2.8,
+      12 + Math.sin(i / 5) * 5,
+      0.35 + 0.3 * Math.sin(i / 9)
+    ]);
     return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><path fill="${item.color}" d="${strokePath(pts, item.width * 1.6)}"/></svg>`;
   }
   if (item.type === 'marker')
@@ -89,7 +105,9 @@ function mine(s) {
     <section class="fb-group"><h3>ペンケース</h3><div class="fb-grid fb-grid--cases">
       ${cases
         .map(
-          (it) => `<button type="button" class="fb-card fb-card--case${it.id === s.caseId ? ' is-in' : ''}" data-fb="case" data-id="${it.id}" aria-pressed="${it.id === s.caseId}">
+          (
+            it
+          ) => `<button type="button" class="fb-card fb-card--case${it.id === s.caseId ? ' is-in' : ''}" data-fb="case" data-id="${it.id}" aria-pressed="${it.id === s.caseId}">
             <div class="fb-card__art">${caseArt(it)}</div><div class="fb-card__name">${esc(it.name)}</div>
             <span class="muted fb-card__state">${it.id === s.caseId ? '使っています' : '押して使う'}</span></button>`
         )
@@ -105,7 +123,9 @@ function shop(s) {
   return `<p class="muted fb-note">公式の文房具をそろえています。いまはすべて無料です。入手したペンは「わたしの筆箱」で筆箱に入れると、PDF の編集画面で使えます。</p>
     ${TYPES.map(
       (type) => `<section class="fb-group"><h3>${TYPE_LABEL[type]}</h3><div class="fb-grid">
-        ${CATALOG.filter((it) => it.type === type && listed(it, {experiments: state.data?.settings?.experiments === true}))
+        ${CATALOG.filter(
+          (it) => it.type === type && listed(it, {experiments: state.data?.settings?.experiments === true})
+        )
           .map(
             (it) => `<div class="fb-card${has.has(it.id) ? ' is-owned' : ''}">
               <div class="fb-card__art">${art(it)}</div>

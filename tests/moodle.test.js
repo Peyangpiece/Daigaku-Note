@@ -16,12 +16,14 @@ function mockMoodle({flaky = 0} = {}) {
     };
     if (url.pathname === '/login/token.php') {
       const body = req.method === 'POST' ? new URLSearchParams(await text(req)) : url.searchParams;
-      if (body.get('username') === 'stu' && body.get('password') === 'pw') return json({token: 'TOK', privatetoken: 'P'});
+      if (body.get('username') === 'stu' && body.get('password') === 'pw')
+        return json({token: 'TOK', privatetoken: 'P'});
       return json({error: 'Invalid login, please try again', errorcode: 'invalidlogin'});
     }
     if (url.pathname === '/webservice/rest/server.php') {
       const body = new URLSearchParams(await text(req));
-      if (body.get('wstoken') !== 'TOK') return json({exception: 'moodle_exception', errorcode: 'invalidtoken', message: 'Invalid token'});
+      if (body.get('wstoken') !== 'TOK')
+        return json({exception: 'moodle_exception', errorcode: 'invalidtoken', message: 'Invalid token'});
       const fn = body.get('wsfunction');
       if (fn === 'core_webservice_get_site_info') return json({userid: 7, fullname: '学生', sitename: 'Example U'});
       if (fn === 'core_enrol_get_users_courses')
@@ -34,13 +36,40 @@ function mockMoodle({flaky = 0} = {}) {
         return json([
           {id: 100, section: 0, name: '一般', modules: [{modname: 'forum', contents: []}]},
           {
-            id: 101, section: 1, name: '第1回 イントロダクション',
-            modules: [{modname: 'resource', contents: [{type: 'file', filename: 'intro.pdf', fileurl: `http://127.0.0.1:${server.address().port}/pluginfile.php/1/intro.pdf?forcedownload=1`, filesize: 5, timemodified: 1760000000}]}]
+            id: 101,
+            section: 1,
+            name: '第1回 イントロダクション',
+            modules: [
+              {
+                modname: 'resource',
+                contents: [
+                  {
+                    type: 'file',
+                    filename: 'intro.pdf',
+                    fileurl: `http://127.0.0.1:${server.address().port}/pluginfile.php/1/intro.pdf?forcedownload=1`,
+                    filesize: 5,
+                    timemodified: 1760000000
+                  }
+                ]
+              }
+            ]
           },
           {
-            id: 102, section: 2, name: 'Topic 2',
+            id: 102,
+            section: 2,
+            name: 'Topic 2',
             modules: [
-              {modname: 'folder', contents: [{type: 'file', filename: 'a.pdf', fileurl: `http://127.0.0.1:${server.address().port}/pluginfile.php/2/a.pdf`}, {type: 'url', filename: 'link', fileurl: 'https://example.com'}]},
+              {
+                modname: 'folder',
+                contents: [
+                  {
+                    type: 'file',
+                    filename: 'a.pdf',
+                    fileurl: `http://127.0.0.1:${server.address().port}/pluginfile.php/2/a.pdf`
+                  },
+                  {type: 'url', filename: 'link', fileurl: 'https://example.com'}
+                ]
+              },
               {modname: 'url', contents: [{type: 'url', filename: 'ext', fileurl: 'https://example.com'}]}
             ]
           }
@@ -53,19 +82,25 @@ function mockMoodle({flaky = 0} = {}) {
         res.writeHead(200, {'Content-Type': 'text/html'});
         return res.end('<html>login</html>');
       }
-      res.writeHead(200, {'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="intro.pdf"'});
+      res.writeHead(200, {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'attachment; filename="intro.pdf"'
+      });
       return res.end('%PDF-fake');
     }
     res.writeHead(404);
     res.end();
   });
-  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({server, base: `http://127.0.0.1:${server.address().port}`})));
+  return new Promise((resolve) =>
+    server.listen(0, '127.0.0.1', () => resolve({server, base: `http://127.0.0.1:${server.address().port}`}))
+  );
 }
-const text = (req) => new Promise((r) => {
-  let s = '';
-  req.on('data', (c) => (s += c));
-  req.on('end', () => r(s));
-});
+const text = (req) =>
+  new Promise((r) => {
+    let s = '';
+    req.on('data', (c) => (s += c));
+    req.on('end', () => r(s));
+  });
 
 function memSecrets() {
   const m = new Map();
@@ -93,7 +128,10 @@ test('Moodle：判定・ログイン・授業・回・ファイル・取得', as
   const connection = {id: 'c1', base_url: base + '/'};
   const ctx = await moodle.createContext(connection);
   assert.equal(await moodle.ensureSession(ctx), 'login-required');
-  await assert.rejects(moodle.login(ctx, 'headless', {credentials: {user: 'stu', password: 'bad'}}), /ID かパスワード|Invalid login/);
+  await assert.rejects(
+    moodle.login(ctx, 'headless', {credentials: {user: 'stu', password: 'bad'}}),
+    /ID かパスワード|Invalid login/
+  );
   const who = await moodle.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}});
   assert.equal(who.userid, 7);
   assert.equal(secrets.map.get('conn:c1:token'), 'TOK');
@@ -103,20 +141,35 @@ test('Moodle：判定・ログイン・授業・回・ファイル・取得', as
   assert.equal(await moodle.ensureSession(ctx2), 'ok');
 
   const courses = await moodle.listCourses(ctx2);
-  assert.deepEqual(courses.map((c) => c.lmsId), ['11'], '非表示の授業は出さない');
+  assert.deepEqual(
+    courses.map((c) => c.lmsId),
+    ['11'],
+    '非表示の授業は出さない'
+  );
   assert.equal(courses[0].weekday, '金');
   assert.equal(courses[0].period, 2);
   assert.equal(courses[0].startDate, '2025-10-01');
 
   const course = {lms_id: '11', lms_url: courses[0].url};
   const rounds = await moodle.listRounds(ctx2, course);
-  assert.deepEqual(rounds.map((r) => [r.number, r.title]), [[0, '一般'], [1, 'イントロダクション'.length ? '第1回 イントロダクション' : ''], [2, 'Topic 2']]);
+  assert.deepEqual(
+    rounds.map((r) => [r.number, r.title]),
+    [
+      [0, '一般'],
+      [1, 'イントロダクション'.length ? '第1回 イントロダクション' : ''],
+      [2, 'Topic 2']
+    ]
+  );
   const files1 = await moodle.listFiles(ctx2, course, rounds[1]);
   assert.equal(files1.length, 1);
   assert.equal(files1[0].name, 'intro.pdf');
   assert.equal(files1[0].modified, '2025-10-09T08:53:20.000Z');
   const files2 = await moodle.listFiles(ctx2, course, rounds[2]);
-  assert.deepEqual(files2.map((f) => f.name), ['a.pdf'], 'URL モジュールと外部リンクは対象外');
+  assert.deepEqual(
+    files2.map((f) => f.name),
+    ['a.pdf'],
+    'URL モジュールと外部リンクは対象外'
+  );
 
   const got = await moodle.fetchFile(ctx2, files1[0]);
   assert.equal(got.ok, true);
@@ -143,7 +196,10 @@ test('launch.php のトークンの取り出しと URL', () => {
   const payload = Buffer.from('hash:::THETOKEN:::private').toString('base64');
   assert.equal(moodle.parseLaunchToken(`daigakunote://token=${payload}`), 'THETOKEN');
   assert.equal(moodle.parseLaunchToken('daigakunote://nothing'), null);
-  assert.match(moodle.launchUrl({base: 'https://m'}, 'abc'), /^https:\/\/m\/admin\/tool\/mobile\/launch\.php\?service=moodle_mobile_app&passport=abc&urlscheme=daigakunote$/);
+  assert.match(
+    moodle.launchUrl({base: 'https://m'}, 'abc'),
+    /^https:\/\/m\/admin\/tool\/mobile\/launch\.php\?service=moodle_mobile_app&passport=abc&urlscheme=daigakunote$/
+  );
 });
 
 test('登録：URL から候補を順に返す', async (t) => {

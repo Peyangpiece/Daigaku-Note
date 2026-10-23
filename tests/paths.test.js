@@ -11,7 +11,15 @@ test('保存先はホームフォルダ内の通常のフォルダだけ', () =>
   assert.equal(checkDownloadDir('~/Documents/授業資料', home, posix), '/Users/u/Documents/授業資料');
   assert.equal(checkDownloadDir('/Users/u/Desktop/大学ノート/', home, posix), '/Users/u/Desktop/大学ノート');
   assert.equal(checkDownloadDir('~', home, posix), '/Users/u');
-  for (const bad of ['/etc', '~/../other', '/Users/u/.ssh', '~/Library/LaunchAgents', 'Documents', '~/Desktop/../../x', '/Users/u2'])
+  for (const bad of [
+    '/etc',
+    '~/../other',
+    '/Users/u/.ssh',
+    '~/Library/LaunchAgents',
+    'Documents',
+    '~/Desktop/../../x',
+    '/Users/u2'
+  ])
     assert.throws(() => checkDownloadDir(bad, home, posix), undefined, bad);
 });
 

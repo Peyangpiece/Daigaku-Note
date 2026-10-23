@@ -29,7 +29,17 @@ import {
   FILE_ART_SHIFT,
   ROUND_DEFAULTS
 } from '../../shared/skin.js';
-import {STICKER_BASE, allTemplates, bookmarkLook, forgetSticker, globalId, noteVars, shapesOf, skinOf, stickerUrl} from '../skin.js';
+import {
+  STICKER_BASE,
+  allTemplates,
+  bookmarkLook,
+  forgetSticker,
+  globalId,
+  noteVars,
+  shapesOf,
+  skinOf,
+  stickerUrl
+} from '../skin.js';
 import {fileArt, kindOf} from './file-art.js';
 import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, isBuiltinSticker} from '../../shared/stickers.js';
 
@@ -37,7 +47,18 @@ const api = window.daigaku;
 
 // 色の見本。紙・カードには淡い色、線・タブ・テープ・資料・しおりにははっきりした色（白などの淡い色は線やテープでは見えないため）
 const LIGHT = ['#ffffff', '#fbf8f1', '#fffaf0', '#fff6f8', '#f4fbf7', '#f3f8ff', '#f8f5ff', '#efe6d6'];
-const VIVID = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9', '#ffab70', '#6fd3e6', '#f7a1c4', '#2c4a7a', '#3a3a3a'];
+const VIVID = [
+  '#f6c445',
+  '#f28b82',
+  '#7fd1ae',
+  '#8ab4f8',
+  '#c58af9',
+  '#ffab70',
+  '#6fd3e6',
+  '#f7a1c4',
+  '#2c4a7a',
+  '#3a3a3a'
+];
 const RECENT_MAX = 4;
 // 見本の授業名は実際の名前を出さず「（授業名）」とする（色やテープは実際の授業のものを使う）
 const SAMPLE_NAME = '（授業名）';
@@ -48,7 +69,20 @@ const SAMPLE = [
 
 // 画面の状態（描き直しても残す）。draft は直している途中のテンプレート（baseId は元のテンプレート）。
 // 対象・名前などは ui が決めるので、描き直しのときに前の値へ戻さない（data-keep="off"）
-const ui = {target: '', part: 'note', scene: 'home', history: [], future: [], fileKind: 'pdf', art: null, book: 'mark', draft: null, selected: null, confirm: null, route: null};
+const ui = {
+  target: '',
+  part: 'note',
+  scene: 'home',
+  history: [],
+  future: [],
+  fileKind: 'pdf',
+  art: null,
+  book: 'mark',
+  draft: null,
+  selected: null,
+  confirm: null,
+  route: null
+};
 
 const courses = (data) => data.courses.filter((c) => !c.hidden);
 const targetCourse = (data) => (ui.target ? (data.courses.find((c) => c.id === ui.target) ?? null) : null);
@@ -111,14 +145,27 @@ function draftSkin(data, course) {
   const own = d.stickers.map((s, i) => ({...s, index: i}));
   return {template: null, own: true, ...d.parts, note, stickers: [...global, ...own].sort((a, b) => a.z - b.z)};
 }
-const stickerModeFor = (course) => (course.sticker_mode === 'global' && ui.draft?.stickers.length ? 'both' : course.sticker_mode || 'global');
+const stickerModeFor = (course) =>
+  course.sticker_mode === 'global' && ui.draft?.stickers.length ? 'both' : course.sticker_mode || 'global';
 /** テンプレートの見た目（一覧の見本） */
 function templateSkin(data, t) {
-  return {template: t, own: true, ...t.parts, note: targetCourse(data) ? skinOf(data).note : t.parts.note, stickers: t.stickers};
+  return {
+    template: t,
+    own: true,
+    ...t.parts,
+    note: targetCourse(data) ? skinOf(data).note : t.parts.note,
+    stickers: t.stickers
+  };
 }
 
-const styleOf = (vars) => Object.entries(vars).map(([k, v]) => `${k}: ${v}`).join('; ');
-const attrsOf = (attrs) => Object.entries(attrs).map(([k, v]) => `${k}="${esc(v)}"`).join(' ');
+const styleOf = (vars) =>
+  Object.entries(vars)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('; ');
+const attrsOf = (attrs) =>
+  Object.entries(attrs)
+    .map(([k, v]) => `${k}="${esc(v)}"`)
+    .join(' ');
 /** ノートの見本の紙 */
 function noteSwatch(note, cls, inner = '') {
   const {attrs, vars} = noteVars(note);
@@ -155,7 +202,9 @@ function colorField(key, label, value, {allowDefault = true, allowCourse = false
   const sw = (v, text, cls = '') =>
     `<button type="button" class="ks-sw ${cls}" data-ks="color" data-key="${key}" data-value="${v}" aria-pressed="${value === v}" title="${esc(text)}"${v.startsWith('#') ? ` style="--sw: ${v}"` : ''}>${v.startsWith('#') ? '' : esc(text)}</button>`;
   // 最近使った色（4 つまで）・今の色（候補になくても見せる）・候補
-  const colors = [...new Set([...recent.slice(0, RECENT_MAX), ...(value?.startsWith('#') ? [value] : []), ...(light ? LIGHT : VIVID)])];
+  const colors = [
+    ...new Set([...recent.slice(0, RECENT_MAX), ...(value?.startsWith('#') ? [value] : []), ...(light ? LIGHT : VIVID)])
+  ];
   return `<fieldset class="ks-field"><legend>${label}</legend><div class="ks-swatches">
     ${allowDefault ? sw('default', '標準', 'ks-sw--text') : ''}
     ${allowCourse ? sw('course', '授業ごとの色', 'ks-sw--text') : ''}
@@ -206,7 +255,14 @@ function tapeControls(data) {
 }
 /** シール帳の並び（はじめから入っているシール＋取り込んだ画像）。filter：all・fav・mark・deco・mine・フォルダ名 */
 function bookList(data, filter = 'all') {
-  const mine = (data.skin?.stickers ?? []).map((b) => ({id: b.id, name: '自分の画像', kind: 'mine', shape: b.shape, favorite: !!b.favorite, folder: b.folder}));
+  const mine = (data.skin?.stickers ?? []).map((b) => ({
+    id: b.id,
+    name: '自分の画像',
+    kind: 'mine',
+    shape: b.shape,
+    favorite: !!b.favorite,
+    folder: b.folder
+  }));
   const builtin = BUILTIN_STICKERS.map((b) => ({id: b.id, name: b.name, kind: b.kind, shape: 'cut'}));
   const all = [...mine, ...builtin];
   if (filter === 'all') return all;
@@ -221,9 +277,10 @@ function bookItems(data, action, current = null, filter = 'all') {
     .map((b) => {
       const url = stickerUrl(b.id);
       const mine = b.kind === 'mine';
-      const tools = action === 'sticker-add' && mine
-        ? `<button type="button" class="ks-book__tool ks-book__fav" data-ks="sticker-fav" data-id="${b.id}" aria-pressed="${b.favorite}" title="${b.favorite ? 'お気に入りから外す' : 'お気に入りにする'}" aria-label="お気に入り">${b.favorite ? '★' : '☆'}</button><button type="button" class="ks-book__tool ks-book__folder" data-ks="sticker-folder" data-id="${b.id}" title="フォルダに分ける${b.folder ? `（今は「${esc(b.folder)}」）` : ''}" aria-label="フォルダに分ける">▤</button><button type="button" class="ks-book__del" data-ks="sticker-del" data-id="${b.id}" title="シール帳から消す" aria-label="シール帳から消す">×</button>`
-        : '';
+      const tools =
+        action === 'sticker-add' && mine
+          ? `<button type="button" class="ks-book__tool ks-book__fav" data-ks="sticker-fav" data-id="${b.id}" aria-pressed="${b.favorite}" title="${b.favorite ? 'お気に入りから外す' : 'お気に入りにする'}" aria-label="お気に入り">${b.favorite ? '★' : '☆'}</button><button type="button" class="ks-book__tool ks-book__folder" data-ks="sticker-folder" data-id="${b.id}" title="フォルダに分ける${b.folder ? `（今は「${esc(b.folder)}」）` : ''}" aria-label="フォルダに分ける">▤</button><button type="button" class="ks-book__del" data-ks="sticker-del" data-id="${b.id}" title="シール帳から消す" aria-label="シール帳から消す">×</button>`
+          : '';
       return `<div class="ks-book__item"><button type="button" class="ks-book__pick" data-ks="${action}" data-id="${b.id}"${action === 'sticker-add' ? ' draggable="true"' : ''} aria-pressed="${current === b.id}" title="${esc(b.name)}">${url ? `<img src="${url}" alt="${esc(b.name)}" class="sticker--${esc(b.shape)}" draggable="false" />` : '…'}</button>${tools}</div>`;
     })
     .join('');
@@ -257,8 +314,7 @@ function stickerControls(data) {
           .map(([v, l]) => `<option value="${v}" ${course.sticker_mode === v ? 'selected' : ''}>${l}</option>`)
           .join('')}</select></label>`
     : '';
-  if (!sel)
-    return mode;
+  if (!sel) return mode;
   return `
     <label class="ks-range">大きさ<input type="range" min="20" max="200" step="5" value="${Math.round(sel.scale * 100)}" data-ks-range="scale" /><output>${Math.round(sel.scale * 100)}%</output></label>
     <label class="ks-range">傾き<input type="range" min="-180" max="180" step="1" value="${sel.rotate}" data-ks-range="rotate" /><output>${sel.rotate}°</output></label>
@@ -288,7 +344,9 @@ const ART_LABEL = {mark: '「PDF」などの文字・絵', label: '下のラベ�
 function fileControls(data) {
   const f = ui.draft.parts.file;
   const art = ui.draft.parts.fileArt[ui.fileKind];
-  const row = (i) => `<div class="ks-artrow${ui.art === i ? ' is-on' : ''}"><span>${ART_LABEL[i]}${art[i].on ? '' : '<span class="muted">（非表示）</span>'}</span>
+  const row = (
+    i
+  ) => `<div class="ks-artrow${ui.art === i ? ' is-on' : ''}"><span>${ART_LABEL[i]}${art[i].on ? '' : '<span class="muted">（非表示）</span>'}</span>
       <span class="actions">${art[i].on ? `<button type="button" class="btn btn--small" data-ks="art-hide" data-art-item="${i}">消す</button>` : `<button type="button" class="btn btn--small" data-ks="art-show" data-art-item="${i}">出す</button>`}
       ${art[i].dx || art[i].dy ? `<button type="button" class="btn btn--small" data-ks="art-reset" data-art-item="${i}">位置を戻す</button>` : ''}</span></div>`;
   return `${colorField(`file.${ui.fileKind}`, `${FILE_KIND_LABEL[ui.fileKind]}の色`, f[ui.fileKind], {recent: data.skin?.recent ?? []})}
@@ -300,7 +358,8 @@ function fileControls(data) {
 function colorRow(key, list, defaults, label, names = null, hint = '') {
   const colors = list === 'default' ? defaults : list;
   const name = (i) => names?.[i] ?? `${i + 1} つ目`;
-  const sw = (c, i) => `<label class="ks-sw ks-sw--pick" style="--sw: ${c}" title="${esc(name(i))}"><input type="color" data-ks-list="${key}" data-i="${i}" value="${c}" aria-label="${label}：${esc(name(i))}" /></label>`;
+  const sw = (c, i) =>
+    `<label class="ks-sw ks-sw--pick" style="--sw: ${c}" title="${esc(name(i))}"><input type="color" data-ks-list="${key}" data-i="${i}" value="${c}" aria-label="${label}：${esc(name(i))}" /></label>`;
   return `<fieldset class="ks-field"><legend>${label}</legend>${hint ? `<p class="muted ks-hint2">${hint}</p>` : ''}<div class="ks-swatches">
     ${colors.map((c, i) => (names ? `<span class="ks-sw-named">${sw(c, i)}<span>${esc(names[i])}</span></span>` : sw(c, i))).join('')}
     <button type="button" class="ks-sw ks-sw--text" data-ks="set" data-key="${key}" data-value="default" aria-pressed="${list === 'default'}">元の色に戻す</button>
@@ -337,7 +396,11 @@ const SCENE_PLACE = {home: 'folder', course: 'heading', file: 'file', viewer: 'v
 // 見本の中のシールの大きさ：ホームと PDF 編集画面の見本は、窓（幅 1200px ほど）を半分ほどに縮めたものなので基準も半分
 const PREVIEW_SCALE = {folder: 1, home: 0.5, heading: 1, viewer: 0.5, round: 1, file: 1, bookmark: 1};
 // 決まった位置のシールの位置と大きさ（授業画面・編集画面と同じ）
-const FIXED_AT = {round: {x: 0.95, y: 0.04, base: 44}, file: {x: 0.12, y: 0.16, base: 30}, bookmark: {x: 0, y: 0.5, base: 28}};
+const FIXED_AT = {
+  round: {x: 0.95, y: 0.04, base: 44},
+  file: {x: 0.12, y: 0.16, base: 30},
+  bookmark: {x: 0, y: 0.5, base: 28}
+};
 
 /** 見本の上のシール 1 枚。直しているテンプレートのシールは選べて、選んだシールには取っ手（大きさ・傾き・複製・はがす）を出す */
 function stageSticker(data, st, {base, fixed = null}) {
@@ -363,22 +426,40 @@ const stageLayer = (data, stickers, place) =>
     .filter((st) => st.place === place)
     .map((st) => stageSticker(data, st, {base: STICKER_BASE[place] * PREVIEW_SCALE[place]}))
     .join('');
-const fixedOne = (data, st) => (st ? `<span class="ks-fixed">${stageSticker(data, st, {base: FIXED_AT[st.place].base, fixed: FIXED_AT[st.place]})}</span>` : '');
+const fixedOne = (data, st) =>
+  st
+    ? `<span class="ks-fixed">${stageSticker(data, st, {base: FIXED_AT[st.place].base, fixed: FIXED_AT[st.place]})}</span>`
+    : '';
 const editAttr = (part, label) => `data-edit="${part}" title="押すと${label}を変えられます"`;
-const isOn = (part, kind = null) => (ui.part === part && (kind == null || ui.fileKind === kind) && ui.selected == null ? ' is-editing' : '');
+const isOn = (part, kind = null) =>
+  ui.part === part && (kind == null || ui.fileKind === kind) && ui.selected == null ? ' is-editing' : '';
 
 function homeScene(data, {first, second, note, skin1, skin2}) {
   const course = targetCourse(data);
   const render = (st) => stageSticker(data, st, {base: STICKER_BASE.folder});
-  return noteSwatch(note, `ks-stage ks-stage--home${isOn('note')}`, `
+  return noteSwatch(
+    note,
+    `ks-stage ks-stage--home${isOn('note')}`,
+    `
     <div class="ks-place" ${course ? '' : 'data-drop-place="home"'} ${editAttr('note', 'ノート（紙と線）')}>${stageLayer(data, skin1.stickers, 'home')}</div>
     <div class="folders ks-stage__folders">
       <div class="ks-target${isOn('folder')}">${folderCard(first, {data, skin: skin1, edit: {render}})}</div>
       ${folderCard(second, {data, skin: skin2, edit: {still: true}})}
-    </div>`);
+    </div>`
+  );
 }
 // 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では 5 回に 2 つずつ
-const KIND_FILE = {pdf: 'a.pdf', slide: 'a.pptx', doc: 'a.docx', sheet: 'a.xlsx', image: 'a.png', video: 'a.mp4', audio: 'a.mp3', zip: 'a.zip', other: 'a.dat'};
+const KIND_FILE = {
+  pdf: 'a.pdf',
+  slide: 'a.pptx',
+  doc: 'a.docx',
+  sheet: 'a.xlsx',
+  image: 'a.png',
+  video: 'a.mp4',
+  audio: 'a.mp3',
+  zip: 'a.zip',
+  other: 'a.dat'
+};
 const SCENE_FILES = Object.values(KIND_FILE);
 function courseScene(data, {first, note, skin1}) {
   const sk = skin1;
@@ -394,10 +475,14 @@ function courseScene(data, {first, note, skin1}) {
   const roundNote = (n, files) =>
     `<div class="ks-note${isOn('sticky')}" style="--note-color: ${colors[n - 1]}" ${editAttr('sticky', '付箋の色')} aria-label="第${n}回の付箋" data-drop-place="round">
       ${n === 1 ? fixedOne(data, find('round')) : ''}<span class="ks-note__files">${files.map(file).join('')}</span></div>`;
-  return noteSwatch(note, `ks-stage ks-stage--course${isOn('note')}`, `
+  return noteSwatch(
+    note,
+    `ks-stage ks-stage--course${isOn('note')}`,
+    `
     <div class="ks-place ks-place--heading" data-drop-place="heading" title="シールをここへドラッグすると見出しに貼れます">${stageLayer(data, sk.stickers, 'heading')}
       <span class="btn">← ホーム</span><h2>${esc(first.name)}</h2></div>
-    <div class="ks-notes">${POP.map((_, i) => roundNote(i + 1, SCENE_FILES.slice(i * 2, i * 2 + 2))).join('')}</div>`);
+    <div class="ks-notes">${POP.map((_, i) => roundNote(i + 1, SCENE_FILES.slice(i * 2, i * 2 + 2))).join('')}</div>`
+  );
 }
 // ファイルの場面：選んでいる種類の資料のイラストを大きく出す。印とラベルはドラッグで動かせる。下に種類の切り替え
 const BIG = 3.4;
@@ -407,25 +492,40 @@ function fileScene(data, {note, skin1}) {
   const st = sk.stickers.find((x) => x.place === 'file' && x.kind === k);
   let art = fileArt(KIND_FILE[k], {colors: sk.file, art: sk.fileArt, editable: true});
   if (ui.art) art = art.replace(`data-art="${ui.art}"`, `data-art="${ui.art}" class="is-sel"`);
-  return noteSwatch(note, 'ks-stage ks-stage--file', `
+  return noteSwatch(
+    note,
+    'ks-stage ks-stage--file',
+    `
     <div class="ks-bigfile${ui.art ? '' : isOn('file', k)}" ${editAttr('file', `${FILE_KIND_LABEL[k]}の色`)} data-kind="${k}" data-drop-place="file" style="--big: ${BIG}">
       <span class="file__art">${art}${st ? `<span class="ks-fixed">${stageSticker(data, st, {base: FIXED_AT.file.base * BIG, fixed: FIXED_AT.file})}</span>` : ''}</span>
     </div>
     <div class="ks-kinds" role="group" aria-label="資料の種類">${FILE_KINDS.map(
       (x) =>
         `<button type="button" class="ks-kind" data-ks="set" data-key="fileKind" data-value="${x}" aria-pressed="${x === k}">${fileArt(KIND_FILE[x], {colors: sk.file, art: sk.fileArt})}<span>${FILE_KIND_LABEL[x]}</span></button>`
-    ).join('')}</div>`);
+    ).join('')}</div>`
+  );
 }
 function viewerScene(data, {note, skin1}) {
   const sk = skin1;
   const look = bookmarkLook(sk);
   const pdf = sk.sticky.round === 'default' ? POP : sk.sticky.round;
   const ribbon = (top, name, withSticker) =>
-    `<span class="bookmark-ribbon bm ${look.cls}${isOn('bookmark')}" style="${look.style}; top: ${top}%" ${editAttr('bookmark', 'しおり')} data-drop-place="bookmark">${withSticker ? fixedOne(data, sk.stickers.find((st) => st.place === 'bookmark')) : ''}<span class="bookmark-ribbon__text">${name}</span></span>`;
-  return noteSwatch(note, `ks-stage ks-stage--viewer${isOn('note')}`, `
+    `<span class="bookmark-ribbon bm ${look.cls}${isOn('bookmark')}" style="${look.style}; top: ${top}%" ${editAttr('bookmark', 'しおり')} data-drop-place="bookmark">${
+      withSticker
+        ? fixedOne(
+            data,
+            sk.stickers.find((st) => st.place === 'bookmark')
+          )
+        : ''
+    }<span class="bookmark-ribbon__text">${name}</span></span>`;
+  return noteSwatch(
+    note,
+    `ks-stage ks-stage--viewer${isOn('note')}`,
+    `
     <div class="ks-place" data-drop-place="viewer" ${editAttr('note', 'ノート（紙と線）')}>${stageLayer(data, sk.stickers, 'viewer')}</div>
     <div class="ks-pdf ks-pdf--stage"><span></span><span></span><span></span>${ribbon(30, 'しおり1', true)}${ribbon(62, 'テストに出る', false)}
-      <span class="ks-pdfnotes${isOn('sticky')}" ${editAttr('sticky', 'PDF に貼る付箋の色')}>${pdf.map((c) => `<span class="ks-chip" style="--sw: ${c}"></span>`).join('')}</span></div>`);
+      <span class="ks-pdfnotes${isOn('sticky')}" ${editAttr('sticky', 'PDF に貼る付箋の色')}>${pdf.map((c) => `<span class="ks-chip" style="--sw: ${c}"></span>`).join('')}</span></div>`
+  );
 }
 
 /** 場面の見本 */
@@ -464,13 +564,22 @@ const PART_TITLE = {
   sticker: 'シール'
 };
 function inspector(data) {
-  const controls = {note: noteControls, folder: folderControls, tape: tapeControls, file: fileControls, sticky: stickyControls, bookmark: bookmarkControls, sticker: stickerControls}[
-    ui.selected != null ? 'sticker' : ui.part
-  ](data);
+  const controls = {
+    note: noteControls,
+    folder: folderControls,
+    tape: tapeControls,
+    file: fileControls,
+    sticky: stickyControls,
+    bookmark: bookmarkControls,
+    sticker: stickerControls
+  }[ui.selected != null ? 'sticker' : ui.part](data);
   const title = ui.selected != null ? '選んだシール' : PART_TITLE[ui.part];
   return `<aside class="ks-inspector" aria-label="${esc(title)}を変える">
     <div class="ks-inspector__parts" role="group" aria-label="変える部分">${PARTS.filter(([k]) => k !== 'sticker')
-      .map(([k, l]) => `<button type="button" class="ks-chipbtn" data-ks="part" data-part="${k}" aria-pressed="${ui.selected == null && ui.part === k}">${l}</button>`)
+      .map(
+        ([k, l]) =>
+          `<button type="button" class="ks-chipbtn" data-ks="part" data-part="${k}" aria-pressed="${ui.selected == null && ui.part === k}">${l}</button>`
+      )
       .join('')}</div>
     <h4 class="ks-inspector__title">${esc(title)}</h4>
     ${controls}
@@ -584,7 +693,6 @@ export function renderKisekae({data}, route) {
     </div>`;
 }
 
-
 /** 細かい編集のページ */
 function editPage(data, course) {
   return `
@@ -609,7 +717,9 @@ async function applyTemplate(data, templateId) {
   const r = await api['skin.apply']({courseId: course?.id, templateId: templateId || null});
   if (r?.error) return toast(r.error, {error: true});
   await reload();
-  const name = templateId ? (allTemplates(state.data).find((t) => t.id === templateId)?.name ?? '') : 'すべての授業と同じ';
+  const name = templateId
+    ? (allTemplates(state.data).find((t) => t.id === templateId)?.name ?? '')
+    : 'すべての授業と同じ';
   toast(`${course ? `「${course.name}」` : 'すべての授業'}を「${name}」にしました`, {
     action: {
       label: '元に戻す',
@@ -633,15 +743,28 @@ async function save({asNew = false, forCourse = false, confirmed = false} = {}) 
     const others = data.courses.filter((c) => c.skin_template_id === baseId && c.id !== course?.id).length;
     const global = globalId(data) === baseId && !!course;
     if (others || global) {
-      ui.confirm = {text: [global ? 'すべての授業' : '', others ? `ほかの ${others} つの授業` : ''].filter(Boolean).join('と')};
+      ui.confirm = {
+        text: [global ? 'すべての授業' : '', others ? `ほかの ${others} つの授業` : ''].filter(Boolean).join('と')
+      };
       return refresh();
     }
   }
   const name = forCourse ? `${course.name} 用` : asNew && d.baseId ? `${d.name} のコピー` : d.name;
-  const template = normalizeTemplate({id: baseId ?? undefined, name, license: d.license, parts: d.parts, stickers: d.stickers, assets: {}});
+  const template = normalizeTemplate({
+    id: baseId ?? undefined,
+    name,
+    license: d.license,
+    parts: d.parts,
+    stickers: d.stickers,
+    assets: {}
+  });
   const r = await api['skin.save']({template: {...template, id: baseId ?? undefined}});
   if (r?.error) return toast(r.error, {error: true});
-  const a = await api['skin.apply']({courseId: course?.id, templateId: r.template.id, stickerMode: course ? stickerModeFor(course) : undefined});
+  const a = await api['skin.apply']({
+    courseId: course?.id,
+    templateId: r.template.id,
+    stickerMode: course ? stickerModeFor(course) : undefined
+  });
   if (a?.error) return toast(a.error, {error: true});
   ui.draft = null;
   ui.confirm = null;
@@ -669,7 +792,10 @@ async function importSticker(file) {
   let clear = false;
   for (let i = 3; i < px.length && !clear; i += 4) if (px[i] < 250) clear = true;
   const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-  const r = await api['sticker.add']({bytes: new Uint8Array(await blob.arrayBuffer()), shape: clear ? 'cut' : 'framed'});
+  const r = await api['sticker.add']({
+    bytes: new Uint8Array(await blob.arrayBuffer()),
+    shape: clear ? 'cut' : 'framed'
+  });
   if (r?.error) return toast(r.error, {error: true});
   await reload();
   toast('シール帳に入れました。見本へドラッグすると貼れます');
@@ -696,7 +822,15 @@ function addSticker(asset, place = SCENE_PLACE[ui.scene], at = START[place] ?? [
   // 押して貼るときは、前に貼ったシールと重ならないように少しずつずらす
   const n = d.stickers.filter((s) => s.place === place).length;
   const [x, y] = at === START[place] ? [Math.min(1, Math.max(0, at[0] + (at[0] > 0.5 ? -0.08 : 0.08) * n)), at[1]] : at;
-  d.stickers.push({place, asset, x, y, scale: 1, rotate: Math.round(Math.random() * 20 - 10), z: Math.max(0, ...d.stickers.map((s) => s.z + 1))});
+  d.stickers.push({
+    place,
+    asset,
+    x,
+    y,
+    scale: 1,
+    rotate: Math.round(Math.random() * 20 - 10),
+    z: Math.max(0, ...d.stickers.map((s) => s.z + 1))
+  });
   ui.selected = d.stickers.length - 1;
   refresh();
 }
@@ -720,7 +854,9 @@ document.addEventListener('click', async (e) => {
       if (r?.error) return toast(r.error, {error: true});
       if (!r?.ok) return;
       await reload();
-      return toast(`「${r.template.name}」を読み込みました（作った人：${r.template.author}・${LICENSE_LABEL[r.template.license]}）`);
+      return toast(
+        `「${r.template.name}」を読み込みました（作った人：${r.template.author}・${LICENSE_LABEL[r.template.license]}）`
+      );
     }
     if (ks === 'edit') return navigate(editRoute({id: el.dataset.id}));
     if (ks === 'open-editor') return navigate(editRoute());
@@ -734,7 +870,12 @@ document.addEventListener('click', async (e) => {
     if (ks === 'remove') {
       const t = allTemplates(data).find((x) => x.id === el.dataset.id);
       const u = usageText(data, t);
-      if (!window.confirm(`「${t.name}」を消しますか？${u ? `\n${u}です。使っていた授業は「すべての授業と同じ」に戻ります。` : ''}`)) return;
+      if (
+        !window.confirm(
+          `「${t.name}」を消しますか？${u ? `\n${u}です。使っていた授業は「すべての授業と同じ」に戻ります。` : ''}`
+        )
+      )
+        return;
       const r = await api['skin.remove']({id: t.id});
       if (r?.error) return toast(r.error, {error: true});
       if (ui.draft?.baseId === t.id) ui.draft = null;
@@ -761,14 +902,16 @@ document.addEventListener('click', async (e) => {
         await api['settings.update']({patch: {rules: el.dataset.value}});
         return reload();
       }
-      peek = null; // 乗せて試していた色は、押した色で決まる
+      // 乗せて試していた色は、押した色で決まる。試していた値は下書きに入ったままなので、履歴に積む前に元へ戻す
+      // （戻さないと「変更後」が履歴に積まれ、取り消しを 1 回押しても何も変わらない）
+      if (peek) ui.draft.parts[peek.a][peek.b] = peek.value;
+      peek = null;
       if (el.dataset.key === 'fileKind') {
         ui.fileKind = el.dataset.value;
         ui.part = 'file';
         ui.selected = null;
         ui.art = null;
-      }
-      else {
+      } else {
         remember();
         setPath(ui.draft.parts, el.dataset.key, el.dataset.value);
       }
@@ -788,8 +931,7 @@ document.addEventListener('click', async (e) => {
     } else if (ks === 'straight' && ui.selected != null) {
       remember();
       ui.draft.stickers[ui.selected].rotate = 0;
-    }
-    else if (ks === 'sticker-fav' || ks === 'sticker-folder') {
+    } else if (ks === 'sticker-fav' || ks === 'sticker-folder') {
       const b = (data.skin?.stickers ?? []).find((x) => x.id === el.dataset.id);
       if (!b) return;
       let patch;
@@ -814,7 +956,8 @@ document.addEventListener('click', async (e) => {
     } else if (ks === 'z' && ui.selected != null) {
       remember();
       ui.draft.stickers[ui.selected].z = Math.max(0, ui.draft.stickers[ui.selected].z + Number(el.dataset.dir));
-    } else if (ks === 'peel' && ui.selected != null) peel(); else if (ks === 'save') return await save();
+    } else if (ks === 'peel' && ui.selected != null) peel();
+    else if (ks === 'save') return await save();
     else if (ks === 'save-new') return await save({asNew: true});
     else if (ks === 'save-confirm') return await save({confirmed: true});
     else if (ks === 'save-course') return await save({forCourse: true});
@@ -869,19 +1012,20 @@ document.addEventListener('input', (e) => {
   const el = e.target;
   if (!inKisekae(el) || !ui.draft) return;
   if (el.dataset.ksList) {
-    if (!pickStart) (pickStart = true), remember();
+    if (!pickStart) ((pickStart = true), remember());
     setListColor(el);
     repaintPreview();
   } else if (el.dataset.ksColor) {
-    if (!pickStart) (pickStart = true), remember();
+    if (!pickStart) ((pickStart = true), remember());
     setPath(ui.draft.parts, el.dataset.ksColor, el.value.toLowerCase());
     repaintPreview();
   } else if (el.dataset.ksRange && ui.selected != null) {
-    if (!rangeStart) (rangeStart = true), remember();
+    if (!rangeStart) ((rangeStart = true), remember());
     const s = ui.draft.stickers[ui.selected];
     if (el.dataset.ksRange === 'scale') s.scale = Number(el.value) / 100;
     else s.rotate = Number(el.value);
-    el.nextElementSibling && (el.nextElementSibling.textContent = el.dataset.ksRange === 'scale' ? `${el.value}%` : `${el.value}°`);
+    el.nextElementSibling &&
+      (el.nextElementSibling.textContent = el.dataset.ksRange === 'scale' ? `${el.value}%` : `${el.value}°`);
     repaintPreview();
   }
 });
@@ -906,7 +1050,14 @@ function repaintPreview() {
 
 // ---- 見本の上で直接さわる ----
 // 部分が見える場面（部分を選んだとき、今の場面になければ移る）
-const AVAIL = {note: ['home', 'course', 'viewer'], folder: ['home'], tape: ['home'], file: ['file'], sticky: ['course', 'viewer'], bookmark: ['viewer']};
+const AVAIL = {
+  note: ['home', 'course', 'viewer'],
+  folder: ['home'],
+  tape: ['home'],
+  file: ['file'],
+  sticky: ['course', 'viewer'],
+  bookmark: ['viewer']
+};
 function selectPart(part, kind = null) {
   ui.part = part;
   ui.selected = null;
@@ -926,7 +1077,12 @@ function duplicate() {
   if (ui.draft.stickers.filter((x) => x.place === s.place).length >= STICKERS_PER_PLACE)
     return toast(`${PLACE_LABEL[s.place]}に貼れるシールは ${STICKERS_PER_PLACE} 枚までです`, {error: true});
   remember();
-  ui.draft.stickers.push({...s, x: Math.min(1, s.x + 0.06), y: Math.min(1, s.y + 0.06), z: Math.max(0, ...ui.draft.stickers.map((x) => x.z + 1))});
+  ui.draft.stickers.push({
+    ...s,
+    x: Math.min(1, s.x + 0.06),
+    y: Math.min(1, s.y + 0.06),
+    z: Math.max(0, ...ui.draft.stickers.map((x) => x.z + 1))
+  });
   ui.selected = ui.draft.stickers.length - 1;
 }
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -961,8 +1117,8 @@ document.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const i = Number(st.dataset.stickerIndex);
     const h = e.target.closest('[data-h]')?.dataset.h;
-    if (h === 'del') return peel(), refresh();
-    if (h === 'dup') return duplicate(), refresh();
+    if (h === 'del') return (peel(), refresh());
+    if (h === 'dup') return (duplicate(), refresh());
     ui.art = null;
     if (ui.selected !== i) {
       // 選ぶ（描き直すので、続けて掴むのは次の押しから。押したまま動かせば、そのまま動かす）
@@ -970,7 +1126,9 @@ document.addEventListener('pointerdown', (e) => {
       ui.part = 'sticker';
     }
     const s = ui.draft.stickers[i];
-    const box = st.parentElement.closest('[data-drop-place], .ks-place, .folder__stickers, .ks-fixed')?.getBoundingClientRect() ?? stageEl.getBoundingClientRect();
+    const box =
+      st.parentElement.closest('[data-drop-place], .ks-place, .folder__stickers, .ks-fixed')?.getBoundingClientRect() ??
+      stageEl.getBoundingClientRect();
     const r = st.getBoundingClientRect();
     const cx = r.left + r.width / 2,
       cy = r.top + r.height / 2;
@@ -1009,7 +1167,16 @@ document.addEventListener('pointerdown', (e) => {
     ui.art = artEl.dataset.art;
     for (const x of stageEl.querySelectorAll('[data-art].is-sel')) x.classList.remove('is-sel');
     artEl.classList.add('is-sel');
-    grip = {mode: 'art', item: ui.art, el: artEl, x0: e.clientX, y0: e.clientY, ratio: artEl.ownerSVGElement.getBoundingClientRect().width / 54, start: {...ui.draft.parts.fileArt[ui.fileKind][ui.art]}, moved: false};
+    grip = {
+      mode: 'art',
+      item: ui.art,
+      el: artEl,
+      x0: e.clientX,
+      y0: e.clientY,
+      ratio: artEl.ownerSVGElement.getBoundingClientRect().width / 54,
+      start: {...ui.draft.parts.fileArt[ui.fileKind][ui.art]},
+      moved: false
+    };
     return;
   }
   // 部分を押した：その部分を右で直す
@@ -1040,10 +1207,18 @@ document.addEventListener('pointermove', (e) => {
     grip.el.style.left = `${(s.x * 100).toFixed(2)}%`;
     grip.el.style.top = `${(s.y * 100).toFixed(2)}%`;
   } else if (grip.mode === 'scale') {
-    s.scale = Math.min(2, Math.max(0.2, Math.round(((grip.start.scale * Math.hypot(e.clientX - grip.cx, e.clientY - grip.cy)) / grip.dist) * 100) / 100));
+    s.scale = Math.min(
+      2,
+      Math.max(
+        0.2,
+        Math.round(((grip.start.scale * Math.hypot(e.clientX - grip.cx, e.clientY - grip.cy)) / grip.dist) * 100) / 100
+      )
+    );
     grip.el.style.width = `${Math.round(grip.base * s.scale)}px`;
   } else if (grip.mode === 'rotate') {
-    let deg = Math.round(grip.start.rotate + ((Math.atan2(e.clientY - grip.cy, e.clientX - grip.cx) - grip.angle) * 180) / Math.PI);
+    let deg = Math.round(
+      grip.start.rotate + ((Math.atan2(e.clientY - grip.cy, e.clientX - grip.cx) - grip.angle) * 180) / Math.PI
+    );
     deg = ((deg + 540) % 360) - 180;
     for (const snapTo of [-180, -90, 0, 90, 180]) if (Math.abs(deg - snapTo) <= 4) deg = snapTo; // まっすぐ・横向きに吸い付く
     s.rotate = deg;
@@ -1064,7 +1239,7 @@ document.addEventListener(
     e.preventDefault();
     const s = ui.draft.stickers[ui.selected];
     if (!wheelTimer) remember();
-    s.scale = Math.min(2, Math.max(0.2, Math.round((s.scale * (e.deltaY < 0 ? 1.06 : 1 / 1.06)) * 100) / 100));
+    s.scale = Math.min(2, Math.max(0.2, Math.round(s.scale * (e.deltaY < 0 ? 1.06 : 1 / 1.06) * 100) / 100));
     st.style.width = `${Math.round(Number(st.dataset.base) * s.scale)}px`;
     clearTimeout(wheelTimer);
     wheelTimer = setTimeout(() => ((wheelTimer = null), refresh()), 300);
@@ -1122,7 +1297,8 @@ document.addEventListener('keydown', (e) => {
   if (move) {
     e.preventDefault();
     remember();
-    if (FIXED_PLACES.includes(s.place) && !s.moved) Object.assign(s, {x: FIXED_AT[s.place].x, y: FIXED_AT[s.place].y, moved: true});
+    if (FIXED_PLACES.includes(s.place) && !s.moved)
+      Object.assign(s, {x: FIXED_AT[s.place].x, y: FIXED_AT[s.place].y, moved: true});
     else if (FIXED_PLACES.includes(s.place)) s.moved = true;
     s.x = clamp01(s.x + move[0]);
     s.y = clamp01(s.y + move[1]);
@@ -1138,7 +1314,9 @@ document.addEventListener('dragstart', (e) => {
   e.dataTransfer.effectAllowed = 'copy';
   document.querySelector('.kisekae .ks-stage')?.classList.add('is-dropping');
 });
-document.addEventListener('dragend', () => document.querySelector('.kisekae .ks-stage')?.classList.remove('is-dropping'));
+document.addEventListener('dragend', () =>
+  document.querySelector('.kisekae .ks-stage')?.classList.remove('is-dropping')
+);
 let hover = null;
 document.addEventListener('dragover', (e) => {
   const t = e.target.closest?.('.kisekae [data-drop-place]');
@@ -1155,7 +1333,12 @@ document.addEventListener('drop', (e) => {
   if (!box || !sid || !ui.draft) return;
   e.preventDefault();
   const r = box.getBoundingClientRect();
-  addSticker(sid, box.dataset.dropPlace, [clamp01((e.clientX - r.left) / r.width), clamp01((e.clientY - r.top) / r.height)], box.dataset.kind ?? box.closest('[data-kind]')?.dataset.kind);
+  addSticker(
+    sid,
+    box.dataset.dropPlace,
+    [clamp01((e.clientX - r.left) / r.width), clamp01((e.clientY - r.top) / r.height)],
+    box.dataset.kind ?? box.closest('[data-kind]')?.dataset.kind
+  );
 });
 
 // ---- フォルダの右クリック →「着せ替え…」：そのフォルダだけの色（タブ・フォルダ・マスキングテープ・新着の知らせ）を選ぶパネル ----
@@ -1225,16 +1408,24 @@ export function openSkinPicker(course, card, x, y) {
     if (i) save({part: i.dataset.lookCustom, color: i.value});
   });
 }
-document.addEventListener('pointerdown', (e) => picker && !picker.el.contains(e.target) && !e.target.closest?.('.toast') && closeSkinPicker());
+document.addEventListener(
+  'pointerdown',
+  (e) => picker && !picker.el.contains(e.target) && !e.target.closest?.('.toast') && closeSkinPicker()
+);
 document.addEventListener('keydown', (e) => e.key === 'Escape' && picker && closeSkinPicker());
 window.addEventListener('hashchange', closeSkinPicker);
-
 
 // 直した内容を守る：保存せずに細かい編集のページを離れようとしたら確かめる（「← 着せ替えへ」「やめる」は click で確かめる）。
 // app.js の hashchange（描き直し）より先に登録されるので、やめたときは描き直しを止めて元のアドレスに戻す
 window.addEventListener('hashchange', (e) => {
   const from = new URL(e.oldURL).hash;
-  if (!from.startsWith('#/kisekae/edit') || location.hash.startsWith('#/kisekae/edit') || !ui.draft || !ui.history.length) return;
+  if (
+    !from.startsWith('#/kisekae/edit') ||
+    location.hash.startsWith('#/kisekae/edit') ||
+    !ui.draft ||
+    !ui.history.length
+  )
+    return;
   if (window.confirm('変更が保存されていません。保存せずに移動しますか？')) {
     ui.draft = null;
     return;
@@ -1276,6 +1467,6 @@ document.addEventListener('focusin', (e) => {
 document.getElementById('view')?.addEventListener('rendered', () => {
   if (!ui.refocus) return;
   ui.refocus = false;
-  if (ui.selected != null) document.querySelector(`.kisekae .ks-st[data-sticker-index="${ui.selected}"]`)?.focus({preventScroll: true});
+  if (ui.selected != null)
+    document.querySelector(`.kisekae .ks-st[data-sticker-index="${ui.selected}"]`)?.focus({preventScroll: true});
 });
-

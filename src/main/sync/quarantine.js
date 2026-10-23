@@ -20,7 +20,10 @@ export function createQuarantine({platform = process.platform, appName = '大学
           return '';
         }
       })();
-      await fsp.writeFile(`${file}:Zone.Identifier`, `[ZoneTransfer]\r\nZoneId=3\r\n${host ? `HostUrl=${host}\r\n` : ''}`);
+      await fsp.writeFile(
+        `${file}:Zone.Identifier`,
+        `[ZoneTransfer]\r\nZoneId=3\r\n${host ? `HostUrl=${host}\r\n` : ''}`
+      );
     }
   };
 }

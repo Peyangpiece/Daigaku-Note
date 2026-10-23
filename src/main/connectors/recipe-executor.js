@@ -8,7 +8,8 @@ import {parseSlot} from './slot.js';
 import {credentialUrlAllowed, markLoginForm, noAutofillHost} from '../browser/login-form.js';
 
 const META = new Set(['url', 'items', 'openBeforeRead', 'files', 'container']);
-const FILE_LINK = /\.(pdf|pptx?|docx?|xlsx?|csv|txt|zip|png|jpe?g|gif|mp4|mp3|m4a|mov)(\?|#|$)|\/file[s]?\/|\/download|forcedownload|pluginfile|attachment/i;
+const FILE_LINK =
+  /\.(pdf|pptx?|docx?|xlsx?|csv|txt|zip|png|jpe?g|gif|mp4|mp3|m4a|mov)(\?|#|$)|\/file[s]?\/|\/download|forcedownload|pluginfile|attachment/i;
 
 const err = (code, message) => Object.assign(new Error(message), {code});
 const LOGOUT_RE = /ログアウト|log\s*out|sign\s*out|サインアウト/i;
@@ -18,8 +19,17 @@ const DEBUG_KEEP = 20; // debug フォルダに残す画面の数
 function pageLoginHints(re) {
   const r = new RegExp(re, 'i');
   const pw = !!document.querySelector('input[type=password]');
-  const logout = [...document.querySelectorAll('a, button, input[type=submit], input[type=button], [role=button], [onclick]')].some((el) =>
-    [el.textContent, el.getAttribute('href'), el.getAttribute('value'), el.getAttribute('onclick'), el.getAttribute('title'), el.getAttribute('aria-label')].some((v) => v && r.test(v))
+  const logout = [
+    ...document.querySelectorAll('a, button, input[type=submit], input[type=button], [role=button], [onclick]')
+  ].some((el) =>
+    [
+      el.textContent,
+      el.getAttribute('href'),
+      el.getAttribute('value'),
+      el.getAttribute('onclick'),
+      el.getAttribute('title'),
+      el.getAttribute('aria-label')
+    ].some((v) => v && r.test(v))
   );
   return {pw, logout};
 }
@@ -37,7 +47,10 @@ function pageSummary() {
     paths.set(p, (paths.get(p) ?? 0) + 1);
   }
   const ids = [...new Set([...document.querySelectorAll('[id]')].map((e) => '#' + e.id))].slice(0, 30);
-  const links = [...paths].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([p, n]) => `${p}(${n})`);
+  const links = [...paths]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([p, n]) => `${p}(${n})`);
   return {title: document.title, links, ids, anchors: document.querySelectorAll('a[href]').length};
 }
 
@@ -71,7 +84,11 @@ function pageExtract(els, spec) {
   return els.map((el) => {
     const out = {};
     for (const [key, alts] of spec.fields) out[key] = alts.map(([sel, attr]) => val(el, sel, attr));
-    if (spec.filesSelector) out.__files = [...el.querySelectorAll(spec.filesSelector)].map((a) => ({href: a.href || a.getAttribute('href') || '', text: (a.textContent || '').trim()}));
+    if (spec.filesSelector)
+      out.__files = [...el.querySelectorAll(spec.filesSelector)].map((a) => ({
+        href: a.href || a.getAttribute('href') || '',
+        text: (a.textContent || '').trim()
+      }));
     out.__text = (el.innerText ?? el.textContent ?? '').trim().slice(0, 2000);
     return out;
   });
@@ -117,7 +134,9 @@ function pageExpand(containerSel) {
           }
     for (const e of box.querySelectorAll('*')) if (events(e).length) found.add(e);
   }
-  const all = [...found].filter((e) => e !== box && !realLink(e) && vis(e) && !e.closest('input,select,textarea,form[action]'));
+  const all = [...found].filter(
+    (e) => e !== box && !realLink(e) && vis(e) && !e.closest('input,select,textarea,form[action]')
+  );
   const leaves = all.filter((e) => !all.some((o) => o !== e && e.contains(o)));
   let n = 0;
   for (const e of leaves) {
@@ -141,7 +160,12 @@ function pageMarkItems(containerSel) {
   let n = 0;
   for (const t of box.querySelectorAll('[data-daigaku-toggle]')) {
     let item = t;
-    while (item.parentElement && item.parentElement !== box && item.parentElement.querySelectorAll('[data-daigaku-toggle]').length === 1) item = item.parentElement;
+    while (
+      item.parentElement &&
+      item.parentElement !== box &&
+      item.parentElement.querySelectorAll('[data-daigaku-toggle]').length === 1
+    )
+      item = item.parentElement;
     if (item.dataset.daigakuItem === undefined) item.dataset.daigakuItem = String(n++);
   }
   if (!n) {
@@ -247,7 +271,8 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       try {
         await page.goto(url, {waitUntil: ctx.waits.pageLoad});
       } catch (e) {
-        if (/blockedbyclient|ERR_BLOCKED_BY_CLIENT/.test(e.message)) throw err('blocked-navigation', '許可していないページへ移動したため中断しました');
+        if (/blockedbyclient|ERR_BLOCKED_BY_CLIENT/.test(e.message))
+          throw err('blocked-navigation', '許可していないページへ移動したため中断しました');
         if (/Timeout/i.test(e.message)) throw err('timeout', `${safeHost(url)} の応答がありませんでした`);
         throw err('network', `${safeHost(url)} に接続できませんでした`);
       }
@@ -255,14 +280,23 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
 
     async _isLoggedIn(page, ctx) {
       const sel = ctx.recipe.login?.loggedIn?.selector;
-      if (sel && (await page.locator(sel).count().catch(() => 0)) > 0) return true;
+      if (
+        sel &&
+        (await page
+          .locator(sel)
+          .count()
+          .catch(() => 0)) > 0
+      )
+        return true;
       // 予備の判定（未検証のレシピや LMS の改修でセレクタが合わないとき）：
       // パスワード欄がなく、「ログアウト」にあたるリンク・ボタンがあればログイン済みとみなす
       const h = await page.evaluate(pageLoginHints, LOGOUT_RE.source).catch(() => ({pw: true, logout: false}));
       const ok = !h.pw && h.logout;
       if (ok && !ctx.heuristicLogged) {
         ctx.heuristicLogged = true;
-        log(`[recipe] ${recipeIn.id}: login.loggedIn のセレクタ（${sel ?? 'なし'}）は一致しませんでしたが、「ログアウト」の表示があるのでログイン済みと判断しました（${page.url()}）。レシピの見直しが要ります`);
+        log(
+          `[recipe] ${recipeIn.id}: login.loggedIn のセレクタ（${sel ?? 'なし'}）は一致しませんでしたが、「ログアウト」の表示があるのでログイン済みと判断しました（${page.url()}）。レシピの見直しが要ります`
+        );
       }
       return ok;
     },
@@ -272,11 +306,17 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       if (!debug?.dir) return null;
       try {
         const summary = await page.evaluate(pageSummary).catch(() => ({title: '', links: [], ids: [], anchors: 0}));
-        const file = path.join(debug.dir, `${recipeIn.id}_${label}_${new Date().toISOString().replace(/[:.]/g, '-')}.html`);
+        const file = path.join(
+          debug.dir,
+          `${recipeIn.id}_${label}_${new Date().toISOString().replace(/[:.]/g, '-')}.html`
+        );
         await writeFile(file, `<!-- ${page.url()} -->\n${await page.content()}`);
-        log(`[recipe] ${recipeIn.id} ${label}: ${page.url()} 「${summary.title}」 リンク ${summary.anchors} 本（${summary.links.join(' ')}） id: ${summary.ids.join(' ')} → 画面を保存 ${file}`);
+        log(
+          `[recipe] ${recipeIn.id} ${label}: ${page.url()} 「${summary.title}」 リンク ${summary.anchors} 本（${summary.links.join(' ')}） id: ${summary.ids.join(' ')} → 画面を保存 ${file}`
+        );
         const old = (await readdir(debug.dir)).filter((f) => f.endsWith('.html')).sort();
-        for (const f of old.slice(0, Math.max(0, old.length - DEBUG_KEEP))) await unlink(path.join(debug.dir, f)).catch(() => {});
+        for (const f of old.slice(0, Math.max(0, old.length - DEBUG_KEEP)))
+          await unlink(path.join(debug.dir, f)).catch(() => {});
         return file;
       } catch (e) {
         log(`[recipe] 画面の保存に失敗: ${e.message}`);
@@ -297,17 +337,37 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       for (let step = 0; step < 6; step++) {
         const host = safeHost(page.url());
         if (host === baseHost && (await this._isLoggedIn(page, ctx))) return;
-        if (!host || !allowed(host)) throw err('login-required', 'ログインのページに自動では入れません。一度ブラウザ窓でログインしてください（通るページを覚えます）');
-        if (noAutofillHost(host)) throw err('login-needs-user', 'Google・Microsoft のログインは自動では入れません。ブラウザ窓でログインしてください');
+        if (!host || !allowed(host))
+          throw err(
+            'login-required',
+            'ログインのページに自動では入れません。一度ブラウザ窓でログインしてください（通るページを覚えます）'
+          );
+        if (noAutofillHost(host))
+          throw err(
+            'login-needs-user',
+            'Google・Microsoft のログインは自動では入れません。ブラウザ窓でログインしてください'
+          );
         // 自動ログインは、本人が見えるログイン窓でログインしたときに通ったホスト（allowedHosts）にも入れる。ただし https だけ
         if (!credentialUrlAllowed(page.url(), {base: ctx.base, hosts: ctx.allowedHosts}))
-          throw err('login-required', 'このログインのページには ID・パスワードを自動では入れません。ブラウザ窓でログインしてください');
+          throw err(
+            'login-required',
+            'このログインのページには ID・パスワードを自動では入れません。ブラウザ窓でログインしてください'
+          );
         const f = form
-          ? {user: (await page.locator(form.user).count()) > 0, password: (await page.locator(form.password).count()) > 0, submit: true}
+          ? {
+              user: (await page.locator(form.user).count()) > 0,
+              password: (await page.locator(form.password).count()) > 0,
+              submit: true
+            }
           : await page.evaluate(markLoginForm).catch(() => ({user: false, password: false, submit: false}));
-        const loc = (role) => (form ? page.locator(form[role]).first() : page.locator(`[data-dn-login="${role}"]`).first());
+        const loc = (role) =>
+          form ? page.locator(form[role]).first() : page.locator(`[data-dn-login="${role}"]`).first();
         if (f.password) {
-          if (sentPassword) throw err('login-bad-credentials', '保存した ID かパスワードでログインできませんでした。設定 → LMS との連携 で入れ直してください（自動ログインは止めました）');
+          if (sentPassword)
+            throw err(
+              'login-bad-credentials',
+              '保存した ID かパスワードでログインできませんでした。設定 → LMS との連携 で入れ直してください（自動ログインは止めました）'
+            );
           if (f.user) await loc('user').fill(cred.user);
           await loc('password').fill(cred.password);
           sentPassword = sentUser = true;
@@ -315,11 +375,17 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           await loc('user').fill(cred.user);
           sentUser = true;
         } else if (f.user && sentUser && !sentPassword) {
-          throw err('login-bad-credentials', '保存した ID でログインできませんでした。設定 → LMS との連携 で入れ直してください（自動ログインは止めました）');
+          throw err(
+            'login-bad-credentials',
+            '保存した ID でログインできませんでした。設定 → LMS との連携 で入れ直してください（自動ログインは止めました）'
+          );
         } else if (sentPassword || sentUser) {
           // パスワードを送ったあと、ID・パスワード以外の画面（認証コード・同意など）。転送の途中なら少し待って見直す
           if (await this._settle(page, ctx, baseHost)) continue;
-          throw err('login-needs-user', '認証コードなど、本人の入力が要る画面になりました。設定 → LMS との連携 の「ログインし直す」で窓を開いてください（ID とパスワードは入れておきます）');
+          throw err(
+            'login-needs-user',
+            '認証コードなど、本人の入力が要る画面になりました。設定 → LMS との連携 の「ログインし直す」で窓を開いてください（ID とパスワードは入れておきます）'
+          );
         } else {
           if (await this._settle(page, ctx, baseHost)) continue;
           throw err('login-needs-user', 'ログインのフォームが見つかりませんでした。ブラウザ窓でログインしてください');
@@ -364,16 +430,25 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
      * visible：見えるログイン窓。ID・パスワードを保存していれば欄に入れておく（送信は本人が押す）
      */
     async login(ctx, mode = 'headless', {credentials} = {}) {
-      const saved = async () => (ctx.connection.save_password ? await secrets?.get(`conn:${ctx.connection.id}:password`) : null);
+      const saved = async () =>
+        ctx.connection.save_password ? await secrets?.get(`conn:${ctx.connection.id}:password`) : null;
       if (mode === 'headless') {
         const cred = credentials ?? (await saved());
-        if (!cred?.user) throw err('login-required', 'ブラウザ窓でログインしてください（自動ログインを使うには、設定 → LMS との連携 で ID とパスワードを保存します）');
+        if (!cred?.user)
+          throw err(
+            'login-required',
+            'ブラウザ窓でログインしてください（自動ログインを使うには、設定 → LMS との連携 で ID とパスワードを保存します）'
+          );
         const page = await this._page(ctx);
         try {
           try {
             await this._goto(page, ctx, ctx.base + '/');
           } catch (e) {
-            if (e.code === 'blocked-navigation') throw err('login-required', 'ログインのページに自動では入れません。一度ブラウザ窓でログインしてください（通るページを覚えます）');
+            if (e.code === 'blocked-navigation')
+              throw err(
+                'login-required',
+                'ログインのページに自動では入れません。一度ブラウザ窓でログインしてください（通るページを覚えます）'
+              );
             throw e;
           }
           if (await this._isLoggedIn(page, ctx)) return {ok: true};
@@ -409,7 +484,11 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       // 欄（container）が AJAX で後から入るときは、中身が入るまで待ってから押す・読む
       const container = section.container ? fillTemplate(section.container, vars) : null;
       if (container) {
-        await page.locator(container).first().waitFor({timeout: 8000}).catch(() => {});
+        await page
+          .locator(container)
+          .first()
+          .waitFor({timeout: 8000})
+          .catch(() => {});
         await page
           .waitForFunction(
             (sel) => {
@@ -428,14 +507,21 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
               .waitForFunction(
                 ([sel, prev]) => {
                   const b = document.querySelector(sel);
-                  return !!b && (prev === null || b.innerHTML !== prev) && !b.querySelector('.loading, [class*="loading" i], [class*="spinner" i]');
+                  return (
+                    !!b &&
+                    (prev === null || b.innerHTML !== prev) &&
+                    !b.querySelector('.loading, [class*="loading" i], [class*="spinner" i]')
+                  );
                 },
                 [container, before],
                 {timeout: 8000}
               )
               .catch(() => {})
           : Promise.resolve();
-      const snapshot = () => (container ? page.evaluate((sel) => document.querySelector(sel)?.innerHTML ?? '', container).catch(() => '') : Promise.resolve(null));
+      const snapshot = () =>
+        container
+          ? page.evaluate((sel) => document.querySelector(sel)?.innerHTML ?? '', container).catch(() => '')
+          : Promise.resolve(null);
       if (section.openBeforeRead === 'auto') {
         const n = await page.evaluate(pageExpand, container).catch(() => 0);
         if (n) {
@@ -449,7 +535,10 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         if (!n) log(`[recipe] ${recipeIn.id} ${section.label}: 押す要素がありません（${sel}）`);
         for (let i = 0; i < (openAll ? n : Math.min(n, 1)); i++) {
           const before = await snapshot();
-          await targets.nth(i).click({timeout: 5000}).catch(() => {});
+          await targets
+            .nth(i)
+            .click({timeout: 5000})
+            .catch(() => {});
           await settled(before);
           await page.waitForTimeout(ctx.waits.afterClick);
         }
@@ -460,16 +549,30 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         itemsSel = '[data-daigaku-item]';
       }
       // 欄が落ち着いたあとなら項目はすぐ出るはず。空の回で毎回 8 秒待たない
-      await page.locator(itemsSel).first().waitFor({timeout: container ? 1500 : 8000}).catch(() => {});
+      await page
+        .locator(itemsSel)
+        .first()
+        .waitFor({timeout: container ? 1500 : 8000})
+        .catch(() => {});
       const raw = await page.$$eval(itemsSel, pageExtract, section.spec);
       if (!raw.length) {
         if (await this._looksLikeLogin(page)) throw err('login-required', 'ログインページに戻されました');
+        // 欄（container）そのものがなければ、画面の構成が変わった可能性が高い（資料のない回なら欄は空のまま残る）
+        const containerMissing =
+          !!container &&
+          (await page
+            .locator(container)
+            .count()
+            .catch(() => 0)) === 0;
         // files は「資料のない回」で空になるのがふつうなので、画面の保存は接続ごとに 1 回だけ
         if (section.label !== 'files' || !ctx.dumpedFiles) {
           ctx.dumpedFiles = ctx.dumpedFiles || section.label === 'files';
           await this._dump(page, section.label ?? 'items');
         }
-        throw err('selector-missing', `要素が見つかりません（${section.items}）`);
+        throw Object.assign(
+          err('selector-missing', `要素が見つかりません（${containerMissing ? container : section.items}）`),
+          {containerMissing}
+        );
       }
       const base = page.url();
       return raw.map((item) => {
@@ -485,7 +588,13 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
             }
           }
         }
-        if (out.link && !/^@/.test(section.link ?? '') && /^(https?:)?\/|^[^:]+$/.test(out.link) && /@href/.test(section.link ?? '@href')) out.link = resolveHref(out.link, base) || out.link;
+        if (
+          out.link &&
+          !/^@/.test(section.link ?? '') &&
+          /^(https?:)?\/|^[^:]+$/.test(out.link) &&
+          /@href/.test(section.link ?? '@href')
+        )
+          out.link = resolveHref(out.link, base) || out.link;
         if (item.__files) out.files = item.__files.map((f) => ({url: resolveHref(f.href, base), name: f.text}));
         out.__text = item.__text;
         return out;
@@ -497,7 +606,8 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const page = await this._page(ctx);
       try {
         await this._goto(page, ctx, fillTemplate(sec.url, {base: ctx.base}));
-        if (!(await this._isLoggedIn(page, ctx)) && (await this._looksLikeLogin(page))) throw err('login-required', 'ログインが必要です');
+        if (!(await this._isLoggedIn(page, ctx)) && (await this._looksLikeLogin(page)))
+          throw err('login-required', 'ログインが必要です');
         const items = await this._collect(page, ctx, sec, {base: ctx.base});
         const seen = new Set();
         const out = [];
@@ -506,10 +616,22 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           const lmsId = it.lmsId || it.link;
           if (seen.has(lmsId)) continue;
           seen.add(lmsId);
-          const slot = it.weekday ? {weekday: it.weekday, period: Number(it.period) || undefined} : parseSlot(it.name) ?? {};
+          const slot = it.weekday
+            ? {weekday: it.weekday, period: Number(it.period) || undefined}
+            : (parseSlot(it.name) ?? {});
           // リンクの文字は「授業名（金曜／2限）\n教員名」のように複数行のことがある。授業名は最初の行だけ
-          const firstLine = it.name.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? it.name;
-          out.push({lmsId, name: firstLine.replace(/\s*[（(][^（()）]*曜[^（()）]*[)）]\s*$/, '').trim() || firstLine, url: it.link, weekday: slot.weekday, period: slot.period});
+          const firstLine =
+            it.name
+              .split(/\r?\n/)
+              .map((l) => l.trim())
+              .find(Boolean) ?? it.name;
+          out.push({
+            lmsId,
+            name: firstLine.replace(/\s*[（(][^（()）]*曜[^（()）]*[)）]\s*$/, '').trim() || firstLine,
+            url: it.link,
+            weekday: slot.weekday,
+            period: slot.period
+          });
         }
         return out;
       } finally {
@@ -524,21 +646,33 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const items = await this._collect(page, ctx, sec, vars);
       return items
         .filter((it) => it.title)
-        .map((it) => ({number: Number(it.round) || parseRound(it.title), title: it.title, lmsRef: it.link || it.lmsRef || it.title, url: /^https?:/.test(it.link ?? '') ? it.link : undefined}));
+        .map((it) => ({
+          number: Number(it.round) || parseRound(it.title),
+          title: it.title,
+          lmsRef: it.link || it.lmsRef || it.title,
+          url: /^https?:/.test(it.link ?? '') ? it.link : undefined
+        }));
     },
 
     async listFiles(ctx, course, round) {
       const sec = ctx.sections.files;
-      const vars = {base: ctx.base, course: {url: course.lms_url ?? course.url, lmsId: course.lms_id ?? course.lmsId}, round: {url: round.url ?? course.lms_url ?? course.url, lmsRef: round.lmsRef}};
+      const vars = {
+        base: ctx.base,
+        course: {url: course.lms_url ?? course.url, lmsId: course.lms_id ?? course.lmsId},
+        round: {url: round.url ?? course.lms_url ?? course.url, lmsRef: round.lmsRef}
+      };
       const page = await this._pageAt(ctx, fillTemplate(sec.url, vars));
       let items;
       try {
         items = await this._collect(page, ctx, sec, vars);
       } catch (e) {
-        if (e.code === 'selector-missing') return []; // 資料のない回
+        // 資料のない回は空。欄そのものがないときは画面の構成が変わった可能性があるので、黙って「0 件」にせず知らせる
+        if (e.code === 'selector-missing' && !e.containerMissing) return [];
         throw e;
       }
-      return items.filter((it) => it.link && FILE_LINK.test(it.link)).map((it) => ({url: it.link, name: it.name || undefined}));
+      return items
+        .filter((it) => it.link && FILE_LINK.test(it.link))
+        .map((it) => ({url: it.link, name: it.name || undefined}));
     },
 
     async listNoticeFiles(ctx, course) {
@@ -561,17 +695,33 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const out = [];
       for (const it of items) {
         const round = Number(it.round) || 0;
-        for (const f of it.files ?? []) if (f.url && FILE_LINK.test(f.url)) out.push({url: f.url, name: f.name || undefined, round: round || undefined, noticeTitle: it.title ?? it.round ?? ''});
+        for (const f of it.files ?? [])
+          if (f.url && FILE_LINK.test(f.url))
+            out.push({
+              url: f.url,
+              name: f.name || undefined,
+              round: round || undefined,
+              noticeTitle: it.title ?? it.round ?? ''
+            });
       }
       return out;
     },
 
     async fetchFile(ctx, ref) {
       ctx.context ??= await session.open(ctx.connection, {allowedHosts: ctx.allowedHosts});
-      if (ctx.allowedHosts.length && !ctx.allowedHosts.some((h) => safeHost(ref.url) === h || safeHost(ref.url).endsWith('.' + h)))
+      if (
+        ctx.allowedHosts.length &&
+        !ctx.allowedHosts.some((h) => safeHost(ref.url) === h || safeHost(ref.url).endsWith('.' + h))
+      )
         throw err('blocked-navigation', '許可していないホストのファイルです');
       const res = await ctx.context.request.get(ref.url, {maxRedirects: 5, timeout: 60000});
-      return {ok: res.ok(), status: res.status(), contentType: res.headers()['content-type'] ?? '', disposition: res.headers()['content-disposition'] ?? '', body: await res.body()};
+      return {
+        ok: res.ok(),
+        status: res.status(),
+        contentType: res.headers()['content-type'] ?? '',
+        disposition: res.headers()['content-disposition'] ?? '',
+        body: await res.body()
+      };
     },
 
     openUrl(course) {

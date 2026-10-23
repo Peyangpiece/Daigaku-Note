@@ -28,7 +28,10 @@ export function chromiumReady(browsersPath) {
  * Chromium を取り込む。Electron の中では process.execPath（Electron 自身）を Node として動かす（ELECTRON_RUN_AS_NODE）。
  * onStatus で進み具合の文言を返す。失敗したら Error
  */
-export async function ensureChromium(browsersPath, {onStatus = () => {}, log = () => {}, execPath = process.execPath, isElectron = !!process.versions.electron} = {}) {
+export async function ensureChromium(
+  browsersPath,
+  {onStatus = () => {}, log = () => {}, execPath = process.execPath, isElectron = !!process.versions.electron} = {}
+) {
   if (chromiumReady(browsersPath)) return 'ready';
   mkdirSync(browsersPath, {recursive: true});
   onStatus('LMS を読むためのブラウザを準備しています（初回とアプリの更新後だけ。数分かかります）…');
@@ -43,11 +46,19 @@ export async function ensureChromium(browsersPath, {onStatus = () => {}, log = (
   } catch (e) {
     throw new Error(`Playwright が見つかりません（npm ci は済んでいますか）: ${e.message}`);
   }
-  const env = {...process.env, ...(isElectron ? {ELECTRON_RUN_AS_NODE: '1'} : {}), PLAYWRIGHT_BROWSERS_PATH: browsersPath};
+  const env = {
+    ...process.env,
+    ...(isElectron ? {ELECTRON_RUN_AS_NODE: '1'} : {}),
+    PLAYWRIGHT_BROWSERS_PATH: browsersPath
+  };
   delete env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD;
   log(`Chromium を取り込みます: ${execPath} ${cli} install chromium → ${browsersPath}`);
   await new Promise((resolve, reject) => {
-    const p = spawn(execPath, [cli, 'install', 'chromium'], {env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true});
+    const p = spawn(execPath, [cli, 'install', 'chromium'], {
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    });
     let out = '',
       err = '';
     p.stdout.on('data', (d) => (out += d));

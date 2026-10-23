@@ -12,7 +12,11 @@ test('Playwright の CLI を見つけて実行し、終わったら印を書く�
   // 本物の取り込みは重いので、`node` を execPath にし、PLAYWRIGHT_BROWSERS_PATH に既存の Chromium があればすぐ終わる。
   // ここでは CLI が見つかること（exports の問題が起きないこと）と、失敗時の文言だけを確かめる
   const statuses = [];
-  const r = await ensureChromium(dir, {onStatus: (s) => statuses.push(s), execPath: process.execPath, isElectron: false}).catch((e) => e);
+  const r = await ensureChromium(dir, {
+    onStatus: (s) => statuses.push(s),
+    execPath: process.execPath,
+    isElectron: false
+  }).catch((e) => e);
   if (r instanceof Error) {
     assert.doesNotMatch(r.message, /Playwright が見つかりません/, 'CLI は見つかること');
     assert.match(r.message, /ブラウザの準備に失敗しました（終了コード/);

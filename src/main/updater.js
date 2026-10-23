@@ -254,10 +254,14 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     if (canReplace(bundle, writable)) {
       expectUpdate(version);
       try {
-        spawn('/bin/sh', ['-c', REPLACE_SCRIPT, 'sh', String(process.pid), file, bundle, version, logFile, sha512, MAC_SIGNING_LEAF], {
-          detached: true,
-          stdio: 'ignore'
-        }).unref();
+        spawn(
+          '/bin/sh',
+          ['-c', REPLACE_SCRIPT, 'sh', String(process.pid), file, bundle, version, logFile, sha512, MAC_SIGNING_LEAF],
+          {
+            detached: true,
+            stdio: 'ignore'
+          }
+        ).unref();
         allowQuit();
         app.quit();
         return;
@@ -288,8 +292,16 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
       if (manual)
         message(
           process.windowsStore
-            ? {type: 'info', message: 'Microsoft Store の大学ノートは、Store が更新します', detail: 'Microsoft Store の「ライブラリ」から更新を確かめられます。'}
-            : {type: 'info', message: '開発中の大学ノートは更新を確かめません', detail: '配布物（.dmg・.exe）から入れたときに働きます。'}
+            ? {
+                type: 'info',
+                message: 'Microsoft Store の大学ノートは、Store が更新します',
+                detail: 'Microsoft Store の「ライブラリ」から更新を確かめられます。'
+              }
+            : {
+                type: 'info',
+                message: '開発中の大学ノートは更新を確かめません',
+                detail: '配布物（.dmg・.exe）から入れたときに働きます。'
+              }
         );
       return;
     }

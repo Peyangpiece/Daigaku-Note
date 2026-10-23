@@ -1,6 +1,6 @@
 // 大学ノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
 // M0 の骨格：DB・設定・ジョブ・スケジューラ・IPC をつなぐ。LMS 操作とファイル操作はここ（メイン）だけで行う。
-import {app, BrowserWindow, Menu, Tray, dialog, nativeImage, nativeTheme, net, shell} from 'electron';
+import {app, BrowserWindow, Menu, Notification, Tray, dialog, nativeImage, nativeTheme, net, shell} from 'electron';
 import {existsSync, mkdirSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -23,6 +23,8 @@ import {createUpdater} from './updater.js';
 import {createFolders} from './folders.js';
 import {createQuizService} from './quiz/service.js';
 import {runSelfTest, selfTestPath} from './self-check.js';
+import {runBackup} from './backup.js';
+import {createNotifier} from './notify.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(here, '..', 'renderer', 'index.html');
@@ -64,7 +66,8 @@ let win = null,
 const ctx = {}; // repo・files・engine・registry・secrets・log・jobs・scheduler
 
 function ensureDirs(userData) {
-  for (const d of ['work', 'logs', 'recipes', 'debug', 'backups', 'pw-browsers']) mkdirSync(path.join(userData, d), {recursive: true});
+  for (const d of ['work', 'logs', 'recipes', 'debug', 'backups', 'pw-browsers'])
+    mkdirSync(path.join(userData, d), {recursive: true});
 }
 
 // 読み込み前の窓の色。設定のテーマ（なければ OS）に合わせ、暗い配色で白く光らないようにする（tokens.css の --paper）
@@ -160,7 +163,16 @@ function buildAppMenu() {
             ]
           }
         ]
-      : [{label: 'ファイル', submenu: [{label: '設定', accelerator: 'Ctrl+,', click: () => openWindow('/settings')}, {type: 'separator'}, {role: 'quit', label: '終了'}]}]),
+      : [
+          {
+            label: 'ファイル',
+            submenu: [
+              {label: '設定', accelerator: 'Ctrl+,', click: () => openWindow('/settings')},
+              {type: 'separator'},
+              {role: 'quit', label: '終了'}
+            ]
+          }
+        ]),
     {
       label: '編集',
       submenu: [
@@ -183,8 +195,20 @@ function buildAppMenu() {
         // 拡大・縮小は画面に任せる（PDF の編集画面では PDF だけを拡大し、ツールバーや背景は拡大しない。app.js）
         {label: '実際のサイズ', accelerator: 'CmdOrCtrl+0', click: zoom('reset')},
         {label: '拡大', accelerator: 'CmdOrCtrl+Plus', click: zoom('in')},
-        {label: '拡大', accelerator: 'CmdOrCtrl+=', click: zoom('in'), visible: false, acceleratorWorksWhenHidden: true},
-        {label: '拡大', accelerator: 'CmdOrCtrl+;', click: zoom('in'), visible: false, acceleratorWorksWhenHidden: true}, // JIS キーボードの「＋」のキー
+        {
+          label: '拡大',
+          accelerator: 'CmdOrCtrl+=',
+          click: zoom('in'),
+          visible: false,
+          acceleratorWorksWhenHidden: true
+        },
+        {
+          label: '拡大',
+          accelerator: 'CmdOrCtrl+;',
+          click: zoom('in'),
+          visible: false,
+          acceleratorWorksWhenHidden: true
+        }, // JIS キーボードの「＋」のキー
         {label: '縮小', accelerator: 'CmdOrCtrl+-', click: zoom('out')},
         {type: 'separator'},
         {role: 'togglefullscreen', label: 'フルスクリーン'}
@@ -196,7 +220,9 @@ function buildAppMenu() {
 }
 
 function buildTray() {
-  const icon = nativeImage.createFromPath(path.join(here, '..', 'renderer', 'assets', process.platform === 'darwin' ? 'trayTemplate.png' : 'tray.png'));
+  const icon = nativeImage.createFromPath(
+    path.join(here, '..', 'renderer', 'assets', process.platform === 'darwin' ? 'trayTemplate.png' : 'tray.png')
+  );
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
   const refresh = () =>
     tray.setContextMenu(
@@ -240,12 +266,22 @@ app.whenReady().then(async () => {
       log: (m) => log.info(m)
     });
     // Playwright：Chromium は userData/pw-browsers に初回起動時に取り込む（§8.5）。取り込みは M0 後半の browser/install.js
-    ctx.session = createBrowserSession({secrets: ctx.secrets, log: (m) => log.info(m), browsersPath: path.join(userData, 'pw-browsers')});
+    ctx.session = createBrowserSession({
+      secrets: ctx.secrets,
+      log: (m) => log.info(m),
+      browsersPath: path.join(userData, 'pw-browsers')
+    });
     ctx.registry = createRegistry({
       secrets: ctx.secrets,
       log: (m) => log.info(m),
       recipes: loadRecipes([path.join(here, '..', '..', 'recipes'), path.join(userData, 'recipes')]),
-      recipeExecutorFactory: (recipe) => createRecipeExecutor(recipe, {session: ctx.session, secrets: ctx.secrets, log: (m) => log.info(m), debug: {dir: path.join(userData, 'debug')}})
+      recipeExecutorFactory: (recipe) =>
+        createRecipeExecutor(recipe, {
+          session: ctx.session,
+          secrets: ctx.secrets,
+          log: (m) => log.info(m),
+          debug: {dir: path.join(userData, 'debug')}
+        })
     });
     ctx.folders = createFolders({repo, rootDir: () => ctx.rootDir(), log: (m) => log.info(m)});
     ctx.engine = new SyncEngine({
@@ -257,16 +293,34 @@ app.whenReady().then(async () => {
     // 同じ LMS の接続が 2 つ以上あれば 1 つにまとめる（セットアップのやり直しで増え、授業が 2 つずつ並んでいた）
     await ctx.engine
       .mergeDuplicateConnections()
-      .then((r) => r.merged && log.info(`同じ LMS の接続を ${r.merged} 件まとめ、重なった授業 ${r.removedCourses} 件を 1 つにしました`))
+      .then(
+        (r) =>
+          r.merged &&
+          log.info(`同じ LMS の接続を ${r.merged} 件まとめ、重なった授業 ${r.removedCourses} 件を 1 つにしました`)
+      )
       .catch((e) => log.error(`接続をまとめられませんでした: ${e.message}`));
-    ctx.jobs = new JobRunner(ctx, {notify: (ch, payload) => win?.webContents.send(ch, payload)});
+    // レンダラへの知らせ。窓が前面になくても分かるよう、新しい資料・ログインの必要・クイズの完成・同期の失敗は OS の通知にも出す（notify.js）
+    const notifier = createNotifier({repo, Notification, openWindow, log: (m) => log.warn(m)});
+    const notify = (ch, payload) => {
+      win?.webContents.send(ch, payload);
+      notifier.onEvent(ch, payload);
+    };
+    ctx.backup = async () => runBackup({db, dir: path.join(userData, 'backups')});
+    ctx.jobs = new JobRunner(ctx, {notify});
     ctx.scheduler = new Scheduler(ctx);
-    ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify: (ch, payload) => win?.webContents.send(ch, payload)});
+    ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify});
     registerIpc(ctx, {openWindow, getWindow: () => win});
     buildAppMenu();
     buildTray();
     // アプリの自動更新（SPEC §14.5）。更新のために終了するときは「処理中ですが終了しますか」を出さない
-    ctx.updater = createUpdater({app, dialog, shell, net, refreshTray: () => ctx.refreshTray?.(), allowQuit: () => (ctx.quitConfirmed = true)});
+    ctx.updater = createUpdater({
+      app,
+      dialog,
+      shell,
+      net,
+      refreshTray: () => ctx.refreshTray?.(),
+      allowQuit: () => (ctx.quitConfirmed = true)
+    });
     ctx.updater.start().catch((e) => log.warn(`更新の確認を始められません: ${e.message}`));
     const connections = repo.listConnections();
     // LMS の登録は任意。つないでいなくても、セットアップを一度飛ばしたか自分のフォルダがあればホームを開く
@@ -323,7 +377,12 @@ app.on('before-quit', (e) => {
   if (ctx.jobs?.running && !ctx.quitConfirmed) {
     e.preventDefault();
     dialog
-      .showMessageBox({type: 'question', buttons: ['終了する', 'キャンセル'], defaultId: 1, message: '同期などの処理中です。終了しますか？'})
+      .showMessageBox({
+        type: 'question',
+        buttons: ['終了する', 'キャンセル'],
+        defaultId: 1,
+        message: '同期などの処理中です。終了しますか？'
+      })
       .then(({response}) => {
         if (response === 0) {
           ctx.quitConfirmed = true;

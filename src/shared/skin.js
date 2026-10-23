@@ -6,13 +6,31 @@ export const FORMAT = 'daigaku-note.skin';
 export const FORMAT_VERSION = 1;
 
 export const NOTE_TYPES = ['ruled', 'grid', 'dot', 'ring', 'plain', 'cornell'];
-export const NOTE_TYPE_LABEL = {ruled: '横罫', grid: '方眼', dot: 'ドット', ring: '丸ドット', plain: '無地', cornell: 'コーネル'};
+export const NOTE_TYPE_LABEL = {
+  ruled: '横罫',
+  grid: '方眼',
+  dot: 'ドット',
+  ring: '丸ドット',
+  plain: '無地',
+  cornell: 'コーネル'
+};
 export const NOTE_GAPS = {narrow: 24, normal: 32, wide: 40};
 export const NOTE_GAP_LABEL = {narrow: '狭い', normal: 'ふつう', wide: '広い'};
 export const TAPE_PATTERNS = ['plain', 'stripe', 'dot', 'check', 'image'];
-export const TAPE_PATTERN_LABEL = {plain: '無地', stripe: 'ストライプ', dot: 'ドット', check: 'チェック', image: '画像', course: '授業ごと'};
+export const TAPE_PATTERN_LABEL = {
+  plain: '無地',
+  stripe: 'ストライプ',
+  dot: 'ドット',
+  check: 'チェック',
+  image: '画像',
+  course: '授業ごと'
+};
 export const LICENSES = ['personal', 'share', 'remix'];
-export const LICENSE_LABEL = {personal: '配らない（自分だけで使う）', share: 'そのまま配ってよい', remix: '手を加えて配ってよい'};
+export const LICENSE_LABEL = {
+  personal: '配らない（自分だけで使う）',
+  share: 'そのまま配ってよい',
+  remix: '手を加えて配ってよい'
+};
 export const STICKER_MODES = ['global', 'course', 'both'];
 // シールを貼れる場所（SPEC-KISEKAE §5）。home（ホームの余白）は全体のテンプレートだけから貼る。
 // round（回の付箋の角）・file（資料のイラスト。種類 kind ごと）・bookmark（しおりのリボンの先）は 1 枚ずつで、貼る位置は決まっている
@@ -32,7 +50,17 @@ export const STICKERS_PER_PLACE = 5;
 export const placeMax = (place) => (FIXED_PLACES.includes(place) ? 1 : STICKERS_PER_PLACE);
 // 資料の種類（file-art.js の印と同じ）
 export const FILE_KINDS = ['pdf', 'slide', 'doc', 'sheet', 'image', 'video', 'audio', 'zip', 'other'];
-export const FILE_KIND_LABEL = {pdf: 'PDF', slide: 'スライド', doc: '文書', sheet: '表', image: '画像', video: '動画', audio: '音声', zip: '圧縮', other: 'その他'};
+export const FILE_KIND_LABEL = {
+  pdf: 'PDF',
+  slide: 'スライド',
+  doc: '文書',
+  sheet: '表',
+  image: '画像',
+  video: '動画',
+  audio: '音声',
+  zip: '圧縮',
+  other: 'その他'
+};
 export const BOOKMARK_SHAPES = ['tag', 'ribbon', 'round'];
 export const BOOKMARK_SHAPE_LABEL = {tag: 'タグ', ribbon: 'リボン', round: '丸'};
 export const ROUND_COLORS = 5; // 付箋の色（授業ページの回の付箋は第 1 回から順に、6 回目からはまた 1 色目。PDF のメモはこの 5 色から選ぶ）
@@ -55,20 +83,29 @@ const color = (v, fallback, {course = false} = {}) =>
   isHex(v) ? v.toLowerCase() : v === 'default' || (course && v === 'course') ? v : fallback;
 const oneOf = (v, list, fallback) => (list.includes(v) ? v : fallback);
 const num = (v, lo, hi, fallback) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Number(v))) : fallback);
-const text = (v, max, fallback = '') => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, '').trim().slice(0, max) : fallback) || fallback;
+const text = (v, max, fallback = '') =>
+  (typeof v === 'string'
+    ? v
+        .replace(/[\u0000-\u001f]/g, '')
+        .trim()
+        .slice(0, max)
+    : fallback) || fallback;
 
 export const DEFAULT_PARTS = {
   note: {type: 'ruled', paper: 'default', line: 'default', gap: 'normal', margin: true},
   folder: {card: 'default', tab: 'default'},
   tape: {color: 'course', pattern: 'course', image: null},
   file: Object.fromEntries(FILE_KINDS.map((k) => [k, 'default'])),
-  fileArt: Object.fromEntries(FILE_KINDS.map((k) => [k, {mark: {dx: 0, dy: 0, on: true}, label: {dx: 0, dy: 0, on: true}}])),
+  fileArt: Object.fromEntries(
+    FILE_KINDS.map((k) => [k, {mark: {dx: 0, dy: 0, on: true}, label: {dx: 0, dy: 0, on: true}}])
+  ),
   sticky: {round: 'default'},
   bookmark: {color: 'default', shape: 'tag'}
 };
 
 // 色の並び：default（はじめの色）か、#rrggbb を n 個（足りなければ default）
-const colorList = (v, n) => (Array.isArray(v) && v.length === n && v.every(isHex) ? v.map((c) => c.toLowerCase()) : 'default');
+const colorList = (v, n) =>
+  Array.isArray(v) && v.length === n && v.every(isHex) ? v.map((c) => c.toLowerCase()) : 'default';
 
 // 資料のイラストの中身（種類の印・拡張子のラベル）：元の位置からのずれ（イラストの座標。幅 54・高さ 66）と、出すかどうか
 export const FILE_ART_ITEMS = ['mark', 'label'];
@@ -78,7 +115,10 @@ const artItem = (v = {}) => ({
   dy: Math.round(num(v.dy, -FILE_ART_SHIFT, FILE_ART_SHIFT, 0) * 10) / 10,
   on: typeof v.on === 'boolean' ? v.on : true
 });
-const fileArtParts = (raw = {}) => Object.fromEntries(FILE_KINDS.map((k) => [k, Object.fromEntries(FILE_ART_ITEMS.map((i) => [i, artItem(raw?.[k]?.[i])]))]));
+const fileArtParts = (raw = {}) =>
+  Object.fromEntries(
+    FILE_KINDS.map((k) => [k, Object.fromEntries(FILE_ART_ITEMS.map((i) => [i, artItem(raw?.[k]?.[i])]))])
+  );
 
 // テープ：柄が画像（image）のときは、シールの素を 1 つ柄にする。画像がなければ無地
 function tape(t) {
@@ -108,7 +148,14 @@ export function normalizeParts(raw = {}) {
     file: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.file?.[k], 'default')])),
     fileArt: fileArtParts(raw.fileArt),
     // 前の版の 8 色の並びは、先頭の 5 色を引き継ぐ
-    sticky: {round: colorList(Array.isArray(raw.sticky?.round) && raw.sticky.round.length === 8 ? raw.sticky.round.slice(0, ROUND_COLORS) : raw.sticky?.round, ROUND_COLORS)},
+    sticky: {
+      round: colorList(
+        Array.isArray(raw.sticky?.round) && raw.sticky.round.length === 8
+          ? raw.sticky.round.slice(0, ROUND_COLORS)
+          : raw.sticky?.round,
+        ROUND_COLORS
+      )
+    },
     bookmark: {color: color(raw.bookmark?.color, 'default'), shape: oneOf(raw.bookmark?.shape, BOOKMARK_SHAPES, 'tag')}
   };
 }
@@ -146,7 +193,8 @@ export function normalizeStickers(raw) {
 export function normalizeTemplate(raw, {id, now = new Date().toISOString()} = {}) {
   if (!raw || typeof raw !== 'object') throw new Error('テンプレートの形が不正です');
   if (raw.format !== undefined && raw.format !== FORMAT) throw new Error('大学ノートのテンプレートではありません');
-  if (Number(raw.formatVersion ?? FORMAT_VERSION) > FORMAT_VERSION) throw new Error('新しい版の大学ノートで作られたテンプレートです。アプリを更新してください');
+  if (Number(raw.formatVersion ?? FORMAT_VERSION) > FORMAT_VERSION)
+    throw new Error('新しい版の大学ノートで作られたテンプレートです。アプリを更新してください');
   const stickers = normalizeStickers(raw.stickers);
   const parts = normalizeParts(raw.parts);
   // 取り込んだ画像だけを assets に（はじめから入っているシールはアプリの中にある）
@@ -173,7 +221,10 @@ export function normalizeTemplate(raw, {id, now = new Date().toISOString()} = {}
 
 // はじめからあるテンプレート。クラシックは今の見た目（テーマの色・授業ごとのテープ）のまま
 const builtin = (key, name, parts) =>
-  normalizeTemplate({id: `builtin-${key}`, name, author: '大学ノート', license: 'share', createdAt: '2026-10-21T00:00:00Z', parts}, {id: `builtin-${key}`});
+  normalizeTemplate(
+    {id: `builtin-${key}`, name, author: '大学ノート', license: 'share', createdAt: '2026-10-21T00:00:00Z', parts},
+    {id: `builtin-${key}`}
+  );
 export const BUILTIN_TEMPLATES = [
   builtin('classic', 'クラシック', {}),
   builtin('lemon', 'クリーム × レモン', {
@@ -229,7 +280,11 @@ export function resolveSkin(templates, globalId, course = null) {
   const own = course?.skin_template_id ? byId(course.skin_template_id) : null;
   const mode = STICKER_MODES.includes(course?.sticker_mode) ? course.sticker_mode : 'global';
   const stickers =
-    mode === 'course' ? (own?.stickers ?? []) : mode === 'both' ? [...global.stickers, ...(own?.stickers ?? [])] : global.stickers;
+    mode === 'course'
+      ? (own?.stickers ?? [])
+      : mode === 'both'
+        ? [...global.stickers, ...(own?.stickers ?? [])]
+        : global.stickers;
   return {
     template: own ?? global,
     own: !!own,
@@ -254,7 +309,14 @@ export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
-export const rgbToHex = (rgb) => `#${rgb.map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('')}`;
+export const rgbToHex = (rgb) =>
+  `#${rgb
+    .map((v) =>
+      Math.round(Math.min(255, Math.max(0, v)))
+        .toString(16)
+        .padStart(2, '0')
+    )
+    .join('')}`;
 
 /** 相対輝度（WCAG 2） */
 export function luminance(hex) {
@@ -276,7 +338,7 @@ export const INK_LIGHT = '#f4f5f7';
 export const inkOn = (bg) => (contrast(bg, INK_DARK) >= contrast(bg, INK_LIGHT) ? INK_DARK : INK_LIGHT);
 
 function rgbToHsl([r, g, b]) {
-  (r /= 255), (g /= 255), (b /= 255);
+  ((r /= 255), (g /= 255), (b /= 255));
   const max = Math.max(r, g, b),
     min = Math.min(r, g, b);
   const l = (max + min) / 2;

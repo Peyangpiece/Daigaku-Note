@@ -162,7 +162,8 @@ export function fitToInk(box, ink, {fh, step = 1, pad = 1.5, cjk = true, edges =
 /** ImageData（明るさで判定）から ink(x, y) を作る。背景より十分暗い画素をインクとみなす。背景が暗いときは null（直さない） */
 export function inkFromImage({data, width, height}, {x0, y0, scale}) {
   const lum = new Uint8Array(width * height);
-  for (let i = 0; i < lum.length; i++) lum[i] = (data[i * 4] * 299 + data[i * 4 + 1] * 587 + data[i * 4 + 2] * 114) / 1000;
+  for (let i = 0; i < lum.length; i++)
+    lum[i] = (data[i * 4] * 299 + data[i * 4 + 1] * 587 + data[i * 4 + 2] * 114) / 1000;
   const sorted = Uint8Array.from(lum).sort();
   const bg = sorted[Math.floor(sorted.length * 0.9)];
   if (bg < 110) return null;

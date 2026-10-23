@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Scheduler} from '../src/main/scheduler.js';
 
-// 日付の変わり目（バックアップ・レシピ）は積むが、LMS をつないでいなければ同期は積まない
+// 日付の変わり目（バックアップ）は積むが、LMS をつないでいなければ同期は積まない
 function ctxWith(connections) {
   const settings = new Map();
   const queued = [];
@@ -22,7 +22,8 @@ test('LMS をつないでいないときは同期を積まない', () => {
   new Scheduler(ctx, {now: evening}).tick();
   assert.deepEqual(
     queued.map(([k]) => k),
-    ['backup', 'recipes']
+    ['backup'],
+    'レシピの更新はまだ仕組みがないので積まない'
   );
 });
 

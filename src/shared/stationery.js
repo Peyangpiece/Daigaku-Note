@@ -11,7 +11,17 @@ export const TYPE_LABEL = {pen: 'ボールペン', marker: 'マーカー', hider
 /** 道具の種類 → 編集画面の注釈の種類（shared/annotation.js） */
 export const KIND_OF = {pen: 'ink', marker: 'line', hider: 'mask'};
 
-const pen = (id, name, color, mm, body, accent = color) => ({id, type: 'pen', name, color, width: PEN_WIDTH[mm], mm, body, accent, price: 0});
+const pen = (id, name, color, mm, body, accent = color) => ({
+  id,
+  type: 'pen',
+  name,
+  color,
+  width: PEN_WIDTH[mm],
+  mm,
+  body,
+  accent,
+  price: 0
+});
 const marker = (id, name, color, thick = false) => ({
   id,
   type: 'marker',
@@ -42,7 +52,7 @@ const maker = (id, name, makerName, art, color, body, accent) => ({
 });
 
 // ボールペンの字幅（mm）→ 線の太さ（pt。1pt ≒ 0.35mm）。紙に書いた線の太さに近づける
-const PEN_WIDTH = {'0.38': 0.8, '0.5': 1.1, '0.7': 1.5, '1.0': 2};
+const PEN_WIDTH = {0.38: 0.8, 0.5: 1.1, 0.7: 1.5, '1.0': 2};
 
 export const CATALOG = [
   pen('pen-black-05', '黒のボールペン 0.5', '#222222', '0.5', '#2c2d30', '#55575c'),
@@ -89,7 +99,14 @@ export const itemOf = (id) => ITEMS.get(id) ?? null;
 export const isTool = (id) => TOOL_TYPES.includes(itemOf(id)?.type);
 
 /** はじめから持っている文房具と、筆箱のはじめの中身 */
-export const STARTER_SLOTS = ['pen-black-05', 'pen-red-05', 'pen-blue-05', 'marker-yellow', 'marker-pink', 'hider-cyan'];
+export const STARTER_SLOTS = [
+  'pen-black-05',
+  'pen-red-05',
+  'pen-blue-05',
+  'marker-yellow',
+  'marker-pink',
+  'hider-cyan'
+];
 export const STARTER_CASE = 'case-canvas-navy';
 export const STARTER = [...STARTER_SLOTS, STARTER_CASE];
 export const DEFAULT_HIDER = 'hider-cyan';
@@ -136,10 +153,13 @@ export function arrange(raw, {slots, caseId} = {}) {
   const has = new Set(st.owned);
   if (slots !== undefined) {
     if (!Array.isArray(slots) || slots.length !== SLOTS) throw new Error('筆箱の中身が不正です');
-    for (const id of slots) if (id !== null && (!has.has(id) || !isTool(id))) throw new Error('持っていない文房具は入れられません');
-    if (new Set(slots.filter(Boolean)).size !== slots.filter(Boolean).length) throw new Error('同じ文房具は 1 本だけ入れられます');
+    for (const id of slots)
+      if (id !== null && (!has.has(id) || !isTool(id))) throw new Error('持っていない文房具は入れられません');
+    if (new Set(slots.filter(Boolean)).size !== slots.filter(Boolean).length)
+      throw new Error('同じ文房具は 1 本だけ入れられます');
   }
-  if (caseId !== undefined && (!has.has(caseId) || itemOf(caseId)?.type !== 'case')) throw new Error('持っていないペンケースです');
+  if (caseId !== undefined && (!has.has(caseId) || itemOf(caseId)?.type !== 'case'))
+    throw new Error('持っていないペンケースです');
   return stationeryState({...st, ...(slots !== undefined ? {slots} : {}), ...(caseId !== undefined ? {caseId} : {})});
 }
 
@@ -182,7 +202,10 @@ export function toolArt(item, {label = true} = {}) {
   if (item.art === 'jetstream') return `${open}${jetstreamArt(item, g)}</svg>`;
   if (item.art === 'sarasa') return `${open}${sarasaArt(item, g)}</svg>`;
   if (item.type === 'pen') {
-    const ridges = Array.from({length: 12}, (_, i) => `<rect x="${33 + i * 3.4}" y="8.2" width="1.2" height="11.6" fill="#000" opacity="0.13"/>`).join('');
+    const ridges = Array.from(
+      {length: 12},
+      (_, i) => `<rect x="${33 + i * 3.4}" y="8.2" width="1.2" height="11.6" fill="#000" opacity="0.13"/>`
+    ).join('');
     return `${open}<defs>${tube(`${g}-b`, item.body)}${tube(`${g}-a`, item.accent)}${METAL(`${g}-m`)}
       <linearGradient id="${g}-t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="0.5" stop-color="${shade(item.body, 0.2)}" stop-opacity="0.45"/><stop offset="1" stop-color="${shade(item.body, -0.3)}" stop-opacity="0.7"/></linearGradient></defs>
       <ellipse cx="104" cy="23.5" rx="92" ry="2.2" fill="#000" opacity="0.12"/>
@@ -201,7 +224,10 @@ export function toolArt(item, {label = true} = {}) {
   if (item.type === 'marker' || item.type === 'hider') {
     const h = item.thick ? 17 : 15;
     const y = (28 - h) / 2;
-    const tag = item.type === 'hider' ? `<text x="120" y="${y + h / 2 + 3}" font-size="8.5" text-anchor="middle" fill="#1d3557" font-family="sans-serif" font-weight="700">隠</text>` : '';
+    const tag =
+      item.type === 'hider'
+        ? `<text x="120" y="${y + h / 2 + 3}" font-size="8.5" text-anchor="middle" fill="#1d3557" font-family="sans-serif" font-weight="700">隠</text>`
+        : '';
     return `${open}<defs>${tube(`${g}-b`, item.body)}${tube(`${g}-c`, item.color)}</defs>
       <ellipse cx="104" cy="${y + h + 2}" rx="92" ry="2.2" fill="#000" opacity="0.12"/>
       <path d="M2 ${14 - h * 0.18} L14 ${y + 2} L14 ${y + h - 2} L4 ${14 + h * 0.22} Z" fill="${shade(item.color, -0.12)}"/>
@@ -216,12 +242,15 @@ export function toolArt(item, {label = true} = {}) {
 
 // ---- 実験：既製品の見た目（個人の試作。写真を見ながら直す前提のおおよその形）----
 const SHADOW = '<ellipse cx="104" cy="24.6" rx="94" ry="2" fill="#000" opacity="0.14"/>';
-const TIP = (g, ink) => `<path d="M1.2 14 L9.5 12.2 L9.5 15.8 Z" fill="url(#${g}-m)"/><circle cx="1.5" cy="14" r="0.85" fill="${ink}"/>`;
+const TIP = (g, ink) =>
+  `<path d="M1.2 14 L9.5 12.2 L9.5 15.8 Z" fill="url(#${g}-m)"/><circle cx="1.5" cy="14" r="0.85" fill="${ink}"/>`;
 
 /** 油性のノック式（不透明の軸・黒いゴムのグリップに細かい粒・軸と同じ色のクリップ・白い文字） */
 function jetstreamArt(item, g) {
   const dots = Array.from({length: 13}, (_, i) =>
-    [9.6, 12.4, 15.2, 18].map((y, j) => `<circle cx="${32 + i * 3.1 + (j % 2) * 1.5}" cy="${y}" r="0.55" fill="#000" opacity="0.55"/>`).join('')
+    [9.6, 12.4, 15.2, 18]
+      .map((y, j) => `<circle cx="${32 + i * 3.1 + (j % 2) * 1.5}" cy="${y}" r="0.55" fill="#000" opacity="0.55"/>`)
+      .join('')
   ).join('');
   return `<defs>${tube(`${g}-b`, item.body)}${METAL(`${g}-m`)}${tube(`${g}-r`, '#26272a')}
       <linearGradient id="${g}-f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa0a6" stop-opacity="0.8"/><stop offset="0.45" stop-color="#4a4d52" stop-opacity="0.55"/><stop offset="1" stop-color="#1c1d20" stop-opacity="0.85"/></linearGradient></defs>
@@ -243,7 +272,10 @@ function jetstreamArt(item, g) {
 
 /** ゲルのノック式（透明の軸の中に替え芯が見える・すけたグリップ・インクと同じ色の大きなクリップとノック） */
 function sarasaArt(item, g) {
-  const ridges = Array.from({length: 14}, (_, i) => `<rect x="${31 + i * 2.9}" y="8.4" width="0.9" height="11.2" fill="#6b7680" opacity="0.28"/>`).join('');
+  const ridges = Array.from(
+    {length: 14},
+    (_, i) => `<rect x="${31 + i * 2.9}" y="8.4" width="0.9" height="11.2" fill="#6b7680" opacity="0.28"/>`
+  ).join('');
   return `<defs>${METAL(`${g}-m`)}${tube(`${g}-c`, item.accent)}${tube(`${g}-i`, item.color)}
       <linearGradient id="${g}-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/><stop offset="0.2" stop-color="#eef3f6" stop-opacity="0.55"/><stop offset="0.6" stop-color="#d7e0e6" stop-opacity="0.35"/><stop offset="1" stop-color="#9aa8b2" stop-opacity="0.75"/></linearGradient>
       <linearGradient id="${g}-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f7f9" stop-opacity="0.9"/><stop offset="0.5" stop-color="#c9d3da" stop-opacity="0.55"/><stop offset="1" stop-color="#8d9aa4" stop-opacity="0.85"/></linearGradient></defs>

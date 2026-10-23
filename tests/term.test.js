@@ -51,7 +51,10 @@ test('今日の学期と終わりの判定', () => {
 });
 
 test('DB の行（start_date/end_date）でも今日の学期を選べる', () => {
-  const rows = [{id: 'a', start_date: '2026-04-01', end_date: '2026-09-30'}, {id: 'b', start_date: '2026-10-01', end_date: '2027-03-31'}];
+  const rows = [
+    {id: 'a', start_date: '2026-04-01', end_date: '2026-09-30'},
+    {id: 'b', start_date: '2026-10-01', end_date: '2027-03-31'}
+  ];
   assert.equal(currentTerm(rows, '2026-10-17').id, 'b');
   assert.equal(termEndingSoon(rows[1], '2027-03-10'), true);
 });
@@ -80,6 +83,12 @@ test('期間が重なる学期（通年と前期）では、期間の短い学�
   ];
   assert.equal(currentTerm(terms, '2026-05-01').id, 'spring');
   assert.equal(currentTerm(terms, '2026-11-01').id, 'fall');
-  assert.deepEqual(overlapping(terms, terms[1]).map((t) => t.id), ['year']);
-  assert.deepEqual(overlapping(terms, terms[0]).map((t) => t.id), ['spring', 'fall']);
+  assert.deepEqual(
+    overlapping(terms, terms[1]).map((t) => t.id),
+    ['year']
+  );
+  assert.deepEqual(
+    overlapping(terms, terms[0]).map((t) => t.id),
+    ['spring', 'fall']
+  );
 });

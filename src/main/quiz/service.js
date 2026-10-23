@@ -120,12 +120,10 @@ export function createQuizService({repo, secrets, log = () => {}, notify = () =>
   /** 今日の復習（全授業。1 日 30 問まで） */
   function review({max = 30} = {}) {
     const now = Date.now();
-    const items = repo
-      .reviewCandidates()
-      .map((q) => ({
-        ...q,
-        entry: {s: q.srs_s, due: Date.parse(q.srs_due), at: Date.parse(q.srs_at), c: q.srs_c, lapses: q.srs_lapses}
-      }));
+    const items = repo.reviewCandidates().map((q) => ({
+      ...q,
+      entry: {s: q.srs_s, due: Date.parse(q.srs_due), at: Date.parse(q.srs_at), c: q.srs_c, lapses: q.srs_lapses}
+    }));
     const {items: today, rest} = reviewQueue(items, now, max);
     return {questions: today.map(({entry: _entry, ...q}) => q), rest, next: today.length ? null : nextDue(items, now)};
   }

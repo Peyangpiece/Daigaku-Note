@@ -38,7 +38,13 @@ export function compareVersion(a, b) {
   return 0;
 }
 
-export function createRegistry({fetch: fetchImpl, secrets, log, recipes = loadRecipes(), recipeExecutorFactory = null} = {}) {
+export function createRegistry({
+  fetch: fetchImpl,
+  secrets,
+  log,
+  recipes = loadRecipes(),
+  recipeExecutorFactory = null
+} = {}) {
   const moodle = createMoodleConnector({fetch: fetchImpl, secrets, log});
   const apis = {moodle};
 
