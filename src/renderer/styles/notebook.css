@@ -1339,6 +1339,17 @@ p.muted {
   font-size: var(--fs-h3);
   margin: 0;
 }
+/* 正解でもらったポイント（shared/points.js） */
+.qcard__points {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: #fff1c2;
+  color: #7a5600;
+  font-size: var(--fs-small);
+  vertical-align: 2px;
+}
 .qcard--ok .qcard__verdict::before {
   content: '◯ ';
 }
@@ -3656,8 +3667,143 @@ textarea.input {
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
-.fb-head .shop-cart {
+.fb-head__side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   justify-self: end;
+}
+/* ポイントの残高の札（押すとポイントのページ） */
+.shop-points {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1.5px solid #e2b93b;
+  background: #fff8e1;
+  color: #5c4300;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.shop-points svg {
+  width: 18px;
+  height: 18px;
+}
+.shop-points b {
+  font-size: 15px;
+}
+/* レジ：ポイントで払う分 */
+.shop-pay__points {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff8e1;
+}
+.shop-pay__points b {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.shop-pay__points svg {
+  width: 16px;
+  height: 16px;
+}
+.shop-pay__points .shop-side__note,
+.shop-pay__points .shop-side__short {
+  margin: 6px 0 0;
+}
+.shop-side__short {
+  margin: 0;
+  color: var(--danger, #c0392b);
+  font-size: var(--fs-small);
+}
+/* ポイントのページ：残高・もらい方・履歴 */
+.pts {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 720px;
+}
+.pts-balance {
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #fff6d5, #ffe9a8);
+  box-shadow: var(--card-shadow);
+  color: #5c4300;
+}
+.pts-balance b {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 40px;
+  line-height: 1.1;
+}
+.pts-balance b svg {
+  width: 34px;
+  height: 34px;
+}
+.pts-balance small {
+  font-size: 18px;
+}
+.pts-balance p {
+  margin: 6px 0 0;
+  color: inherit;
+}
+.pts-ways,
+.pts-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.pts-way {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.pts-way__name {
+  font-weight: 700;
+}
+.pts-way__amount {
+  font-weight: 700;
+  color: #9a6b00;
+  text-align: right;
+}
+.pts-way__note {
+  font-size: var(--fs-small);
+}
+.pts-way__soon {
+  justify-self: end;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
+  font-size: var(--fs-small);
+}
+.pts-way.is-soon .pts-way__name,
+.pts-way.is-soon .pts-way__amount {
+  opacity: 0.55;
+}
+.pts-history li {
+  display: grid;
+  grid-template-columns: 9em 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
+  font-size: 14px;
+}
+.pts-history .is-plus {
+  color: #9a6b00;
+}
+.pts-history .is-minus {
+  color: var(--paper-ink);
 }
 @media (max-width: 640px) {
   .fb-head {
@@ -4876,6 +5022,13 @@ button.fb-card {
   stroke-linecap: round;
   stroke-linejoin: round;
   mix-blend-mode: multiply;
+}
+/* 赤シートを通した写しの、文字隠しペンの線：不透明の黒（下の字を完全に隠す） */
+.ts-cover {
+  fill: none;
+  stroke: #000;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .ts-seen {
   display: none;

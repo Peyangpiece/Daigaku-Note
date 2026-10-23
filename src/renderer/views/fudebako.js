@@ -1,24 +1,26 @@
 // 筆箱のページ（SPEC §15）。上の切り替えタブの「筆箱」。
 // 「わたしの筆箱」：筆箱に入れる 6 本（編集画面の PDF の横に出る）とペンケースを選ぶ。持っている文房具の一覧。
 // 「ショップ」：上に「新しく入りました」の帯、検索と絞り込み、シリーズ（同じ品の色ちがい）ごとの札。色は札の右下の丸で選ぶ。
-//   無料の品は白い札にグレーの枠、有料の品は値段帯（shared/stationery.js の TIERS）で札の紙を変える。
+//   ポイントの品（公式の品）は白い札にグレーの枠、円の品は値段帯（shared/stationery.js の TIERS）で札の紙を変える。
 //   押すと詳細ページ（#/fudebako/item/<id>）へ。3D モデルの品は、拡大・回転して細部を見られる（renderer/model3d.js）。
 //   道具の詳細ページには、試し書きの付箋（views/tryout.js。文字隠しペン・赤シートで消える色のペンは赤シートも）を置く。
-// 買う：無料の品も有料の品も「カートへ入れる」→ カート（#/fudebako/cart）→ レジ（#/fudebako/checkout）→ 注文完了（#/fudebako/order/<id>）。
-//   買い物をする感覚を大事にするため、無料の品もカートを通す（レジでは支払いなしで受け取る）。
+// 買う：ポイントの品も円の品も「カートへ入れる」→ カート（#/fudebako/cart）→ レジ（#/fudebako/checkout）→ 注文完了（#/fudebako/order/<id>）。
+//   ポイントの品の分はレジで残高から引く（足りなければ買えない）。右上のポイントの札から、残高・もらい方・履歴（#/fudebako/points）。
 // 筆箱がいっぱいのときは、詳細ページ・注文完了で「何本目と入れ替えるか」を選んで入れる（swapButtons）。
-//   α 版の決済はデモ（実際の請求はない。カードの番号は下 4 桁だけ注文の記録に残す）。無料の品だけなら支払いはない。
+//   α 版の円の決済はデモ（実際の請求はない。カードの番号は下 4 桁だけ注文の記録に残す）。ポイントの品だけならカードの入力はない。
 // 持ち物・筆箱の中身はメインの設定（stationery）に保存する（ipc.js の stationery.purchase・stationery.arrange）
 import {esc, navigate, refresh, state, toast} from '../app.js';
 import {cart} from '../cart.js';
 import {strokePath} from '../../shared/ink.js';
 import {tryout} from './tryout.js';
+import {EARN, dayOf, pt} from '../../shared/points.js';
 import {
   PAYMENT_METHODS,
   SLOTS,
   TOOL_TYPES,
   TYPES,
   TYPE_LABEL,
+  cartPoints,
   cartTotal,
   caseArt,
   itemOf,
@@ -104,6 +106,12 @@ function tabs(shop) {
     <button type="button" role="tab" class="fb-tab" aria-selected="${shop}" data-action="nav" data-route="${SHOP}">ショップ</button>
   </div>`;
 }
+/** いまのポイントの残高 */
+const balance = () => state.data?.points?.balance ?? 0;
+/** 右上のポイントの札（押すと、残高・もらい方・履歴のページ） */
+function pointsButton() {
+  return `<button type="button" class="shop-points" data-action="nav" data-route="/fudebako/points" aria-label="ポイント（${pt(balance())}）">${ICON.coin}<b>${balance().toLocaleString('ja-JP')}</b> pt</button>`;
+}
 /** 右上のカートのボタン（入っている数つき） */
 function cartButton() {
   const n = cart.count();
@@ -112,6 +120,7 @@ function cartButton() {
 const ICON = {
   search:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>',
+  coin: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#f5c542" stroke="#b8860b" stroke-width="1.6"/><text x="12" y="16.2" text-anchor="middle" font-size="11" font-weight="700" fill="#7a5600" font-family="sans-serif">P</text></svg>',
   cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11h11l2-7H7"/><circle cx="9.5" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/></svg>'
 };
 
@@ -267,13 +276,19 @@ function filtered(s) {
   const has = new Set(s.owned);
   let list = shopSeries().filter((se) => {
     if (f.type !== 'all' && se.type !== f.type) return false;
-    if (f.pay === 'free' && se.price !== 0) return false;
-    if (f.pay === 'paid' && se.price === 0) return false;
+    if (f.pay === 'points' && !se.items.some((it) => it.points > 0)) return false;
+    if (f.pay === 'yen' && !se.items.some((it) => it.price > 0)) return false;
     if (f.unowned && se.items.every((it) => has.has(it.id))) return false;
     return matches(se, f.q);
   });
-  if (f.sort === 'cheap') list = [...list].sort((a, b) => a.price - b.price);
-  else if (f.sort === 'dear') list = [...list].sort((a, b) => b.price - a.price);
+  // 値段の順：ポイントの品と円の品は比べられないので、安い順はポイントの品（pt の順）→ 円の品（円の順）、高い順はその逆
+  const cost = (se) => {
+    const yenMin = Math.min(...se.items.map((it) => it.price || Infinity));
+    return yenMin < Infinity ? [1, yenMin] : [0, Math.min(...se.items.map((it) => it.points || Infinity))];
+  };
+  const byCost = (a, b) => cost(a)[0] - cost(b)[0] || cost(a)[1] - cost(b)[1];
+  if (f.sort === 'cheap') list = [...list].sort(byCost);
+  else if (f.sort === 'dear') list = [...list].sort((a, b) => byCost(b, a));
   else if (f.sort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
   return list;
 }
@@ -324,11 +339,11 @@ function shop(s) {
       </div>
       <div class="shop-chips">
         <span class="muted shop-chips__label">種類</span>${chip('type', 'all', 'すべて', f.type === 'all')}${TYPES.map((t) => chip('type', t, TYPE_LABEL[t], f.type === t)).join('')}
-        <span class="shop-chips__sep"></span><span class="muted shop-chips__label">値段</span>${chip('price', 'all', 'すべて', f.pay === 'all')}${chip('price', 'free', '無料', f.pay === 'free')}${chip('price', 'paid', '有料', f.pay === 'paid')}
+        <span class="shop-chips__sep"></span><span class="muted shop-chips__label">値段</span>${chip('price', 'all', 'すべて', f.pay === 'all')}${chip('price', 'points', 'ポイント', f.pay === 'points')}${chip('price', 'yen', '円', f.pay === 'yen')}
         <span class="shop-chips__sep"></span>${chip('unowned', f.unowned ? '0' : '1', 'まだ持っていないものだけ', f.unowned)}
       </div>
     </div>
-    <p class="muted shop-note">α 版の支払いはデモです（実際の請求はありません）。</p>
+    <p class="muted shop-note">公式の文房具はポイントで買えます（ログインボーナスやクイズの正解でたまります）。円の支払いは α 版のあいだはデモです（実際の請求はありません）。</p>
     <div id="shop-results">${results(s)}</div>
   </div>`;
 }
@@ -403,7 +418,15 @@ function detail(s, id) {
         ${ribbons(it)}
         <h2>${esc(it.name)}</h2>
         ${it.maker ? `<p class="muted fb-detail__maker">${esc(it.maker)}</p>` : ''}
-        <p class="fb-detail__price">${priceTag(it, s.owned.includes(it.id))}${it.price && !s.owned.includes(it.id) ? '<span class="muted">メーカーの参考価格（税込）</span>' : ''}</p>
+        <p class="fb-detail__price">${priceTag(it, s.owned.includes(it.id))}${
+          s.owned.includes(it.id)
+            ? ''
+            : it.price
+              ? '<span class="muted">メーカーの参考価格（税込）</span>'
+              : it.points
+                ? `<span class="muted">いま ${pt(balance())} 持っています</span>`
+                : ''
+        }</p>
         <dl class="fb-spec">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
         ${colors}
         ${samples ? `<h3 class="fb-detail__sub">書いた線</h3>${samples}` : ''}
@@ -430,10 +453,26 @@ const orderRow = (it, {remove = false} = {}) =>
     <div class="shop-row__price">${priceLabel(it)}</div>
     ${remove ? `<button type="button" class="btn btn--small btn--quiet" data-shop="remove" data-id="${esc(it.id)}" aria-label="${esc(it.name)}をカートから外す">外す</button>` : ''}
   </li>`;
+/** 合計：円とポイントは別々に（両方あれば 2 行） */
 const totals = (items) => {
-  const total = cartTotal(items.map((it) => it.id));
-  return `<dl class="shop-total"><dt>${items.length} 点</dt><dd>${items.filter((it) => it.price === 0).length ? `無料 ${items.filter((it) => it.price === 0).length} 点` : ''}</dd><dt class="shop-total__sum">合計</dt><dd class="shop-total__sum">${yen(total)}</dd></dl>`;
+  const ids = items.map((it) => it.id);
+  const total = cartTotal(ids);
+  const points = cartPoints(ids);
+  const sums = [];
+  if (points || !total)
+    sums.push(`<dt class="shop-total__sum">合計（ポイント）</dt><dd class="shop-total__sum">${pt(points)}</dd>`);
+  if (total) sums.push(`<dt class="shop-total__sum">合計（円）</dt><dd class="shop-total__sum">${yen(total)}</dd>`);
+  return `<dl class="shop-total"><dt>${items.length} 点</dt><dd></dd>${sums.join('')}</dl>`;
 };
+/** ポイントの足りる・足りないの説明（カート・レジ） */
+function pointsNote(items) {
+  const need = cartPoints(items.map((it) => it.id));
+  if (!need) return '';
+  const have = balance();
+  return have >= need
+    ? `<p class="muted shop-side__note">ポイント：いま ${pt(have)} → 買ったあと ${pt(have - need)}</p>`
+    : `<p class="shop-side__short" role="alert">ポイントが ${pt(need - have)} 足りません（いま ${pt(have)}）。<button type="button" class="btn btn--small btn--quiet" data-action="nav" data-route="/fudebako/points">ためかた</button></p>`;
+}
 /** カート */
 function cartPage(s) {
   const items = cartItems(s);
@@ -444,7 +483,8 @@ function cartPage(s) {
       <ul class="shop-rows">${items.map((it) => orderRow(it, {remove: true})).join('')}</ul>
       <aside class="shop-side">
         ${totals(items)}
-        <p class="muted shop-side__note">${cartTotal(items.map((it) => it.id)) ? 'α 版の支払いはデモです。実際の請求はありません。' : '無料の品だけなので、支払いはありません。'}</p>
+        ${pointsNote(items)}
+        ${cartTotal(items.map((it) => it.id)) ? '<p class="muted shop-side__note">円の支払いは α 版のあいだはデモです。実際の請求はありません。</p>' : ''}
         <button type="button" class="btn btn--primary shop-side__go" data-action="nav" data-route="/fudebako/checkout">レジへ進む</button>
         <button type="button" class="btn" data-action="nav" data-route="${SHOP}">買い物を続ける</button>
       </aside>
@@ -452,11 +492,17 @@ function cartPage(s) {
 }
 const field = (id, label, {placeholder = '', inputmode = '', maxlength = '', hint = ''} = {}) =>
   `<div class="field"><label for="${id}">${label}</label><input id="${id}" class="input" type="text" placeholder="${placeholder}"${inputmode ? ` inputmode="${inputmode}"` : ''}${maxlength ? ` maxlength="${maxlength}"` : ''} autocomplete="off" />${hint ? `<small class="muted">${hint}</small>` : ''}<small class="field__error" data-error-for="${id}" role="alert"></small></div>`;
-/** レジ：注文内容と支払い（有料の品があればデモのカードの入力。無料だけなら受け取るだけ） */
+/** レジ：注文内容と支払い（円の品があればデモのカードの入力。ポイントの品は残高から引く） */
 function checkout(s) {
   const items = cartItems(s);
   if (!items.length) return cartPage(s);
   const total = cartTotal(items.map((it) => it.id));
+  const points = cartPoints(items.map((it) => it.id));
+  const short = points > balance();
+  const pointsPart = points
+    ? `<div class="shop-pay__points"><b>${ICON.coin} ポイントで払う</b>${pointsNote(items)}</div>`
+    : '';
+  const label = [points ? pt(points) : '', total ? yen(total) : ''].filter(Boolean).join(' ＋ ');
   const pay = total
     ? `<form id="checkout" class="shop-pay" data-form="checkout" novalidate>
         <h4>支払い</h4>
@@ -467,9 +513,10 @@ function checkout(s) {
         ${field('co-number', 'カード番号', {placeholder: '4242 4242 4242 4242', inputmode: 'numeric', maxlength: '19', hint: '試しの番号：4242 4242 4242 4242'})}
         ${field('co-name', 'カードの名義', {placeholder: 'TARO DAIGAKU'})}
         <div class="shop-pay__row">${field('co-exp', '有効期限', {placeholder: 'MM/YY', inputmode: 'numeric', maxlength: '5'})}${field('co-cvc', 'セキュリティコード', {placeholder: '123', inputmode: 'numeric', maxlength: '4'})}</div>
-        <button type="submit" class="btn btn--primary shop-side__go" data-shop="buy">${yen(total)} を支払う（デモ）</button>
+        ${pointsPart}
+        <button type="submit" class="btn btn--primary shop-side__go" data-shop="buy"${short ? ' disabled' : ''}>${label} を支払う${total ? '（円はデモ）' : ''}</button>
       </form>`
-    : `<div class="shop-pay"><h4>受け取る</h4><p class="muted">無料の品だけなので、支払いはありません。</p><button type="button" class="btn btn--primary shop-side__go" data-shop="buy">無料で受け取る</button></div>`;
+    : `<div class="shop-pay"><h4>支払い</h4>${pointsPart || '<p class="muted">支払いのない品だけです。</p>'}<button type="button" class="btn btn--primary shop-side__go" data-shop="buy"${short ? ' disabled' : ''}>${points ? `${pt(points)} で買う` : '受け取る'}</button></div>`;
   return `<h3 class="shop-h">レジ</h3>
     <div class="shop-checkout">
       <div>
@@ -487,16 +534,23 @@ function orderPage(s, id) {
   if (!o)
     return `<p class="muted">その注文はありません。</p><p><button type="button" class="btn" data-action="nav" data-route="${SHOP}">ショップへ</button></p>`;
   const at = new Date(o.at).toLocaleString('ja-JP', {dateStyle: 'medium', timeStyle: 'short'});
-  const payLabel =
-    o.payment.method === 'free'
-      ? '支払いなし（無料）'
-      : `${PAYMENT_METHODS[o.payment.method] ?? o.payment.method}${o.payment.last4 ? `・カード下 4 桁 ${o.payment.last4}` : ''}`;
+  const payLabel = [
+    o.points ? `ポイント ${pt(o.points)}` : '',
+    o.payment.method === 'demo'
+      ? `${PAYMENT_METHODS.demo}${o.payment.last4 ? `・カード下 4 桁 ${o.payment.last4}` : ''}`
+      : o.payment.method === 'free'
+        ? '支払いなし'
+        : ''
+  ]
+    .filter(Boolean)
+    .join('・');
+  const cost = (x) => (x.price ? yen(x.price) : x.points ? pt(x.points) : '無料');
   const empty = s.slots.indexOf(null);
   const rows = o.items
     .map((x) => {
       const it = itemOf(x.id);
       if (!it)
-        return `<li class="shop-row"><div class="shop-row__text">${esc(x.name)}</div><div class="shop-row__price">${x.price ? yen(x.price) : '無料'}</div></li>`;
+        return `<li class="shop-row"><div class="shop-row__text">${esc(x.name)}</div><div class="shop-row__price">${cost(x)}</div></li>`;
       let act = '';
       if (it.type === 'case')
         act =
@@ -515,7 +569,7 @@ function orderPage(s, id) {
       return `<li class="shop-row">
         <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'case' ? caseArt(it) : toolArt(it)}</button>
         <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${esc(it.maker ?? '大学ノート')}</div></div>
-        <div class="shop-row__price">${x.price ? yen(x.price) : '無料'}</div>
+        <div class="shop-row__price">${cost(x)}</div>
         <div class="shop-row__act">${act}</div>
       </li>`;
     })
@@ -524,22 +578,58 @@ function orderPage(s, id) {
       <h3 class="shop-h">ご注文ありがとうございます</h3>
       <p class="muted">注文番号 <code>${esc(o.id)}</code>・${esc(at)}・${esc(payLabel)}</p>
       <ul class="shop-rows">${rows}</ul>
-      <dl class="shop-total"><dt class="shop-total__sum">合計</dt><dd class="shop-total__sum">${yen(o.total)}</dd></dl>
+      <dl class="shop-total">${o.points ? `<dt class="shop-total__sum">合計（ポイント）</dt><dd class="shop-total__sum">${pt(o.points)}</dd>` : ''}${o.total || !o.points ? `<dt class="shop-total__sum">合計（円）</dt><dd class="shop-total__sum">${yen(o.total)}</dd>` : ''}</dl>
       <p class="muted">買った文房具は「わたしの筆箱」に入りました。筆箱に入れると PDF の編集画面で使えます。</p>
       <p class="shop-done__act"><button type="button" class="btn btn--primary" data-action="nav" data-route="/fudebako">わたしの筆箱へ</button><button type="button" class="btn" data-action="nav" data-route="${SHOP}">ショップへ戻る</button></p>
     </div>`;
 }
 
-/** 筆箱のページ（#/fudebako、ショップは #/fudebako?tab=shop、カート #/fudebako/cart、レジ #/fudebako/checkout、注文 #/fudebako/order/<id>） */
+/** ポイントのページ：残高・もらい方（準備中のものも並べる）・履歴 */
+function pointsPage() {
+  const p = state.data?.points ?? {balance: 0, history: []};
+  const ways = Object.entries(EARN)
+    .map(
+      ([k, w]) => `<li class="pts-way${w.available ? '' : ' is-soon'}">
+        <span class="pts-way__name">${esc(w.label)}</span>
+        <span class="pts-way__amount">+${pt(w.amount)}</span>
+        <span class="muted pts-way__note">${esc(w.note)}${k === 'login' && p.lastLogin === dayOf() ? '・今日はもらいました' : ''}</span>
+        ${w.available ? '' : '<span class="pts-way__soon">準備中</span>'}
+      </li>`
+    )
+    .join('');
+  const label = (h) => (h.kind === 'shop' ? 'ショップで買い物' : (EARN[h.kind]?.label ?? h.kind));
+  const history = p.history.length
+    ? `<ul class="pts-history">${p.history
+        .slice(0, 50)
+        .map(
+          (
+            h
+          ) => `<li><span class="muted">${esc(new Date(h.at).toLocaleString('ja-JP', {dateStyle: 'short', timeStyle: 'short'}))}</span>
+            <span>${esc(label(h))}${h.note ? `<span class="muted">（${esc(h.note)}）</span>` : ''}</span>
+            <b class="${h.amount < 0 ? 'is-minus' : 'is-plus'}">${h.amount < 0 ? '−' : '+'}${pt(Math.abs(h.amount))}</b></li>`
+        )
+        .join('')}</ul>`
+    : '<p class="muted">まだありません。</p>';
+  return `<p><button type="button" class="btn btn--small" data-action="nav" data-route="${SHOP}">← ショップ</button></p>
+    <div class="pts">
+      <section class="pts-balance"><span class="muted">いまのポイント</span><b>${ICON.coin}${p.balance.toLocaleString('ja-JP')}<small> pt</small></b>
+        <p class="muted">公式の文房具はポイントで買えます。</p></section>
+      <section><h3 class="shop-h">ポイントのもらい方</h3><ul class="pts-ways">${ways}</ul></section>
+      <section><h3 class="shop-h">履歴</h3>${history}</section>
+    </div>`;
+}
+
+/** 筆箱のページ（#/fudebako、ショップは #/fudebako?tab=shop、カート #/fudebako/cart、レジ #/fudebako/checkout、注文 #/fudebako/order/<id>、ポイント #/fudebako/points） */
 export function renderFudebako(_state, route) {
   const isShop = new URLSearchParams(route.split('?')[1] ?? '').get('tab') === 'shop';
   const item = route.match(/^\/fudebako\/item\/([^?]+)/);
   const order = route.match(/^\/fudebako\/order\/([^?]+)/);
   const isCart = /^\/fudebako\/cart(\?|$)/.test(route);
   const isCheckout = /^\/fudebako\/checkout(\?|$)/.test(route);
+  const isPoints = /^\/fudebako\/points(\?|$)/.test(route);
   const s = st();
   if (ui.slot < 0 || ui.slot >= SLOTS) ui.slot = 0;
-  const inShop = isShop || !!item || !!order || isCart || isCheckout;
+  const inShop = isShop || !!item || !!order || isCart || isCheckout || isPoints;
   const body = item
     ? detail(s, decodeURIComponent(item[1]))
     : order
@@ -548,11 +638,13 @@ export function renderFudebako(_state, route) {
         ? cartPage(s)
         : isCheckout
           ? checkout(s)
-          : isShop
-            ? shop(s)
-            : mine(s);
+          : isPoints
+            ? pointsPage()
+            : isShop
+              ? shop(s)
+              : mine(s);
   return `<div class="fudebako">
-    <div class="fb-head"><h2>筆箱</h2>${tabs(inShop)}${cartButton()}</div>
+    <div class="fb-head"><h2>筆箱</h2>${tabs(inShop)}<div class="fb-head__side">${pointsButton()}${cartButton()}</div></div>
     ${body}
   </div>`;
 }
@@ -628,9 +720,17 @@ async function pay(button, payment) {
   }
   state.data.stationery = r.stationery;
   state.data.orders = r.orders;
+  if (r.points) state.data.points = r.points;
   cart.clear();
   navigate(`/fudebako/order/${encodeURIComponent(r.order.id)}`);
-  toast(payment ? `${yen(r.order.total)} を支払いました（デモ）` : '受け取りました');
+  toast(
+    [
+      r.order.points ? `${pt(r.order.points)} を使いました` : '',
+      r.order.total ? `${yen(r.order.total)} を支払いました（デモ）` : ''
+    ]
+      .filter(Boolean)
+      .join('・') || '受け取りました'
+  );
 }
 
 document.addEventListener('submit', (e) => {

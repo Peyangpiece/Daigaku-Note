@@ -3,9 +3,11 @@
 // ボールペン：白紙の付箋に、ペンの色・太さ・書き味（筆圧で太さが変わる。shared/ink.js）で書く。
 // マーカー・文字隠しペン：付箋の真ん中に「大学ノート」と印字してあり、その上に引ける。
 // 赤シート：文字隠しペンと、赤シートで消える色（赤・橙・桃）のボールペンでは、付箋の横に置く（shared/stationery.js の needsRedSheet）。
-//   ドラッグで動かして付箋に重ねると、重なったところだけ「赤シートを通した見え方」の写しに切り替わる。
-//   写しは付箋の中身を赤の成分だけの濃淡にしたもの（SVG のフィルタ）。赤い光しか通らないので、明るい赤・橙・桃の線は紙と同じ明るさになって消え、
-//   赤の成分が 0 の文字隠しペンは黒くなって下の字が読めなくなる。その上に赤シートの赤を乗算で重ねる（編集画面の赤シートと同じ色）
+//   ドラッグで動かして付箋に重ねると、重なったところだけ「赤シートを通した見え方」の写し（.ts-seen）に切り替わる。
+//   写しは線ごとに描き分ける（seenSvg）：文字隠しペンの線は不透明の黒（下の字はまったく見えない）、赤シートで消える色
+//   （赤・橙・桃。fadesUnderRedSheet）のボールペンの線は描かない（完全に消える）、ほかの色の線は黒っぽく残る。
+//   紙は白・罫線は薄い灰色・印字は黒で、その上に赤シートの赤を乗算で重ねる（編集画面の赤シートと同じ色）。
+//   色の計算（フィルタ）だけで見え方を作ると、線のふちや色によって字や線がうっすら透けるため、描き分けて確実に隠す
 // 付箋の右下はめくれていて、押すか左上へ引くと、はがれて下の新しい紙になる。書いた線はこの画面を開いている間だけ覚える（保存しない）
 import {esc} from '../app.js';
 import {createCapture, strokePath} from '../../shared/ink.js';
@@ -34,7 +36,7 @@ function inkOf(item) {
     return {kind: 'pen', color: r.color, width: r.width * PEN_SCALE};
   }
   if (item.type === 'marker') return {kind: 'line', color: item.color, width: item.width * MARKER_SCALE};
-  return {kind: 'line', color: item.color, width: HIDER_WIDTH};
+  return {kind: 'line', color: item.color, width: HIDER_WIDTH, hider: true};
 }
 
 /** 付箋の紙：地の色・罫線・（マーカー・文字隠しペンは）真ん中の「大学ノート」 */
@@ -48,11 +50,30 @@ function paper(item) {
   return `<rect class="ts-ground" width="${SIZE}" height="${SIZE}"/><g class="ts-rules">${lines.join('')}</g>${word}`;
 }
 
+/** 赤シートを通した紙：白い地・薄い罫線・黒い印字（赤シートの赤を乗算で重ねると、地は赤、印字は黒に見える） */
+function paperSeen(item) {
+  return paper(item)
+    .replace('class="ts-ground"', 'fill="#fff"')
+    .replace('class="ts-rules"', 'stroke="#d0d0d0" stroke-width="0.8"');
+}
+
+const linePath = (points) => {
+  const d = points.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
+  return points.length > 1 ? d : `${d}l0.1 0`;
+};
 /** 線の SVG（ボールペンは塗りつぶした輪郭、マーカー・文字隠しペンは太さの決まった線を乗算で） */
 function strokeSvg(ink, points, pressure) {
   if (ink.kind === 'pen') return `<path fill="${ink.color}" d="${strokePath(points, ink.width, {pressure})}"/>`;
-  const d = points.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
-  return `<path class="ts-hl" stroke="${ink.color}" stroke-width="${ink.width}" d="${points.length > 1 ? d : `${d}l0.1 0`}"/>`;
+  return `<path class="ts-hl" stroke="${ink.color}" stroke-width="${ink.width}" d="${linePath(points)}"/>`;
+}
+/**
+ * 赤シートを通したときの線：文字隠しペンは不透明の黒（下の字を完全に隠す）、赤シートで消える色のボールペンは描かない
+ * （完全に消える）、ほかのボールペン（黒・青・シャープなど）は黒っぽく残る。マーカーは明るい色なので描かない
+ */
+function seenSvg(ink, points, pressure) {
+  if (ink.hider) return `<path class="ts-cover" stroke-width="${ink.width}" d="${linePath(points)}"/>`;
+  if (ink.kind !== 'pen' || fadesUnderRedSheet(ink.color)) return '';
+  return `<path fill="#1a1a1a" d="${strokePath(points, ink.width, {pressure})}"/>`;
 }
 
 /** 試し書きの欄（道具の詳細ページ。ペンケースには出さない） */
@@ -85,13 +106,9 @@ export function tryout(item) {
         <div class="ts-under" aria-hidden="true"><svg viewBox="0 0 ${SIZE} ${SIZE}">${paper(item)}</svg></div>
         <div class="ts-note">
           <svg class="ts-paper" viewBox="0 0 ${SIZE} ${SIZE}" role="img" aria-label="試し書きの付箋（なぞると書けます）">
-            <defs><filter id="ts-red" color-interpolation-filters="sRGB">
-              <feColorMatrix type="matrix" values="1 0 0 0 0  1 0 0 0 0  1 0 0 0 0  0 0 0 1 0"/>
-              <feComponentTransfer><feFuncR type="table" tableValues="0 0.15 0.3 0.45 0.6 0.95 1 1"/><feFuncG type="table" tableValues="0 0.15 0.3 0.45 0.6 0.95 1 1"/><feFuncB type="table" tableValues="0 0.15 0.3 0.45 0.6 0.95 1 1"/></feComponentTransfer>
-            </filter></defs>
-            <g id="ts-face">${paper(item)}<g class="ts-ink">${note.ink.join('')}</g></g>
+            ${paper(item)}<g class="ts-ink">${note.ink.map((x) => x.html).join('')}</g>
           </svg>
-          ${sheet ? `<svg class="ts-seen" viewBox="0 0 ${SIZE} ${SIZE}" aria-hidden="true"><use href="#ts-face" filter="url(#ts-red)"/></svg>` : ''}
+          ${sheet ? `<svg class="ts-seen" viewBox="0 0 ${SIZE} ${SIZE}" aria-hidden="true">${paperSeen(item)}<g class="ts-seen-ink">${note.ink.map((x) => x.seen).join('')}</g></svg>` : ''}
         </div>
         <button type="button" class="ts-curl" data-try="peel" aria-label="付箋をはがして新しい紙にする" title="押すか左上へ引くと、はがして新しい紙になります"><span class="ts-curl__flap"></span></button>
       </div>
@@ -146,6 +163,8 @@ function startInk(e, svg) {
   const ink = inkOf(item);
   const group = svg.querySelector('.ts-ink');
   group.insertAdjacentHTML('beforeend', '<path/>');
+  const seenGroup = box.querySelector('.ts-seen-ink'); // 赤シートを通した写し（赤シートのない品は null）
+  if (seenGroup) seenGroup.insertAdjacentHTML('beforeend', '<g></g>');
   const d = {
     id: item.id,
     ink,
@@ -163,6 +182,7 @@ function startInk(e, svg) {
     d.frame = 0;
     d.el.outerHTML = strokeSvg(d.ink, d.cap.points, d.pressure);
     d.el = group.lastElementChild;
+    if (seenGroup) seenGroup.lastElementChild.innerHTML = seenSvg(d.ink, d.cap.points, d.pressure);
   };
   add(e);
   draw();
@@ -181,8 +201,10 @@ function startInk(e, svg) {
     const [x, y] = toPaper(ev, d.rect);
     const points = d.cap.finish(x, y, d.pressure ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
     const html = strokeSvg(d.ink, points, d.pressure);
+    const seen = seenSvg(d.ink, points, d.pressure);
     d.el.outerHTML = html;
-    noteOf(d.id).ink.push(html);
+    if (seenGroup) seenGroup.lastElementChild.outerHTML = seen || '<g></g>';
+    noteOf(d.id).ink.push({html, seen});
     drawing = null;
   };
   drawing = d;
@@ -201,6 +223,8 @@ function peel(box) {
     () => {
       noteOf(box.dataset.tryBox).ink = [];
       pad.querySelector('.ts-ink').innerHTML = '';
+      const seenInk = pad.querySelector('.ts-seen-ink');
+      if (seenInk) seenInk.innerHTML = '';
       pad.classList.add('is-fresh'); // 動きを止めて元の場所へ戻す（下の新しい紙と入れ替わったように見える）
       pad.classList.remove('is-peeling');
       pad.style.removeProperty('--curl');
