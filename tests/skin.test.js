@@ -139,6 +139,17 @@ test('暗い表示の色：色合いを保って暗くする', () => {
   assert.ok(contrast(d, '#eceff4') >= 4.5, '暗い表示の文字が読める');
 });
 
+test('暗い表示の色：ほぼ白いカードは暗い灰色に近づき、はっきりした色は色合いを残す', () => {
+  const spread = (hex) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    return Math.max(...c) - Math.min(...c);
+  };
+  const card = {lo: 0.18, span: 0.07, sat: 0.32}; // renderer/skin.js の DARK.card と同じ
+  assert.ok(spread(darken('#fffdf4', card)) <= 8, 'クリーム色のカードは暗い表示で黄土色に浮かない');
+  assert.ok(spread(darken('#fbf5ea', card)) <= 8, '生成り色のカードは暗い表示で茶色に浮かない');
+  assert.ok(spread(darken('#ffe7a3', {lo: 0.24, span: 0.12, sat: 0.55})) >= 30, 'レモン色のタブは色合いを残す');
+});
+
 test('はじめからあるテンプレートのフォルダは、黒い文字で読める（4.5:1 以上）', () => {
   for (const t of BUILTIN_TEMPLATES) {
     if (t.parts.folder.card === 'default') continue;
