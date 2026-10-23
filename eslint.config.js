@@ -44,5 +44,5 @@ export default [
       eqeqeq: ['error', 'smart']
     }
   },
-  {ignores: ['node_modules/', 'release/', 'dist/']}
+  {ignores: ['node_modules/', 'release/', 'dist/', 'src/renderer/vendor/']}
 ];

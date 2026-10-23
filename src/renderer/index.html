@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'sha256-D3sB7fleN0DUBuPnNeLEVM2hj0YfufurW6QHSerDT3Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob:; font-src 'self' data:"
+      content="default-src 'self'; script-src 'self' 'sha256-zJU76tHLkCaQecIZUuu3d/nt6R8PDf36X0xElYVWvfo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob:; font-src 'self' data:"
     />
-    <!-- three.js の addons（GLTFLoader など）が 'three' を名前で import するための対応表。中身を変えたら上の CSP のハッシュも変える -->
+    <!-- three.js と addons（vendor/three-addons に写したもの。配布物では node_modules の examples が外れるため）を名前で import するための対応表。中身を変えたら上の CSP のハッシュも変える -->
     <script type="importmap">
       {
         "imports": {
           "three": "../../node_modules/three/build/three.module.js",
-          "three/addons/": "../../node_modules/three/examples/jsm/"
+          "three/addons/": "./vendor/three-addons/"
         }
       }
     </script>
