@@ -189,7 +189,7 @@ function buildAppMenu() {
     {
       label: '表示',
       submenu: [
-        {role: 'reload', label: '再読み込み'},
+        {role: 'reload', label: '再読み込み', accelerator: 'CmdOrCtrl+Shift+R'}, // ⌘R は PDF の編集画面の赤シートに使う
         {role: 'toggleDevTools', label: '開発者ツール'},
         {type: 'separator'},
         // 拡大・縮小は画面に任せる（PDF の編集画面では PDF だけを拡大し、ツールバーや背景は拡大しない。app.js）

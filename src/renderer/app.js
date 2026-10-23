@@ -62,6 +62,15 @@ watchTheme(
 );
 setStickerReload(() => render()); // シールの画像が届いたら描き直す
 
+/**
+ * 文字を打っている最中か（入力欄・テキストエリア・選択肢・編集中の要素、日本語入力の変換中）。
+ * 1 文字のショートカットは一切使わず、ショートカットは ⌘（Windows は Ctrl）＋キーだけにする。それでも打っている間は何も起こさない
+ */
+export const isTyping = (e) =>
+  e.isComposing ||
+  e.key === 'Process' ||
+  !!e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
+
 export function navigate(route) {
   location.hash = route.startsWith('#') ? route : '#' + route;
 }
@@ -293,7 +302,7 @@ api.on('quiz.finished', (r) => {
     );
   else toast(r.message, {error: true, detail: r.detail});
 });
-document.addEventListener('keydown', (e) => quizKey(e));
+document.addEventListener('keydown', (e) => !isTyping(e) && quizKey(e));
 document.addEventListener('submit', (e) => {
   if (e.target.matches('[data-quiz-num]')) {
     e.preventDefault();
