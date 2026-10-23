@@ -288,7 +288,7 @@ export function renderCourse({data, progress}, courseId) {
       <button class="btn btn--quiet" data-action="sync" data-course-id="${esc(courseId)}" data-full="1" ${syncing ? 'disabled' : ''} title="ふだんの同期は今日の前後 7 日の回だけを見ます。前の回の資料が足りないときに押してください（数分かかります）">過去の回も全部確かめる</button>`
           : ''
       }
-      ${course.lms_url ? `<button class="btn btn--quiet" data-action="open-external" data-url="${esc(course.lms_url)}">LMS で開く</button>` : ''}
+      ${course.lms_url ? `<button class="btn btn--quiet" data-action="open-external" data-url="${esc(course.lms_url)}">${esc(conn?.label || 'LMS')} で開く</button>` : ''}
       ${quizInfo.hasKey || quizzes.length || !features(data.settings).quiz ? '' : '<button class="btn btn--quiet" data-action="nav" data-route="/settings?focus=quiz" title="資料から復習のクイズを作れます（自分の Claude API キーが要ります）">クイズを使う…</button>'}
       <span class="muted" id="sync-status" role="status">${esc(status)}</span>
     </div>
