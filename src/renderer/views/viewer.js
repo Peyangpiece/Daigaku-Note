@@ -9,6 +9,13 @@
 //   どれを入れるかは「筆箱」のページで変える（文房具は shared/stationery.js）。消しゴムはペンの線・マーカーを消す。
 //   ボールペンの書き味：なぞった点を間引かず受け取り（getCoalescedEvents）、筆圧で太さを変える（shared/ink.js）。
 //   ペン（スタイラス）を一度使ったら、指で触れても書かない（手のひらが当たっても線にならない。指 1 本はスクロール）
+// 画面の四隅（§9.9）：左上にシール帳・左下に素材・右上に筆箱・右下にポーチ。ふだんは画面の外にしまい、端のつまみだけ見せる。
+//   出すとき：つまみを押す・マウスを画面の端（上半分・下半分）へ動かす・指（ペン）で画面の端からなでる。1 つ出すとほかはしまう
+//   シール帳・素材：押すと見ているページの真ん中に、ドラッグするとページの好きな所に「貼りもの」（注釈の stamp）として貼る。
+//     貼りものは選択の道具で動かし、右下のつまみで大きさを変える（シール・図は縦横の比を保つ）。ペンの線は上に重ねて書ける
+//   ポーチ：赤シート・電卓・メモ帳・定規・付箋・タイマー。メモ帳はちぎると、書いた紙がページに貼りものとして貼られる（ちぎり口はぎざぎざ）。
+//     定規はページの上に置き、ふちのすぐ外からボールペンで書くと、ふちに沿ったまっすぐな線になる。
+//     付箋（インデックス）はページの右の端からはみ出して貼る色の目印。タイマーは時間になると音と知らせ
 // 取り消し・やり直し（§9.1：200 手まで。履歴はメモリだけ）。注釈付きの PDF を別のファイルに書き出せる（§9.7）。
 // 元の PDF は変えない（§9.1）。注釈はページ座標（PDF のユーザー空間、左下原点、pt）でメインの DB に保存する。
 // ほかの画面と違い、状態が変わるたびに描き直さない（app.js が mount / unmount だけ呼ぶ）。
@@ -17,7 +24,7 @@
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
 import {esc, isTyping, navigate, state, toast} from '../app.js';
 import {bookmarkLook, fixedSticker, skinOf} from '../skin.js';
-import {ROUND_DEFAULTS} from '../../shared/skin.js';
+import {ROUND_DEFAULTS, inkOn} from '../../shared/skin.js';
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
 import {
   boundsOf,
@@ -39,7 +46,21 @@ import {
   stationeryState,
   toolArt
 } from '../../shared/stationery.js';
-import {NOTE_INK_SCALE, hidesUnderRedSheet} from '../../shared/annotation.js';
+import {MEMO_COLOR, MEMO_SIZE, NOTE_INK_SCALE, hidesUnderRedSheet} from '../../shared/annotation.js';
+import {BUILTIN_STICKERS, isBuiltinSticker} from '../../shared/stickers.js';
+import {figureOf, figureUrl} from '../../shared/figures.js';
+import {
+  CSS_UNITS,
+  DeskTools,
+  MEMO_DEPTH,
+  MEMO_LINE,
+  MEMO_PAD,
+  MEMO_TOOTH,
+  MEMO_TOP,
+  cornersHtml,
+  tearClip,
+  tearEdge
+} from '../desk-tools.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -52,7 +73,6 @@ export const canvasScale = (vp, dpr) => {
   const px = vp.width * vp.height;
   return px > 0 ? Math.min(dpr, Math.sqrt(MAX_CANVAS_PIXELS / px)) : dpr;
 };
-const CSS_UNITS = 96 / 72; // 拡大率 100% で紙の実寸
 const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 const clampZoom = (z) => Math.min(4, Math.max(0.25, z));
 // 1 ページの絵（canvas）の画素数の上限。拡大 4 倍 × Retina で A4 が 5,700 万画素（約 228 MB）になるのを防ぐ。
@@ -87,6 +107,12 @@ const LINE_HEIGHT = 1.4; // notebook.css の .anno-text と同じ
 const EXPORT_PX_PER_PT = 4; // 書き出す文字入れの画像の細かさ（1pt = 4px、288dpi）
 const HISTORY_MAX = 200;
 const MASK_HEX = '#00d2ff'; // 文字隠しの既定の色（shared/annotation.js の MASK_COLOR）
+// 付箋（インデックス）：pt。ページに重なる所（OVER）は薄く、はみ出す所は濃い色に言葉
+const INDEX_W = 44;
+const INDEX_H = 16;
+const INDEX_OVER = 14;
+const INDEX_GAP = 4; // 続けて貼るときの間
+const INDEX_COLORS = ['#f28b82', '#fbbc04', '#fff475', '#ccff90', '#a7ffeb', '#aecbfa', '#d7aefb', '#fdcfe8'];
 const ERASER_PX = 9; // 消しゴムの半径（画面の px）
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DRAW_TOOLS = ['ink', 'line', 'eraser']; // なぞって書く道具（注釈の上でも書く。動かさない）
@@ -150,7 +176,6 @@ const BAR = `
         <ul class="bookmark-panel__list" data-v="bookmark-list"></ul>
       </div>
     </div>
-    <button type="button" class="viewer-bar__sheet" data-v="sheet" aria-pressed="false" title="赤シートを出す・しまう（${key(MOD, 'R')}）。マーカーのところだけ黒く隠れます">赤シート</button>
     </div>
     <div class="viewer-bar__history">
       <button type="button" data-v="undo" disabled title="取り消す（${key(MOD, 'Z')}）" aria-label="取り消す">↶</button>
@@ -194,7 +219,7 @@ const BAR = `
           <dt>${key(SHIFT, MOD, 'H')}・${key(MOD, 'E')}</dt><dd>文字隠しペン・消しゴム</dd>
           <dt>${key(MOD, 'B')}</dt><dd>太字（文字入れを選んでいるとき）</dd>
           <dt>${key(MOD, 'D')}</dt><dd>今の場所にしおり</dd>
-          <dt>${key(MOD, 'R')}</dt><dd>赤シートを出す・しまう</dd>
+          <dt>${key(MOD, 'R')}</dt><dd>赤シート（ポーチの中）を出す・しまう</dd>
           <dt>Tab・Enter</dt><dd>注釈を順に選ぶ・選んだ文字を直す／メモを開く</dd>
           <dt>Delete</dt><dd>選んだ注釈を消す</dd>
           <dt>Esc</dt><dd>選択をやめて選択ツールへ</dd>
@@ -205,6 +230,7 @@ const BAR = `
           <dt class="muted">文字を打っている間</dt><dd class="muted">ショートカットは効きません（1 文字のショートカットはありません）</dd>
         </dl>
         <p class="help-panel__note">変更は自動で保存されます（右上の「保存しました」が目印）。赤シートは、マーカーのところを黒く隠し、赤い字・赤ペンの線を見えなくします。</p>
+        <p class="help-panel__note">画面の四隅：左上にシール帳、左下に素材、右上に筆箱、右下にポーチ（赤シート・電卓・メモ帳）。端のつまみを押すか、マウスを画面の端へ動かすと出ます。</p>
       </div>
     </div>
   </div>
@@ -224,8 +250,8 @@ const BAR = `
       </div>
     </form>
   </dialog>
-  <aside class="fude-side is-tucked" data-v="side" aria-label="筆箱">
-    <button type="button" class="fude-side__tab" data-v="side-tab" title="筆箱を出す（マウスを画面の右端へ・右端から左へなでる）" aria-label="筆箱を出す"><span>筆箱</span></button>
+  <aside class="fude-side is-tucked" data-v="side" data-corner="fude" aria-label="筆箱">
+    <button type="button" class="fude-side__tab" data-corner-tab="fude" aria-expanded="false" title="筆箱を出す（マウスを画面の右上の端へ・右端から左へなでる）" aria-label="筆箱を出す"><span>筆箱</span></button>
     <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span></div>
     <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン（${key(MOD, '1')}〜${key(MOD, '6')}）"></div>
     <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカー・文字隠しをなぞって消す（${key(MOD, 'E')}）">
@@ -237,11 +263,12 @@ const BAR = `
       <div class="case-panel" data-v="case-panel" hidden></div>
     </div>
   </aside>
+${cornersHtml({index: true})}
   <div class="viewer-pages" data-v="pages"><p class="muted">読み込み中…</p></div>`;
 
-class Viewer {
+class Viewer extends DeskTools {
   constructor(root, {materialId, course, onBack}) {
-    this.root = root;
+    super(root);
     this.materialId = materialId;
     this.course = course;
     this.onBack = onBack;
@@ -272,7 +299,6 @@ class Viewer {
       COURSE_HEX[course?.color] && this.noteColors.includes(COURSE_HEX[course.color])
         ? COURSE_HEX[course.color]
         : this.noteColors[0];
-    this.listeners = [];
     this.chains = new Set(); // 保存中の処理（書き出しの前に待つ）
     this.undoStack = [];
     this.redoStack = [];
@@ -284,12 +310,32 @@ class Viewer {
     this.penSeen = false; // ペン（スタイラス）を使ったか。使ったら指では書かない
   }
 
-  $(name) {
-    return this.root.querySelector(`[data-v="${name}"]`);
+  // ---- 四隅の道具（desk-tools.js）に、PDF のページの場合を教える ----
+  busy() {
+    return !!(this.drawing || this.drag || this.carry);
   }
-  on(target, type, fn, opts) {
-    target.addEventListener(type, fn, opts);
-    this.listeners.push(() => target.removeEventListener(type, fn, opts));
+  keepCorner() {
+    return !this.$('case-panel').hidden; // ペンの入れ替えを開いている間はしまわない
+  }
+  onCornerClose(name) {
+    if (name === 'fude') this.openCase(false);
+  }
+  stampScale() {
+    return this.pages[0]?.viewport?.scale ?? CSS_UNITS;
+  }
+  /** 運んで離した点の下のページに貼る（影の真ん中をページの中の位置にして）。ページの外なら false */
+  dropStamp(spec, px, py, cx, cy) {
+    const p = this.pageAt(px, py);
+    if (!p) return false;
+    const box = p.el.getBoundingClientRect();
+    this.placeStamp(spec, {p, x: cx - box.left, y: cy - box.top});
+    return true;
+  }
+  pouchAction(v) {
+    if (v !== 'index') return super.pouchAction(v);
+    this.toggleIndexPad();
+    this.tuckSoon();
+    return true;
   }
 
   async start() {
@@ -537,8 +583,10 @@ class Viewer {
   fitZoom() {
     const first = this.pages[0]?.page.getViewport({scale: CSS_UNITS});
     if (!first) return 1;
+    // ページの右の端からはみ出す付箋（インデックス）の分も、左右に空けておく（ページは真ん中に置く）
     const avail = this.pagesEl.clientWidth - 32;
-    return Math.min(2, Math.max(0.5, Math.floor((avail / first.width) * 100) / 100));
+    const tab = (INDEX_W - INDEX_OVER) * CSS_UNITS * 2;
+    return Math.min(2, Math.max(0.5, Math.floor((avail / (first.width + tab)) * 100) / 100));
   }
 
   layout(keepAnchor = true) {
@@ -556,6 +604,7 @@ class Viewer {
     }
     for (const a of this.annos.values()) this.place(a);
     if (this.sheet) this.syncCovers();
+    if (this.ruler) this.drawRuler();
     this.$('zoom-label').textContent = `${Math.round(this.zoom * 100)}%`;
     if (anchor && frac > 0) {
       const top = anchor.el.getBoundingClientRect().top + window.scrollY;
@@ -740,6 +789,15 @@ class Viewer {
     } else if (a.kind === 'text') {
       el.className = 'anno-text';
       el.textContent = a.body;
+    } else if (a.kind === 'stamp') {
+      // 貼りもの：シール・素材の図は画像、ちぎった紙は文字。右下のつまみで大きさを変える（選んでいるときだけ見える）
+      el.className = `anno-stamp anno-stamp--${a.style.type}`;
+      el.innerHTML =
+        a.style.type === 'memo'
+          ? '<div class="anno-stamp__memo"><div class="anno-stamp__text"></div></div><span class="anno-stamp__grip" aria-hidden="true"></span>'
+          : a.style.type === 'index'
+            ? '<span class="anno-stamp__tab"></span>'
+            : '<img class="anno-stamp__img" alt="" draggable="false" /><span class="anno-stamp__grip" aria-hidden="true"></span>';
     } else if (a.kind === 'mask') {
       el.className = 'anno-mask';
       el.title = '文字隠し';
@@ -776,11 +834,17 @@ class Viewer {
       if (a.kind === 'text') el.setAttribute('aria-label', `文字入れ：${a.body.slice(0, 40)}`);
     }
     a.el = el;
-    p.layer.append(el);
+    this.mountAnno(a, p);
     this.annos.set(a.key, a);
     this.applyStyle(a);
     this.place(a);
     return a;
+  }
+  /** 注釈の要素をページに入れる。貼りものはペンの線の下（線を上に書き込める）、ほかは上 */
+  mountAnno(a, p) {
+    if (a.kind === 'ink') p.ink.append(a.el);
+    else if (a.kind === 'stamp') p.layer.insertBefore(a.el, p.ink.ownerSVGElement);
+    else p.layer.append(a.el);
   }
 
   applyStyle(a) {
@@ -797,7 +861,7 @@ class Viewer {
       a.el.style.setProperty('--note', a.style.color);
       this.noteTitle(a);
       this.applyNotePop(a);
-    }
+    } else if (a.kind === 'stamp') this.applyStamp(a);
     // 赤く見える色の文字入れ・ペンの線は、赤シートの下に入ると見えなくなる（本物の赤シートと同じ）。syncCovers が隠す
     if (a.kind === 'text' || a.kind === 'ink') {
       const red = hidesUnderRedSheet(a.style.color);
@@ -808,6 +872,40 @@ class Viewer {
       }
       if (this.sheet) this.syncCovers();
     }
+  }
+
+  /** 貼りものの中身：シールの画像（取り込んだ画像は届いてから）・図・ちぎった紙の文字と色 */
+  applyStamp(a) {
+    const {type, ref} = a.style;
+    if (type === 'index') {
+      a.el.style.setProperty('--index', a.style.color);
+      a.el.style.setProperty('--index-ink', inkOn(a.style.color));
+      a.el.querySelector('.anno-stamp__tab').textContent = a.body;
+      a.el.setAttribute('aria-label', `付箋：${a.body || '（言葉なし）'}`);
+      queueMicrotask(() => this.indexPad && this.renderIndexList()); // 位置（place）が決まってから並べる
+      return;
+    }
+    if (type === 'memo') {
+      a.el.style.setProperty('--memo', a.style.color ?? MEMO_COLOR);
+      a.el.querySelector('.anno-stamp__text').textContent = a.body;
+      a.el.setAttribute('aria-label', `メモ帳の紙：${a.body.slice(0, 40) || '（白紙）'}`);
+      return;
+    }
+    const img = a.el.querySelector('img');
+    if (type === 'figure') {
+      img.src = figureUrl(ref);
+      a.el.setAttribute('aria-label', `素材：${figureOf(ref)?.name ?? '図'}`);
+      return;
+    }
+    const shape = isBuiltinSticker(ref)
+      ? 'cut'
+      : ((state.data?.skin?.stickers ?? []).find((x) => x.id === ref)?.shape ?? 'cut');
+    img.className = `anno-stamp__img sticker--${shape}`;
+    a.el.dataset.shape = shape;
+    a.el.setAttribute('aria-label', `シール：${BUILTIN_STICKERS.find((x) => x.id === ref)?.name ?? '自分の画像'}`);
+    this.stickerSrc(ref).then((url) => {
+      if (url && a.style.ref === ref) img.src = url;
+    });
   }
 
   /** メモの吹き出し：大きさ（style.w・h）と中の手書き（style.ink）を画面に当てる */
@@ -865,11 +963,27 @@ class Viewer {
     if (a.kind === 'text') {
       a.el.style.fontSize = `${a.style.size * vp.scale}px`;
       a.el.style.maxWidth = `${Math.max(40, vp.width - s.left)}px`;
-    } else if (a.kind === 'mask' || a.kind === 'line') {
+    } else if (a.kind === 'mask' || a.kind === 'line' || a.kind === 'stamp') {
       a.el.style.width = `${s.width}px`;
       a.el.style.height = `${s.height}px`;
       if (a.kind === 'mask') this.syncCovers();
+      if (a.kind === 'stamp' && a.style.type === 'memo') this.placeMemo(a, s.width, vp.scale);
+      if (a.kind === 'stamp' && a.style.type === 'index') {
+        a.el.style.setProperty('--index-over', `${INDEX_OVER * vp.scale}px`);
+        a.el.style.setProperty('--index-font', `${8 * vp.scale}px`);
+      }
     } else a.el.style.setProperty('--note-size', `${NOTE_SIZE * vp.scale}px`);
+  }
+
+  /** ちぎった紙の文字の大きさ・余白・罫線・ちぎり口を、拡大率に合わせる（寸法は pt。書き出しと同じ） */
+  placeMemo(a, width, scale) {
+    const size = (a.style.size ?? MEMO_SIZE) * scale;
+    const st = a.el.style;
+    st.setProperty('--memo-font', `${size}px`);
+    st.setProperty('--memo-lh', `${size * MEMO_LINE}px`);
+    st.setProperty('--memo-pad', `${MEMO_PAD * scale}px`);
+    st.setProperty('--memo-top', `${(MEMO_TOP + MEMO_DEPTH) * scale}px`);
+    a.el.firstElementChild.style.clipPath = tearClip(width, MEMO_DEPTH * scale, MEMO_TOOTH * scale);
   }
 
   /** 画面の箱（左上と大きさ）から rect を取り直す */
@@ -991,6 +1105,7 @@ class Viewer {
     this.annos.delete(a.key);
     if (this.selected === a) this.select(null);
     if (this.editing === a) this.editing = null;
+    if (a.kind === 'stamp' && a.style.type === 'index' && this.indexPad) this.renderIndexList();
     // 同じ注釈の保存と消去は 1 本の鎖で順に行う。保存中に消されたときは flush の末尾が先に消すので、removedOnServer で 2 回送らない
     if (a.id || a.chain)
       this.track(a, async () => {
@@ -1110,8 +1225,7 @@ class Viewer {
     const data = structuredClone(snap);
     if (!a) a = this.addAnno({key, id: null, ...data});
     else {
-      if (a.page !== data.page)
-        (a.kind === 'ink' ? this.pages[data.page - 1].ink : this.pages[data.page - 1].layer).append(a.el);
+      if (a.page !== data.page) this.mountAnno(a, this.pages[data.page - 1]);
       Object.assign(a, data);
       if (a.kind === 'text') a.el.textContent = a.body;
       else if (a.kind === 'note') a.el.querySelector('textarea').value = a.body;
@@ -1284,60 +1398,165 @@ class Viewer {
     this.renderSlots();
     this.useSlot(at);
   }
-  /** 筆箱を出す（true）・しまう（false） */
-  openSide(open) {
-    clearTimeout(this.tuckTimer);
-    if (this.sideOpen === open) return;
-    this.sideOpen = open;
-    const side = this.$('side');
-    side.classList.toggle('is-tucked', !open);
-    this.$('side-tab').setAttribute('aria-expanded', String(open));
-    if (!open) this.openCase(false);
-  }
-  tuckSoon() {
-    clearTimeout(this.tuckTimer);
-    this.tuckTimer = setTimeout(() => !this.destroyed && this.openSide(false), 350);
-  }
-  bindSide() {
-    const side = this.$('side');
-    const EDGE = 10; // 画面の右端から何 px でマウスを寄せたとみなすか
-    // マウス：右端へ寄せたら出し、筆箱から離れたらしまう
-    this.on(document, 'pointermove', (e) => {
-      if (e.pointerType !== 'mouse' || this.drawing || this.drag) return;
-      if (!this.sideOpen && e.clientX >= document.documentElement.clientWidth - EDGE) this.openSide(true);
-    });
-    this.on(side, 'pointerleave', (e) => {
-      if (e.pointerType === 'mouse' && this.sideOpen && this.$('case-panel').hidden) this.tuckSoon();
-    });
-    this.on(side, 'pointerenter', () => clearTimeout(this.tuckTimer));
-    // 指・ペン：画面の右端から左へなでたら出す。筆箱の外を押したらしまう
-    this.on(
-      document,
-      'pointerdown',
-      (e) => {
-        if (e.pointerType === 'mouse') {
-          if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
-          return;
-        }
-        if (e.clientX >= document.documentElement.clientWidth - 24 && !e.target.closest('.fude-side')) {
-          this.edge = {pointer: e.pointerId, x: e.clientX, y: e.clientY};
-        } else if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
-      },
-      {capture: true}
+
+  /** 画面の点の下のページ（なければ null） */
+  pageAt(x, y) {
+    return (
+      this.pages.find((p) => {
+        const r = p.el.getBoundingClientRect();
+        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      }) ?? null
     );
-    this.on(document, 'pointermove', (e) => {
-      const g = this.edge;
-      if (!g || g.pointer !== e.pointerId) return;
-      if (g.x - e.clientX > 30 && Math.abs(e.clientY - g.y) < 60) {
-        this.edge = null;
-        this.cancelPointer(); // 書きかけの線にしない
-        this.openSide(true);
-      }
-    });
-    const endEdge = (e) => this.edge?.pointer === e.pointerId && (this.edge = null);
-    this.on(document, 'pointerup', endEdge);
-    this.on(document, 'pointercancel', endEdge);
   }
+  /**
+   * 貼りものを置く。at（{p, x, y}：ページの左上からの px）がなければ、見ているページの真ん中（続けて押したら少しずつずらす）。
+   * 置いたら選択の道具にして選ぶ（すぐ動かせる・大きさを変えられる）。戻りは注釈
+   */
+  placeStamp(spec, at = null) {
+    let p, x, y;
+    if (at) ({p, x, y} = at);
+    else {
+      const c = this.viewCenter();
+      const dist = (q) => {
+        const r = q.el.getBoundingClientRect();
+        return c.y < r.top ? r.top - c.y : c.y > r.bottom ? c.y - r.bottom : 0;
+      };
+      p = this.pages.length ? this.pages.reduce((a, b) => (dist(b) < dist(a) ? b : a)) : null;
+      if (!p) return null;
+      const box = p.el.getBoundingClientRect();
+      const n = (this.placed = ((this.placed ?? -1) + 1) % 6);
+      x = Math.min(Math.max(c.x - box.left, 0), box.width) + n * 14;
+      y = Math.min(Math.max(c.y - box.top, 0), box.height) + n * 14;
+    }
+    const vp = p?.viewport;
+    if (!vp) return null;
+    const sw = spec.w * vp.scale,
+      sh = spec.h * vp.scale;
+    // 付箋（インデックス）はページの右の端に、外へはみ出して貼る（ページに重なるのは INDEX_OVER だけ）
+    const left =
+      spec.type === 'index'
+        ? vp.width - INDEX_OVER * vp.scale
+        : Math.min(Math.max(x - sw / 2, 0), Math.max(0, vp.width - sw));
+    const top = Math.min(
+      Math.max(spec.type === 'index' && !at ? this.indexSlot(p) : y - sh / 2, 0),
+      Math.max(0, vp.height - sh)
+    );
+    const style =
+      spec.type === 'memo'
+        ? {type: 'memo', color: spec.color ?? MEMO_COLOR, size: spec.size ?? MEMO_SIZE}
+        : spec.type === 'index'
+          ? {type: 'index', color: spec.color}
+          : {type: spec.type, ref: spec.ref};
+    const a = this.addAnno({
+      key: `k${this.seq++}`,
+      id: null,
+      page: p.num,
+      kind: 'stamp',
+      rect: this.fromScreen(p.num, {left, top, width: sw, height: sh}),
+      body: spec.body ?? '',
+      style
+    });
+    if (spec.type === 'memo') {
+      // 書いた文字が紙に収まらなければ、紙を下へ伸ばす
+      const need = a.el.querySelector('.anno-stamp__text').scrollHeight + MEMO_PAD * vp.scale;
+      if (need > sh) {
+        a.rect = this.fromScreen(p.num, {left, top, width: sw, height: Math.min(need, vp.height - top)});
+        this.place(a);
+      }
+    }
+    this.record(a.key, null, this.snap(a));
+    if (this.tool !== 'select') this.setTool('select');
+    this.select(a);
+    this.scheduleSave(a, 0);
+    return a;
+  }
+
+  // ---- 付箋（インデックス）：色を押すと、見ているページの右の端の空いている所に貼る。ドラッグすると離した高さに ----
+  toggleIndexPad(on = !this.indexPad) {
+    if (!on) {
+      this.indexPad?.remove();
+      this.indexPad = null;
+    } else if (!this.indexPad) {
+      this.indexColor ??= INDEX_COLORS[0];
+      const colors = INDEX_COLORS.map(
+        (c) =>
+          `<button type="button" class="index-pad__color" data-index-color="${c}" style="--index: ${c}" title="この色の付箋を貼る（ドラッグすると好きな高さに）" aria-label="付箋を貼る ${c}"></button>`
+      ).join('');
+      const el = this.floatTool(
+        'index-pad',
+        '付箋',
+        `<label class="index-pad__label">書く言葉（なくても可）<input type="text" maxlength="12" data-index-label placeholder="例：第3章・試験範囲" /></label>
+        <div class="index-pad__colors">${colors}</div>
+        <p class="index-pad__hint">色を押すと、見ているページの右の端に貼れます。貼った付箋は上下に動かせます</p>
+        <div class="index-pad__list" data-index-list></div>`,
+        {right: 24, bottom: 160},
+        () => this.toggleIndexPad(false)
+      );
+      el.addEventListener('pointerdown', (e) => {
+        const b = e.target.closest('[data-index-color]');
+        if (b)
+          this.startCarry(e, this.indexSpec(b.dataset.indexColor), {
+            ghost: () => this.indexGhost(b.dataset.indexColor)
+          });
+      });
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-index-color]');
+        if (b && e.detail === 0) this.placeStamp(this.indexSpec(b.dataset.indexColor)); // キーボード
+        const go = e.target.closest('[data-index-go]');
+        if (go) {
+          const a = this.annos.get(go.dataset.indexGo);
+          if (a) {
+            this.jumpTo({
+              page: a.page,
+              y: Math.max(0, parseFloat(a.el.style.top) / this.pages[a.page - 1].el.offsetHeight - 0.1)
+            });
+            this.select(a);
+          }
+        }
+      });
+      this.indexPad = el;
+      this.renderIndexList();
+    }
+    this.$('index').setAttribute('aria-pressed', String(!!this.indexPad));
+  }
+  indexSpec(color) {
+    const label = (this.indexPad?.querySelector('[data-index-label]').value ?? '').trim().slice(0, 12);
+    return {type: 'index', color, body: label, w: INDEX_W, h: INDEX_H};
+  }
+  indexGhost(color) {
+    const scale = this.pages[0]?.viewport?.scale ?? 1;
+    const g = document.createElement('div');
+    g.className = 'index-ghost';
+    g.style.setProperty('--index', color);
+    Object.assign(g.style, {width: `${INDEX_W * scale}px`, height: `${INDEX_H * scale}px`});
+    return g;
+  }
+  /** ページの右の端で、上から見て最初に空いている高さ（画面の px） */
+  indexSlot(p) {
+    const s = p.viewport.scale;
+    const h = INDEX_H * s,
+      step = (INDEX_H + INDEX_GAP) * s;
+    const taken = [...this.annos.values()]
+      .filter((a) => a.page === p.num && a.kind === 'stamp' && a.style.type === 'index' && !a.removed)
+      .map((a) => parseFloat(a.el.style.top));
+    for (let y = 36 * s; y + h <= p.viewport.height; y += step) if (!taken.some((t) => Math.abs(t - y) < h)) return y;
+    return 36 * s;
+  }
+  /** 貼った付箋の一覧（押すとその場所へ） */
+  renderIndexList() {
+    const list = [...this.annos.values()]
+      .filter((a) => a.kind === 'stamp' && a.style.type === 'index' && !a.removed)
+      .sort((a, b) => a.page - b.page || parseFloat(a.el.style.top) - parseFloat(b.el.style.top));
+    this.indexPad.querySelector('[data-index-list]').innerHTML = list.length
+      ? `<strong>貼った付箋</strong>${list
+          .map(
+            (a) =>
+              `<button type="button" class="index-pad__item" data-index-go="${a.key}"><span class="index-pad__chip" style="--index: ${a.style.color}"></span>${esc(a.body || '（言葉なし）')}<span class="muted">${a.page} ページ</span></button>`
+          )
+          .join('')}`
+      : '';
+  }
+
   bindCase() {
     const panel = this.$('case-panel');
     this.on(panel, 'click', (e) => {
@@ -1446,15 +1665,22 @@ class Viewer {
       const inNote = document.activeElement?.closest?.('.anno-note__pop');
       if ((this.editing || inNote) && e.target.closest('button, .swatch')) e.preventDefault();
     });
-    const side = this.$('side');
-    // 筆箱（横）が見えている場所：ツールバーの下から
-    this.sideObserver = new ResizeObserver(() => (side.style.top = `${bar.getBoundingClientRect().bottom + 16}px`));
+    // 四隅の上の 2 つ（筆箱・シール帳）が見えている場所：ツールバーの下から
+    this.sideObserver = new ResizeObserver(() =>
+      this.root.style.setProperty('--corner-top', `${bar.getBoundingClientRect().bottom + 16}px`)
+    );
     this.sideObserver.observe(bar);
     const onClick = (e) => {
       const t = e.target.closest('button');
       if (!t || t.closest('.case-panel')) return;
       const fromSide = !!t.closest('.fude-side');
-      if (t.dataset.v === 'side-tab') return this.openSide(true);
+      if (t.dataset.cornerTab) return this.openCorner(t.dataset.cornerTab);
+      // シール帳・素材の 1 つ：押す・ドラッグは startCarry が受ける。ここに来るのはキーボード（Enter・Space）のとき
+      if (t.dataset.seal || t.dataset.figure) return e.detail === 0 && this.placeStamp(this.itemSpec(t));
+      if (t.dataset.sealTab) return this.renderSeal(t.dataset.sealTab);
+      if (t.dataset.sozaiTab) return this.renderSozai(t.dataset.sozaiTab);
+      // ポーチから出したら、少し見せてからしまう（筆箱のペンと同じ）
+      if (this.pouchAction(t.dataset.v)) return;
       if (t.dataset.tool) this.setTool(t.dataset.tool);
       else if (t.dataset.refill) this.pickRefill(t.dataset.refill);
       else if (t.dataset.slot !== undefined) this.useSlot(Number(t.dataset.slot));
@@ -1472,18 +1698,22 @@ class Viewer {
       else if (t.dataset.v === 'bookmark-add') this.addBookmark();
       else if (t.dataset.v === 'undo') this.undo();
       else if (t.dataset.v === 'redo') this.redo();
-      else if (t.dataset.v === 'sheet') this.toggleSheet();
-      else if (t.dataset.v === 'status') this.failed && this.retrySaves();
+      else if (t.dataset.v === 'sheet') {
+        this.toggleSheet();
+        this.tuckSoon();
+      } else if (t.dataset.v === 'status') this.failed && this.retrySaves();
       else if (t.dataset.v === 'export') this.openExport();
       else if (t.dataset.v === 'help') this.openHelp(this.$('help-panel').hidden);
       // 筆箱からペン（消しゴム）を持ったら、少し見せてから画面の外へしまう
       if (fromSide && (t.dataset.slot !== undefined || t.dataset.tool === 'eraser')) this.tuckSoon();
     };
     this.on(bar, 'click', onClick);
-    this.on(side, 'click', onClick);
-    this.on(side, 'pointerdown', (e) => {
-      if (this.editing && e.target.closest('button')) e.preventDefault();
-    });
+    for (const el of this.root.querySelectorAll('[data-corner]')) {
+      this.on(el, 'click', onClick);
+      this.on(el, 'pointerdown', (e) => {
+        if (this.editing && e.target.closest('button')) e.preventDefault();
+      });
+    }
     // ページ番号を入れて移る。スクロールしたら今のページを出す
     const page = this.$('page');
     const goPage = () => {
@@ -1592,14 +1822,17 @@ class Viewer {
       this.pagesEl.dataset.pen = 'seen';
     }
     if (e.target.closest('.bookmark-ribbon')) return; // しおりのリボンは押しても書き込まない
-    // 画面の右端（指・ペン）は筆箱を出すなでる操作の始まり。書き始めない
-    if (e.pointerType !== 'mouse' && e.clientX >= document.documentElement.clientWidth - 24) return;
+    // 画面の左右の端（指・ペン）は四隅を出すなでる操作の始まり。書き始めない
+    if (e.pointerType !== 'mouse' && (e.clientX >= document.documentElement.clientWidth - 24 || e.clientX <= 24))
+      return;
     // ペンの消しゴムの側（スタイラスの後ろ・消しゴムのボタン）は、どの道具のときも消しゴム
     const penEraser = e.pointerType === 'pen' && (e.button === 5 || (e.buttons & 32) !== 0);
     if (penEraser || DRAW_TOOLS.includes(this.tool)) return this.startDraw(e, penEraser);
     if (e.button !== 0) return;
     if (e.target.closest('.anno-note__pop')) return; // メモの本文は普通に打てる
-    const a = this.annoOf(e.target);
+    let a = this.annoOf(e.target);
+    // 貼りもの（図・シール・紙）は下敷き：選択の道具のときだけ選んで動かす。ほかの道具では上に文字・メモ・文字隠しを置く
+    if (a?.kind === 'stamp' && this.tool !== 'select') a = null;
     if (this.editing && this.editing !== a) this.finishEdit();
     if (a) {
       if (this.editing === a) return; // 編集中の文字はカーソル移動・範囲選択
@@ -1612,6 +1845,10 @@ class Viewer {
         y: e.clientY,
         left: parseFloat(a.el.style.left),
         top: parseFloat(a.el.style.top),
+        // 貼りものの右下のつまみ：大きさを変える
+        resize: a.kind === 'stamp' && !!e.target.closest('.anno-stamp__grip'),
+        width: a.el.offsetWidth,
+        height: a.el.offsetHeight,
         moved: false,
         pointer: e.pointerId
       };
@@ -1683,7 +1920,8 @@ class Viewer {
       item: this.penItem,
       sim: 0.5,
       last: null,
-      extra: []
+      extra: [],
+      rule: this.rulerEdgeAt(e.clientX, e.clientY) // 定規のふちのすぐ外から書き始めたら、ふちに沿わせる
     });
     this.addInkPoint(d, e);
     this.drawInk();
@@ -1691,7 +1929,8 @@ class Viewer {
 
   /** 画面の点 → PDF の点と筆圧。筆圧の取れない道具では動く速さから作る */
   inkPoint(d, ev) {
-    const [x, y] = d.p.viewport.convertToPdfPoint(ev.clientX - d.box.left, ev.clientY - d.box.top);
+    const [cx, cy] = this.onRule(d, ev.clientX, ev.clientY);
+    const [x, y] = d.p.viewport.convertToPdfPoint(cx - d.box.left, cy - d.box.top);
     let pr;
     if (d.pressure) pr = ev.pressure > 0 ? ev.pressure : 0.5;
     else {
@@ -1714,7 +1953,8 @@ class Viewer {
     }
     // この先に来そうな点（予測）。線の先が指・ペンに遅れて見えないように、下書きにだけ足す
     d.extra = (e.getPredictedEvents?.() ?? []).slice(0, 2).map((ev) => {
-      const [x, y] = d.p.viewport.convertToPdfPoint(ev.clientX - d.box.left, ev.clientY - d.box.top);
+      const [cx, cy] = this.onRule(d, ev.clientX, ev.clientY);
+      const [x, y] = d.p.viewport.convertToPdfPoint(cx - d.box.left, cy - d.box.top);
       return [x, y, d.cap.points.at(-1)?.[2] ?? 0.5];
     });
   }
@@ -2362,9 +2602,25 @@ class Viewer {
   textSnaps() {
     const out = [];
     for (const a of this.annos.values()) {
-      if (a.kind !== 'text' || a.removed) continue;
+      if ((a.kind !== 'text' && a.kind !== 'stamp') || a.removed) continue;
       const p = this.pages[a.page - 1];
       if (!p?.viewport) continue;
+      if (a.kind === 'stamp') {
+        // 貼りもの：紙は画面の行の区切りのまま、シール・図は画面に出ている画像のまま
+        const memo = a.style.type === 'memo';
+        out.push({
+          a,
+          stamp: true,
+          lines: memo ? this.textLines(a.el.querySelector('.anno-stamp__text')) : null,
+          box: this.toScreen(a.page, a.rect),
+          scale: p.viewport.scale,
+          style: {...a.style},
+          src: a.el.querySelector('img')?.src ?? '',
+          label: a.body,
+          shape: a.el.dataset.shape ?? 'cut'
+        });
+        continue;
+      }
       out.push({
         a,
         lines: this.textLines(a.el),
@@ -2377,8 +2633,85 @@ class Viewer {
   }
   async textImages(snaps) {
     const texts = [];
-    for (const s of snaps) if (s.a.id && !s.a.removed) texts.push({id: s.a.id, png: await this.textToPng(s)});
+    for (const s of snaps) {
+      if (!s.a.id || s.a.removed) continue;
+      const png = s.stamp ? await this.stampToPng(s).catch(() => null) : await this.textToPng(s);
+      if (png) texts.push({id: s.a.id, png});
+    }
     return texts;
+  }
+
+  /** 貼りものを PNG にする（288dpi）。紙はちぎり口・罫線・文字を描き、シール・図は画像を描く。描けなければ null */
+  async stampToPng({box, scale, style, lines, src, shape, label}) {
+    const k = EXPORT_PX_PER_PT;
+    const W = Math.max(1, Math.ceil((box.width / scale) * k));
+    const H = Math.max(1, Math.ceil((box.height / scale) * k));
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (style.type === 'index') {
+      // 付箋：ページに重なる所は薄く、残りは濃い色に言葉
+      const over = INDEX_OVER * k;
+      ctx.fillStyle = style.color;
+      ctx.globalAlpha = 0.45;
+      ctx.fillRect(0, 0, over, H);
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.roundRect(over, 0, W - over, H, [0, 2 * k, 2 * k, 0]);
+      ctx.fill();
+      const font = `700 ${8 * k}px ${FONT}`;
+      await document.fonts.load(font).catch(() => {});
+      ctx.font = font;
+      ctx.fillStyle = inkOn(style.color);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label ?? '', over + (W - over) / 2, H / 2, W - over - 2 * k);
+    } else if (style.type === 'memo') {
+      const edge = tearEdge(W, MEMO_DEPTH * k, MEMO_TOOTH * k);
+      ctx.beginPath();
+      edge.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.lineTo(W, H);
+      ctx.lineTo(0, H);
+      ctx.closePath();
+      ctx.fillStyle = style.color ?? MEMO_COLOR;
+      ctx.fill();
+      ctx.save();
+      ctx.clip();
+      const size = (style.size ?? MEMO_SIZE) * k;
+      const lh = size * MEMO_LINE;
+      const top = (MEMO_TOP + MEMO_DEPTH) * k;
+      ctx.fillStyle = '#bcd3ea';
+      for (let y = top + lh; y < H; y += lh) ctx.fillRect(0, y - k / 2, W, k / 2); // 罫線（画面の 1px にあたる）
+      const font = `400 ${size}px ${FONT}`;
+      await document.fonts.load(font).catch(() => {});
+      ctx.font = font;
+      ctx.fillStyle = '#2b2b2b';
+      const m = ctx.measureText('あ');
+      const base = (lh - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 + m.fontBoundingBoxAscent;
+      (lines ?? []).forEach((line, i) => ctx.fillText(line, MEMO_PAD * k, top + i * lh + base));
+      ctx.restore();
+    } else {
+      if (!src) return null;
+      const img = new window.Image();
+      img.src = src;
+      await img.decode();
+      ctx.save();
+      ctx.beginPath();
+      if (shape === 'circle') ctx.ellipse(W / 2, H / 2, W / 2, H / 2, 0, 0, Math.PI * 2);
+      else if (shape === 'round') ctx.roundRect(0, 0, W, H, Math.min(W, H) * 0.18);
+      else ctx.rect(0, 0, W, H);
+      ctx.clip();
+      ctx.drawImage(img, 0, 0, W, H);
+      ctx.restore();
+      if (shape === 'framed') {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = (6 * k) / scale; // 画面の 3px のふち（内側の半分が見える）
+        ctx.strokeRect(0, 0, W, H);
+      }
+    }
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
   }
 
   /** 画面に出ている行の区切りのまま、文字入れを PNG にする（ヒラギノで描く。フォントは PDF に埋め込まない） */
@@ -2472,7 +2805,17 @@ class Viewer {
     if (!d.moved && Math.hypot(dx, dy) < 3) return;
     d.moved = true;
     d.a.el.classList.add('is-dragging');
-    d.a.el.style.left = `${d.left + dx}px`;
+    if (d.resize) {
+      // シール・図は縦横の比を保つ。紙は自由に（文字は折り返し直す）
+      const w = Math.max(16, d.width + dx);
+      const h = d.a.style.type === 'memo' ? Math.max(16, d.height + dy) : (w * d.height) / d.width;
+      d.a.el.style.width = `${w}px`;
+      d.a.el.style.height = `${h}px`;
+      if (d.a.style.type === 'memo') this.placeMemo(d.a, w, this.pages[d.a.page - 1].viewport.scale);
+      return;
+    }
+    // 付箋（インデックス）はページの端に沿って上下にだけ動かす
+    if (!(d.a.kind === 'stamp' && d.a.style.type === 'index')) d.a.el.style.left = `${d.left + dx}px`;
     d.a.el.style.top = `${d.top + dy}px`;
     if (d.a.kind === 'mask') this.syncCovers();
   }
@@ -2505,7 +2848,17 @@ class Viewer {
       // ページの外へは出さない
       const left = Math.min(Math.max(parseFloat(a.el.style.left), 0), p.viewport.width - 8);
       const top = Math.min(Math.max(parseFloat(a.el.style.top), 0), p.viewport.height - 8);
-      const {width, height} = this.toScreen(a.page, a.rect);
+      let {width, height} = this.toScreen(a.page, a.rect);
+      if (d.resize) {
+        // ページの外へははみ出さない（シール・図は比を保ったまま縮める）
+        const maxW = p.viewport.width - left,
+          maxH = p.viewport.height - top;
+        width = a.el.offsetWidth;
+        height = a.el.offsetHeight;
+        const k = a.style.type === 'memo' ? 1 : Math.min(1, maxW / width, maxH / height);
+        width = Math.min(width * k, maxW);
+        height = Math.min(height * k, maxH);
+      }
       a.rect = this.fromScreen(a.page, {left, top, width, height});
       this.place(a);
       this.record(a.key, d.before, this.snap(a));
@@ -2557,6 +2910,7 @@ class Viewer {
     if (e.key === 'Escape') {
       this.openHelp(false);
       this.openCase(false);
+      this.openCorner(null);
       this.select(null);
       this.setTool('select');
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.selected) {
@@ -2587,6 +2941,8 @@ class Viewer {
     this.sideObserver?.disconnect();
     clearTimeout(this.tuckTimer);
     this.toggleSheet(false);
+    this.toggleIndexPad(false);
+    this.closeTools();
     this.ring?.remove();
     cancelAnimationFrame(this.coverFrame);
     cancelAnimationFrame(this.inkFrame);

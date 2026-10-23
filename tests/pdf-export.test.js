@@ -89,6 +89,49 @@ test('書き出し：黒く塗る・付箋を入れないを選べる。画像�
   assert.equal(p2.page.node.Annots()?.size() ?? 0, 0);
 });
 
+test('書き出し：貼りものは画像として、マーカーより下に描く', async () => {
+  const list = [
+    {id: 'M1', page: 1, kind: 'mask', rect: {x: 72, y: 700, w: 100, h: 14}, body: '', style: {}},
+    {
+      id: 'S1',
+      page: 1,
+      kind: 'stamp',
+      rect: {x: 60, y: 690, w: 80, h: 60},
+      body: '',
+      style: {type: 'figure', ref: 'fig-circle'}
+    }
+  ];
+  const out = await exportAnnotatedPdf(await source(1), list, {images: new Map([['S1', PNG]])});
+  const p1 = await contentOf(out, 0);
+  const img = p1.text.indexOf('Do');
+  const mask = p1.text.indexOf('0 0.8235');
+  assert.ok(img >= 0 && mask > img, '貼りもの（画像）のあとにマーカー');
+  assert.match(p1.text, /1 0 0 1 60 690 cm[\s\S]*80 0 0 60 0 0 cm[\s\S]*Do/, '貼った四角の位置と大きさ');
+});
+
+test('書き出し：ページの端からはみ出した付箋は、ページの中へ寄せて描く', async () => {
+  const {insideBox} = await import('../src/main/pdf-export.js');
+  assert.deepEqual(insideBox({x: 570, y: 700, w: 44, h: 16}, {x: 0, y: 0, width: 595, height: 842}), {
+    x: 551,
+    y: 700,
+    w: 44,
+    h: 16
+  });
+  assert.deepEqual(insideBox({x: -10, y: 840, w: 44, h: 16}, {x: 0, y: 0, width: 595, height: 842}).y, 826);
+  const list = [
+    {
+      id: 'I1',
+      page: 1,
+      kind: 'stamp',
+      rect: {x: 570, y: 700, w: 44, h: 16},
+      body: '第3章',
+      style: {type: 'index', color: '#8ab4f8'}
+    }
+  ];
+  const p1 = await contentOf(await exportAnnotatedPdf(await source(1), list, {images: new Map([['I1', PNG]])}), 0);
+  assert.match(p1.text, /1 0 0 1 551 700 cm[\s\S]*44 0 0 16 0 0 cm/);
+});
+
 test('書き出し：読めない PDF はわかる言葉で失敗する', async () => {
   await assert.rejects(() => exportAnnotatedPdf(new Uint8Array([1, 2, 3]), []), /PDF を読めませんでした/);
 });
