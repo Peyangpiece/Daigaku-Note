@@ -5126,35 +5126,29 @@ button.fb-card {
   }
 }
 
-/* トラックパッドの 2 本指の横スワイプ（renderer/swipe.js）：戻る・進むの矢印の丸。動かした分だけ端から出て、届くと色が付く */
-.swipe-hint {
-  --p: 0;
-  position: fixed;
-  top: 50%;
-  left: 0;
-  z-index: 60;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--card, #fff);
-  color: var(--paper-ink, #2b2b2b);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);
-  opacity: calc(0.35 + var(--p) * 0.65);
-  transform: translate(calc(-48px + var(--p) * 64px), -50%);
+/* トラックパッドの 2 本指の横スワイプ（renderer/swipe.js）：ノートのページ（#app）が指について捲れる。
+   下には机（紙より暗い色）が見え、ページには影と、持ち上がった端の陰（--shade）が付く */
+html.is-page-turning,
+html.is-page-turning body {
+  overflow-x: hidden;
+  background: color-mix(in srgb, var(--paper) 78%, #000);
+}
+html.is-page-turning #app {
+  position: relative;
+  min-height: 100vh;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+html.is-page-turning #app::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 100;
   pointer-events: none;
+  opacity: var(--shade, 0);
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.22), transparent 35%);
 }
-.swipe-hint.is-forward {
-  right: 0;
-  left: auto;
-  transform: translate(calc(48px - var(--p) * 64px), -50%) scaleX(-1);
-}
-.swipe-hint.is-ready {
-  background: var(--paper-ink, #2b2b2b);
-  color: var(--card, #fff);
-}
-.swipe-hint svg {
-  width: 22px;
-  height: 22px;
+html.is-page-turning #app[data-turn='forward']::after {
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.22), transparent 35%);
 }
