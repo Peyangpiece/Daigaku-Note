@@ -91,7 +91,7 @@ export function fileCard(m, course, places) {
     <div class="file__tools">
       <button class="file__tool" data-action="reveal-material" data-id="${esc(m.id)}" title="${esc(m.name)} をフォルダで表示">📁 フォルダ</button>
       ${move}
-      ${m.source === 'upload' ? `<button class="file__tool" data-action="remove-material" data-id="${esc(m.id)}" title="${esc(m.name)} を外してゴミ箱へ">外す</button>` : ''}
+      ${m.source === 'upload' ? `<button class="file__tool" data-action="remove-material" data-id="${esc(m.id)}" data-name="${esc(m.name)}" title="${esc(m.name)} をパソコンのゴミ箱へ移す">ゴミ箱へ</button>` : ''}
     </div>
   </div>`;
 }
@@ -284,7 +284,7 @@ export function renderCourse({data, progress}, courseId) {
     <div class="course-actions">
       ${
         syncable
-          ? `<button class="btn btn--primary" data-action="sync" data-course-id="${esc(courseId)}" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : 'この授業を同期'}</button>
+          ? `<button class="btn" data-action="sync" data-course-id="${esc(courseId)}" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : 'この授業を同期'}</button>
       <button class="btn btn--quiet" data-action="sync" data-course-id="${esc(courseId)}" data-full="1" ${syncing ? 'disabled' : ''} title="ふだんの同期は今日の前後 7 日の回だけを見ます。前の回の資料が足りないときに押してください（数分かかります）">過去の回も全部確かめる</button>`
           : ''
       }

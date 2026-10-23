@@ -71,6 +71,27 @@ export const isTyping = (e) =>
   e.key === 'Process' ||
   !!e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
 
+/**
+ * 確認の窓（OS の confirm の代わり。アプリの見た目にそろえる）。戻りは「進む」を押したら true。
+ * danger を付けると「進む」のボタンを危険の色にする。Esc・「やめる」で false
+ */
+export function confirmDialog(message, {ok = 'OK', cancel = 'やめる', danger = false} = {}) {
+  return new Promise((resolve) => {
+    const d = document.createElement('dialog');
+    d.className = 'confirm-dialog';
+    d.innerHTML = `<form method="dialog"><p></p><div class="confirm-dialog__foot"><button type="submit" class="btn" value="cancel"></button><button type="submit" class="btn ${danger ? 'btn--danger' : 'btn--primary'}" value="ok" autofocus></button></div></form>`;
+    d.querySelector('p').textContent = message;
+    d.querySelector('[value="cancel"]').textContent = cancel;
+    d.querySelector('[value="ok"]').textContent = ok;
+    d.addEventListener('close', () => {
+      resolve(d.returnValue === 'ok');
+      d.remove();
+    });
+    document.body.append(d);
+    d.showModal();
+  });
+}
+
 export function navigate(route) {
   location.hash = route.startsWith('#') ? route : '#' + route;
 }
@@ -412,9 +433,17 @@ document.addEventListener('click', async (e) => {
       await reload();
       navigate('/');
     } else if (action === 'remove-material') {
+      // 元に戻す仕組みはない（パソコンのゴミ箱へ移す）ので、先に確かめる
+      if (
+        !(await confirmDialog(`「${el.dataset.name ?? 'このファイル'}」をパソコンのゴミ箱へ移しますか？`, {
+          ok: 'ゴミ箱へ',
+          danger: true
+        }))
+      )
+        return;
       const r = await api['material.remove']({materialId: el.dataset.id});
       if (r?.error) toast(r.error, {error: true});
-      else (toast('外しました（ファイルはゴミ箱にあります）'), reload());
+      else (toast('ゴミ箱へ移しました（パソコンのゴミ箱から戻せます）'), reload());
     } else if (action === 'quiz-pick') {
       for (const x of document.querySelectorAll('input[name=quiz-make]'))
         x.checked = el.dataset.pick === 'new' ? !x.dataset.hasQuiz : false;
@@ -424,7 +453,9 @@ document.addEventListener('click', async (e) => {
       const redo = picked.filter((x) => x.dataset.hasQuiz).map((x) => x.dataset.label);
       if (
         redo.length &&
-        !window.confirm(`${redo.join('・')}はクイズがあります。作り直しますか？（前の版の記録は残ります）`)
+        !(await confirmDialog(`${redo.join('・')}はクイズがあります。作り直しますか？（前の版の記録は残ります）`, {
+          ok: '作り直す'
+        }))
       )
         return;
       const roundIds = picked.map((x) => x.value);

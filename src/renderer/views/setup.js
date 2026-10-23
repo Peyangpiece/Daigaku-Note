@@ -119,8 +119,8 @@ function stepUrl(data, n) {
     <input class="input" id="su-url" type="url" placeholder="https://lms.example-u.ac.jp/" value="${esc(draft.url)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)}${c.kind === 'manual' ? ` <span class="muted">${esc(KIND_LABEL.manual)}</span>` : ''}</label>`).join('')}</div>
     ${draft.connectorId ? `<label class="su-label">LMS の名前（ホームや設定に出ます）<input class="input" id="su-label" maxlength="60" placeholder="例：manaba・〇〇大学 LMS" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
-    <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : '<button class="btn" data-action="nav" data-route="/settings">やめる</button>'}<button class="btn" id="su-detect">種類を判定</button><button class="btn btn--primary" id="su-next1" ${draft.connectorId ? '' : 'disabled'}>次へ</button></div>
-    ${draft.connectorId ? '' : draft.detected ? '<p role="status">この LMS には、まだ対応していません（いま使えるのは Moodle と manabo（試験中）です）。URL がトップページかどうかも確かめてください。</p>' : '<p class="muted">先に「種類を判定」を押すと「次へ」が押せます。</p>'}`;
+    <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : '<button class="btn" data-action="nav" data-route="/settings">やめる</button>'}<button class="btn btn--primary" id="su-next1">次へ</button></div>
+    ${draft.connectorId ? '' : draft.detected ? '<p role="status">この LMS には、まだ対応していません（いま使えるのは Moodle と manabo（試験中）です）。URL がトップページかどうかも確かめてください。</p>' : '<p class="muted">「次へ」を押すと、URL から LMS の種類を調べます。</p>'}`;
 }
 function stepLogin(data, n) {
   const body =
@@ -223,8 +223,8 @@ function stepLmsTerms(data, n) {
 }
 function stepTerm(data, n) {
   return `<h2>${n}. 学期の設定</h2>
-    <p class="muted">学期の名前と期間、回数、時限の開始時刻を入れます（あとから 設定 → 学期 で直せます）。</p>
-    ${termForm(data, null)}
+    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 学期 で直せます）。</p>
+    ${termForm(data, null, {compact: true})}
     <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : ''}<button class="btn btn--primary" id="su-next4">保存して次へ</button></div>`;
 }
 function stepRoot(data, n) {
@@ -340,7 +340,7 @@ function bind() {
       next();
     };
   if ($('su-detect')) $('su-detect').onclick = detect;
-  if ($('su-url')) $('su-url').onkeydown = (e) => e.key === 'Enter' && detect();
+  if ($('su-url')) $('su-url').onkeydown = (e) => e.key === 'Enter' && !e.isComposing && $('su-next1')?.click();
   document.querySelectorAll('input[name=cand]').forEach(
     (r) =>
       (r.onchange = () => {
@@ -353,6 +353,14 @@ function bind() {
   if ($('su-label')) $('su-label').oninput = (e) => (draft.label = e.target.value);
   if ($('su-next1'))
     $('su-next1').onclick = async () => {
+      // URL を入れて「次へ」だけで進める：まだ調べていなければここで種類を調べ、候補があれば続ける
+      if (!draft.connectorId) {
+        const btn = $('su-next1');
+        btn.disabled = true;
+        btn.textContent = '調べています…';
+        await detect().finally(() => ((btn.disabled = false), (btn.textContent = '次へ')));
+        if (!draft.connectorId) return;
+      }
       const r = await api['setup.createConnection']({
         connectorId: draft.connectorId,
         kind: draft.kind,

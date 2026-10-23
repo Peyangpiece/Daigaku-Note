@@ -1,5 +1,5 @@
 // 設定（SPEC §12.2）。学期・授業・保存先・クイズ・見た目、下に LMS との連携（任意）と同期。変更はすぐ保存する。
-import {esc, reload, toast} from '../app.js';
+import {confirmDialog, esc, reload, toast} from '../app.js';
 import {ROLES, USES, features} from '../../shared/profile.js';
 
 const api = window.daigaku;
@@ -42,7 +42,7 @@ function quizSection(q, focus = false) {
          <p><strong>送らない</strong>：大学のアカウント・パスワード・Cookie、資料のファイルそのもの、ほかの回の資料、成績、名前、LMS の URL。</p>
        </details>
        <label style="display:block; margin: var(--space-1) 0"><input type="checkbox" id="qz-consent"> 上の内容で、資料の本文を Claude API に送ることに同意します</label>
-       <div style="display:flex; gap: var(--space-1); align-items:end"><label style="flex:1">API キー<input class="input" id="qz-key" type="password" placeholder="sk-ant-…" autocomplete="off" data-keep="off"></label><button class="btn btn--primary" data-quiz-setkey>確かめて保存</button></div>`;
+       <div style="display:flex; gap: var(--space-1); align-items:end"><label style="flex:1">API キー<input class="input" id="qz-key" type="password" placeholder="キーを貼り付け（sk-ant- で始まります）" autocomplete="off" data-keep="off"></label><button class="btn btn--primary" data-quiz-setkey>確かめて保存</button></div>`;
   const mix = Object.entries(TYPE_NAMES)
     .map(
       ([t, label]) =>
@@ -187,7 +187,7 @@ export function renderSettings({data}, route = '/settings') {
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-class" ${s.classStart ? 'checked' : ''}> 授業の開始時刻に、その授業を同期する（学期の設定に時限の時刻が要ります）</label>
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-notify" ${s.notifications === false ? '' : 'checked'}> 新しい資料・ログインの必要・クイズの完成・同期の失敗を、パソコンの通知で知らせる</label>
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-login" ${s.openAtLogin?.on ? 'checked' : ''} ${s.openAtLogin?.available ? '' : 'disabled'}> パソコンにログインしたら大学ノートを起動する（同期はアプリが起動している間だけ動きます）</label>
-        ${s.openAtLogin?.available ? '' : '<p class="muted" style="margin-top: 4px">アプリとして入れたとき（Mac は <code>npm run install:mac</code>）に設定できます。</p>'}
+        ${s.openAtLogin?.available ? '' : '<p class="muted" style="margin-top: 4px">インストールしたアプリから起動しているときに設定できます（開発中の起動では使えません）。</p>'}
       </section>
       </div>
       </div>
@@ -215,7 +215,10 @@ function bind() {
   const qrm = document.querySelector('[data-quiz-removekey]');
   if (qrm)
     qrm.onclick = async () => {
-      if (!confirm('API キーを削除しますか？（作った問題と記録は残ります）')) return;
+      if (
+        !(await confirmDialog('API キーを削除しますか？（作った問題と記録は残ります）', {ok: '削除する', danger: true}))
+      )
+        return;
       await api['quiz.removeKey']();
       reload();
     };
@@ -292,9 +295,10 @@ function bind() {
   document.querySelectorAll('[data-forget-pass]').forEach((b) =>
     b.addEventListener('click', async () => {
       if (
-        !confirm(
-          '自動ログインをやめますか？ 保存した ID とパスワードを消します（資料と注釈は残ります。次の同期からはログインの窓が出ます）'
-        )
+        !(await confirmDialog(
+          '自動ログインをやめますか？ 保存した ID とパスワードを消します（資料と注釈は残ります。次の同期からはログインの窓が出ます）',
+          {ok: 'やめる（消す）', danger: true}
+        ))
       )
         return;
       const r = await api['connection.forgetPassword']({connectionId: b.dataset.forgetPass});
@@ -305,7 +309,10 @@ function bind() {
   );
   document.querySelectorAll('[data-remove-conn]').forEach((b) =>
     b.addEventListener('click', async () => {
-      if (!confirm('この接続を削除しますか？ 授業・資料・注釈は残ります。')) return;
+      if (
+        !(await confirmDialog('この接続を削除しますか？ 授業・資料・注釈は残ります。', {ok: '削除する', danger: true}))
+      )
+        return;
       const r = await api['connection.remove']({connectionId: b.dataset.removeConn});
       if (r?.error) toast(r.error, {error: true});
       else toast('接続を削除しました');

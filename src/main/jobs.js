@@ -103,8 +103,7 @@ export class JobRunner {
         sync: '同期中…',
         login: 'ログイン中…',
         move: '資料を移動中…',
-        settings: '設定を保存中…',
-        recipes: 'レシピを確認中…'
+        settings: '設定を保存中…'
       }[job.kind] ?? '処理中…'
     );
   }

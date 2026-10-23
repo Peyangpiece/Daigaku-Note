@@ -167,6 +167,12 @@ h2[tabindex='-1']:focus {
   color: var(--paper-ink-weak);
   font-size: var(--fs-small);
 }
+/* 段落の説明（セットアップの案内・設定の補足など）は 1 段大きく、少し濃く。短い添え書き（span の .muted）は小さいまま */
+p.muted {
+  font-size: 14px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--paper-ink-weak) 55%, var(--paper-ink));
+}
 
 /* 授業フォルダのグリッド：1 行 4 枚まで（広くても 5 枚） */
 .folders {
@@ -2431,8 +2437,10 @@ textarea.input {
   gap: 4px;
   padding: 4px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--card) 92%, transparent);
-  box-shadow: var(--card-shadow);
+  background: var(--card); /* 下にスクロールして本文に重なっても読めるように不透明。まわりに紙色のふちを敷く */
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--paper) 85%, transparent),
+    var(--card-shadow);
 }
 .topnav__btn {
   padding: 7px 14px; /* 高さおよそ 32px */
@@ -3844,4 +3852,50 @@ button.fb-card {
 }
 .cal-add .input {
   width: auto;
+}
+
+/* ---- 確認の窓（app.js の confirmDialog。書き出しの窓と同じ見た目） ---- */
+.confirm-dialog {
+  max-width: 440px;
+  border: 0;
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow-hover);
+}
+.confirm-dialog::backdrop {
+  background: rgba(43, 43, 43, 0.35);
+}
+.confirm-dialog p {
+  margin: 0 0 var(--space-2);
+  white-space: pre-line;
+  line-height: 1.6;
+}
+.confirm-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* 編集画面のツールバー：ページ送りと拡大率はひとまとまりで折り返す */
+.viewer-bar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.viewer-bar__status {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: default;
+}
+.viewer-bar__status.is-error {
+  cursor: pointer;
+}
+.help-panel__note {
+  margin: 8px 0 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
 }
