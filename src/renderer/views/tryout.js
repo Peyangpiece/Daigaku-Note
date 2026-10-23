@@ -1,4 +1,5 @@
-// ショップの詳細ページの「試し書き」（SPEC §15）。お店に置いてある試し書きの紙のように、罫線のある正方形の付箋に書ける。
+// ショップの詳細ページの「試し書き」（SPEC §15）。お店に置いてある試し書きの紙のように、罫線のある白い正方形の付箋に書ける。
+// 付箋は木のメモトレー（縁を残して彫ったくぼみ）に載せてある。
 // ボールペン：白紙の付箋に、ペンの色・太さ・書き味（筆圧で太さが変わる。shared/ink.js）で書く。
 // マーカー・文字隠しペン：付箋の真ん中に「大学ノート」と印字してあり、その上に引ける。
 // 赤シート：文字隠しペンと、赤シートで消える色（赤・橙・桃）のボールペンでは、付箋の横に置く（shared/stationery.js の needsRedSheet）。
@@ -79,6 +80,7 @@ export function tryout(item) {
     <h3 class="fb-detail__sub">試し書き</h3>
     ${refills}
     <div class="ts-desk${sheet ? ' ts-desk--sheet' : ''}">
+      <div class="ts-tray" aria-hidden="true"><div class="ts-tray__well"></div></div>
       <div class="ts-pad">
         <div class="ts-under" aria-hidden="true"><svg viewBox="0 0 ${SIZE} ${SIZE}">${paper(item)}</svg></div>
         <div class="ts-note">

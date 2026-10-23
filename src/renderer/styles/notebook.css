@@ -4643,7 +4643,7 @@ button.fb-card {
   line-height: 1.5;
 }
 
-/* 試し書き（詳細ページ。views/tryout.js）：罫線のある正方形の付箋。右下がめくれていて、押すか引くとはがれる。
+/* 試し書き（詳細ページ。views/tryout.js）：罫線のある白い正方形の付箋を、木のメモトレーに載せる。右下がめくれていて、押すか引くとはがれる。
    文字隠しペン・赤シートで消える色のペンは、横に赤シート（乗算で重ねる。編集画面の .red-sheet と同じ赤） */
 @property --curl {
   syntax: '<length>';
@@ -4651,6 +4651,7 @@ button.fb-card {
   initial-value: 26px;
 }
 .fb-try {
+  container-type: inline-size; /* 付箋の大きさ・赤シートの置き場所は、欄の幅で決める（画面の幅ではなく） */
   margin-top: var(--space-3);
   padding: var(--space-2) var(--space-3) var(--space-3);
   border-radius: var(--radius);
@@ -4676,15 +4677,68 @@ button.fb-card {
   vertical-align: -1px;
 }
 .ts-desk {
-  --note: min(300px, calc(100vw - 96px));
+  --note: min(300px, calc(100cqi - 2 * var(--frame) - 2 * var(--gap)));
+  /* 木のメモトレー：縁の幅・付箋とくぼみの壁のすき間（付箋のまわりは同じ幅） */
+  --frame: 18px;
+  --frame-top: 18px;
+  --gap: 8px;
+  --tray-w: calc(var(--note) + 2 * var(--frame) + 2 * var(--gap));
+  --tray-h: calc(var(--frame-top) + var(--gap) + var(--note) + var(--gap) + var(--frame));
   position: relative;
-  height: calc(var(--note) + 16px);
+  height: calc(var(--tray-h) + 10px);
+  margin-top: 4px;
+}
+/* 木のメモトレー（ウォールナット風の板。縁を残して彫ったくぼみに付箋を置く。横から見ると合板の層） */
+.ts-tray {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tray-w);
+  height: var(--tray-h);
+  border-radius: 7px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.1)),
+    repeating-linear-gradient(
+      93deg,
+      rgba(60, 35, 15, 0.1) 0 2px,
+      transparent 2px 7px,
+      rgba(255, 238, 215, 0.07) 7px 9px,
+      transparent 9px 16px
+    ),
+    repeating-linear-gradient(87deg, rgba(70, 42, 20, 0.09) 0 1px, transparent 1px 29px), #9b7b5d;
+  box-shadow:
+    0 2px 0 #6c4d33,
+    0 3px 0 #b48f69,
+    0 5px 0 #5f4430,
+    0 6px 0 #a8845f,
+    0 12px 20px rgba(0, 0, 0, 0.28);
+}
+.ts-tray__well {
+  position: absolute;
+  top: var(--frame-top);
+  left: var(--frame);
+  right: var(--frame);
+  bottom: var(--frame);
+  border-radius: 2px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(
+      92deg,
+      rgba(55, 32, 14, 0.1) 0 2px,
+      transparent 2px 8px,
+      rgba(255, 238, 215, 0.06) 8px 10px,
+      transparent 10px 17px
+    ),
+    #8f6f52;
+  box-shadow:
+    inset 3px 4px 3px rgba(40, 22, 8, 0.45),
+    inset -1px -1px 0 rgba(255, 240, 220, 0.18);
 }
 .ts-pad {
   --curl: 26px;
   position: absolute;
-  top: 6px;
-  left: 0;
+  top: calc(var(--frame-top) + var(--gap));
+  left: calc(var(--frame) + var(--gap));
   width: var(--note);
   height: var(--note);
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18));
@@ -4694,8 +4748,8 @@ button.fb-card {
   position: absolute;
   inset: 0;
   box-shadow:
-    1px 2px 0 #e9dc8c,
-    2px 4px 0 #ddd07f;
+    1px 2px 0 #ececea,
+    2px 4px 0 #dcdcd8;
 }
 .ts-under svg,
 .ts-paper,
@@ -4736,7 +4790,7 @@ button.fb-card {
   user-select: none;
 }
 .ts-ground {
-  fill: #fff4b0;
+  fill: #ffffff;
 }
 .ts-rules {
   stroke: #9fb4cc;
@@ -4760,7 +4814,7 @@ button.fb-card {
   inset: 0;
   pointer-events: none;
 }
-/* めくれた角：押せる広さは大きめに。折り返しは紙の裏（少し影のある黄色） */
+/* めくれた角：押せる広さは大きめに。折り返しは紙の裏（少し影のある白） */
 .ts-curl {
   position: absolute;
   right: 0;
@@ -4788,13 +4842,13 @@ button.fb-card {
   width: var(--curl);
   height: var(--curl);
   clip-path: polygon(0 0, 100% 0, 0 100%);
-  background: linear-gradient(to top left, #cfc070 0%, #e6d98e 50%, #f6eeb8 75%, #fffbe0 100%);
+  background: linear-gradient(to top left, #c9c9c4 0%, #e2e2de 50%, #f3f3f0 75%, #ffffff 100%);
 }
 /* 赤シート：付箋の横に置き、ドラッグで重ねる。重なったところは .ts-seen（赤だけを通した濃淡）に乗算で赤を重ねる */
 .ts-sheet {
   position: absolute;
   top: 18px;
-  left: calc(var(--note) + 32px);
+  left: calc(var(--tray-w) + 28px);
   width: 150px;
   height: 210px;
   border-radius: 6px;
@@ -4818,13 +4872,13 @@ button.fb-card {
   letter-spacing: 0.1em;
   pointer-events: none;
 }
-/* 狭い画面：赤シートは付箋の下に横長で置く */
-@media (max-width: 560px) {
+/* 狭い欄（メモトレーの横に赤シートが入らない）：赤シートはメモトレーの下に横長で置く */
+@container (max-width: 560px) {
   .ts-desk--sheet {
-    height: calc(var(--note) + 150px);
+    height: calc(var(--tray-h) + 150px);
   }
   .ts-sheet {
-    top: calc(var(--note) + 24px);
+    top: calc(var(--tray-h) + 24px);
     left: 0;
     width: 210px;
     height: 110px;
