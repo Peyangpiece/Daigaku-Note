@@ -46,6 +46,12 @@ const bad = (msg) => {
   throw new Error(msg);
 };
 
+/** ホームと上部ナビに出す復習の数：今日の問題数と、今日が 0 問のときの次の日付・問数 */
+function reviewSummary(quiz) {
+  const r = quiz.review();
+  return {reviewDue: r.questions.length, reviewNext: r.next};
+}
+
 export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   const {repo, registry, jobs, files, secrets, log, folders} = ctx;
   const handle = (channel, fn) =>
@@ -92,7 +98,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         theme: repo.getSetting('ui.theme', 'system'),
         rules: repo.getSetting('ui.rules', 'normal'),
         folderLooks: repo.getSetting('skin.folderLooks', {}), // フォルダごとの色 {授業の id: {card, tab, tape, badge}}（右クリック →「着せ替え…」）
-        ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「付箋を追加」の色（付箋の 5 色の何番目か）
+        ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「振り分け前」の付箋の色（5 色の何番目か）
         role: repo.getSetting('profile.role', null), // 使う人（profile.js の ROLES）。まだ選んでいなければ null
         uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）
         university: repo.getSetting('profile.university', ''),
@@ -122,9 +128,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
             .map(({source_json, ...z}) => ({...z, notes: JSON.parse(source_json ?? '{}').notes ?? []}))
         ])
       ),
-      quiz: ctx.quiz
-        ? {...ctx.quiz.status(), key: await ctx.quiz.keyInfo(), reviewDue: ctx.quiz.review().questions.length}
-        : null,
+      quiz: ctx.quiz ? {...ctx.quiz.status(), key: await ctx.quiz.keyInfo(), ...reviewSummary(ctx.quiz)} : null,
+      dev: !app.isPackaged, // 開発中の起動（npm start）か。実験の区画など、配る版には出さないものの出し分けに使う
       version: app.getVersion()
     };
   });
@@ -745,7 +750,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
                   ? where.number === 0
                     ? where.title_user || 'その他'
                     : `第${where.number}回`
-                  : '「付箋を追加」'
+                  : '「振り分け前」'
           });
         } else out.added++;
       } catch (e) {
@@ -896,7 +901,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       else delete map[cid];
       repo.setSetting('skin.folderLooks', map);
     }
-    // 「付箋を追加」の色：付箋の 5 色の何番目か（0〜4）。null で元の白に戻す
+    // 「振り分け前」の付箋の色：5 色の何番目か（0〜4）。null で元の白に戻す
     if (patch.ownColor && typeof patch.ownColor === 'object') {
       const cid = id(patch.ownColor.courseId) ?? bad('授業が不正です');
       const i = patch.ownColor.index;

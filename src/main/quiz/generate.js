@@ -131,7 +131,7 @@ export function friendlyAiError(e, Anthropic) {
   if (Anthropic && e instanceof Anthropic.APIConnectionError) return 'インターネットに接続してください';
   if (Anthropic && e instanceof Anthropic.InternalServerError)
     return 'AI の側で問題が起きています。しばらくしてからもう一度作ってください';
-  return `クイズを作れませんでした：${String(e?.message ?? e).slice(0, 160)}`;
+  return 'クイズを作れませんでした'; // 元の例外文は service.js が detail で別に渡す（画面では「くわしく」から）
 }
 
 /**

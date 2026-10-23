@@ -95,7 +95,7 @@ function stepsOf(data) {
 }
 const next = () => ((step = Math.min(step + 1, steps.length - 1)), reload());
 
-const KIND_LABEL = {api: 'API で読む', recipe: '画面を読む', generic: '汎用の読み取り', manual: '手動で取り込む'};
+const KIND_LABEL = {manual: '手動で取り込む'}; // 候補には名前だけを出す（読み取りの方式や確からしさは使う人には関係がない）
 
 export function renderSetup({data}) {
   steps = stepsOf(data);
@@ -117,7 +117,7 @@ function stepUrl(data, n) {
     <p class="muted">大学の LMS（manaba・Moodle などの学習支援サービス）のトップページの URL を入れて「種類を判定」を押します。いま使えるのは Moodle と manabo（試験中）です。つなぐと、授業の資料を自動で集めます。</p>
     <label class="sr-only" for="su-url">LMS の URL</label>
     <input class="input" id="su-url" type="url" placeholder="https://lms.example-u.ac.jp/" value="${esc(draft.url)}">
-    <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)} <span class="muted">${esc(KIND_LABEL[c.kind] ?? c.kind)}${c.score ? ` ・ 確からしさ ${Math.round(c.score * 100)}%` : ''}</span></label>`).join('')}</div>
+    <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)}${c.kind === 'manual' ? ` <span class="muted">${esc(KIND_LABEL.manual)}</span>` : ''}</label>`).join('')}</div>
     ${draft.connectorId ? `<label class="su-label">LMS の名前（ホームや設定に出ます）<input class="input" id="su-label" maxlength="60" placeholder="例：manaba・〇〇大学 LMS" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
     <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : '<button class="btn" data-action="nav" data-route="/settings">やめる</button>'}<button class="btn" id="su-detect">種類を判定</button><button class="btn btn--primary" id="su-next1" ${draft.connectorId ? '' : 'disabled'}>次へ</button></div>
     ${draft.connectorId ? '' : draft.detected ? '<p role="status">この LMS には、まだ対応していません（いま使えるのは Moodle と manabo（試験中）です）。URL がトップページかどうかも確かめてください。</p>' : '<p class="muted">先に「種類を判定」を押すと「次へ」が押せます。</p>'}`;

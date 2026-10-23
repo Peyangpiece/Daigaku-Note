@@ -43,8 +43,9 @@ export async function reload() {
   if (state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
     state.data.skin.introduced = true;
     api['skin.introduced']();
-    toast('着せ替えができるようになりました。上の「着せ替え」か、フォルダの右クリックから選べます', {
-      action: {label: '見てみる', run: () => navigate('/kisekae')}
+    toast('着せ替えができるようになりました。ホーム下の「着せ替え」か、フォルダの右クリックから選べます', {
+      action: {label: '見てみる', run: () => navigate('/kisekae')},
+      untilNavigate: true
     });
   }
 }
@@ -65,30 +66,62 @@ export function navigate(route) {
   location.hash = route.startsWith('#') ? route : '#' + route;
 }
 
-// トースト：画面下に積む（重ねない）。失敗の知らせは長めに残し、押すと消える。読み上げは #toasts の role=status で
+// トースト：画面下に積む（重ねない）。失敗の知らせは長めに残し、押すか × で消える。読み上げは #toasts の role=status で
 // action：{label, run}。知らせの中にボタンを出す（「元に戻す」など。押すと run して消える。知らせは長めに残す）
-export function toast(message, {error = false, action = null} = {}) {
+// detail：元の例外文など。ふだんは隠し、「くわしく」を押したときだけ下に出す（英語の例外をそのまま見せない。DESIGN-M0 §11）
+// untilNavigate：画面を移ったら消す（更新の知らせなど、今の画面にいる間だけ見せたいもの）
+export function toast(message, {error = false, action = null, detail = '', untilNavigate = false} = {}) {
   const box = document.getElementById('toasts');
   const el = document.createElement('div');
   el.className = `toast${error ? ' toast--error' : ''}`;
-  el.textContent = message;
+  if (untilNavigate) el.dataset.untilNavigate = '1';
+  const text = document.createElement('span');
+  text.className = 'toast__text';
+  text.textContent = message;
+  el.append(text);
   el.title = '押すと消えます';
   el.onclick = () => el.remove();
-  if (action) {
+  const button = (label, run, cls = 'toast__action') => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'toast__action';
-    b.textContent = action.label;
+    b.className = cls;
+    b.textContent = label;
     b.onclick = (e) => {
       e.stopPropagation();
-      el.remove();
-      action.run();
+      run();
     };
     el.append(b);
+    return b;
+  };
+  if (action)
+    button(action.label, () => {
+      el.remove();
+      action.run();
+    });
+  if (detail) {
+    const pre = document.createElement('pre');
+    pre.className = 'toast__detail';
+    pre.textContent = detail;
+    pre.hidden = true;
+    el.append(pre);
+    const b = button('くわしく', () => {
+      pre.hidden = !pre.hidden;
+      b.textContent = pre.hidden ? 'くわしく' : 'たたむ';
+      b.setAttribute('aria-expanded', String(!pre.hidden));
+      clearTimeout(timer); // 読んでいる間は消さない
+    });
+    b.setAttribute('aria-expanded', 'false');
   }
+  const close = button('×', () => el.remove(), 'toast__close');
+  close.setAttribute('aria-label', '閉じる');
+  if (detail) el.append(el.querySelector('.toast__detail')); // 本文は × より後ろ（2 段目いっぱい）に置く
   box.append(el);
   while (box.children.length > 3) box.firstElementChild.remove();
-  setTimeout(() => el.remove(), error || action ? 8000 : 4000);
+  const timer = setTimeout(() => el.remove(), error || action || detail ? 8000 : 4000);
+}
+/** 画面を移ったときに、untilNavigate の知らせを消す */
+function dismissNavigateToasts() {
+  for (const el of document.querySelectorAll('#toasts [data-until-navigate]')) el.remove();
 }
 
 function head() {
@@ -196,6 +229,7 @@ function render() {
   viewer?.unmount();
   viewer = null;
   const same = route === lastRoute;
+  if (!same && lastRoute !== null) dismissNavigateToasts();
   const snap = same ? snapshot(view) : null;
   if (route === '/setup' && !same) resetSetup('first');
   if (route === '/settings/lms' && !same) resetSetup('lms', state.data);
@@ -242,12 +276,13 @@ api.on('sync.finished', (r) => {
   if (r.status === 'login-required')
     toast(r.message || 'LMS へのログインが必要です（設定 → 大学の LMS → ログインし直す）', {error: true});
   else if (r.status === 'failed' || r.status === 'browser-not-ready')
-    toast(r.message || '同期に失敗しました', {error: true});
+    toast(r.message || '同期に失敗しました', {error: true, detail: r.detail});
   else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 学期）', {error: true});
   else if (r.status === 'terms-required') toast(r.message, {error: true});
   else
     toast(
-      `同期しました：資料 ${r.materials ?? 0} 件保存${r.failures ? `・失敗 ${r.failures} 件（${r.message ?? ''}）` : ''}`
+      `同期しました：資料 ${r.materials ?? 0} 件保存${r.failures ? `・失敗 ${r.failures} 件（${r.message ?? ''}）` : ''}`,
+      {detail: r.failures ? r.detail : ''}
     );
 });
 api.on('quiz.progress', () => reload().catch(console.error));
@@ -256,7 +291,7 @@ api.on('quiz.finished', (r) => {
     toast(
       `クイズができました：${r.count} 問${r.flagged ? `（要確認 ${r.flagged} 問）` : ''}${r.notes?.length ? `。${r.notes.join('。')}` : ''}`
     );
-  else toast(r.message, {error: true});
+  else toast(r.message, {error: true, detail: r.detail});
 });
 document.addEventListener('keydown', (e) => quizKey(e));
 document.addEventListener('submit', (e) => {
