@@ -234,7 +234,7 @@ function render() {
   if (route === '/setup' && !same) resetSetup('first');
   if (route === '/settings/lms' && !same) resetSetup('lms', state.data);
   if (route === '/settings/lms-terms' && !same) resetSetup('terms', state.data);
-  if (route === '/settings/term' && !same) resetTerm();
+  if (/^\/settings\/term(\?|$)/.test(route) && !same) resetTerm();
   if (!same && !route.startsWith('/quiz') && !route.startsWith('/review')) leaveQuiz();
   if (!same && !route.startsWith('/quiz-edit/')) leaveQuizEdit();
   if (route === '/setup' || route === '/settings/lms' || route === '/settings/lms-terms')
@@ -244,7 +244,7 @@ function render() {
     view.innerHTML =
       course?.kind === 'folder' ? renderFolder(state, course) : renderCourse(state, route.slice('/course/'.length));
   } else if (route.startsWith('/folder-new')) view.innerHTML = renderFolderNew(state, route);
-  else if (route === '/settings/term') view.innerHTML = renderTerm(state);
+  else if (/^\/settings\/term(\?|$)/.test(route)) view.innerHTML = renderTerm(state, route);
   else if (route.startsWith('/quiz-edit/')) view.innerHTML = renderQuizEdit(state, route.slice('/quiz-edit/'.length));
   else if (route.startsWith('/quiz') || route.startsWith('/review')) view.innerHTML = renderQuiz(state, route);
   else if (route === '/settings' || route.startsWith('/settings?')) view.innerHTML = renderSettings(state, route);
@@ -427,6 +427,10 @@ document.addEventListener('click', async (e) => {
           ? `${r.queued} 回分のクイズを順に作ります（1 回 1〜2 分）`
           : 'クイズを作っています（1〜2 分）'
       );
+      reload();
+    } else if (action === 'calendar-dismiss') {
+      // ホームの「学年暦を入れる」案内を、この学期では出さない
+      await api['settings.update']({patch: {calendarDismiss: el.dataset.termId}});
       reload();
     } else if (action === 'quiz-range') {
       const picked = [...document.querySelectorAll('input[name=quiz-range]:checked')].map((x) => x.value);

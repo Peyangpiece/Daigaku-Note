@@ -5,6 +5,8 @@ import {folderShown, scopeLabel} from './folder.js';
 import {features} from '../../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 import {folderLook, shapesOf, skinOf, stickerImg, stickerLayer} from '../skin.js';
+import {classWeekday, termCalendar} from '../../shared/calendar.js';
+import {addDays, weekdayOf} from '../../shared/holidays.js';
 
 // shared/ids.js の tapeAngle と同じ計算（レンダラは main のモジュールを読まないので写す）
 function hash32(str) {
@@ -29,14 +31,25 @@ export function weekOrder(courses) {
     .map(([c]) => c);
 }
 
-/** 今日の授業（時限の順）と、今日がなければ次に授業のある日の授業。曜日の分からない授業は数えない */
-export function classDays(courses, now = new Date()) {
-  const dow = now.getDay();
-  const on = (d) => courses.filter((c) => c.weekday === DAYS[d]).sort(byPeriod);
-  const today = on(dow);
-  for (let i = 1; i <= 7 && !today.length; i++) {
-    const list = on((dow + i) % 7);
-    if (list.length) return {today, next: {list, inDays: i}};
+/**
+ * 今日の授業（時限の順）と、今日がなければ次に授業のある日の授業。曜日の分からない授業は数えない。
+ * cal（学期の学年暦：休講日・振替授業日）があれば、その日に行う授業の曜日で数える（休講日・祝日は授業なし、振替授業日はその曜日の授業）
+ */
+export function classDays(courses, now = new Date(), cal = null) {
+  const today0 = now.toLocaleDateString('sv-SE'); // その場所の今日（YYYY-MM-DD）
+  const wdOn = (i) => {
+    const d = addDays(today0, i);
+    return cal ? classWeekday(cal, d) : DAYS[weekdayOf(d)];
+  };
+  const on = (i) => {
+    const wd = wdOn(i);
+    return wd ? courses.filter((c) => c.weekday === wd).sort(byPeriod) : [];
+  };
+  const today = on(0);
+  for (let i = 1; i <= 14 && !today.length; i++) {
+    const list = on(i);
+    if (list.length)
+      return {today, next: {list, inDays: i, weekday: wdOn(i), dayOfWeek: DAYS[weekdayOf(addDays(today0, i))]}};
   }
   return {today, next: null};
 }
@@ -116,14 +129,16 @@ function reviewButton(quiz) {
 
 export function renderHome({data, progress}) {
   const all = data.courses.filter((c) => !c.hidden && c.kind !== 'folder');
-  // 今日の授業（なければ次の授業）を上の 1 行に
-  const {today, next} = classDays(all);
+  // 今日の授業（なければ次の授業）を上の 1 行に。学期の学年暦（休講日・振替授業日）があればそれで数える
+  const term = (data.terms ?? []).find((t) => t.id === data.currentTermId) ?? null;
+  const cal = term ? termCalendar(term) : null;
+  const {today, next} = classDays(all, new Date(), cal);
   const courses = weekOrder(all); // 月曜の 1 限から週の順。今日の授業には「今日」を付ける
   const todayIds = new Set(today.map((c) => c.id));
   const dayLine = today.length
     ? `<p class="home-day" id="today-label"><strong>今日の授業</strong> ${today.map((c) => `${esc(c.name)}（${c.period ? `${c.period}限` : '時限なし'}）`).join('・')}</p>`
     : next
-      ? `<p class="home-day"><strong>次の授業</strong> ${next.inDays === 1 ? '明日' : `${esc(next.list[0].weekday)}曜`}　${next.list.map((c) => `${esc(c.name)}${c.period ? `（${c.period}限）` : ''}`).join('・')}</p>`
+      ? `<p class="home-day"><strong>次の授業</strong> ${next.inDays === 1 ? '明日' : `${esc(next.dayOfWeek)}曜`}${next.weekday !== next.dayOfWeek ? `（${esc(next.weekday)}曜日の授業の日）` : ''}　${next.list.map((c) => `${esc(c.name)}${c.period ? `（${c.period}限）` : ''}`).join('・')}</p>`
       : '';
   const hidden = data.courses.filter((c) => c.hidden);
   // 自分のフォルダ：マイフォルダと今学期のフォルダ。前の学期のフォルダは畳んで下に
@@ -158,6 +173,18 @@ export function renderHome({data, progress}) {
   if (hasLms && data.settings.lmsTerms?.version !== LMS_TERMS_VERSION)
     attention.push(
       '<li>大学の LMS とつなぐ機能の利用規約に同意すると、同期を続けます。<button class="btn btn--small" data-action="nav" data-route="/settings/lms-terms">利用規約を読む</button></li>'
+    );
+  // LMS をつないでいる人には、学年暦（休講日・振替授業日）がまだない学期で案内する（「この学期は入れない」で消せる）
+  if (
+    hasLms &&
+    term &&
+    cal &&
+    !cal.holidays.length &&
+    !cal.swaps.length &&
+    !(data.settings.calendarDismissed ?? []).includes(term.id)
+  )
+    attention.push(
+      `<li>大学の学年暦（休講日・振替授業日）を入れると、回の日付と「今日の授業」が大学の予定どおりになります。<button class="btn btn--small" data-action="nav" data-route="/settings/term?calendar=1">学年暦を入れる</button> <button class="btn btn--small btn--quiet" data-action="calendar-dismiss" data-term-id="${esc(term.id)}">この学期は入れない</button></li>`
     );
   if (hasLms && data.browser?.state === 'failed')
     attention.push(

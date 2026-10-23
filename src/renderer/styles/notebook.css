@@ -3764,3 +3764,55 @@ button.fb-card {
   margin-top: var(--space-4);
   text-align: center;
 }
+
+/* ---- 設定 → 学期 → 学年暦（休講日・振替授業日）の一覧 ---- */
+.cal-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.cal-cols h4 {
+  margin: 0 0 4px;
+}
+.cal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 16em;
+  overflow: auto;
+}
+.cal-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
+}
+.cal-remove {
+  margin-left: auto;
+  min-width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--paper-ink-weak);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+.cal-remove:hover,
+.cal-remove:focus-visible {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+  color: var(--paper-ink);
+}
+.cal-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cal-add .input {
+  width: auto;
+}

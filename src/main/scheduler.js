@@ -1,6 +1,7 @@
 // スケジューラ（DESIGN-M0 §6）。1 分ごとの tick で、毎日の同期・授業開始の同期・定期の確認・日付の変化を見る。
 import {dueClassSyncs, dueDailySync, jstNow} from '../shared/schedule.js';
 import {currentTerm} from '../shared/term.js';
+import {classWeekday, termCalendar} from '../shared/calendar.js';
 
 export class Scheduler {
   constructor(ctx, {intervalMs = 60e3, now = () => new Date()} = {}) {
@@ -52,7 +53,10 @@ export class Scheduler {
       if (term && periods) {
         const classSynced = repo.getSetting('scheduler.classSynced', {});
         const courses = repo.listCourses({termId: term.id});
-        for (const {course} of dueClassSyncs({courses, periods, classSynced}, now)) {
+        // 授業日の判定は学年暦で：休講日・祝日は同期しない。振替授業日はその曜日の授業を同期する
+        const cal = termCalendar(term);
+        const isClassDay = (c, d) => classWeekday(cal, d) === c.weekday;
+        for (const {course} of dueClassSyncs({courses, periods, classSynced, isClassDay}, now)) {
           classSynced[course.id] = date;
           jobs.enqueue('sync', {courseId: course.id, kind: 'class-start'});
         }

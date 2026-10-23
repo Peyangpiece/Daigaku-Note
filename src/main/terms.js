@@ -4,7 +4,8 @@
 // その中の資料の記録（material.path）と自分のフォルダの場所（course.dir）を新しい名前に合わせる
 import path from 'node:path';
 import {promises as fsp} from 'node:fs';
-import {defaultTermDates, termFolder, termId} from '../shared/term.js';
+import {defaultTermDates, termFolder, termId, termRoundDates} from '../shared/term.js';
+import {cleanCalendar} from '../shared/calendar.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
 
 export const ROUNDS = [15, 14, 8, 7];
@@ -48,7 +49,8 @@ export async function saveTerm({repo, rootDir}, input) {
       : input.periods && typeof input.periods === 'object'
         ? input.periods
         : null;
-  const holidays = Array.isArray(input.holidays) ? input.holidays.filter((x) => DATE.test(x)) : [];
+  // 学年暦：休講日（日付の配列）と振替授業日（{date, weekday}）。形の悪いものは捨てる
+  const {holidays, swaps} = cleanCalendar({holidays: input.holidays, swaps: input.swaps});
 
   const terms = repo.listTerms();
   const folder = termFolder(year, label);
@@ -71,9 +73,32 @@ export async function saveTerm({repo, rootDir}, input) {
     end_date: end,
     rounds,
     holidays_json: JSON.stringify(holidays),
+    swaps_json: JSON.stringify(swaps),
     periods_json: periods ? JSON.stringify(periods) : null,
     source: 'user'
   });
+}
+
+/**
+ * 学期を保存したあと、その学期の授業の回の日付を計算し直す（学年暦・期間・回数が変わったとき）。
+ * LMS から日付が来た回（前の設定での計算と違う日付を持つ回）はそのまま。戻りは変えた回の数
+ */
+export function recomputeRoundDates(repo, before, after) {
+  let changed = 0;
+  for (const course of repo.listCourses({termId: after.id})) {
+    if (!course.weekday) continue;
+    const old = before ? termRoundDates(before, course.weekday) : [];
+    const now = termRoundDates(after, course.weekday);
+    for (const r of repo.listRounds(course.id)) {
+      if (r.number < 1) continue;
+      if (r.date && r.date !== old[r.number - 1]) continue;
+      const next = now[r.number - 1] ?? null;
+      if (r.date === next) continue;
+      repo.updateRound(r.id, {date: next});
+      changed++;
+    }
+  }
+  return changed;
 }
 
 /**
