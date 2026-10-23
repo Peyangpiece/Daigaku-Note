@@ -23,6 +23,7 @@ import {
 import {mountViewer} from './views/viewer.js';
 import {watchModels} from './model3d.js';
 import './swipe.js'; // トラックパッドの 2 本指の横スワイプで戻る・進む
+import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具（筆箱・ポーチ・シール帳・素材）
 
 const api = window.daigaku;
 export const state = {data: null, progress: null};
@@ -237,6 +238,7 @@ function render() {
     count.hidden = !due;
     count.parentElement.setAttribute('aria-label', due ? `復習（今日 ${due} 問）` : '復習');
   }
+  deskRoute(route); // クイズ・ホームでは四隅の道具を出す（編集画面は自分で持つ）
   const inViewer = route.startsWith('/viewer/');
   app.classList.toggle('paper--viewer', inViewer);
   document.documentElement.classList.toggle('paper-canvas', inViewer);
