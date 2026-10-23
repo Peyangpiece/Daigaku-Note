@@ -37,7 +37,7 @@ import {
   stationeryState,
   toolArt
 } from '../../shared/stationery.js';
-import {hidesUnderRedSheet} from '../../shared/annotation.js';
+import {NOTE_INK_SCALE, hidesUnderRedSheet} from '../../shared/annotation.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -58,7 +58,6 @@ const clampZoom = (z) => Math.min(4, Math.max(0.25, z));
 const MAX_CANVAS_PIXELS = 16 * 1024 * 1024;
 const FILE_SAVE_DELAY = 1500; // 注釈を保存してからファイルを上書きするまで（ms）。続けて書いている間は待つ
 const PINCH_IDLE = 180; // ピンチの指が止まってから描き直すまで（ms）
-const NOTE_INK_SCALE = 1.6; // メモの中の手書きの太さ：ペンの太さ（pt）を吹き出しの px に（ページの 100% 表示より少し太く）
 const NOTE_DEFAULT_PEN = {type: 'pen', color: '#2b2b2b', width: 1.1}; // 筆箱のボールペンを持っていないときのメモの手書き（黒の 0.5 相当）
 const PINCH_SPEED = 0.01; // wheel の deltaY 1 あたりの拡大率の変化（指数）
 // shared/annotation.js と同じ値（レンダラは shared を読まないので写す）

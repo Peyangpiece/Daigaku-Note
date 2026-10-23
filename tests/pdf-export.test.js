@@ -131,3 +131,57 @@ test('書き出し：ボールペンの線は塗りつぶした図形、マー�
   assert.match(p1.text, /1 0\.6196\d* 0\.7803\d* rg/); // #ff9ec7 のマーカー
   assert.match(p1.text, /0 0\.7882\d* 0\.5529\d* rg/); // #00c98d の文字隠し
 });
+
+test('書き出し：メモの手書きは、アイコンの右にスタンプ注釈として入る（線を塗りつぶした見た目）', async () => {
+  const {encodePoints} = await import('../src/shared/ink.js');
+  const ink = [
+    {p: encodePoints(Array.from({length: 8}, (_, i) => [10 + i * 10, 20 + (i % 2) * 6, 0.5])), c: '#d93025', w: 1.1},
+    {
+      p: encodePoints([
+        [20, 60, 0.5],
+        [60, 62, 0.5],
+        [90, 58, 0.5]
+      ]),
+      c: '#2b2b2b',
+      w: 0.8,
+      pressure: false
+    }
+  ];
+  const list = [
+    {
+      id: 'N2',
+      page: 1,
+      kind: 'note',
+      rect: {x: 300, y: 400, w: 20, h: 20},
+      body: '本文',
+      style: {color: '#8ab4f8', w: 320, h: 260, ink}
+    }
+  ];
+  const out = await exportAnnotatedPdf(await source(1), list);
+  const p1 = await contentOf(out, 0);
+  const annots = p1.page.node
+    .Annots()
+    .asArray()
+    .map((r) => p1.doc.context.lookup(r));
+  assert.deepEqual(
+    annots.map((d) => d.get(PDFName.of('Subtype')).toString()),
+    ['/Text', '/Stamp']
+  );
+  const rect = annots[1]
+    .lookup(PDFName.of('Rect'))
+    .asArray()
+    .map((n) => n.asNumber());
+  assert.equal(rect[0], 324, 'アイコンの右（4pt あけて）');
+  assert.ok(rect[3] <= 420 && rect[1] < rect[3], '上端はアイコンの上端にそろえる');
+  const ap = annots[1].lookup(PDFName.of('AP'), PDFDict).lookup(PDFName.of('N'));
+  const raw = Buffer.from(ap.getContents?.() ?? ap.contents ?? []);
+  const text = (ap.dict.has(PDFName.of('Filter')) ? inflateSync(raw) : raw).toString('latin1');
+  assert.match(text, /0\.8509\d* 0\.1882\d* 0\.1450\d* rg/, '赤い線');
+  assert.match(text, /0\.75 0 0 0\.75 0 0 cm|0\.75 0 0 -0\.75/, 'px を pt に縮める');
+  assert.match(text, /\nf\n/, '塗りつぶし');
+  assert.equal(annots[1].lookup(PDFName.of('Contents'), PDFHexString).decodeText(), 'メモの手書き');
+  // notes: false なら、メモも手書きも入れない
+  const none = await exportAnnotatedPdf(await source(1), list, {notes: false});
+  const q = await contentOf(none, 0);
+  assert.equal(q.page.node.Annots()?.asArray().length ?? 0, 0);
+});

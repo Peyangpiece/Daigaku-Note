@@ -20,6 +20,8 @@ export const NOTE_SIZE = 20; // 付箋アイコンの一辺（pt）
 export const NOTE_POP_MIN = 160; // メモの吹き出しの幅・高さ（画面 px）の範囲
 export const NOTE_POP_MAX = 900;
 export const NOTE_INK_MAX = 300; // メモの中の手書きの線の数の上限
+export const NOTE_INK_SCALE = 1.6; // メモの中の手書きの太さ：ペンの太さ（pt）を吹き出しの px に（ページの 100% 表示より少し太く）
+export const NOTE_INK_PT_PER_PX = 0.75; // 書き出し：吹き出しの px を PDF の pt に（100% 表示のときの大きさ）
 const NOTE_INK_COORD_MAX = 4000; // メモの中の点の座標（吹き出しの左上からの px）
 
 /**
