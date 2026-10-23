@@ -130,14 +130,6 @@ export function renderSettings({data}, route = '/settings') {
           <p class="muted" style="align-self:end">ノートの種類・色・線の濃さは<button class="btn btn--small" data-action="nav" data-route="/kisekae">着せ替え</button>で、PDF に書くペンは<button class="btn btn--small" data-action="nav" data-route="/fudebako">筆箱</button>で変えられます</p>
         </div>
       </section>
-      ${
-        data.dev
-          ? `<section class="card"><h3>実験（開発中の起動でだけ出ます）</h3>
-        <label><input type="checkbox" id="st-experiments" ${s.experiments ? 'checked' : ''} /> 既製品の見た目のペン（ジェットストリーム・サラサクリップ・サクラクラフトラボ 004）を筆箱に出す</label>
-        <p class="muted">個人で試すための試作です。メーカーの許しを得ていないので、配る版には出しません。</p>
-      </section>`
-          : ''
-      }
         ${
           hidden.length
             ? `<section class="card"><h3>非表示の授業・フォルダ</h3>
@@ -249,7 +241,6 @@ function bind() {
   $('st-notify')?.addEventListener('change', (e) => save({notifications: e.target.checked}));
   $('st-login')?.addEventListener('change', (e) => save({openAtLogin: e.target.checked}));
   $('st-theme')?.addEventListener('change', (e) => save({theme: e.target.value}));
-  $('st-experiments')?.addEventListener('change', (e) => save({experiments: e.target.checked}));
   $('st-role')?.addEventListener('change', (e) => e.target.value && save({role: e.target.value}));
   document
     .querySelectorAll('[data-st-use]')

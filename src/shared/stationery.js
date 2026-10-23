@@ -113,8 +113,8 @@ export const CATALOG = [
   pencase('case-pastel-pink', 'パステルの筆箱（桃）', 'pouch', '#f6c9d6', '#ffffff'),
   pencase('case-sage', 'くすみグリーンの筆箱', 'pouch', '#a9bfa8', '#f3efe4'),
   pencase('case-clear', 'クリアケース', 'clear', '#e9f3f8', '#9fb7c4'),
-  // 実験：既製品の見た目のペン（個人の試作。メーカーの許しを得ていないので一般には出さない。
-  // ショップに出すのは設定の「実験」をオンにしたときだけ）
+  // 既製品の見た目のペン（試作。メーカーの許しを得ていないので、正式な公開の前に見直す。
+  // α 版のあいだはショップに出す：MAKER_ITEMS_LISTED）
   maker('maker-jetstream-black', 'ジェットストリーム 黒 0.5', '三菱鉛筆', 'jetstream', '#1f1f22', '#1d1e21', '#121214'),
   maker('maker-jetstream-red', 'ジェットストリーム 赤 0.5', '三菱鉛筆', 'jetstream', '#d0202e', '#c8102e', '#121214'),
   maker('maker-sarasa-black', 'サラサクリップ 黒 0.5', 'ゼブラ', 'sarasa', '#141414', '#e8eef2', '#1b1b1b'),
@@ -202,10 +202,10 @@ export function stationeryState(raw) {
 }
 
 /** ショップで入手する。無料の品だけ（有料の品はまだない）。新しい状態を返す。入手できなければ Error */
-export function acquire(raw, id, {experiments = false} = {}) {
+export function acquire(raw, id) {
   const st = stationeryState(raw);
   const item = itemOf(id);
-  if (!item || (item.experimental && !experiments)) throw new Error('その文房具はありません');
+  if (!item || !listed(item)) throw new Error('その文房具はありません');
   if (item.price !== 0) throw new Error('この文房具はまだ足せません');
   if (st.owned.includes(id)) return st;
   return stationeryState({...st, owned: [...st.owned, id]});
@@ -237,8 +237,11 @@ export function arrange(raw, {slots, caseId, refills} = {}) {
   });
 }
 
-/** ショップに出す品か（実験の品は、設定の実験をオンにしたときだけ） */
-export const listed = (item, {experiments = false} = {}) => !item.experimental || experiments;
+// 既製品の見た目の品（experimental）：α 版（正式な公開の前）のあいだは、ふつうの品と同じようにショップに出す。
+// 正式に公開するときに、メーカーの許しがなければ false にして隠す（SPEC §9.8）
+export const MAKER_ITEMS_LISTED = true;
+/** ショップに出す品か */
+export const listed = (item) => !item.experimental || MAKER_ITEMS_LISTED;
 
 /** 値段の表示。無料は「無料」 */
 export const priceLabel = (item) => (item.price === 0 ? '無料' : `¥${item.price}`);

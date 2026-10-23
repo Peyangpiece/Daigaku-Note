@@ -424,9 +424,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
 
   // ---- 文房具（SPEC §15）：ショップで入手する（いまは無料の品だけ）・筆箱の中身とペンケースを変える ----
   handle('stationery.acquire', ({itemId}) => {
-    const st = acquire(repo.getSetting('stationery', null), String(itemId ?? ''), {
-      experiments: repo.getSetting('experiments.makerPens', false) === true
-    });
+    const st = acquire(repo.getSetting('stationery', null), String(itemId ?? ''));
     repo.setSetting('stationery', st);
     return {stationery: st};
   });

@@ -71,15 +71,15 @@ test('絵：道具とペンケースの SVG に名前が入る（名前は文字
     assert.match(caseArt(itemOf(id)), /<svg/);
 });
 
-test('実験：既製品の見た目のペンは、実験をオンにしたときだけショップに出て入手できる', async () => {
-  const {listed} = await import('../src/shared/stationery.js');
+test('既製品の見た目のペン：α 版のあいだはショップに出て入手できる（正式な公開の前に見直す目印 experimental）', async () => {
+  const {MAKER_ITEMS_LISTED, listed} = await import('../src/shared/stationery.js');
   const js = itemOf('maker-jetstream-black');
   assert.equal(js.experimental, true);
-  assert.equal(listed(js), false);
-  assert.equal(listed(js, {experiments: true}), true);
+  assert.equal(MAKER_ITEMS_LISTED, true);
+  assert.equal(listed(js), true);
   assert.equal(listed(itemOf('pen-black-05')), true);
-  assert.throws(() => acquire(null, 'maker-sarasa-red'), /ありません/);
-  assert.ok(acquire(null, 'maker-sarasa-red', {experiments: true}).owned.includes('maker-sarasa-red'));
+  assert.ok(acquire(null, 'maker-sarasa-red').owned.includes('maker-sarasa-red'));
+  assert.throws(() => acquire(null, 'gold-pen'), /ありません/);
   assert.match(toolArt(js), /JETSTREAM/);
   assert.match(toolArt(itemOf('maker-sarasa-red')), /SARASA/);
 });
@@ -88,8 +88,8 @@ test('多機能ペン（サクラクラフトラボ 004）：3 本の芯を回�
   const {heldPen, listed, nextRefill, refillOf} = await import('../src/shared/stationery.js');
   const it = itemOf('maker-craftlab-004');
   assert.equal(it.type, 'pen');
-  assert.equal(it.experimental, true, '既製品なので、実験をオンにしたときだけ');
-  assert.equal(listed(it), false);
+  assert.equal(it.experimental, true, '既製品（正式な公開の前に見直す）');
+  assert.equal(listed(it), true, 'α 版のあいだはショップに出す');
   assert.equal(it.art, 'model');
   assert.equal(it.model, 'craftlab-004');
   assert.equal(it.refill, '4C');
@@ -112,7 +112,7 @@ test('多機能ペン（サクラクラフトラボ 004）：3 本の芯を回�
   const sharp = heldPen(it, 'sharp');
   assert.ok(sharp.refill.sharp && sharp.width < it.width * 1.3 && sharp.color !== it.color, 'シャープは灰色');
   // 選んだ芯は設定に残る。持っていない品・ない芯は捨てる
-  const owned = acquire(null, 'maker-craftlab-004', {experiments: true});
+  const owned = acquire(null, 'maker-craftlab-004');
   assert.deepEqual(owned.refills, {});
   const picked = arrange(owned, {refills: {'maker-craftlab-004': 'red'}});
   assert.deepEqual(picked.refills, {'maker-craftlab-004': 'red'});

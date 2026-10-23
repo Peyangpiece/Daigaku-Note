@@ -55,8 +55,8 @@ function sample(item) {
 /** 品の説明（色・太さ） */
 function spec(item) {
   if (item.refills)
-    return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格${item.experimental ? '・試作（実験）' : ''}`;
-  if (item.experimental) return `${esc(item.maker)}・${item.mm} mm・試作（実験）`;
+    return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格${item.experimental ? '・試作' : ''}`;
+  if (item.experimental) return `${esc(item.maker)}・${item.mm} mm・試作`;
   if (item.type === 'pen') return `${item.mm} mm`;
   if (item.type === 'marker') return item.thick ? '太め' : 'ふつう';
   if (item.type === 'hider') return '赤シートで隠れる色';
@@ -145,11 +145,10 @@ function mine(s) {
 /** 文房具をふやす：品の絵と名前だけの一覧。押すと詳細ページへ */
 function shop(s) {
   const has = new Set(s.owned);
-  const exp = state.data?.settings?.experiments === true;
   return `<p class="muted fb-note">公式の文房具をそろえています。押すとくわしい説明が出ます。足したペンは「わたしの筆箱」で筆箱に入れると、PDF の編集画面で使えます。</p>
     ${TYPES.map(
       (type) => `<section class="fb-group"><h3>${TYPE_LABEL[type]}</h3><div class="fb-grid">
-        ${CATALOG.filter((it) => it.type === type && listed(it, {experiments: exp}))
+        ${CATALOG.filter((it) => it.type === type && listed(it))
           .map(
             (
               it
@@ -183,8 +182,7 @@ function buyButtons(s, it) {
 /** 文房具の詳細ページ：大きな絵（3D モデルは拡大・回転）・説明・線の見本・入手 */
 function detail(s, id) {
   const it = itemOf(id);
-  const exp = state.data?.settings?.experiments === true;
-  if (!it || !listed(it, {experiments: exp}))
+  if (!it || !listed(it))
     return `<p class="muted">その文房具はありません。</p><p><button type="button" class="btn" data-action="nav" data-route="/fudebako?tab=shop">← 文房具をふやす</button></p>`;
   const rows = [];
   rows.push(['種類', TYPE_LABEL[it.type]]);
@@ -199,7 +197,8 @@ function detail(s, id) {
   else if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
   else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
   if (it.art === 'model') rows.push(['見た目', '3D モデル（実物の形と材質）']);
-  if (it.experimental) rows.push(['注意', '既製品の見た目の試作（実験）。一般に配る版では出しません']);
+  if (it.experimental)
+    rows.push(['注意', '既製品の見た目の試作。α 版のあいだはそのまま出しています（正式な公開の前に見直します）']);
   rows.push(['値段', priceLabel(it)]);
   const samples = it.refills
     ? `<ul class="fb-refills">${it.refills
