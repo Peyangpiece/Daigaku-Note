@@ -1,5 +1,5 @@
 // ショップの詳細ページの「試し書き」（SPEC §15）。お店に置いてある試し書きの紙のように、罫線のある白い正方形の付箋に書ける。
-// 付箋は木のメモトレー（縁を残して彫ったくぼみ・右上に金の台のペン立て）に載せてある。
+// 付箋は木のメモトレー（縁を残して彫ったくぼみ）に載せてある。
 // ボールペン：白紙の付箋に、ペンの色・太さ・書き味（筆圧で太さが変わる。shared/ink.js）で書く。
 // マーカー・文字隠しペン：付箋の真ん中に「大学ノート」と印字してあり、その上に引ける。
 // 赤シート：文字隠しペンと、赤シートで消える色（赤・橙・桃）のボールペンでは、付箋の横に置く（shared/stationery.js の needsRedSheet）。
@@ -18,15 +18,6 @@ const MARKER_SCALE = 2.4; // マーカーの太さ（pt）→ 付箋の座標
 const HIDER_WIDTH = 24; // 文字隠しペンの太さ（印字の字の高さより少し太い）
 const CURL = 26; // めくれた角の大きさ（px）
 const PEEL_MS = 450;
-/** メモトレーの右上のペン立て：金の台座と玉、斜めに立つ黒いホルダー（口に金の輪） */
-const STAND = `<svg class="ts-tray__stand" viewBox="0 0 36 56"><defs>
-  <linearGradient id="ts-gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9a7420"/><stop offset="0.45" stop-color="#f6dc86"/><stop offset="1" stop-color="#a27a22"/></linearGradient>
-  <linearGradient id="ts-black" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#050505"/><stop offset="0.35" stop-color="#4a4a4a"/><stop offset="1" stop-color="#0a0a0a"/></linearGradient></defs>
-  <ellipse cx="18" cy="49" rx="15" ry="5.5" fill="rgba(0,0,0,.25)"/>
-  <ellipse cx="18" cy="47.5" rx="14" ry="5" fill="url(#ts-gold)"/><ellipse cx="18" cy="46.5" rx="9" ry="3" fill="#fbe9a8" opacity=".55"/>
-  <circle cx="17" cy="41" r="3.6" fill="url(#ts-gold)"/>
-  <g transform="rotate(16 17 40)"><path d="M14.6 40 L12 6 Q18 3 24 6 L21.4 40 Z" fill="url(#ts-black)"/><path d="M12.6 14 L23.4 14 L23.2 16 L12.8 16 Z" fill="url(#ts-gold)"/>
-  <ellipse cx="18" cy="6" rx="6" ry="2.2" fill="#000"/></g></svg>`;
 
 // 品ごとの書いた線と選んだ芯（この画面を開いている間だけ。描き直しても消えない）
 const notes = new Map();
@@ -89,7 +80,7 @@ export function tryout(item) {
     <h3 class="fb-detail__sub">試し書き</h3>
     ${refills}
     <div class="ts-desk${sheet ? ' ts-desk--sheet' : ''}">
-      <div class="ts-tray" aria-hidden="true"><div class="ts-tray__well"></div>${STAND}</div>
+      <div class="ts-tray" aria-hidden="true"><div class="ts-tray__well"></div></div>
       <div class="ts-pad">
         <div class="ts-under" aria-hidden="true"><svg viewBox="0 0 ${SIZE} ${SIZE}">${paper(item)}</svg></div>
         <div class="ts-note">

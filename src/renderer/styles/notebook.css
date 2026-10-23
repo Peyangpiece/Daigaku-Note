@@ -4677,16 +4677,15 @@ button.fb-card {
 }
 .ts-desk {
   --note: min(300px, calc(100vw - 150px));
-  /* 木のメモトレー：縁の幅・上の縁（ペン立てを載せる）・付箋とくぼみの壁のすき間・付箋の下（指をかける切り欠き） */
+  /* 木のメモトレー：縁の幅・付箋とくぼみの壁のすき間（付箋のまわりは同じ幅） */
   --frame: 18px;
-  --frame-top: 34px;
+  --frame-top: 18px;
   --gap: 8px;
-  --foot: 44px;
   --tray-w: calc(var(--note) + 2 * var(--frame) + 2 * var(--gap));
-  --tray-h: calc(var(--frame-top) + var(--gap) + var(--note) + var(--foot) + var(--frame));
+  --tray-h: calc(var(--frame-top) + var(--gap) + var(--note) + var(--gap) + var(--frame));
   position: relative;
-  height: calc(var(--tray-h) + 14px);
-  margin-top: 14px;
+  height: calc(var(--tray-h) + 10px);
+  margin-top: 4px;
 }
 /* 木のメモトレー（ウォールナット風の板。縁を残して彫ったくぼみに付箋を置く。横から見ると合板の層） */
 .ts-tray {
@@ -4733,27 +4732,6 @@ button.fb-card {
   box-shadow:
     inset 3px 4px 3px rgba(40, 22, 8, 0.45),
     inset -1px -1px 0 rgba(255, 240, 220, 0.18);
-}
-/* 付箋の下の、指をかける浅い切り欠き */
-.ts-tray__well::after {
-  content: '';
-  position: absolute;
-  left: 22%;
-  right: 22%;
-  bottom: 0;
-  height: 26px;
-  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-  background: rgba(60, 35, 15, 0.08);
-  box-shadow: inset 0 2px 2px rgba(40, 22, 8, 0.25);
-}
-/* 右上の縁のペン立て（金の台に黒いホルダー） */
-.ts-tray__stand {
-  position: absolute;
-  top: -22px;
-  right: 4px;
-  width: 36px;
-  height: 56px;
-  pointer-events: none;
 }
 .ts-pad {
   --curl: 26px;
