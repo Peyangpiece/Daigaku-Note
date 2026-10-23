@@ -234,6 +234,27 @@ export function hiderColorOk(hex) {
 }
 
 /**
+ * 赤シートの下で見えなくなるインクの色か（ショップの試し書きで、赤シートを横に置くかを決める）。
+ * 赤シートは赤い光だけを通すので、赤の成分が紙（白）に近い明るい赤・橙・桃は紙と見分けがつかなくなる。
+ * 条件：赤 190 以上で、赤と緑・青の差が 80 以上（赤 #d93025・橙 #e37400・桃 #d6457a が当たり、紫 #7b3fbf・黒・青は当たらない）。
+ * 編集画面の文字入れの判定（shared/annotation.js の hidesUnderRedSheet）より広い：あちらは赤い字を確実に隠すための狭い判定
+ */
+export function fadesUnderRedSheet(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex ?? '')) return false;
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255,
+    g = (n >> 8) & 255,
+    b = n & 255;
+  return r >= 190 && r - Math.max(g, b) >= 80;
+}
+/** 試し書きの横に赤シートを置く品か：文字隠しペンと、赤シートで消える色のボールペン（多機能ペンはどれかの芯がそうなら） */
+export function needsRedSheet(item) {
+  if (item?.type === 'hider') return true;
+  if (item?.type !== 'pen') return false;
+  return (item.refills ?? [item]).some((r) => !r.sharp && fadesUnderRedSheet(r.color));
+}
+
+/**
  * 設定に保存した値を、使える形に直す（知らない品・持っていない品は外す。はじめの品はいつも持っている）。
  * 戻り値：{owned: [id…], slots: [id|null × 6], caseId, refills: {多機能ペンの id: 選んだ芯の id}}
  */

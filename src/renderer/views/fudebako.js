@@ -3,12 +3,14 @@
 // 「ショップ」：上に「新しく入りました」の帯、検索と絞り込み、シリーズ（同じ品の色ちがい）ごとの札。色は札の右下の丸で選ぶ。
 //   無料の品は白い札にグレーの枠、有料の品は値段帯（shared/stationery.js の TIERS）で札の紙を変える。
 //   押すと詳細ページ（#/fudebako/item/<id>）へ。3D モデルの品は、拡大・回転して細部を見られる（renderer/model3d.js）。
+//   道具の詳細ページには、試し書きの付箋（views/tryout.js。文字隠しペン・赤シートで消える色のペンは赤シートも）を置く。
 // 買う：「カートへ入れる」→ カート（#/fudebako/cart）→ レジ（#/fudebako/checkout）→ 注文完了（#/fudebako/order/<id>）。
 //   α 版の決済はデモ（実際の請求はない。カードの番号は下 4 桁だけ注文の記録に残す）。無料の品だけなら支払いはない。
 // 持ち物・筆箱の中身はメインの設定（stationery）に保存する（ipc.js の stationery.purchase・stationery.arrange）
 import {esc, navigate, refresh, state, toast} from '../app.js';
 import {cart} from '../cart.js';
 import {strokePath} from '../../shared/ink.js';
+import {tryout} from './tryout.js';
 import {
   PAYMENT_METHODS,
   SLOTS,
@@ -340,7 +342,7 @@ function buyButtons(s, it) {
     : `<span class="muted">筆箱はいっぱいです</span><button type="button" class="btn" data-action="nav" data-route="/fudebako">わたしの筆箱で入れ替える</button>`;
 }
 
-/** 文房具の詳細ページ：大きな絵（3D モデルは拡大・回転）・説明・線の見本・色ちがい・入手 */
+/** 文房具の詳細ページ：大きな絵（3D モデルは拡大・回転）・説明・線の見本・色ちがい・入手・試し書き */
 function detail(s, id) {
   const it = itemOf(id);
   if (!it || !listed(it))
@@ -395,7 +397,8 @@ function detail(s, id) {
         ${samples ? `<h3 class="fb-detail__sub">書いた線</h3>${samples}` : ''}
         <div class="fb-detail__buy">${buyButtons(s, it)}</div>
       </div>
-    </div>`;
+    </div>
+    ${tryout(it)}`;
 }
 
 // ---- カート・レジ・注文完了 ----

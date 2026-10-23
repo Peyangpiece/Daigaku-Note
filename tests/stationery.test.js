@@ -10,8 +10,10 @@ import {
   arrange,
   cartTotal,
   caseArt,
+  fadesUnderRedSheet,
   hiderColorOk,
   itemOf,
+  needsRedSheet,
   priceLabel,
   purchase,
   shopSeries,
@@ -228,4 +230,16 @@ test('多機能ペン（サクラクラフトラボ 004）：3 本の芯を回�
   assert.match(art, /<image data-model-img/);
   assert.match(art, /サクラクラフトラボ 004/);
   assert.doesNotMatch(toolArt({...it, art: null}), /data-model/, '描けないときはふつうのペンの絵');
+});
+
+test('試し書きの赤シート：文字隠しペンと、赤シートで消える色（赤・橙・桃）のボールペンに置く', () => {
+  for (const hex of ['#d93025', '#e37400', '#d6457a', '#e4002b', '#d0202e']) assert.ok(fadesUnderRedSheet(hex), hex);
+  for (const hex of ['#222222', '#1a5fd0', '#7b3fbf', '#6b4423', '#188038', '#ffe14d', 'red', null])
+    assert.ok(!fadesUnderRedSheet(hex), String(hex));
+  const yes = ['hider-cyan', 'pen-red-05', 'pen-orange-05', 'pen-pink-05', 'pen-navy-038', 'maker-sarasa-red'];
+  const no = ['pen-black-05', 'pen-blue-05', 'pen-purple-05', 'pen-sakura-05', 'marker-pink', 'case-sage'];
+  for (const id of yes) assert.ok(needsRedSheet(itemOf(id)), id);
+  for (const id of no) assert.ok(!needsRedSheet(itemOf(id)), id);
+  assert.ok(needsRedSheet(itemOf('maker-craftlab-004')), '多機能ペンは赤の芯があれば置く');
+  assert.ok(!needsRedSheet(null));
 });
