@@ -15,7 +15,7 @@
 // pdf.js は互換版（legacy）を使う。通常版は Map.prototype.getOrInsertComputed などの新しい機能を前提にしており、
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
-import {navigate, state, toast} from '../app.js';
+import {isTyping, navigate, state, toast} from '../app.js';
 import {bookmarkLook, fixedSticker, skinOf} from '../skin.js';
 import {ROUND_DEFAULTS} from '../../shared/skin.js';
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
@@ -133,22 +133,22 @@ const BAR = `
     <button type="button" class="btn btn--small" data-v="back">← 授業へ</button>
     <span class="viewer-bar__name" data-v="name"></span>
     <div class="seg" role="group" aria-label="ツール">
-      <button type="button" data-tool="select" title="選択・移動（V）">選択</button>
-      <button type="button" data-tool="text" title="文字入れ（T）">文字</button>
-      <button type="button" data-tool="note" title="メモ（M）">メモ</button>
+      <button type="button" data-tool="select" title="選択・移動（Esc）">選択</button>
+      <button type="button" data-tool="text" title="文字入れ（${key(MOD, 'T')}）">文字</button>
+      <button type="button" data-tool="note" title="メモ（${key(MOD, 'M')}）">メモ</button>
     </div>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
-      <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="しおり（B で今の場所にしおりを足す）">しおり</button>
+      <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="しおり（${key(MOD, 'D')} で今の場所にしおりを足す）">しおり</button>
       <div class="bookmark-panel" data-v="bookmark-panel" hidden>
         <div class="bookmark-panel__head">
           <strong>しおり</strong>
-          <button type="button" class="btn btn--small" data-v="bookmark-add" title="いま見ている場所にしおりを足す（B）">＋ ここにしおり</button>
+          <button type="button" class="btn btn--small" data-v="bookmark-add" title="いま見ている場所にしおりを足す（${key(MOD, 'D')}）">＋ ここにしおり</button>
         </div>
         <ul class="bookmark-panel__list" data-v="bookmark-list"></ul>
       </div>
     </div>
-    <button type="button" class="viewer-bar__sheet" data-v="sheet" aria-pressed="false" title="赤シートを出す・しまう（R）。マーカーのところだけ黒く隠れます">赤シート</button>
+    <button type="button" class="viewer-bar__sheet" data-v="sheet" aria-pressed="false" title="赤シートを出す・しまう（${key(MOD, 'R')}）。マーカーのところだけ黒く隠れます">赤シート</button>
     </div>
     <div class="viewer-bar__history">
       <button type="button" data-v="undo" disabled title="取り消す（${key(MOD, 'Z')}）" aria-label="取り消す">↶</button>
@@ -157,7 +157,7 @@ const BAR = `
     <div class="viewer-bar__group" data-group="text" hidden>
       <span class="viewer-bar__font" title="文字入れのフォントは${IS_MAC ? 'ヒラギノ角ゴ' : 'この OS の標準のゴシック体'}です（変えられません）">${FONT_LABEL}</span>
       <label class="viewer-bar__size">サイズ<input type="number" data-v="size" min="${SIZE_MIN}" max="${SIZE_MAX}" step="0.5" />pt</label>
-      <button type="button" class="viewer-bar__bold" data-v="bold" aria-pressed="false" title="太字">B</button>
+      <button type="button" class="viewer-bar__bold" data-v="bold" aria-pressed="false" title="太字（${key(MOD, 'B')}）">B</button>
       <span class="swatches">${swatches(TEXT_COLORS, 'text-color')}</span>
       <input type="color" data-v="text-custom" title="ほかの色" aria-label="文字のほかの色" />
     </div>
@@ -178,23 +178,26 @@ const BAR = `
       <button type="button" data-v="fit" title="ページの幅を画面の幅に合わせる">ページ幅</button>
     </div>
     <span class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（${key(MOD, 'S')} ですぐに保存）"></span>
-    <button type="button" class="btn btn--small btn--quiet" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（${key(MOD, 'E')}）">書き出す…</button>
+    <button type="button" class="btn btn--small btn--quiet" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（${key(SHIFT, MOD, 'E')}）">書き出す…</button>
     <div class="viewer-bar__help">
-      <button type="button" data-v="help" aria-expanded="false" aria-haspopup="true" title="キーボードの操作（?）" aria-label="キーボードの操作">?</button>
+      <button type="button" data-v="help" aria-expanded="false" aria-haspopup="true" title="キーボードの操作（${key(MOD, '/')}）" aria-label="キーボードの操作">?</button>
       <div class="help-panel" data-v="help-panel" hidden>
         <strong>キーボードの操作</strong>
         <dl>
-          <dt>V・T・M</dt><dd>選択・文字・メモ</dd>
-          <dt>1〜6</dt><dd>筆箱の 1〜6 本目のペン</dd>
-          <dt>H・E</dt><dd>文字隠しペン・消しゴム</dd>
-          <dt>B</dt><dd>今の場所にしおり</dd>
-          <dt>R</dt><dd>赤シートを出す・しまう</dd>
+          <dt>${key(MOD, 'T')}・${key(MOD, 'M')}</dt><dd>文字入れ・メモ</dd>
+          <dt>${key(MOD, '1')}〜${key(MOD, '6')}</dt><dd>筆箱の 1〜6 本目のペン</dd>
+          <dt>${key(SHIFT, MOD, 'H')}・${key(MOD, 'E')}</dt><dd>文字隠しペン・消しゴム</dd>
+          <dt>${key(MOD, 'B')}</dt><dd>太字（文字入れを選んでいるとき）</dd>
+          <dt>${key(MOD, 'D')}</dt><dd>今の場所にしおり</dd>
+          <dt>${key(MOD, 'R')}</dt><dd>赤シートを出す・しまう</dd>
           <dt>Tab・Enter</dt><dd>注釈を順に選ぶ・選んだ文字を直す／メモを開く</dd>
           <dt>Delete</dt><dd>選んだ注釈を消す</dd>
-          <dt>Esc</dt><dd>選択をやめる</dd>
+          <dt>Esc</dt><dd>選択をやめて選択ツールへ</dd>
           <dt>${key(MOD, 'Z')}・${key(SHIFT, MOD, 'Z')}</dt><dd>取り消す・やり直す</dd>
-          <dt>${key(MOD, 'S')}・${key(MOD, 'E')}</dt><dd>すぐに保存（ふだんは自動）・書き出す</dd>
+          <dt>${key(MOD, 'S')}・${key(SHIFT, MOD, 'E')}</dt><dd>すぐに保存（ふだんは自動）・書き出す</dd>
+          <dt>${key(MOD, '/')}</dt><dd>この一覧を出す・しまう</dd>
           <dt>ピンチ・${MOD}＋ホイール</dt><dd>拡大・縮小</dd>
+          <dt class="muted">文字を打っている間</dt><dd class="muted">ショートカットは効きません（1 文字のショートカットはありません）</dd>
         </dl>
       </div>
     </div>
@@ -218,8 +221,8 @@ const BAR = `
   <aside class="fude-side is-tucked" data-v="side" aria-label="筆箱">
     <button type="button" class="fude-side__tab" data-v="side-tab" title="筆箱を出す（マウスを画面の右端へ・右端から左へなでる）" aria-label="筆箱を出す"><span>筆箱</span></button>
     <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span></div>
-    <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン（キーの 1〜6）"></div>
-    <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカー・文字隠しをなぞって消す（E）">
+    <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン（${key(MOD, '1')}〜${key(MOD, '6')}）"></div>
+    <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカー・文字隠しをなぞって消す（${key(MOD, 'E')}）">
       <svg viewBox="0 0 64 28" aria-hidden="true"><rect x="2" y="5" width="40" height="18" rx="3" fill="#fbfbf8" stroke="#c9c6bd"/><rect x="26" y="4" width="36" height="20" rx="2" fill="#2f6fb5"/><rect x="30" y="9" width="28" height="10" rx="1" fill="#fff" opacity="0.9"/></svg>
       <span>消しゴム</span>
     </button>
@@ -1175,7 +1178,7 @@ class Viewer {
     const item = itemOf(this.st.slots[i]);
     if (item) this.usePen(item, i);
   }
-  /** 文字隠しペン（H）：筆箱の中の最初の文字隠しペン。なければ水色 */
+  /** 文字隠しペン（⇧⌘H）：筆箱の中の最初の文字隠しペン。なければ水色 */
   useHider() {
     const i = this.st.slots.findIndex((id) => itemOf(id)?.type === 'hider');
     if (i >= 0) this.useSlot(i);
@@ -1376,7 +1379,9 @@ class Viewer {
     this.barObserver.observe(bar);
     // ツールバーを押しても文字入れの編集を終わらせない（書式を変えながら打てるように）
     this.on(bar, 'pointerdown', (e) => {
-      if (this.editing && e.target.closest('button, .swatch')) e.preventDefault();
+      // 文字入れの編集中・メモの本文を打っている間は、ツールバーを押してもフォーカスを奪わない（続けて打てる）
+      const inNote = document.activeElement?.closest?.('.anno-note__pop');
+      if ((this.editing || inNote) && e.target.closest('button, .swatch')) e.preventDefault();
     });
     const side = this.$('side');
     // 筆箱（横）が見えている場所：ツールバーの下から
@@ -2444,11 +2449,14 @@ class Viewer {
     else if (a.kind === 'text' && this.tool === 'text') this.edit(a);
   }
 
+  /**
+   * キーボード（SPEC §9.5）。ショートカットは ⌘（Windows・Linux は Ctrl）＋キーだけ。1 文字のショートカットはない。
+   * 文字を打っている間（入力欄・メモの本文・文字入れの編集中・日本語入力の変換中）は、Esc 以外は何もしない
+   */
   onKey(e) {
     const t = e.target;
-    if (this.$('export-dialog')?.open) return; // 書き出しの窓が開いている間は、1 文字のショートカット（R・B など）を効かせない
-    const typing = t.closest?.('input, textarea, [contenteditable="plaintext-only"], [contenteditable="true"]');
-    if (typing) {
+    if (this.$('export-dialog')?.open) return; // 書き出しの窓が開いている間は効かせない
+    if (isTyping(e)) {
       if (e.key === 'Escape' && t.tagName === 'TEXTAREA') {
         const a = this.annoOf(t);
         if (a) this.openNote(a, false);
@@ -2456,25 +2464,32 @@ class Viewer {
       return;
     }
     const k = e.key.toLowerCase();
-    if ((e.metaKey || e.ctrlKey) && !e.altKey) {
-      if (k === 'z' && !e.shiftKey) this.undo();
-      else if ((k === 'z' && e.shiftKey) || k === 'y') this.redo();
-      else if (k === 'e') this.openExport();
-      else if (k === 's') this.saveFile({manual: true});
+    // ⌘／Ctrl ＋ キー。Mac では Ctrl、Windows では Win キーの組み合わせは使わない
+    const mod = IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+    if (mod && !e.altKey) {
+      const shift = e.shiftKey;
+      if (k === 'z' && !shift) this.undo();
+      else if ((k === 'z' && shift) || (k === 'y' && !shift)) this.redo();
+      else if (k === 'e' && shift) this.openExport();
+      else if (k === 'e') this.setTool('eraser');
+      else if (k === 's' && !shift) this.saveFile({manual: true});
+      else if (k === 't' && !shift) this.setTool('text');
+      else if (k === 'm' && !shift) this.setTool('note');
+      else if (k === 'h' && shift) this.useHider();
+      else if (k === 'b' && !shift) {
+        // 太字：文字入れを選んでいる（または文字入れの道具）のときだけ
+        if (this.selected?.kind === 'text' || this.tool === 'text')
+          this.setTextStyle({bold: !(this.selected?.kind === 'text' ? this.selected.style : this.textStyle).bold});
+        else return;
+      } else if (k === 'd' && !shift) this.addBookmark();
+      else if (k === 'r' && !shift) this.toggleSheet();
+      else if (k === '/' || e.key === '?') this.openHelp(this.$('help-panel').hidden);
+      else if (/^[1-6]$/.test(e.key) && !shift) this.useSlot(Number(e.key) - 1);
       else return;
       return e.preventDefault();
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === '?') this.openHelp(this.$('help-panel').hidden);
-    else if (k === 'b') this.addBookmark();
-    else if (k === 'v') this.setTool('select');
-    else if (k === 't') this.setTool('text');
-    else if (k === 'm') this.setTool('note');
-    else if (k === 'h') this.useHider();
-    else if (k === 'e') this.setTool('eraser');
-    else if (/^[1-6]$/.test(e.key)) this.useSlot(Number(e.key) - 1);
-    else if (k === 'r') this.toggleSheet();
-    else if (e.key === 'Escape') {
+    if (e.key === 'Escape') {
       this.openHelp(false);
       this.openCase(false);
       this.select(null);

@@ -1250,7 +1250,9 @@ let wheelTimer = null;
 // キー：⌘Z・Ctrl+Z で取り消し、⇧⌘Z・Ctrl+Y でやり直し。シールを選んでいれば、矢印で動かし Delete ではがし Esc で選ぶのをやめる
 document.addEventListener('keydown', (e) => {
   if (!ui.draft || !document.querySelector('.kisekae .ks-studio')) return;
-  const typing = e.target.matches?.('input:not([type=range]):not([type=color]), textarea, select');
+  const typing =
+    e.isComposing ||
+    e.target.matches?.('input:not([type=range]):not([type=color]), textarea, select, [contenteditable]');
   const mod = e.metaKey || e.ctrlKey;
   if (mod && !typing && (e.key === 'z' || e.key === 'Z' || e.key === 'y')) {
     e.preventDefault();

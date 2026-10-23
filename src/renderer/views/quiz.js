@@ -286,7 +286,7 @@ export async function quizAction(action, el) {
 /** キーボード：1〜4 で選ぶ、Enter で次へ、Space で答えを見る */
 export function quizKey(e) {
   if (!session || session.loading || !session.questions.length || session.i >= session.questions.length) return;
-  if (e.target.closest('input, textarea, select, details')) return;
+  if (e.isComposing || e.target.closest('input, textarea, select, details, [contenteditable]')) return;
   const q = session.questions[session.i];
   const res = session.results[q.id];
   if (res && e.key === 'Enter') return (e.preventDefault(), next());
