@@ -25,32 +25,32 @@ function studioScene() {
   const scene = new THREE.Scene();
   const room = new THREE.Mesh(
     new THREE.BoxGeometry(10, 10, 10),
-    new THREE.MeshStandardMaterial({color: 0x121212, roughness: 1, metalness: 0, side: THREE.BackSide})
+    new THREE.MeshStandardMaterial({color: 0x1a1a1a, roughness: 1, metalness: 0, side: THREE.BackSide})
   );
   scene.add(room);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(10, 10),
-    new THREE.MeshStandardMaterial({color: 0x2a2a2a, roughness: 1})
+    new THREE.MeshStandardMaterial({color: 0x3a3a3a, roughness: 1})
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -4.99;
   scene.add(floor);
-  const top = lightPanel(5, 2.4, 2.6, [1, 0.98, 0.95]);
+  const top = lightPanel(5, 2.4, 6, [1, 0.98, 0.95]);
   top.rotation.x = Math.PI / 2;
   top.position.set(0, 4.9, 0.6);
   scene.add(top);
-  const left = lightPanel(1, 6, 1.3, [1, 0.96, 0.9]);
+  const left = lightPanel(1, 6, 3, [1, 0.96, 0.9]);
   left.rotation.y = Math.PI / 2;
   left.position.set(-4.9, 0.8, 0);
   scene.add(left);
-  const right = lightPanel(1, 6, 1, [0.92, 0.96, 1]);
+  const right = lightPanel(1, 6, 2.2, [0.92, 0.96, 1]);
   right.rotation.y = -Math.PI / 2;
   right.position.set(4.9, 0.8, 0);
   scene.add(right);
-  const back = lightPanel(6, 2, 0.7);
+  const back = lightPanel(6, 2, 1.2);
   back.position.set(0, 1.2, -4.9);
   scene.add(back);
-  const front = lightPanel(6, 1.2, 0.5);
+  const front = lightPanel(6, 1.2, 0.8);
   front.rotation.y = Math.PI;
   front.position.set(0, -1.5, 4.9);
   scene.add(front);
@@ -64,7 +64,7 @@ function gl() {
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.85;
+  renderer.toneMappingExposure = 0.95;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.VSMShadowMap; // ぼかせる影（radius・blurSamples が効く）
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -121,8 +121,8 @@ async function loadNow(id) {
   const scene = new THREE.Scene();
   scene.add(group);
   scene.environment = envMap;
-  scene.environmentIntensity = 0.6;
-  const key = new THREE.DirectionalLight(0xfff6ea, 0.7);
+  scene.environmentIntensity = 0.9;
+  const key = new THREE.DirectionalLight(0xfff6ea, 1.1);
   key.position.set(-0.8, 1.6, 1.2);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
@@ -134,7 +134,7 @@ async function loadNow(id) {
   key.shadow.blurSamples = 16;
   key.shadow.bias = -0.0005;
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0xe8f0ff, 0.4);
+  const rim = new THREE.DirectionalLight(0xe8f0ff, 0.5);
   rim.position.set(0.9, 0.6, -1.4);
   scene.add(rim);
   // 机に落ちる影（影だけを描く面。横からの絵では真横から見るので見えない）
