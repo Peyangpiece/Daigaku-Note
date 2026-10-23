@@ -1522,6 +1522,26 @@ textarea.input {
 .viewer-bar__bold {
   font-weight: 800 !important;
 }
+/* 多機能ペンの芯の切り替え（持っているときだけ出る） */
+.viewer-bar__refills {
+  gap: 4px;
+}
+.viewer-bar__refills-name {
+  margin-right: 2px;
+  font-size: var(--fs-small);
+  color: var(--muted, #888);
+}
+.viewer-bar button.viewer-bar__refill::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  background: var(--swatch);
+  vertical-align: -1px;
+}
 .swatches {
   display: inline-flex;
   gap: 4px;
@@ -3782,6 +3802,42 @@ button.fb-card {
   height: 26px;
   border-radius: 6px;
   background: #fff;
+}
+/* 文房具の 3D モデル（renderer/model3d.js）。札の中でドラッグして回せる */
+.fb-card__art .model-view {
+  width: 100%;
+  height: 128px;
+}
+.model-view {
+  position: relative;
+  border-radius: 10px;
+  background: radial-gradient(ellipse at 50% 60%, rgba(0, 0, 0, 0.1), transparent 70%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.model-view:active {
+  cursor: grabbing;
+}
+.model-view__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.model-view.is-failed {
+  display: flex;
+  align-items: center;
+  cursor: default;
+}
+.model-view.is-failed .st-art {
+  width: 100%;
+  height: 26px;
+}
+.model-view__hint {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-small);
+  text-align: center;
 }
 .fb-card__buy {
   display: flex;

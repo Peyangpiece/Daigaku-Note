@@ -23,16 +23,25 @@ const ui = {slot: 0}; // わたしの筆箱：入れ替える場所（何本目�
 
 const st = () => stationeryState(state.data?.stationery);
 
-/** 書いた線の見本（ボールペン・マーカーの色と太さ） */
+/** ゆるい波（見本の線。筆圧が少しずつ変わる） */
+const wave = (x0, n) =>
+  Array.from({length: n}, (_, i) => [x0 + i * 2.8, 12 + Math.sin(i / 5) * 5, 0.35 + 0.3 * Math.sin(i / 9)]);
+
+/** 書いた線の見本（ボールペン・マーカーの色と太さ。多機能ペンは芯ごとに短い線） */
 function sample(item) {
+  if (item.refills) {
+    const w = 120 / item.refills.length;
+    const paths = item.refills
+      .map(
+        (r, k) =>
+          `<path fill="${r.color}" d="${strokePath(wave(4 + k * w, Math.floor((w - 6) / 2.8)), r.width * 1.6)}"/>`
+      )
+      .join('');
+    return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true">${paths}</svg>`;
+  }
   if (item.type === 'pen') {
     // ゆるい波を、筆圧が少しずつ変わる線で書く（見本なので太さは 2 倍に見せる）
-    const pts = Array.from({length: 40}, (_, i) => [
-      6 + i * 2.8,
-      12 + Math.sin(i / 5) * 5,
-      0.35 + 0.3 * Math.sin(i / 9)
-    ]);
-    return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><path fill="${item.color}" d="${strokePath(pts, item.width * 1.6)}"/></svg>`;
+    return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><path fill="${item.color}" d="${strokePath(wave(6, 40), item.width * 1.6)}"/></svg>`;
   }
   if (item.type === 'marker')
     return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><text x="8" y="14" font-size="12" fill="#333">大学ノート</text><rect x="6" y="${item.thick ? 10 : 13}" width="72" height="${item.thick ? 7 : 3.5}" rx="2" fill="${item.color}" style="mix-blend-mode:multiply"/></svg>`;
@@ -43,6 +52,8 @@ function sample(item) {
 
 /** 品の説明（色・太さ） */
 function spec(item) {
+  if (item.refills)
+    return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格${item.experimental ? '・試作（実験）' : ''}`;
   if (item.experimental) return `${esc(item.maker)}・${item.mm} mm・試作（実験）`;
   if (item.type === 'pen') return `${item.mm} mm`;
   if (item.type === 'marker') return item.thick ? '太め' : 'ふつう';
@@ -50,7 +61,13 @@ function spec(item) {
   return '';
 }
 
-const art = (item) => (item.type === 'case' ? caseArt(item) : toolArt(item));
+/** 札の絵。3D モデルの品は、ドラッグで回せる 3D 表示（renderer/model3d.js が中を作る） */
+const art = (item) =>
+  item.type === 'case'
+    ? caseArt(item)
+    : item.art === 'model'
+      ? `<div class="model-view" data-model="${esc(item.model)}" role="img" aria-label="${esc(item.name)}の 3D モデル"></div><span class="muted model-view__hint">ドラッグで回せます</span>`
+      : toolArt(item);
 
 function tabs(shop) {
   return `<div class="fb-tabs" role="tablist">

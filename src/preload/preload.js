@@ -67,7 +67,8 @@ const INVOKE = [
   'skin.export',
   'skin.import',
   'stationery.acquire',
-  'stationery.arrange'
+  'stationery.arrange',
+  'stationery.model'
 ];
 const ON = [
   'quiz.progress',

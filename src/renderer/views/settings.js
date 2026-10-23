@@ -133,7 +133,7 @@ export function renderSettings({data}, route = '/settings') {
       ${
         data.dev
           ? `<section class="card"><h3>実験（開発中の起動でだけ出ます）</h3>
-        <label><input type="checkbox" id="st-experiments" ${s.experiments ? 'checked' : ''} /> 既製品の見た目のペン（ジェットストリーム・サラサクリップ）を筆箱に出す</label>
+        <label><input type="checkbox" id="st-experiments" ${s.experiments ? 'checked' : ''} /> 既製品の見た目のペン（ジェットストリーム・サラサクリップ・サクラクラフトラボ 004）を筆箱に出す</label>
         <p class="muted">個人で試すための試作です。メーカーの許しを得ていないので、配る版には出しません。</p>
       </section>`
           : ''

@@ -29,6 +29,7 @@ export default [
         CustomEvent: 'readonly',
         require: 'readonly',
         IntersectionObserver: 'readonly',
+        MutationObserver: 'readonly',
         NodeFilter: 'readonly',
         ResizeObserver: 'readonly',
         requestAnimationFrame: 'readonly',

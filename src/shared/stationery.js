@@ -3,6 +3,8 @@
 // 筆箱には道具（ペン・マーカー・文字隠しペン）を 6 本まで入れられ、編集画面の PDF の横に出る。
 // 道具ごとに、書いた線の色・太さが決まる（軸の色は見た目だけ）。
 // 文字隠しペンの色は赤の成分が 0 のものに限る（赤シートを乗算で重ねたとき黒くなって隠れる。viewer.js の冒頭）
+// 多機能ペン（refills）：1 本に替え芯がいくつか入り、持っている間にどれで書くか選ぶ（選んだ芯は設定に残す）。
+// 見た目が 3D モデル（art: 'model'）の品は、GLB を renderer/assets/stationery に置き、renderer/model3d.js が描く
 
 export const SLOTS = 6;
 export const TYPES = ['pen', 'marker', 'hider', 'case'];
@@ -53,6 +55,30 @@ const maker = (id, name, makerName, art, color, body, accent) => ({
 
 // ボールペンの字幅（mm）→ 線の太さ（pt。1pt ≒ 0.35mm）。紙に書いた線の太さに近づける
 const PEN_WIDTH = {0.38: 0.8, 0.5: 1.1, 0.7: 1.5, '1.0': 2};
+// シャープペンシル 0.5 の線：芯の太さ（0.5mm ≒ 1.4pt）より少し細く、黒鉛の灰色
+const SHARP = {color: '#4a4a4a', width: 1.3};
+
+/**
+ * 実験：既製品の多機能ペン（3D モデルの見た目）。refills の最初の芯で書き始める。
+ * 各芯：{id, name, color, mm, width, sharp?}。item の color・width・mm は最初の芯のもの（筆箱の一覧の色などに使う）
+ */
+const multi = (id, name, makerName, {model, body, accent, refills, refill}) => ({
+  id,
+  type: 'pen',
+  name,
+  color: refills[0].color,
+  width: refills[0].width,
+  mm: refills[0].mm,
+  body,
+  accent,
+  price: 0,
+  maker: makerName,
+  art: 'model',
+  model,
+  refills,
+  refill,
+  experimental: true
+});
 
 export const CATALOG = [
   pen('pen-black-05', '黒のボールペン 0.5', '#222222', '0.5', '#2c2d30', '#55575c'),
@@ -92,11 +118,43 @@ export const CATALOG = [
   maker('maker-jetstream-black', 'ジェットストリーム 黒 0.5', '三菱鉛筆', 'jetstream', '#1f1f22', '#1d1e21', '#121214'),
   maker('maker-jetstream-red', 'ジェットストリーム 赤 0.5', '三菱鉛筆', 'jetstream', '#d0202e', '#c8102e', '#121214'),
   maker('maker-sarasa-black', 'サラサクリップ 黒 0.5', 'ゼブラ', 'sarasa', '#141414', '#e8eef2', '#1b1b1b'),
-  maker('maker-sarasa-red', 'サラサクリップ 赤 0.5', 'ゼブラ', 'sarasa', '#e4002b', '#e8eef2', '#e4002b')
+  maker('maker-sarasa-red', 'サラサクリップ 赤 0.5', 'ゼブラ', 'sarasa', '#e4002b', '#e8eef2', '#e4002b'),
+  // サクラクラフトラボ 004：回転式の 2&1（黒・赤のボールペンと 0.5 のシャープ）。替え芯は 4C 規格。
+  // 見た目は 3D モデル（assets/stationery/craftlab-004.glb。写真の質感をそのまま使う）
+  multi('maker-craftlab-004', 'サクラクラフトラボ 004', 'サクラクレパス', {
+    model: 'craftlab-004',
+    body: '#5c5d55',
+    accent: '#a99d80',
+    refill: '4C',
+    refills: [
+      {id: 'black', name: '黒ボールペン', color: '#1f1f22', mm: '0.5', width: PEN_WIDTH[0.5]},
+      {id: 'red', name: '赤ボールペン', color: '#d0202e', mm: '0.5', width: PEN_WIDTH[0.5]},
+      {id: 'sharp', name: 'シャープ', color: SHARP.color, mm: '0.5', width: SHARP.width, sharp: true}
+    ]
+  })
 ];
 const ITEMS = new Map(CATALOG.map((it) => [it.id, it]));
 export const itemOf = (id) => ITEMS.get(id) ?? null;
 export const isTool = (id) => TOOL_TYPES.includes(itemOf(id)?.type);
+
+/** 多機能ペンの芯（id が合わなければ最初の芯）。多機能ペンでなければ null */
+export function refillOf(item, refillId) {
+  if (!Array.isArray(item?.refills) || !item.refills.length) return null;
+  return item.refills.find((r) => r.id === refillId) ?? item.refills[0];
+}
+/** 持って書くときのペン：多機能ペンは選んだ芯の色・太さにした品（refill に芯）。ふつうのペンはそのまま */
+export function heldPen(item, refillId) {
+  const r = refillOf(item, refillId);
+  if (!r) return item;
+  return {...item, color: r.color, width: r.width, mm: r.mm, refill: r};
+}
+/** 次の芯（回転式：最後の芯の次は最初へ） */
+export function nextRefill(item, refillId) {
+  const r = refillOf(item, refillId);
+  if (!r) return null;
+  const i = item.refills.indexOf(r);
+  return item.refills[(i + 1) % item.refills.length].id;
+}
 
 /** はじめから持っている文房具と、筆箱のはじめの中身 */
 export const STARTER_SLOTS = [
@@ -119,7 +177,7 @@ export function hiderColorOk(hex) {
 
 /**
  * 設定に保存した値を、使える形に直す（知らない品・持っていない品は外す。はじめの品はいつも持っている）。
- * 戻り値：{owned: [id…], slots: [id|null × 6], caseId}
+ * 戻り値：{owned: [id…], slots: [id|null × 6], caseId, refills: {多機能ペンの id: 選んだ芯の id}}
  */
 export function stationeryState(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
@@ -134,7 +192,13 @@ export function stationeryState(raw) {
     return id;
   });
   const caseId = has.has(r.caseId) && itemOf(r.caseId).type === 'case' ? r.caseId : STARTER_CASE;
-  return {owned, slots, caseId};
+  const refills = {};
+  if (r.refills && typeof r.refills === 'object')
+    for (const [id, rid] of Object.entries(r.refills)) {
+      const it = itemOf(id);
+      if (has.has(id) && it?.refills?.some((x) => x.id === rid)) refills[id] = rid;
+    }
+  return {owned, slots, caseId, refills};
 }
 
 /** ショップで入手する。無料の品だけ（有料の品はまだない）。新しい状態を返す。入手できなければ Error */
@@ -147,8 +211,8 @@ export function acquire(raw, id, {experiments = false} = {}) {
   return stationeryState({...st, owned: [...st.owned, id]});
 }
 
-/** 筆箱の中身・ペンケースを変える。持っていない品は入れられない（Error） */
-export function arrange(raw, {slots, caseId} = {}) {
+/** 筆箱の中身・ペンケース・多機能ペンの芯を変える。持っていない品は入れられない（Error） */
+export function arrange(raw, {slots, caseId, refills} = {}) {
   const st = stationeryState(raw);
   const has = new Set(st.owned);
   if (slots !== undefined) {
@@ -160,7 +224,17 @@ export function arrange(raw, {slots, caseId} = {}) {
   }
   if (caseId !== undefined && (!has.has(caseId) || itemOf(caseId)?.type !== 'case'))
     throw new Error('持っていないペンケースです');
-  return stationeryState({...st, ...(slots !== undefined ? {slots} : {}), ...(caseId !== undefined ? {caseId} : {})});
+  if (refills !== undefined) {
+    if (!refills || typeof refills !== 'object') throw new Error('芯の指定が不正です');
+    for (const [id, rid] of Object.entries(refills))
+      if (!has.has(id) || !itemOf(id)?.refills?.some((x) => x.id === rid)) throw new Error('その芯はありません');
+  }
+  return stationeryState({
+    ...st,
+    ...(slots !== undefined ? {slots} : {}),
+    ...(caseId !== undefined ? {caseId} : {}),
+    ...(refills !== undefined ? {refills: {...st.refills, ...refills}} : {})
+  });
 }
 
 /** ショップに出す品か（実験の品は、設定の実験をオンにしたときだけ） */
@@ -199,6 +273,8 @@ export function toolArt(item, {label = true} = {}) {
   const title = label ? `<title>${esc(item.name)}</title>` : '';
   const g = `st-${item.id}`; // グラデーションの id（品ごと）
   const open = `<svg class="st-art st-art--${item.type === 'pen' ? 'pen' : 'marker'}" viewBox="0 0 200 28" aria-hidden="${label ? 'false' : 'true'}" role="img">${title}`;
+  if (item.art === 'model')
+    return `${open.replace('<svg ', `<svg data-model="${esc(item.model)}" `)}${modelArt()}</svg>`;
   if (item.art === 'jetstream') return `${open}${jetstreamArt(item, g)}</svg>`;
   if (item.art === 'sarasa') return `${open}${sarasaArt(item, g)}</svg>`;
   if (item.type === 'pen') {
@@ -239,6 +315,13 @@ export function toolArt(item, {label = true} = {}) {
   }
   return '';
 }
+
+/**
+ * 3D モデルの品の絵：影の上に、モデルを横から描いた画像を置く（画像は renderer/model3d.js が GLB から描いて href に入れる。
+ * 入るまでは影だけ）。横向き・左がペン先・上がクリップで、ほかの絵と同じ向き
+ */
+const modelArt = () =>
+  `<ellipse cx="104" cy="23.5" rx="92" ry="2.2" fill="#000" opacity="0.12"/><image data-model-img x="0" y="0" width="200" height="28" preserveAspectRatio="xMidYMid meet"/>`;
 
 // ---- 実験：既製品の見た目（個人の試作。写真を見ながら直す前提のおおよその形）----
 const SHADOW = '<ellipse cx="104" cy="24.6" rx="94" ry="2" fill="#000" opacity="0.14"/>';
