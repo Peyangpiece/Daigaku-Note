@@ -4,7 +4,9 @@
 //   無料の品は白い札にグレーの枠、有料の品は値段帯（shared/stationery.js の TIERS）で札の紙を変える。
 //   押すと詳細ページ（#/fudebako/item/<id>）へ。3D モデルの品は、拡大・回転して細部を見られる（renderer/model3d.js）。
 //   道具の詳細ページには、試し書きの付箋（views/tryout.js。文字隠しペン・赤シートで消える色のペンは赤シートも）を置く。
-// 買う：「カートへ入れる」→ カート（#/fudebako/cart）→ レジ（#/fudebako/checkout）→ 注文完了（#/fudebako/order/<id>）。
+// 無料の品は「もらう」を押せばすぐ持ち物に入る（カートを通らない）。
+// 有料の品は「カートへ入れる」→ カート（#/fudebako/cart）→ レジ（#/fudebako/checkout）→ 注文完了（#/fudebako/order/<id>）。
+// 筆箱がいっぱいのときは、詳細ページ・注文完了で「何本目と入れ替えるか」を選んで入れる（swapButtons）。
 //   α 版の決済はデモ（実際の請求はない。カードの番号は下 4 桁だけ注文の記録に残す）。無料の品だけなら支払いはない。
 // 持ち物・筆箱の中身はメインの設定（stationery）に保存する（ipc.js の stationery.purchase・stationery.arrange）
 import {esc, navigate, refresh, state, toast} from '../app.js';
@@ -69,8 +71,8 @@ function sample(item) {
 /** 品の説明（色・太さ） */
 function spec(item) {
   if (item.refills)
-    return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格${item.experimental ? '・試作' : ''}`;
-  if (item.experimental) return `${esc(item.maker)}・${item.mm} mm・試作`;
+    return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格`;
+  if (item.experimental) return `${esc(item.maker)}・${item.mm} mm`;
   if (item.type === 'pen') return `${item.mm} mm`;
   if (item.type === 'marker') return item.thick ? '太め' : 'ふつう';
   if (item.type === 'hider') return '赤シートで隠れる色';
@@ -194,14 +196,18 @@ function dots(series, picked) {
     )
     .join('')}</span>`;
 }
-/** シリーズで選んでいる品（選んでいなければ、持っていない最初の品。すべて持っていれば最初の品） */
-function pickedOf(series, has) {
+/** シリーズで選んでいる品（選んでいなければ、シリーズの最初の品＝代表の色） */
+function pickedOf(series) {
   const id = ui.shop.pick[series.id];
-  return series.items.find((it) => it.id === id) ?? series.items.find((it) => !has.has(it.id)) ?? series.items[0];
+  return series.items.find((it) => it.id === id) ?? series.items[0];
 }
-/** 札の下のボタン：持っている・カートに入っている・カートへ入れる */
+/** 無料の品の「もらう」（カートを通らず、すぐ持ち物に入る） */
+const getButton = (it, cls = 'btn btn--small') =>
+  `<button type="button" class="${cls}" data-shop="get" data-id="${esc(it.id)}">もらう</button>`;
+/** 札の下のボタン：持っている・もらう（無料）・カートに入っている・カートへ入れる */
 function cartAction(it, s) {
   if (s.owned.includes(it.id)) return '';
+  if (it.price === 0) return getButton(it);
   if (cart.has(it.id))
     return `<span class="muted shop-card__state">カートに入っています</span><button type="button" class="btn btn--small" data-action="nav" data-route="/fudebako/cart">カートを見る</button>`;
   return `<button type="button" class="btn btn--small${it.price ? ' btn--primary' : ''}" data-shop="cart" data-id="${esc(it.id)}">${ICON.cart} カートへ入れる</button>`;
@@ -212,10 +218,16 @@ function ribbons(it) {
   if (it.art === 'model') r.push('<span class="shop-ribbon shop-ribbon--3d">3D で見られる</span>');
   return r.length ? `<span class="shop-ribbons">${r.join('')}</span>` : '';
 }
+/** 持っている色を選んでいるときの札の下：ほかに持っていない色があれば、その数 */
+function ownedNote(series, has) {
+  if (series.items.length === 1) return '';
+  const rest = series.items.filter((x) => !has.has(x.id)).length;
+  return `<span class="muted shop-card__state">${rest ? `ほかに ${rest} 色（丸で選べます）` : '全色持っています'}</span>`;
+}
 /** シリーズの札 */
 function seriesCard(series, s) {
   const has = new Set(s.owned);
-  const it = pickedOf(series, has);
+  const it = pickedOf(series);
   const owned = has.has(it.id);
   const tier = tierOf(it.price);
   const sub = [it.maker ?? '大学ノート'];
@@ -230,7 +242,7 @@ function seriesCard(series, s) {
     <button type="button" class="shop-card__name" data-action="nav" data-route="${detailRoute(it)}">${esc(series.name)}</button>
     <div class="muted shop-card__spec">${sub.map(esc).join('・')}</div>
     <div class="shop-card__foot">${priceTag(it, owned)}${dots(series, it)}</div>
-    <div class="shop-card__act">${owned ? '<span class="muted shop-card__state">わたしの筆箱にあります</span>' : cartAction(it, s)}</div>
+    <div class="shop-card__act">${owned ? ownedNote(series, has) : cartAction(it, s)}</div>
   </article>`;
 }
 
@@ -274,9 +286,9 @@ function results(s) {
   const list = filtered(s);
   if (!list.length)
     return `<p class="muted shop-empty">当てはまる文房具がありません。<button type="button" class="btn btn--small" data-shop="reset">絞り込みを外す</button></p>`;
-  const all = shopSeries();
+  const all = shopSeries().reduce((k, se) => k + se.items.length, 0);
   const n = list.reduce((k, se) => k + se.items.length, 0);
-  return `<p class="muted shop-count">${list.length === all.length ? `${all.length} シリーズ・${n} 点すべて` : `${list.length} シリーズ・${n} 点`}</p>
+  return `<p class="muted shop-count">${n === all ? `全 ${all} 点` : `${n} 点（全 ${all} 点）`}</p>
     <div class="shop-grid">${list.map((se) => seriesCard(se, s)).join('')}</div>`;
 }
 const chip = (what, v, label, on) =>
@@ -306,25 +318,28 @@ function shop(s) {
   return `<div class="shop">
     ${hero(s)}
     <div class="shop-toolbar" role="search">
-      <label class="shop-search">${ICON.search}<input id="shop-q" type="search" value="${esc(f.q)}" placeholder="ペンやメーカーの名前でさがす（例：0.38、サラサ、ジェット）" aria-label="文房具をさがす" autocomplete="off" /></label>
-      <div class="shop-chips">
-        <span class="muted shop-chips__label">種類</span>${chip('type', 'all', 'すべて', f.type === 'all')}${TYPES.map((t) => chip('type', t, TYPE_LABEL[t], f.type === t)).join('')}
-        <span class="shop-chips__sep"></span><span class="muted shop-chips__label">値段</span>${chip('price', 'all', 'すべて', f.pay === 'all')}${chip('price', 'free', '無料', f.pay === 'free')}${chip('price', 'paid', '有料', f.pay === 'paid')}
-        <span class="shop-chips__sep"></span>${chip('unowned', f.unowned ? '0' : '1', 'まだ持っていないものだけ', f.unowned)}
+      <div class="shop-toolbar__row">
+        <label class="shop-search">${ICON.search}<input id="shop-q" type="search" value="${esc(f.q)}" placeholder="ペンやメーカーの名前でさがす（例：0.38、サラサ、ジェット）" aria-label="文房具をさがす" autocomplete="off" /></label>
         <label class="shop-sort"><span class="sr-only">並び替え</span><select id="shop-sort" data-shop="sort">${Object.entries(
           SORTS
         )
           .map(([k, v]) => `<option value="${k}"${f.sort === k ? ' selected' : ''}>${v}</option>`)
           .join('')}</select></label>
       </div>
+      <div class="shop-chips">
+        <span class="muted shop-chips__label">種類</span>${chip('type', 'all', 'すべて', f.type === 'all')}${TYPES.map((t) => chip('type', t, TYPE_LABEL[t], f.type === t)).join('')}
+        <span class="shop-chips__sep"></span><span class="muted shop-chips__label">値段</span>${chip('price', 'all', 'すべて', f.pay === 'all')}${chip('price', 'free', '無料', f.pay === 'free')}${chip('price', 'paid', '有料', f.pay === 'paid')}
+        <span class="shop-chips__sep"></span>${chip('unowned', f.unowned ? '0' : '1', 'まだ持っていないものだけ', f.unowned)}
+      </div>
     </div>
-    <p class="muted shop-note">無料の品は白い札、有料の品は値段で紙が変わります。札の右下の丸で色を選べます。α 版の支払いはデモ（実際の請求はありません）。</p>
+    <p class="muted shop-note">無料の品は「もらう」ですぐ使えます。有料の品の支払いは、α 版のあいだはデモです（実際の請求はありません）。</p>
     <div id="shop-results">${results(s)}</div>
   </div>`;
 }
 
 /** 入手のボタン（詳細ページ）：持っていなければ「カートへ入れる」、持っていれば筆箱に入れる・入っている場所 */
 function buyButtons(s, it) {
+  if (!s.owned.includes(it.id) && it.price === 0) return getButton(it, 'btn btn--primary');
   if (!s.owned.includes(it.id))
     return cart.has(it.id)
       ? `<span class="muted">カートに入っています</span><button type="button" class="btn btn--primary" data-action="nav" data-route="/fudebako/cart">カートを見る</button>`
@@ -339,7 +354,16 @@ function buyButtons(s, it) {
   return at >= 0
     ? `<button type="button" class="btn btn--primary" data-fb="put" data-id="${it.id}" data-at="${at}">筆箱の ${at + 1} 本目に入れる</button>
       <button type="button" class="btn" data-action="nav" data-route="/fudebako">わたしの筆箱で選ぶ</button>`
-    : `<span class="muted">筆箱はいっぱいです</span><button type="button" class="btn" data-action="nav" data-route="/fudebako">わたしの筆箱で入れ替える</button>`;
+    : swapButtons(s, it);
+}
+/** 筆箱がいっぱいのとき：何本目と入れ替えるかのボタン（丸は今そこにある品のインクの色。出した品は持ち物に残る） */
+function swapButtons(s, it) {
+  return `<span class="fb-swap" role="group" aria-label="筆箱の何本目と入れ替えるか"><span class="muted fb-swap__label">筆箱はいっぱいです。入れ替える場所：</span>${s.slots
+    .map((id, i) => {
+      const old = itemOf(id);
+      return `<button type="button" class="fb-swap__slot" data-fb="put" data-id="${esc(it.id)}" data-at="${i}" title="${i + 1} 本目（${esc(old?.name ?? '空き')}）と入れ替える"><span class="fb-swap__dot" style="background:${old?.color ?? 'transparent'}"></span>${i + 1}</button>`;
+    })
+    .join('')}</span>`;
 }
 
 /** 文房具の詳細ページ：大きな絵（3D モデルは拡大・回転）・説明・線の見本・色ちがい・入手・試し書き */
@@ -349,7 +373,6 @@ function detail(s, id) {
     return `<p class="muted">その文房具はありません。</p><p><button type="button" class="btn" data-action="nav" data-route="${SHOP}">← ショップ</button></p>`;
   const rows = [];
   rows.push(['種類', TYPE_LABEL[it.type]]);
-  if (it.maker) rows.push(['メーカー', esc(it.maker)]);
   if (it.refills) {
     rows.push([
       'しくみ',
@@ -360,12 +383,6 @@ function detail(s, id) {
   else if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
   else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
   if (it.art === 'model') rows.push(['見た目', '3D モデル（実物の形と材質）']);
-  if (it.experimental)
-    rows.push(['注意', '既製品の見た目の試作。α 版のあいだはそのまま出しています（正式な公開の前に見直します）']);
-  rows.push([
-    '値段',
-    `${priceLabel(it)}${it.price ? `<span class="muted">（メーカーの参考価格・税込。α 版の支払いはデモです）</span>` : ''}`
-  ]);
   const samples = it.refills
     ? `<ul class="fb-refills">${it.refills
         .map(
@@ -391,7 +408,7 @@ function detail(s, id) {
         ${ribbons(it)}
         <h2>${esc(it.name)}</h2>
         ${it.maker ? `<p class="muted fb-detail__maker">${esc(it.maker)}</p>` : ''}
-        <p class="fb-detail__price">${priceTag(it, s.owned.includes(it.id))}</p>
+        <p class="fb-detail__price">${priceTag(it, s.owned.includes(it.id))}${it.price && !s.owned.includes(it.id) ? '<span class="muted">メーカーの参考価格（税込）</span>' : ''}</p>
         <dl class="fb-spec">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
         ${colors}
         ${samples ? `<h3 class="fb-detail__sub">書いた線</h3>${samples}` : ''}
@@ -498,7 +515,7 @@ function orderPage(s, id) {
             ? `<span class="muted">筆箱の ${where + 1} 本目</span>`
             : empty >= 0
               ? `<button type="button" class="btn btn--small" data-fb="put" data-id="${it.id}" data-at="${empty}">筆箱の ${empty + 1} 本目に入れる</button>`
-              : '<span class="muted">筆箱はいっぱい</span>';
+              : swapButtons(s, it);
       }
       return `<li class="shop-row">
         <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'case' ? caseArt(it) : toolArt(it)}</button>
@@ -540,7 +557,7 @@ export function renderFudebako(_state, route) {
             ? shop(s)
             : mine(s);
   return `<div class="fudebako">
-    <div class="fb-head"><h2>筆箱</h2>${tabs(inShop)}${inShop ? cartButton() : ''}</div>
+    <div class="fb-head"><h2>筆箱</h2>${tabs(inShop)}${cartButton()}</div>
     ${body}
   </div>`;
 }
@@ -621,6 +638,37 @@ async function pay(button, payment) {
   toast(payment ? `${yen(r.order.total)} を支払いました（デモ）` : '受け取りました');
 }
 
+/** 無料の品をもらう（カートを通らない）。もらったら、筆箱に空きがあればその場で入れられる */
+async function getFree(id) {
+  const it = itemOf(id);
+  if (!it) return;
+  const r = await api['stationery.acquire']({itemId: id});
+  if (r?.error) return toast(r.error, {error: true});
+  state.data.stationery = r.stationery;
+  cart.remove(id); // 前の版でカートに入れていた無料の品
+  refresh();
+  if (it.type === 'case')
+    return toast(`${it.name} をもらいました`, {
+      action: {label: '使う', run: () => save('stationery.arrange', {caseId: id})},
+      untilNavigate: true
+    });
+  const at = st().slots.indexOf(null);
+  toast(`${it.name} をもらいました`, {
+    action:
+      at >= 0
+        ? {
+            label: `筆箱の ${at + 1} 本目に入れる`,
+            run: () => {
+              const slots = [...st().slots];
+              slots[at] = id;
+              save('stationery.arrange', {slots}, `${it.name} を ${at + 1} 本目に入れました`);
+            }
+          }
+        : {label: '筆箱に入れる', run: () => navigate(detailRoute(it))},
+    untilNavigate: true
+  });
+}
+
 document.addEventListener('submit', (e) => {
   const form = e.target.closest('form#checkout');
   if (!form) return;
@@ -628,7 +676,7 @@ document.addEventListener('submit', (e) => {
   const {payment, errors} = checkCard(form);
   if (errors) {
     showErrors(form, errors);
-    return toast('入力を確かめてください', {error: true});
+    return toast('入力を確かめてください', {error: true, untilNavigate: true});
   }
   showErrors(form, {});
   pay(form.querySelector('[data-shop="buy"]'), payment);
@@ -677,8 +725,11 @@ document.addEventListener('click', (e) => {
       cart.add(it.id);
       refresh();
       toast(`${it.name} をカートに入れました`, {
-        action: {label: 'カートを見る', run: () => navigate('/fudebako/cart')}
+        action: {label: 'カートを見る', run: () => navigate('/fudebako/cart')},
+        untilNavigate: true
       });
+    } else if (what === 'get') {
+      getFree(sb.dataset.id);
     } else if (what === 'remove') {
       cart.remove(sb.dataset.id);
       refresh();
@@ -702,9 +753,14 @@ document.addEventListener('click', (e) => {
   } else if (what === 'put') {
     const at = b.dataset.at !== undefined ? Number(b.dataset.at) : ui.slot; // 詳細ページ・注文完了からは空きの場所へ
     const slots = [...s.slots];
+    const old = itemOf(slots[at]);
     slots[at] = id;
     const next = slots.indexOf(null);
-    save('stationery.arrange', {slots}, `${itemOf(id).name} を ${at + 1} 本目に入れました`);
+    save(
+      'stationery.arrange',
+      {slots},
+      `${itemOf(id).name} を ${at + 1} 本目に入れました${old ? `（${old.name} は持ち物に残っています）` : ''}`
+    );
     if (next >= 0) ui.slot = next; // 空きがあれば、次はそこへ
   } else if (what === 'case') save('stationery.arrange', {caseId: id});
 });
