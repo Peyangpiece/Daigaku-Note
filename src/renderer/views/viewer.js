@@ -19,8 +19,24 @@ import {navigate, state, toast} from '../app.js';
 import {bookmarkLook, fixedSticker, skinOf} from '../skin.js';
 import {ROUND_DEFAULTS} from '../../shared/skin.js';
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
-import {boundsOf, createCapture, decodePoints, encodePoints, speedPressure, strokePath, touchesStroke} from '../../shared/ink.js';
-import {DEFAULT_HIDER, KIND_OF, TYPE_LABEL, TOOL_TYPES, itemOf, stationeryState, toolArt} from '../../shared/stationery.js';
+import {
+  boundsOf,
+  createCapture,
+  decodePoints,
+  encodePoints,
+  speedPressure,
+  strokePath,
+  touchesStroke
+} from '../../shared/ink.js';
+import {
+  DEFAULT_HIDER,
+  KIND_OF,
+  TYPE_LABEL,
+  TOOL_TYPES,
+  itemOf,
+  stationeryState,
+  toolArt
+} from '../../shared/stationery.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -260,7 +276,8 @@ class Viewer {
 
   async start() {
     this.root.innerHTML = BAR;
-    if (this.noteColors !== NOTE_COLORS) this.root.querySelector('[data-note-color]').parentElement.innerHTML = swatches(this.noteColors, 'note-color');
+    if (this.noteColors !== NOTE_COLORS)
+      this.root.querySelector('[data-note-color]').parentElement.innerHTML = swatches(this.noteColors, 'note-color');
     this.pagesEl = this.$('pages');
     this.bindBar();
     this.bindPages();
@@ -342,7 +359,10 @@ class Viewer {
     const names = this.bookmarks.map((b) => b.name);
     let n = 0;
     for (const s of names) n = Math.max(n, Number(String(s).match(/^しおり\s*(\d+)$/)?.[1] ?? 0));
-    const r = await api['bookmark.save']({materialId: this.materialId, bookmark: {...this.currentSpot(), name: `しおり${n + 1}`}});
+    const r = await api['bookmark.save']({
+      materialId: this.materialId,
+      bookmark: {...this.currentSpot(), name: `しおり${n + 1}`}
+    });
     if (r?.error) return toast(r.error, {error: true});
     this.bookmarks.push(r.bookmark);
     this.renderBookmarks();
@@ -386,7 +406,8 @@ class Viewer {
     this.$('bookmarks').setAttribute('aria-expanded', String(open));
   }
   renderBookmarks() {
-    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+    const esc = (t) =>
+      String(t).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
     const list = [...this.bookmarks].sort((a, b) => a.page - b.page || a.y - b.y);
     this.$('bookmark-list').innerHTML = list.length
       ? list
@@ -404,7 +425,11 @@ class Viewer {
     // ページの右端のリボン（位置は割合なので、拡大率を変えても置き直さなくてよい）
     for (const el of this.pagesEl.querySelectorAll('.bookmark-ribbon')) el.remove();
     const look = bookmarkLook(this.skin);
-    const sticker = fixedSticker(this.skin.stickers.find((st) => st.place === 'bookmark'), state.data, {x: 0, y: 0.5, base: 28});
+    const sticker = fixedSticker(
+      this.skin.stickers.find((st) => st.place === 'bookmark'),
+      state.data,
+      {x: 0, y: 0.5, base: 28}
+    );
     for (const b of list) {
       const p = this.pages[b.page - 1];
       if (!p) continue;
@@ -574,7 +599,8 @@ class Viewer {
   // タッチ画面の 2 本指で拡大・縮小する（Electron はブラウザのピンチ拡大を切っているので、自分で受ける）。
   // 基準は 2 本の指の真ん中。指をそろえて動かすとスクロールにもなる（文字隠しの道具では 1 本指がなぞりになるため）
   onTouchStart(e) {
-    if (e.touches.length !== 2 || !this.pages.length || (this.pinch && !this.pinch.touch) || this.drawing?.byPen) return;
+    if (e.touches.length !== 2 || !this.pages.length || (this.pinch && !this.pinch.touch) || this.drawing?.byPen)
+      return;
     e.preventDefault(); // ブラウザのスクロールに渡さない（あとの touchmove を止められるように）
     this.cancelPointer();
     clearTimeout(this.pinchTimer);
@@ -583,7 +609,16 @@ class Viewer {
       y = (a.clientY + b.clientY) / 2;
     const r = this.pagesEl.getBoundingClientRect();
     const zoom = this.pinch?.zoom ?? this.zoom;
-    this.pinch = {touch: true, zoom, start: zoom, x, y, dx: 0, dy: 0, dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1};
+    this.pinch = {
+      touch: true,
+      zoom,
+      start: zoom,
+      x,
+      y,
+      dx: 0,
+      dy: 0,
+      dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1
+    };
     this.pagesEl.style.transformOrigin = `${x - r.left}px ${y - r.top}px`;
   }
   onTouchMove(e) {
@@ -1009,7 +1044,8 @@ class Viewer {
     const data = structuredClone(snap);
     if (!a) a = this.addAnno({key, id: null, ...data});
     else {
-      if (a.page !== data.page) (a.kind === 'ink' ? this.pages[data.page - 1].ink : this.pages[data.page - 1].layer).append(a.el);
+      if (a.page !== data.page)
+        (a.kind === 'ink' ? this.pages[data.page - 1].ink : this.pages[data.page - 1].layer).append(a.el);
       Object.assign(a, data);
       if (a.kind === 'text') a.el.textContent = a.body;
       else if (a.kind === 'note') a.el.querySelector('textarea').value = a.body;
@@ -1098,7 +1134,8 @@ class Viewer {
     box.innerHTML = this.st.slots
       .map((id, i) => {
         const it = itemOf(id);
-        if (!it) return `<button type="button" class="fude-side__pen is-empty" data-slot="${i}" disabled title="空き（「ペンを入れ替える」で入れる）" aria-label="${i + 1} 本目：空き"><span class="fude-side__num">${i + 1}</span></button>`;
+        if (!it)
+          return `<button type="button" class="fude-side__pen is-empty" data-slot="${i}" disabled title="空き（「ペンを入れ替える」で入れる）" aria-label="${i + 1} 本目：空き"><span class="fude-side__num">${i + 1}</span></button>`;
         const tip = `${it.name}（${TYPE_LABEL[it.type]}・キー ${i + 1}）`;
         return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${it.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
       })
@@ -1168,15 +1205,20 @@ class Viewer {
     });
     this.on(side, 'pointerenter', () => clearTimeout(this.tuckTimer));
     // 指・ペン：画面の右端から左へなでたら出す。筆箱の外を押したらしまう
-    this.on(document, 'pointerdown', (e) => {
-      if (e.pointerType === 'mouse') {
-        if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
-        return;
-      }
-      if (e.clientX >= document.documentElement.clientWidth - 24 && !e.target.closest('.fude-side')) {
-        this.edge = {pointer: e.pointerId, x: e.clientX, y: e.clientY};
-      } else if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
-    }, {capture: true});
+    this.on(
+      document,
+      'pointerdown',
+      (e) => {
+        if (e.pointerType === 'mouse') {
+          if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
+          return;
+        }
+        if (e.clientX >= document.documentElement.clientWidth - 24 && !e.target.closest('.fude-side')) {
+          this.edge = {pointer: e.pointerId, x: e.clientX, y: e.clientY};
+        } else if (this.sideOpen && !e.target.closest('.fude-side')) this.openSide(false);
+      },
+      {capture: true}
+    );
     this.on(document, 'pointermove', (e) => {
       const g = this.edge;
       if (!g || g.pointer !== e.pointerId) return;
@@ -1482,7 +1524,20 @@ class Viewer {
     p.ink.append(el);
     // 間引き：画面で 0.3px より近い点は捨てる。なめらかさ：ペンは控えめ（遅れを小さく）、指・マウスは強め（手ぶれを抑える）
     const cap = createCapture({minGap: 0.3 / vp.scale, streamline: pressure ? 0.2 : 0.4});
-    const d = (this.drawing = {kind: 'ink', p, el, cap, box, pressure, byPen: pressure, pointer: e.pointerId, item: this.penItem, sim: 0.5, last: null, extra: []});
+    const d = (this.drawing = {
+      kind: 'ink',
+      p,
+      el,
+      cap,
+      box,
+      pressure,
+      byPen: pressure,
+      pointer: e.pointerId,
+      item: this.penItem,
+      sim: 0.5,
+      last: null,
+      extra: []
+    });
     this.addInkPoint(d, e);
     this.drawInk();
   }
@@ -1557,7 +1612,19 @@ class Viewer {
     p.layer.append(el);
     const x = e.clientX - box.left,
       y = e.clientY - box.top;
-    const d = (this.drawing = {kind: 'line', p, el, box, item: this.penItem, x0: x, y0: y, x1: x, y1: y, pointer: e.pointerId, line: null});
+    const d = (this.drawing = {
+      kind: 'line',
+      p,
+      el,
+      box,
+      item: this.penItem,
+      x0: x,
+      y0: y,
+      x1: x,
+      y1: y,
+      pointer: e.pointerId,
+      line: null
+    });
     p.textPromise
       .then((raw) => {
         const onLine = this.screenItems(p, raw).filter((it) => y >= it.hitTop && y <= it.hitBottom);
@@ -1640,7 +1707,12 @@ class Viewer {
         let hit = false;
         if (a.kind === 'ink') {
           const b = a.rect;
-          hit = x >= b.x - r && x <= b.x + b.w + r && y >= b.y - r && y <= b.y + b.h + r && touchesStroke(a.points, a.style.width, x, y, r);
+          hit =
+            x >= b.x - r &&
+            x <= b.x + b.w + r &&
+            y >= b.y - r &&
+            y <= b.y + b.h + r &&
+            touchesStroke(a.points, a.style.width, x, y, r);
         } else if (a.kind === 'line' || a.kind === 'mask') {
           const s = this.toScreen(a.page, a.rect);
           const nx = Math.max(s.left, Math.min(sx, s.left + s.width)),
@@ -1707,13 +1779,19 @@ class Viewer {
       y1 = Math.min(p.viewport.height, box.top + box.height + m);
     let img;
     try {
-      img = c.getContext('2d').getImageData(Math.floor(x0 * k), Math.floor(y0 * k), Math.ceil((x1 - x0) * k), Math.ceil((y1 - y0) * k));
+      img = c
+        .getContext('2d')
+        .getImageData(Math.floor(x0 * k), Math.floor(y0 * k), Math.ceil((x1 - x0) * k), Math.ceil((y1 - y0) * k));
     } catch {
       return box;
     }
     const ink = inkFromImage(img, {x0: Math.floor(x0 * k) / k, y0: Math.floor(y0 * k) / k, scale: k});
     if (!ink) return box;
-    const r = fitToInk({left: box.left, right: box.left + box.width, top: box.top, bottom: box.top + box.height}, ink, {fh, step: 1 / k, edges});
+    const r = fitToInk({left: box.left, right: box.left + box.width, top: box.top, bottom: box.top + box.height}, ink, {
+      fh,
+      step: 1 / k,
+      edges
+    });
     return {left: r.left, top: r.top, width: r.right - r.left, height: r.bottom - r.top};
   }
 
@@ -1744,7 +1822,8 @@ class Viewer {
     for (let i = 0; i < ops.fnArray.length; i++) {
       if (ops.fnArray[i] === pdfjs.OPS.setFont) font = ops.argsArray[i][0];
       else if (ops.fnArray[i] === pdfjs.OPS.showText)
-        for (const g of ops.argsArray[i][0]) if (g?.unicode && g.width > 0 && !out.has(`${font}|${g.unicode}`)) out.set(`${font}|${g.unicode}`, g.width);
+        for (const g of ops.argsArray[i][0])
+          if (g?.unicode && g.width > 0 && !out.has(`${font}|${g.unicode}`)) out.set(`${font}|${g.unicode}`, g.width);
     }
     return out;
   }
@@ -2010,7 +2089,13 @@ class Viewer {
       if (a.kind !== 'text' || a.removed) continue;
       const p = this.pages[a.page - 1];
       if (!p?.viewport) continue;
-      out.push({a, lines: this.textLines(a.el), box: this.toScreen(a.page, a.rect), scale: p.viewport.scale, style: {...a.style}});
+      out.push({
+        a,
+        lines: this.textLines(a.el),
+        box: this.toScreen(a.page, a.rect),
+        scale: p.viewport.scale,
+        style: {...a.style}
+      });
     }
     return out;
   }

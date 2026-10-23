@@ -35,7 +35,11 @@ test('はじめの状態：6 本の筆箱と帆布のペンケース。はじめ
   assert.equal(st.slots.length, SLOTS);
   assert.equal(st.caseId, STARTER_CASE);
   assert.deepEqual(st.owned, STARTER);
-  const odd = stationeryState({owned: ['nope'], slots: ['nope', 'pen-red-05', 'pen-red-05', 'case-tin-silver'], caseId: 'pen-red-05'});
+  const odd = stationeryState({
+    owned: ['nope'],
+    slots: ['nope', 'pen-red-05', 'pen-red-05', 'case-tin-silver'],
+    caseId: 'pen-red-05'
+  });
   assert.deepEqual(odd.slots, [null, 'pen-red-05', null, null, null, null], '知らない品・同じ品・ペンケースは入れない');
   assert.equal(odd.caseId, STARTER_CASE);
 });
@@ -63,7 +67,8 @@ test('絵：道具とペンケースの SVG に名前が入る（名前は文字
   assert.match(toolArt(itemOf('pen-black-05')), /<svg[^>]*>[\s\S]*黒のボールペン 0\.5/);
   assert.match(toolArt(itemOf('hider-cyan')), /隠/);
   assert.doesNotMatch(toolArt(itemOf('pen-black-05'), {label: false}), /<title>/);
-  for (const id of ['case-canvas-navy', 'case-tin-silver', 'case-leather-brown', 'case-clear']) assert.match(caseArt(itemOf(id)), /<svg/);
+  for (const id of ['case-canvas-navy', 'case-tin-silver', 'case-leather-brown', 'case-clear'])
+    assert.match(caseArt(itemOf(id)), /<svg/);
 });
 
 test('実験：既製品の見た目のペンは、実験をオンにしたときだけショップに出て入手できる', async () => {

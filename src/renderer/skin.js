@@ -16,8 +16,14 @@ export const skinOf = (data, course = null) => resolveSkin(allTemplates(data), g
 
 // 暗い表示では、選んだ色を色合いを保ったまま暗くする（SPEC-KISEKAE §4.5）。default はテーマの色のまま（null）
 // 淡い色は HSL の彩度が高く出るので、暗くするときは彩度を大きく落とす（紙が赤黒く浮かないように）
-const DARK = {paper: {lo: 0.12, span: 0.06, sat: 0.28}, card: {lo: 0.18, span: 0.07, sat: 0.32}, line: {lo: 0.26, span: 0.1, sat: 0.4}, tab: {lo: 0.24, span: 0.12, sat: 0.55}};
-export const tone = (hex, kind, dark = isDark()) => (!hex || hex === 'default' ? null : dark ? darken(hex, DARK[kind]) : hex);
+const DARK = {
+  paper: {lo: 0.12, span: 0.06, sat: 0.28},
+  card: {lo: 0.18, span: 0.07, sat: 0.32},
+  line: {lo: 0.26, span: 0.1, sat: 0.4},
+  tab: {lo: 0.24, span: 0.12, sat: 0.55}
+};
+export const tone = (hex, kind, dark = isDark()) =>
+  !hex || hex === 'default' ? null : dark ? darken(hex, DARK[kind]) : hex;
 
 /** ノートの見た目を変数にする（html にも見本の紙にも使う）。戻りは {attrs, vars} */
 export function noteVars(note, dark = isDark()) {
@@ -58,7 +64,11 @@ export function folderLook(course, skin, dark = isDark()) {
   const vars = [];
   if (card) {
     const ink = inkOn(card);
-    vars.push(`--folder-card: ${card}`, `--folder-ink: ${ink}`, `--folder-sub: color-mix(in srgb, ${ink} 68%, ${card})`);
+    vars.push(
+      `--folder-card: ${card}`,
+      `--folder-ink: ${ink}`,
+      `--folder-sub: color-mix(in srgb, ${ink} 68%, ${card})`
+    );
   }
   if (tab) vars.push(`--folder-tab: ${tab}`);
   const tapeColor = skin.tape.color === 'course' ? `var(--c${course.color ?? 1})` : skin.tape.color;

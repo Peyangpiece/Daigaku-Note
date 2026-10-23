@@ -45,7 +45,10 @@ test('刈り込み：同期の記録は 90 日、終わったジョブは 30 日
   const now = new Date('2026-10-23T00:00:00Z');
   const old = repo.startSyncRun({kind: 'full'});
   repo.addSyncEvent(old.id, {level: 'info', message: 'old'});
-  db.prepare('UPDATE sync_run SET started_at = ? WHERE id = ?').run(new Date(now.getTime() - 91 * DAY).toISOString(), old.id);
+  db.prepare('UPDATE sync_run SET started_at = ? WHERE id = ?').run(
+    new Date(now.getTime() - 91 * DAY).toISOString(),
+    old.id
+  );
   const fresh = repo.startSyncRun({kind: 'full'});
   repo.addSyncEvent(fresh.id, {level: 'info', message: 'fresh'});
   const j1 = repo.enqueueJob('sync', {});
@@ -59,7 +62,10 @@ test('刈り込み：同期の記録は 90 日、終わったジョブは 30 日
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sync_run').get().n, 1);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sync_event').get().n, 1);
   assert.deepEqual(
-    db.prepare('SELECT id FROM job ORDER BY created_at').all().map((r) => r.id),
+    db
+      .prepare('SELECT id FROM job ORDER BY created_at')
+      .all()
+      .map((r) => r.id),
     [j2.id, j3.id]
   );
 });
@@ -67,7 +73,13 @@ test('刈り込み：同期の記録は 90 日、終わったジョブは 30 日
 test('ジョブ：backup は ctx.backup を呼ぶ。知らないジョブは失敗にする（「未対応」で done にしない）', async () => {
   const calls = [];
   const logs = [];
-  const runner = new JobRunner({backup: async () => (calls.push(1), {file: '/b/x.sqlite', size: 10, removed: ['a'], pruned: {syncRuns: 1, syncEvents: 2, jobs: 3}}), log: {info: (m) => logs.push(m)}});
+  const runner = new JobRunner({
+    backup: async () => (
+      calls.push(1),
+      {file: '/b/x.sqlite', size: 10, removed: ['a'], pruned: {syncRuns: 1, syncEvents: 2, jobs: 3}}
+    ),
+    log: {info: (m) => logs.push(m)}
+  });
   const r = await runner.run({kind: 'backup', payload: {}});
   assert.deepEqual(r, {file: '/b/x.sqlite', removed: 1, pruned: {syncRuns: 1, syncEvents: 2, jobs: 3}});
   assert.equal(calls.length, 1);

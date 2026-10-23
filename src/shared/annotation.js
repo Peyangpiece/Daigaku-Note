@@ -56,7 +56,8 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
     // 点の並びから四角を作り直す（レンダラから来た rect は使わない）
     const points = typeof body === 'string' ? decodePoints(body) : null;
     if (!points) throw new Error('線が不正です');
-    if (points.some(([px, py]) => Math.abs(px) > COORD_MAX || Math.abs(py) > COORD_MAX)) throw new Error('位置が不正です');
+    if (points.some(([px, py]) => Math.abs(px) > COORD_MAX || Math.abs(py) > COORD_MAX))
+      throw new Error('位置が不正です');
     const cleanStyle = {color: isHex(s.color) ? s.color.toLowerCase() : DEFAULT_TEXT_COLOR, width: width(s.width, 1.1)};
     if (s.pressure === false) cleanStyle.pressure = false; // 筆圧の取れない道具で書いた（太さの変え方が違う。shared/ink.js）
     const b = boundsOf(points, cleanStyle.width);

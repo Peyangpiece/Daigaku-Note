@@ -39,7 +39,12 @@ export function createNotifier({repo, Notification, openWindow, log = () => {}, 
       if (payload.materials > 0)
         return show({title: '大学ノート', body: `新しい資料 ${payload.materials} 件を保存しました`, route: null});
       if (payload.status === 'failed' || payload.status === 'browser-not-ready')
-        return show({title: '同期に失敗しました', body: payload.message || 'LMS に接続できませんでした', route: '/settings', oncePerDay: `sync-failed`});
+        return show({
+          title: '同期に失敗しました',
+          body: payload.message || 'LMS に接続できませんでした',
+          route: '/settings',
+          oncePerDay: `sync-failed`
+        });
       return false;
     }
     if (channel === 'login.required')
@@ -51,9 +56,16 @@ export function createNotifier({repo, Notification, openWindow, log = () => {}, 
       });
     if (channel === 'quiz.finished') {
       const round = payload.roundId ? repo.get('round', payload.roundId) : null;
-      const where = round ? `${round.number === 0 ? 'その他' : `第${round.number}回`}${round.title_user || round.title ? ` ${round.title_user || round.title}` : ''}` : '';
+      const where = round
+        ? `${round.number === 0 ? 'その他' : `第${round.number}回`}${round.title_user || round.title ? ` ${round.title_user || round.title}` : ''}`
+        : '';
       const route = round ? `/course/${round.course_id}` : null;
-      if (payload.ok) return show({title: 'クイズができました', body: `${where ? `${where} のクイズ` : 'クイズ'}（${payload.count ?? 0} 問）ができました`, route});
+      if (payload.ok)
+        return show({
+          title: 'クイズができました',
+          body: `${where ? `${where} のクイズ` : 'クイズ'}（${payload.count ?? 0} 問）ができました`,
+          route
+        });
       return show({title: 'クイズを作れませんでした', body: payload.message || '', route});
     }
     return false;

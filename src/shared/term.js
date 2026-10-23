@@ -5,7 +5,17 @@ import {addDays, holidaysBetween, weekdayOf, ymd} from './holidays.js';
 export const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 /** 学期名の候補（選ぶか自由入力） */
-export const TERM_LABELS = ['前期', '後期', '春学期', '秋学期', '第1クォーター', '第2クォーター', '第3クォーター', '第4クォーター', '通年'];
+export const TERM_LABELS = [
+  '前期',
+  '後期',
+  '春学期',
+  '秋学期',
+  '第1クォーター',
+  '第2クォーター',
+  '第3クォーター',
+  '第4クォーター',
+  '通年'
+];
 
 /** 学期名と年度から既定の期間。春・前期：4/1〜9/30、秋・後期：10/1〜翌 3/31、クォーターは 2 か月ごと、通年は 4/1〜翌 3/31 */
 export function defaultTermDates(label, year) {
@@ -74,7 +84,10 @@ const endOf = (t) => t.end ?? t.end_date;
 export function currentTerm(terms, today) {
   const hits = terms.filter((t) => startOf(t) <= today && today <= endOf(t));
   const span = (t) => Date.parse(endOf(t)) - Date.parse(startOf(t));
-  return hits.sort((a, b) => span(a) - span(b) || (startOf(b) > startOf(a) ? 1 : startOf(b) < startOf(a) ? -1 : 0))[0] ?? null;
+  return (
+    hits.sort((a, b) => span(a) - span(b) || (startOf(b) > startOf(a) ? 1 : startOf(b) < startOf(a) ? -1 : 0))[0] ??
+    null
+  );
 }
 
 /** 期間が重なるほかの学期（学期の編集で知らせる） */
@@ -97,5 +110,15 @@ export function autoTerm(today) {
   const year = m >= 4 ? y : y - 1;
   const label = spring ? '春学期' : '秋学期';
   const d = defaultTermDates(label, year);
-  return {id: termId(year, label), label, year, folder: termFolder(year, label), start_date: d.start, end_date: d.end, rounds: 15, holidays_json: '[]', source: 'auto'};
+  return {
+    id: termId(year, label),
+    label,
+    year,
+    folder: termFolder(year, label),
+    start_date: d.start,
+    end_date: d.end,
+    rounds: 15,
+    holidays_json: '[]',
+    source: 'auto'
+  };
 }

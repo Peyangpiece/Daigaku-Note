@@ -73,11 +73,15 @@ export function renderFolder({data}, course) {
   const gen = round ? data.quiz?.generating?.[round.id] : null;
   // 付箋：フォルダの直下と、下のフォルダごとに 1 枚ずつ、横に 5 枚まで並べる。色は着せ替えの回の付箋と同じく 1 枚目から順に
   const sk = skinOf(data, course);
-  const colorOf = (i) => (sk.sticky.round === 'default' ? `var(--pop${roundColorIndex(i + 1) + 1})` : sk.sticky.round[roundColorIndex(i + 1)]);
+  const colorOf = (i) =>
+    sk.sticky.round === 'default' ? `var(--pop${roundColorIndex(i + 1) + 1})` : sk.sticky.round[roundColorIndex(i + 1)];
   const parts = list.length ? groups(list) : [['', []]];
   const notes = parts
     .map(
-      ([sub, ms], i) => `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i)}" data-drop="own" data-course-id="${esc(course.id)}" aria-label="${esc(sub || course.name)} のファイル">
+      (
+        [sub, ms],
+        i
+      ) => `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i)}" data-drop="own" data-course-id="${esc(course.id)}" aria-label="${esc(sub || course.name)} のファイル">
       <header class="round-note__head" data-rename-box><span class="round-note__round">${sub ? '📁 ' : ''}<span data-rename-target>${esc(sub ? sub.split('/').pop() : course.name)}</span></span>
         <button type="button" class="rename-btn" data-action="rename" data-what="${sub ? 'sub' : 'folder'}" data-id="${esc(course.id)}" data-sub="${esc(sub)}" data-value="${esc(sub ? sub.split('/').pop() : course.name)}" title="${sub ? 'フォルダの名前を変える（パソコンのフォルダの名前も変わります）' : 'フォルダの名前を変える'}" aria-label="名前を変える">✎</button></header>
       ${ms.length ? `<div class="round-note__files">${ms.map((m) => fileCard(m, course, [])).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグして入れます。</p>'}

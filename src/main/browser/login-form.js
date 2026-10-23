@@ -17,9 +17,44 @@ const JP_SECOND = new Set(['ac', 'co', 'or', 'ne', 'go', 'ed', 'lg', 'gr', 'ad']
 // 日本以外で「国 + 種類」の 2 段が公共の接尾辞になっている国（ac.uk・com.au など）。この下の 1 つまでを「同じ組織」とみなす。
 // これがないと lms.example.ac.uk の組織が ac.uk になり、英国の大学すべてが同じ組織に見えてしまう
 const SECOND_LEVEL = new Set([
-  'uk', 'au', 'nz', 'kr', 'tw', 'cn', 'hk', 'sg', 'my', 'th', 'in', 'id', 'ph', 'vn', 'br', 'ar', 'mx', 'za', 'il', 'tr'
+  'uk',
+  'au',
+  'nz',
+  'kr',
+  'tw',
+  'cn',
+  'hk',
+  'sg',
+  'my',
+  'th',
+  'in',
+  'id',
+  'ph',
+  'vn',
+  'br',
+  'ar',
+  'mx',
+  'za',
+  'il',
+  'tr'
 ]);
-const COMMON_SECOND = new Set(['ac', 'co', 'com', 'edu', 'gov', 'org', 'net', 'or', 'ne', 'go', 'sch', 'ltd', 'plc', 'nhs', 'police']);
+const COMMON_SECOND = new Set([
+  'ac',
+  'co',
+  'com',
+  'edu',
+  'gov',
+  'org',
+  'net',
+  'or',
+  'ne',
+  'go',
+  'sch',
+  'ltd',
+  'plc',
+  'nhs',
+  'police'
+]);
 const LOCAL = new Set(['localhost', '127.0.0.1']);
 /** 組織のドメイン（lms.example-u.ac.jp → example-u.ac.jp、lms.example.edu → example.edu、lms.example.ac.uk → example.ac.uk） */
 export function siteOf(host) {

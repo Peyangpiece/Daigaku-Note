@@ -15,7 +15,9 @@ try {
 } catch {
   /* 入っていなければ飛ばす */
 }
-const executablePath = process.env.DAIGAKU_CHROMIUM || (process.env.PLAYWRIGHT_BROWSERS_PATH ? `${process.env.PLAYWRIGHT_BROWSERS_PATH}/chromium` : undefined);
+const executablePath =
+  process.env.DAIGAKU_CHROMIUM ||
+  (process.env.PLAYWRIGHT_BROWSERS_PATH ? `${process.env.PLAYWRIGHT_BROWSERS_PATH}/chromium` : undefined);
 
 /** 模擬 LMS：manabo レシピのセレクタに合わせた最小の画面 */
 function mockLms({logout = '<a id="button-logout" href="/logout">ログアウト</a>'} = {}) {
@@ -37,11 +39,16 @@ function mockLms({logout = '<a id="button-logout" href="/logout">ログアウト
           res.writeHead(302, {'Set-Cookie': 'sid=ok; Path=/', Location: '/'});
           return res.end();
         }
-        html('<form method="post" action="/login"><p>ID かパスワードが違います</p><input name="userid"><input type="password" name="password"><input type="submit" value="ログイン"></form>');
+        html(
+          '<form method="post" action="/login"><p>ID かパスワードが違います</p><input name="userid"><input type="password" name="password"><input type="submit" value="ログイン"></form>'
+        );
       });
       return;
     }
-    if (!loggedIn) return html('<form method="post" action="/login"><input name="userid"><input type="password" name="password"><input type="submit" value="ログイン"></form>');
+    if (!loggedIn)
+      return html(
+        '<form method="post" action="/login"><input name="userid"><input type="password" name="password"><input type="submit" value="ログイン"></form>'
+      );
     if (url.pathname === '/')
       return html(`${logout}
         <ul><li><a href="/class/101/"><span>管理会計Ⅱ（金曜／2限）</span>
@@ -76,12 +83,17 @@ function mockLms({logout = '<a id="button-logout" href="/logout">ログアウト
         </script>`);
     }
     if (url.pathname.startsWith('/file/')) {
-      res.writeHead(200, {'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent('資料' + url.pathname.split('/')[2] + '.pdf')}`});
+      res.writeHead(200, {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent('資料' + url.pathname.split('/')[2] + '.pdf')}`
+      });
       return res.end('%PDF-' + url.pathname);
     }
     html('not found', 404);
   });
-  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({server, base: `http://127.0.0.1:${server.address().port}`})));
+  return new Promise((resolve) =>
+    server.listen(0, '127.0.0.1', () => resolve({server, base: `http://127.0.0.1:${server.address().port}`}))
+  );
 }
 
 function memSecrets() {
@@ -91,126 +103,202 @@ function memSecrets() {
 
 const recipeBase = JSON.parse(readFileSync(new URL('../../recipes/manabo.json', import.meta.url), 'utf8'));
 
-test('レシピ実行器：ログイン → 授業 → 回 → ファイル → お知らせ → 取得 → ホストの制限', {skip: !playwright && 'Playwright が入っていません'}, async (t) => {
-  const {server, base} = await mockLms();
-  t.after(() => server.close());
-  const secrets = memSecrets();
-  const session = createBrowserSession({secrets, playwright, executablePath});
-  t.after(() => session.shutdown());
-  // 模擬 LMS はパスワードのフォームなので、レシピの login.form を足す（本物の manabo は統合認証で null）
-  const recipe = {...recipeBase, login: {loggedIn: {selector: '#button-logout'}, form: {user: 'input[name=userid]', password: 'input[name=password]', submit: 'input[type=submit]'}}};
-  const connector = createRecipeExecutor(recipe, {session, secrets});
-  const connection = {id: 'c1', base_url: base, university_host: '127.0.0.1'};
+test(
+  'レシピ実行器：ログイン → 授業 → 回 → ファイル → お知らせ → 取得 → ホストの制限',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const {server, base} = await mockLms();
+    t.after(() => server.close());
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    // 模擬 LMS はパスワードのフォームなので、レシピの login.form を足す（本物の manabo は統合認証で null）
+    const recipe = {
+      ...recipeBase,
+      login: {
+        loggedIn: {selector: '#button-logout'},
+        form: {user: 'input[name=userid]', password: 'input[name=password]', submit: 'input[type=submit]'}
+      }
+    };
+    const connector = createRecipeExecutor(recipe, {session, secrets});
+    const connection = {id: 'c1', base_url: base, university_host: '127.0.0.1'};
 
-  const ctx = await connector.createContext(connection);
-  try {
-    assert.equal(await connector.ensureSession(ctx), 'login-required');
-    await assert.rejects(connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'bad'}}), /ID かパスワード/);
-    assert.deepEqual(await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}}), {ok: true});
-    assert.ok(secrets.map.get('conn:c1:cookies'), 'Cookie を保存した');
-    assert.equal(await connector.ensureSession(ctx), 'ok');
-
-    const courses = await connector.listCourses(ctx);
-    assert.deepEqual(
-      courses.map((c) => [c.lmsId, c.name, c.weekday, c.period]),
-      [['101', '管理会計Ⅱ', '金', 2], ['102', '意思決定論', '月', 3]],
-      '重複は 1 つに、曜日・時限を読み、名前から時限の表記を外す。2 行目の教員名は入れない'
-    );
-    const course = {lms_id: '101', lms_url: courses[0].url};
-    const rounds = await connector.listRounds(ctx, course);
-    assert.deepEqual(rounds.map((r) => [r.number, r.title, r.lmsRef]), [[1, '第1回 イントロダクション', 'd1'], [3, '第3回 原価企画', 'd3'], [0, '参考資料', 'dx']], '題名は押す要素の文字、なければ 1 つ前の行');
-
-    const files3 = await connector.listFiles(ctx, course, rounds[1]);
-    assert.deepEqual(files3.map((f) => f.name), ['第3回 資料.pdf', '第3回 資料 4up.pdf'], 'ファイルでないリンクは除く（1up の選別は同期エンジンが行う）');
-    assert.ok(files3[0].url.startsWith(base + '/file/3/'), '相対リンクを絶対 URL に');
-    assert.deepEqual(await connector.listFiles(ctx, course, rounds[2]), [], '欄はあるが資料のない回は空');
-    // 欄（container）そのものがなければ「資料のない回」ではなく、画面の構成が変わったとして知らせる（黙って 0 件にしない）
-    const noBox = createRecipeExecutor({...recipe, files: {...recipe.files, container: '#no-such-box'}}, {session, secrets});
-    const ctxNoBox = await noBox.createContext(connection);
+    const ctx = await connector.createContext(connection);
     try {
-      await assert.rejects(noBox.listFiles(ctxNoBox, course, rounds[2]), (e) => e.code === 'selector-missing' && e.containerMissing === true);
+      assert.equal(await connector.ensureSession(ctx), 'login-required');
+      await assert.rejects(
+        connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'bad'}}),
+        /ID かパスワード/
+      );
+      assert.deepEqual(await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}}), {
+        ok: true
+      });
+      assert.ok(secrets.map.get('conn:c1:cookies'), 'Cookie を保存した');
+      assert.equal(await connector.ensureSession(ctx), 'ok');
+
+      const courses = await connector.listCourses(ctx);
+      assert.deepEqual(
+        courses.map((c) => [c.lmsId, c.name, c.weekday, c.period]),
+        [
+          ['101', '管理会計Ⅱ', '金', 2],
+          ['102', '意思決定論', '月', 3]
+        ],
+        '重複は 1 つに、曜日・時限を読み、名前から時限の表記を外す。2 行目の教員名は入れない'
+      );
+      const course = {lms_id: '101', lms_url: courses[0].url};
+      const rounds = await connector.listRounds(ctx, course);
+      assert.deepEqual(
+        rounds.map((r) => [r.number, r.title, r.lmsRef]),
+        [
+          [1, '第1回 イントロダクション', 'd1'],
+          [3, '第3回 原価企画', 'd3'],
+          [0, '参考資料', 'dx']
+        ],
+        '題名は押す要素の文字、なければ 1 つ前の行'
+      );
+
+      const files3 = await connector.listFiles(ctx, course, rounds[1]);
+      assert.deepEqual(
+        files3.map((f) => f.name),
+        ['第3回 資料.pdf', '第3回 資料 4up.pdf'],
+        'ファイルでないリンクは除く（1up の選別は同期エンジンが行う）'
+      );
+      assert.ok(files3[0].url.startsWith(base + '/file/3/'), '相対リンクを絶対 URL に');
+      assert.deepEqual(await connector.listFiles(ctx, course, rounds[2]), [], '欄はあるが資料のない回は空');
+      // 欄（container）そのものがなければ「資料のない回」ではなく、画面の構成が変わったとして知らせる（黙って 0 件にしない）
+      const noBox = createRecipeExecutor(
+        {...recipe, files: {...recipe.files, container: '#no-such-box'}},
+        {session, secrets}
+      );
+      const ctxNoBox = await noBox.createContext(connection);
+      try {
+        await assert.rejects(
+          noBox.listFiles(ctxNoBox, course, rounds[2]),
+          (e) => e.code === 'selector-missing' && e.containerMissing === true
+        );
+      } finally {
+        await noBox.releaseContext(ctxNoBox);
+      }
+      assert.deepEqual(await connector.listFiles(ctx, course, rounds[2]), [], '資料のない回は空');
+
+      const notices = await connector.listNoticeFiles(ctx, course);
+      assert.equal(notices.length, 1, 'AJAX で入った欄の折りたたみを開き、添付だけを拾う（一覧へのリンクは拾わない）');
+      assert.equal(notices[0].round, 2);
+      assert.equal(notices[0].name, '補講資料.pdf');
+      assert.match(notices[0].noticeTitle, /【第02回，10\/02】休講のお知らせ/);
+
+      const got = await connector.fetchFile(ctx, files3[0]);
+      assert.equal(got.ok, true);
+      assert.equal(got.contentType, 'application/pdf');
+      assert.equal(got.body.toString(), '%PDF-/file/3/');
+      assert.match(got.disposition, /filename\*=UTF-8/);
+
+      await assert.rejects(connector.fetchFile(ctx, {url: 'https://evil.example.com/x.pdf'}), /許可していない/);
     } finally {
-      await noBox.releaseContext(ctxNoBox);
+      await connector.releaseContext(ctx);
     }
-    assert.deepEqual(await connector.listFiles(ctx, course, rounds[2]), [], '資料のない回は空');
 
-    const notices = await connector.listNoticeFiles(ctx, course);
-    assert.equal(notices.length, 1, 'AJAX で入った欄の折りたたみを開き、添付だけを拾う（一覧へのリンクは拾わない）');
-    assert.equal(notices[0].round, 2);
-    assert.equal(notices[0].name, '補講資料.pdf');
-    assert.match(notices[0].noticeTitle, /【第02回，10\/02】休講のお知らせ/);
-
-    const got = await connector.fetchFile(ctx, files3[0]);
-    assert.equal(got.ok, true);
-    assert.equal(got.contentType, 'application/pdf');
-    assert.equal(got.body.toString(), '%PDF-/file/3/');
-    assert.match(got.disposition, /filename\*=UTF-8/);
-
-    await assert.rejects(connector.fetchFile(ctx, {url: 'https://evil.example.com/x.pdf'}), /許可していない/);
-  } finally {
-    await connector.releaseContext(ctx);
+    // 保存した Cookie で新しい文脈はログイン済み
+    const ctx2 = await connector.createContext(connection);
+    try {
+      assert.equal(await connector.ensureSession(ctx2), 'ok');
+    } finally {
+      await connector.releaseContext(ctx2);
+    }
   }
+);
 
-  // 保存した Cookie で新しい文脈はログイン済み
-  const ctx2 = await connector.createContext(connection);
-  try {
-    assert.equal(await connector.ensureSession(ctx2), 'ok');
-  } finally {
-    await connector.releaseContext(ctx2);
+test(
+  'レシピ実行器：要素が見つからなければ selector-missing、ログインに戻されれば login-required',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const {server, base} = await mockLms();
+    t.after(() => server.close());
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const broken = {
+      ...recipeBase,
+      login: {
+        loggedIn: {selector: '#button-logout'},
+        form: {user: 'input[name=userid]', password: 'input[name=password]', submit: 'input[type=submit]'}
+      },
+      courses: {...recipeBase.courses, items: 'table.nothing tr'}
+    };
+    const debugDir = mkdtempSync(path.join(tmpdir(), 'daigaku-debug-'));
+    const logs = [];
+    const connector = createRecipeExecutor(broken, {
+      session,
+      secrets,
+      log: (m) => logs.push(m),
+      debug: {dir: debugDir}
+    });
+    const ctx = await connector.createContext({id: 'c2', base_url: base, university_host: '127.0.0.1'});
+    try {
+      await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}});
+      await assert.rejects(connector.listCourses(ctx), (e) => e.code === 'selector-missing');
+      const dumps = readdirSync(debugDir).filter((f) => f.startsWith('manabo_courses_') && f.endsWith('.html'));
+      assert.equal(dumps.length, 1, '合わなかった画面を debug に保存する');
+      assert.match(readFileSync(path.join(debugDir, dumps[0]), 'utf8'), /\/class\/101\//);
+      assert.ok(
+        logs.some((m) => /manabo courses: .*\/class\/101\(2\).*#button-logout.*画面を保存/.test(m)),
+        `要約をログに出す: ${logs.join(' | ')}`
+      );
+    } finally {
+      await connector.releaseContext(ctx);
+    }
+    const ctx3 = await connector.createContext({id: 'c3', base_url: base, university_host: '127.0.0.1'});
+    try {
+      await assert.rejects(connector.listCourses(ctx3), (e) => e.code === 'login-required');
+    } finally {
+      await connector.releaseContext(ctx3);
+    }
   }
-});
+);
 
-test('レシピ実行器：要素が見つからなければ selector-missing、ログインに戻されれば login-required', {skip: !playwright && 'Playwright が入っていません'}, async (t) => {
-  const {server, base} = await mockLms();
-  t.after(() => server.close());
-  const secrets = memSecrets();
-  const session = createBrowserSession({secrets, playwright, executablePath});
-  t.after(() => session.shutdown());
-  const broken = {...recipeBase, login: {loggedIn: {selector: '#button-logout'}, form: {user: 'input[name=userid]', password: 'input[name=password]', submit: 'input[type=submit]'}}, courses: {...recipeBase.courses, items: 'table.nothing tr'}};
-  const debugDir = mkdtempSync(path.join(tmpdir(), 'daigaku-debug-'));
-  const logs = [];
-  const connector = createRecipeExecutor(broken, {session, secrets, log: (m) => logs.push(m), debug: {dir: debugDir}});
-  const ctx = await connector.createContext({id: 'c2', base_url: base, university_host: '127.0.0.1'});
-  try {
-    await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}});
-    await assert.rejects(connector.listCourses(ctx), (e) => e.code === 'selector-missing');
-    const dumps = readdirSync(debugDir).filter((f) => f.startsWith('manabo_courses_') && f.endsWith('.html'));
-    assert.equal(dumps.length, 1, '合わなかった画面を debug に保存する');
-    assert.match(readFileSync(path.join(debugDir, dumps[0]), 'utf8'), /\/class\/101\//);
-    assert.ok(logs.some((m) => /manabo courses: .*\/class\/101\(2\).*#button-logout.*画面を保存/.test(m)), `要約をログに出す: ${logs.join(' | ')}`);
-  } finally {
-    await connector.releaseContext(ctx);
+test(
+  'レシピ実行器：loggedIn のセレクタが合わなくても「ログアウト」の表示があればログイン済みとみなす',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const {server, base} = await mockLms({
+      logout: '<form action="/logout" method="post"><button type="submit" class="nav-item">ログアウト</button></form>'
+    });
+    t.after(() => server.close());
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const logs = [];
+    const recipe = {
+      ...recipeBase,
+      login: {
+        loggedIn: {selector: '#button-logout'},
+        form: {user: 'input[name=userid]', password: 'input[name=password]', submit: 'input[type=submit]'}
+      }
+    };
+    const connector = createRecipeExecutor(recipe, {session, secrets, log: (m) => logs.push(m)});
+    const ctx = await connector.createContext({id: 'c4', base_url: base, university_host: '127.0.0.1'});
+    try {
+      assert.equal(
+        await connector.ensureSession(ctx),
+        'login-required',
+        'ログイン前（パスワード欄あり）は予備判定でも未ログイン'
+      );
+      assert.deepEqual(await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}}), {
+        ok: true
+      });
+      assert.equal(await connector.ensureSession(ctx), 'ok');
+      assert.ok(
+        logs.some((m) => /login\.loggedIn のセレクタ（#button-logout）は一致しませんでしたが/.test(m)),
+        'レシピの見直しを促すログを 1 回出す'
+      );
+      assert.equal(logs.filter((m) => /一致しませんでしたが/.test(m)).length, 1);
+      const courses = await connector.listCourses(ctx);
+      assert.equal(courses.length, 2);
+    } finally {
+      await connector.releaseContext(ctx);
+    }
   }
-  const ctx3 = await connector.createContext({id: 'c3', base_url: base, university_host: '127.0.0.1'});
-  try {
-    await assert.rejects(connector.listCourses(ctx3), (e) => e.code === 'login-required');
-  } finally {
-    await connector.releaseContext(ctx3);
-  }
-});
-
-test('レシピ実行器：loggedIn のセレクタが合わなくても「ログアウト」の表示があればログイン済みとみなす', {skip: !playwright && 'Playwright が入っていません'}, async (t) => {
-  const {server, base} = await mockLms({logout: '<form action="/logout" method="post"><button type="submit" class="nav-item">ログアウト</button></form>'});
-  t.after(() => server.close());
-  const secrets = memSecrets();
-  const session = createBrowserSession({secrets, playwright, executablePath});
-  t.after(() => session.shutdown());
-  const logs = [];
-  const recipe = {...recipeBase, login: {loggedIn: {selector: '#button-logout'}, form: {user: 'input[name=userid]', password: 'input[name=password]', submit: 'input[type=submit]'}}};
-  const connector = createRecipeExecutor(recipe, {session, secrets, log: (m) => logs.push(m)});
-  const ctx = await connector.createContext({id: 'c4', base_url: base, university_host: '127.0.0.1'});
-  try {
-    assert.equal(await connector.ensureSession(ctx), 'login-required', 'ログイン前（パスワード欄あり）は予備判定でも未ログイン');
-    assert.deepEqual(await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}}), {ok: true});
-    assert.equal(await connector.ensureSession(ctx), 'ok');
-    assert.ok(logs.some((m) => /login\.loggedIn のセレクタ（#button-logout）は一致しませんでしたが/.test(m)), 'レシピの見直しを促すログを 1 回出す');
-    assert.equal(logs.filter((m) => /一致しませんでしたが/.test(m)).length, 1);
-    const courses = await connector.listCourses(ctx);
-    assert.equal(courses.length, 2);
-  } finally {
-    await connector.releaseContext(ctx);
-  }
-});
+);
 
 /**
  * 模擬の統合認証：LMS（127.0.0.1）に未ログインで来ると IdP（localhost。別のホスト）へ転送。
@@ -395,62 +483,100 @@ test(
   }
 );
 
-test('ログインの欄を探す：1 ページのフォーム・ID だけのページ・認証コードのページ・検索欄', {skip: !playwright && 'Playwright が入っていません'}, async (t) => {
-  const {markLoginForm} = await import('../../src/main/browser/login-form.js');
-  const browser = await playwright.chromium.launch({headless: true, ...(executablePath ? {executablePath} : {})});
-  t.after(() => browser.close());
-  const page = await browser.newPage();
-  const look = async (html) => {
-    await page.setContent(`<!doctype html><meta charset="utf-8"><body>${html}</body>`);
-    const f = await page.evaluate(markLoginForm);
-    const marked = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-dn-login]')].map((e) => [e.dataset.dnLogin, e.name || e.textContent])));
-    return {...f, marked};
-  };
-  // Shibboleth の形：ID・パスワード・ログイン（前に検索欄があっても ID の欄を選ぶ）
-  let f = await look('<input type="text" name="q" placeholder="検索"><form><input name="j_username"><input type="password" name="j_password"><button type="submit">Login</button></form>');
-  assert.deepEqual(f.marked, {user: 'j_username', password: 'j_password', submit: 'Login'});
-  // ID だけを先に聞くページ
-  f = await look('<form><input type="email" name="loginfmt"><input type="submit" name="next" value="次へ"></form>');
-  assert.equal(f.marked.user, 'loginfmt');
-  assert.equal(f.password, false);
-  // 認証コードだけのページ：ID の欄とみなさない
-  f = await look('<form><p>認証コード</p><input type="text" name="otp_code" autocomplete="one-time-code"><button type="submit">送信</button></form>');
-  assert.equal(f.user, false);
-  assert.equal(f.password, false);
-  assert.equal(f.extra, true);
-  // 欄が 1 つだけでも、ID らしい名前でなければ当て推量で入れない
-  f = await look('<form><input type="text" name="keyword"><button type="submit">探す</button></form>');
-  assert.equal(f.user, false);
-  // 隠れた欄は使わない
-  f = await look('<form><input name="username" style="display:none"><input name="login_id"><input type="password" name="pw"><input type="submit" value="ログイン"></form>');
-  assert.equal(f.marked.user, 'login_id');
-});
+test(
+  'ログインの欄を探す：1 ページのフォーム・ID だけのページ・認証コードのページ・検索欄',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const {markLoginForm} = await import('../../src/main/browser/login-form.js');
+    const browser = await playwright.chromium.launch({headless: true, ...(executablePath ? {executablePath} : {})});
+    t.after(() => browser.close());
+    const page = await browser.newPage();
+    const look = async (html) => {
+      await page.setContent(`<!doctype html><meta charset="utf-8"><body>${html}</body>`);
+      const f = await page.evaluate(markLoginForm);
+      const marked = await page.evaluate(() =>
+        Object.fromEntries(
+          [...document.querySelectorAll('[data-dn-login]')].map((e) => [e.dataset.dnLogin, e.name || e.textContent])
+        )
+      );
+      return {...f, marked};
+    };
+    // Shibboleth の形：ID・パスワード・ログイン（前に検索欄があっても ID の欄を選ぶ）
+    let f = await look(
+      '<input type="text" name="q" placeholder="検索"><form><input name="j_username"><input type="password" name="j_password"><button type="submit">Login</button></form>'
+    );
+    assert.deepEqual(f.marked, {user: 'j_username', password: 'j_password', submit: 'Login'});
+    // ID だけを先に聞くページ
+    f = await look('<form><input type="email" name="loginfmt"><input type="submit" name="next" value="次へ"></form>');
+    assert.equal(f.marked.user, 'loginfmt');
+    assert.equal(f.password, false);
+    // 認証コードだけのページ：ID の欄とみなさない
+    f = await look(
+      '<form><p>認証コード</p><input type="text" name="otp_code" autocomplete="one-time-code"><button type="submit">送信</button></form>'
+    );
+    assert.equal(f.user, false);
+    assert.equal(f.password, false);
+    assert.equal(f.extra, true);
+    // 欄が 1 つだけでも、ID らしい名前でなければ当て推量で入れない
+    f = await look('<form><input type="text" name="keyword"><button type="submit">探す</button></form>');
+    assert.equal(f.user, false);
+    // 隠れた欄は使わない
+    f = await look(
+      '<form><input name="username" style="display:none"><input name="login_id"><input type="password" name="pw"><input type="submit" value="ログイン"></form>'
+    );
+    assert.equal(f.marked.user, 'login_id');
+  }
+);
 
-test('見えるログイン窓：保存した ID とパスワードを欄に入れておく（送信は本人）', {skip: (!playwright && 'Playwright が入っていません') || (process.platform === 'linux' && !process.env.DISPLAY && '画面がありません（xvfb-run で動かす）')}, async (t) => {
-  const sso = await mockSso();
-  t.after(sso.close);
-  // 起動した見えるブラウザをテストから操作するため、launch を包む
-  let headed = null;
-  const wrapped = {...playwright, chromium: {...playwright.chromium, launch: async (o) => (o.headless === false ? (headed = await playwright.chromium.launch(o)) : playwright.chromium.launch(o))}};
-  const secrets = memSecrets();
-  const session = createBrowserSession({secrets, playwright: wrapped, executablePath});
-  t.after(() => session.shutdown());
-  const connector = createRecipeExecutor(recipeBase, {session, secrets});
-  await secrets.set('conn:v1:password', {user: 'stu', password: 'pw'});
-  const ctx = await connector.createContext({id: 'v1', base_url: sso.base, university_host: '127.0.0.1', save_password: 1});
-  const done = connector.login(ctx, 'visible');
-  const pageOf = async () => {
-    for (let i = 0; i < 50 && !headed?.contexts()[0]?.pages()[0]; i++) await new Promise((r) => setTimeout(r, 100));
-    return headed.contexts()[0].pages()[0];
-  };
-  const page = await pageOf();
-  await page.waitForFunction(() => document.querySelector('[name=j_username]')?.value === 'stu', null, {timeout: 10000});
-  assert.deepEqual(sso.seen.users, [], '送信はしない');
-  await page.click('button[type=submit]'); // 本人が「次へ」を押す
-  await page.waitForFunction(() => document.querySelector('[name=j_password]')?.value === 'pw', null, {timeout: 10000});
-  await page.click('button[type=submit]'); // 本人が「ログイン」を押す
-  const r = await done;
-  assert.equal(r.ok, true);
-  assert.ok(r.visitedHosts.includes('localhost'), 'IdP のホストを覚える（次から自動ログインに使う）');
-  await connector.releaseContext(ctx);
-});
+test(
+  '見えるログイン窓：保存した ID とパスワードを欄に入れておく（送信は本人）',
+  {
+    skip:
+      (!playwright && 'Playwright が入っていません') ||
+      (process.platform === 'linux' && !process.env.DISPLAY && '画面がありません（xvfb-run で動かす）')
+  },
+  async (t) => {
+    const sso = await mockSso();
+    t.after(sso.close);
+    // 起動した見えるブラウザをテストから操作するため、launch を包む
+    let headed = null;
+    const wrapped = {
+      ...playwright,
+      chromium: {
+        ...playwright.chromium,
+        launch: async (o) =>
+          o.headless === false ? (headed = await playwright.chromium.launch(o)) : playwright.chromium.launch(o)
+      }
+    };
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright: wrapped, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor(recipeBase, {session, secrets});
+    await secrets.set('conn:v1:password', {user: 'stu', password: 'pw'});
+    const ctx = await connector.createContext({
+      id: 'v1',
+      base_url: sso.base,
+      university_host: '127.0.0.1',
+      save_password: 1
+    });
+    const done = connector.login(ctx, 'visible');
+    const pageOf = async () => {
+      for (let i = 0; i < 50 && !headed?.contexts()[0]?.pages()[0]; i++) await new Promise((r) => setTimeout(r, 100));
+      return headed.contexts()[0].pages()[0];
+    };
+    const page = await pageOf();
+    await page.waitForFunction(() => document.querySelector('[name=j_username]')?.value === 'stu', null, {
+      timeout: 10000
+    });
+    assert.deepEqual(sso.seen.users, [], '送信はしない');
+    await page.click('button[type=submit]'); // 本人が「次へ」を押す
+    await page.waitForFunction(() => document.querySelector('[name=j_password]')?.value === 'pw', null, {
+      timeout: 10000
+    });
+    await page.click('button[type=submit]'); // 本人が「ログイン」を押す
+    const r = await done;
+    assert.equal(r.ok, true);
+    assert.ok(r.visitedHosts.includes('localhost'), 'IdP のホストを覚える（次から自動ログインに使う）');
+    await connector.releaseContext(ctx);
+  }
+);

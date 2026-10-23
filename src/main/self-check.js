@@ -9,10 +9,16 @@ import {openDatabase} from './db/db.js';
 import {ensureChromium} from './browser/install.js';
 import {defaultRoot} from '../shared/paths.js';
 
-export const selfTestPath = (argv = process.argv) => argv.find((a) => a.startsWith('--self-test='))?.slice('--self-test='.length) || null;
+export const selfTestPath = (argv = process.argv) =>
+  argv.find((a) => a.startsWith('--self-test='))?.slice('--self-test='.length) || null;
 
 export async function runSelfTest(out) {
-  const result = {version: app.getVersion(), windowsStore: !!process.windowsStore, platform: process.platform, checks: {}};
+  const result = {
+    version: app.getVersion(),
+    windowsStore: !!process.windowsStore,
+    platform: process.platform,
+    checks: {}
+  };
   const check = async (name, fn) => {
     try {
       result.checks[name] = {ok: true, detail: (await fn()) ?? ''};
@@ -43,7 +49,9 @@ export async function runSelfTest(out) {
   });
   await check('秘密を暗号化できる', () => {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('safeStorage が使えません');
-    return safeStorage.decryptString(safeStorage.encryptString('probe')) === 'probe' ? '暗号化・復号できた' : '復号の結果が違う';
+    return safeStorage.decryptString(safeStorage.encryptString('probe')) === 'probe'
+      ? '暗号化・復号できた'
+      : '復号の結果が違う';
   });
   const browsers = path.join(base, 'pw-browsers');
   await check('LMS 用のブラウザを取り込める', () => ensureChromium(browsers, {log: () => {}}));

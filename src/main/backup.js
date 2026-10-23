@@ -47,8 +47,12 @@ export function runBackup({db, dir, now = () => new Date(), keep = KEEP_BACKUPS}
 export function prune(db, at = new Date()) {
   const syncBefore = new Date(at.getTime() - PRUNE_SYNC_DAYS * DAY).toISOString();
   const jobBefore = new Date(at.getTime() - PRUNE_JOB_DAYS * DAY).toISOString();
-  const syncEvents = db.prepare('DELETE FROM sync_event WHERE run_id IN (SELECT id FROM sync_run WHERE started_at < ?)').run(syncBefore).changes;
+  const syncEvents = db
+    .prepare('DELETE FROM sync_event WHERE run_id IN (SELECT id FROM sync_run WHERE started_at < ?)')
+    .run(syncBefore).changes;
   const syncRuns = db.prepare('DELETE FROM sync_run WHERE started_at < ?').run(syncBefore).changes;
-  const jobs = db.prepare("DELETE FROM job WHERE status IN ('done', 'failed') AND updated_at < ?").run(jobBefore).changes;
+  const jobs = db
+    .prepare("DELETE FROM job WHERE status IN ('done', 'failed') AND updated_at < ?")
+    .run(jobBefore).changes;
   return {syncRuns: Number(syncRuns), syncEvents: Number(syncEvents), jobs: Number(jobs)};
 }

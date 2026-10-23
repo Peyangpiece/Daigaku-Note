@@ -57,7 +57,9 @@ test('起動時のログインのジョブ：接続ごとにログインし、�
     engine: {
       restoreSession: async ({connection, connector}) => {
         tried.push(connector);
-        return connection.id === 'a' ? {status: 'ok', loggedIn: true} : {status: 'login-required', error: new Error('ID とパスワードがありません')};
+        return connection.id === 'a'
+          ? {status: 'ok', loggedIn: true}
+          : {status: 'login-required', error: new Error('ID とパスワードがありません')};
       }
     }
   };
@@ -83,7 +85,11 @@ test('同期のジョブ：1 つの接続が失敗しても（未対応の種類
   ];
   const ran = [];
   const ctx = {
-    repo: {listTerms: () => [{id: 't', start_date: '2000-01-01', end_date: '2999-12-31'}], listConnections: () => connections, getSetting: agreed},
+    repo: {
+      listTerms: () => [{id: 't', start_date: '2000-01-01', end_date: '2999-12-31'}],
+      listConnections: () => connections,
+      getSetting: agreed
+    },
     registry: {
       forConnection: (c) => {
         if (c.kind === 'generic') throw new Error('未対応の接続の種類: generic');
@@ -109,7 +115,11 @@ test('同期のジョブ：1 つの接続が失敗しても（未対応の種類
 test('利用規約：いまの版に同意していなければ、同期もログインもせずに知らせる', async () => {
   let ran = 0;
   const ctx = {
-    repo: {listTerms: () => [], listConnections: () => [{id: 'a', kind: 'api', label: 'Moodle', status: 'ok'}], getSetting: (k) => (k === 'lms.terms' ? {version: '2000-01-01'} : null)},
+    repo: {
+      listTerms: () => [],
+      listConnections: () => [{id: 'a', kind: 'api', label: 'Moodle', status: 'ok'}],
+      getSetting: (k) => (k === 'lms.terms' ? {version: '2000-01-01'} : null)
+    },
     registry: {forConnection: () => 'x'},
     engine: {run: async () => ran++, restoreSession: async () => ran++}
   };

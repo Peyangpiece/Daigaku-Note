@@ -50,7 +50,9 @@ const withIdleTimeout = (start, ms, msg) =>
         reject(new SyncError('timeout', msg));
       }
     }, 1000);
-    start(touch).then(resolve, reject).finally(() => clearInterval(t));
+    start(touch)
+      .then(resolve, reject)
+      .finally(() => clearInterval(t));
   });
 
 export class SyncEngine {
@@ -83,7 +85,11 @@ export class SyncEngine {
    * @param {boolean} [p.full]     全回を確かめる（初回・保存先の変更）
    */
   async run({connection, connector, term, courseIds = null, kind = 'full', full = false}) {
-    const run = this.repo.startSyncRun({connection_id: connection.id, kind, course_id: courseIds?.length === 1 ? courseIds[0] : null});
+    const run = this.repo.startSyncRun({
+      connection_id: connection.id,
+      kind,
+      course_id: courseIds?.length === 1 ? courseIds[0] : null
+    });
     const summary = {courses: 0, materials: 0, failures: 0, events: [], timing: {}};
     const started = Date.now();
     const event = (level, course, code, message) => {
@@ -99,7 +105,12 @@ export class SyncEngine {
       if (failure) {
         // 自動ログインを試したときだけ理由を添える（試していなければ「ログインが必要」だけで足りる）
         const code = failure.code?.startsWith('login') ? failure.code : 'login-required';
-        event('error', null, code, `${connection.label} へのログインが必要です${connection.save_password ? `（${failure.message}）` : ''}`);
+        event(
+          'error',
+          null,
+          code,
+          `${connection.label} へのログインが必要です${connection.save_password ? `（${failure.message}）` : ''}`
+        );
         this.repo.finishSyncRun(run.id, {...summary, timing: {total: Date.now() - started}});
         return {...summary, status: 'login-required'};
       }
@@ -155,10 +166,16 @@ export class SyncEngine {
    */
   async loginIfNeeded({connection, connector, ctx}) {
     if ((await connector.ensureSession(ctx)) !== 'login-required') return {loggedIn: false};
-    const error = await connector.login(ctx, 'headless').then(() => null, (e) => e);
+    const error = await connector.login(ctx, 'headless').then(
+      () => null,
+      (e) => e
+    );
     if (!error) return {loggedIn: true};
     const badCredentials = error.code === 'login-bad-credentials';
-    this.repo.updateConnection(connection.id, {status: 'login-required', ...(badCredentials ? {save_password: 0} : {})});
+    this.repo.updateConnection(connection.id, {
+      status: 'login-required',
+      ...(badCredentials ? {save_password: 0} : {})
+    });
     return {error};
   }
 
@@ -215,12 +232,18 @@ export class SyncEngine {
             const from = this.files.courseDir(term, row),
               to = this.files.courseDir(term, {...row, folder_name: folder});
             await this.files.renameDir(from, to);
-            this.repo.db.prepare('UPDATE material SET path = ? || substr(path, ?) WHERE course_id = ? AND substr(path, 1, ?) = ?').run(to, from.length + 1, row.id, from.length, from);
+            this.repo.db
+              .prepare('UPDATE material SET path = ? || substr(path, ?) WHERE course_id = ? AND substr(path, 1, ?) = ?')
+              .run(to, from.length + 1, row.id, from.length, from);
             patch.folder_name = folder;
           }
         }
         if (c.url && c.url !== row.lms_url) patch.lms_url = c.url;
-        if (c.weekday && row.weekday_from !== 'user' && (c.weekday !== row.weekday || (c.period ?? null) !== row.period)) {
+        if (
+          c.weekday &&
+          row.weekday_from !== 'user' &&
+          (c.weekday !== row.weekday || (c.period ?? null) !== row.period)
+        ) {
           patch.weekday = c.weekday;
           patch.period = c.period ?? null;
           patch.weekday_from = 'lms';
@@ -269,7 +292,11 @@ export class SyncEngine {
             continue;
           }
           const okCount = (c) => this.repo.listMaterials(c.id).filter((m) => m.status === 'ok').length;
-          const [survivor, loser] = okCount(course) > okCount(twin) || (okCount(course) === okCount(twin) && course.created_at <= twin.created_at) ? [course, twin] : [twin, course];
+          const [survivor, loser] =
+            okCount(course) > okCount(twin) ||
+            (okCount(course) === okCount(twin) && course.created_at <= twin.created_at)
+              ? [course, twin]
+              : [twin, course];
           await this.removeDuplicateCourse(loser, survivor);
           removedCourses++;
           if (survivor.connection_id !== keep.id) this.repo.updateCourse(survivor.id, {connection_id: keep.id});
@@ -307,8 +334,13 @@ export class SyncEngine {
       db.prepare('DELETE FROM course WHERE id = ?').run(loser.id);
       if (missing.length) db.prepare('UPDATE course SET full_synced_at = NULL WHERE id = ?').run(survivor.id);
     });
-    if (dir && dir !== (term && this.files.courseDir(term, survivor))) await this.files.trash(dir).catch((e) => this.log(`[merge] フォルダをゴミ箱へ移せませんでした: ${dir}（${e.message}）`));
-    this.log(`[merge] 重なった授業を 1 つにしました: ${loser.name}（${loser.folder_name} をゴミ箱へ${missing.length ? `。残すほうにない資料 ${missing.length} 件は次の同期で取り直します` : ''}）`);
+    if (dir && dir !== (term && this.files.courseDir(term, survivor)))
+      await this.files
+        .trash(dir)
+        .catch((e) => this.log(`[merge] フォルダをゴミ箱へ移せませんでした: ${dir}（${e.message}）`));
+    this.log(
+      `[merge] 重なった授業を 1 つにしました: ${loser.name}（${loser.folder_name} をゴミ箱へ${missing.length ? `。残すほうにない資料 ${missing.length} 件は次の同期で取り直します` : ''}）`
+    );
   }
 
   /** 「名前 (2)」になっていた授業フォルダを、空いていれば元の名前に戻す（記録のパスも書き換える） */
@@ -320,7 +352,9 @@ export class SyncEngine {
     const from = this.files.courseDir(term, row),
       to = this.files.courseDir(term, {...row, folder_name: base});
     await this.files.renameDir(from, to);
-    this.repo.db.prepare('UPDATE material SET path = ? || substr(path, ?) WHERE course_id = ? AND substr(path, 1, ?) = ?').run(to, from.length + 1, row.id, from.length, from);
+    this.repo.db
+      .prepare('UPDATE material SET path = ? || substr(path, ?) WHERE course_id = ? AND substr(path, 1, ?) = ?')
+      .run(to, from.length + 1, row.id, from.length, from);
     this.repo.updateCourse(row.id, {folder_name: base});
   }
 
@@ -338,7 +372,13 @@ export class SyncEngine {
     const byNumber = new Map(existing.map((r) => [r.number, r]));
     const taken = new Set(existing.map((r) => r.folder_name));
     const dates = course.weekday
-      ? roundDates({start: term.start_date, end: term.end_date, weekday: course.weekday, rounds: term.rounds, holidays: JSON.parse(term.holidays_json ?? '[]')})
+      ? roundDates({
+          start: term.start_date,
+          end: term.end_date,
+          weekday: course.weekday,
+          rounds: term.rounds,
+          holidays: JSON.parse(term.holidays_json ?? '[]')
+        })
       : [];
     const ensure = async (number, title, lmsRef, date) => {
       const cleanTitle = title ? roundTitle(title) : ''; // 「第3回 原価企画」→「原価企画」、「Week 2」→「」
@@ -346,22 +386,38 @@ export class SyncEngine {
       if (!row) {
         const folder = roundFolderName(number, cleanTitle, [...taken]);
         taken.add(folder);
-        row = this.repo.createRound({course_id: course.id, number, title: cleanTitle || null, folder_name: folder, date: date ?? dates[number - 1] ?? null, lms_ref: lmsRef ?? null});
+        row = this.repo.createRound({
+          course_id: course.id,
+          number,
+          title: cleanTitle || null,
+          folder_name: folder,
+          date: date ?? dates[number - 1] ?? null,
+          lms_ref: lmsRef ?? null
+        });
         byNumber.set(number, row);
         return row;
       }
       const patch = {};
       if (cleanTitle && cleanTitle !== row.title) {
         patch.title = cleanTitle;
-        const folder = roundFolderName(number, cleanTitle, [...taken].filter((f) => f !== row.folder_name));
+        const folder = roundFolderName(
+          number,
+          cleanTitle,
+          [...taken].filter((f) => f !== row.folder_name)
+        );
         if (folder !== row.folder_name) {
-          await this.files.renameDir(this.files.roundDir(term, course, row), this.files.roundDir(term, course, {folder_name: folder}));
+          await this.files.renameDir(
+            this.files.roundDir(term, course, row),
+            this.files.roundDir(term, course, {folder_name: folder})
+          );
           taken.delete(row.folder_name);
           taken.add(folder);
           patch.folder_name = folder;
           const from = this.files.roundDir(term, course, row),
             to = this.files.roundDir(term, course, {folder_name: folder});
-          this.repo.db.prepare('UPDATE material SET path = ? || substr(path, ?) WHERE round_id = ? AND substr(path, 1, ?) = ?').run(to, from.length + 1, row.id, from.length, from);
+          this.repo.db
+            .prepare('UPDATE material SET path = ? || substr(path, ?) WHERE round_id = ? AND substr(path, 1, ?) = ?')
+            .run(to, from.length + 1, row.id, from.length, from);
         }
       }
       if (lmsRef && lmsRef !== row.lms_ref) patch.lms_ref = lmsRef;
@@ -426,7 +482,12 @@ export class SyncEngine {
       if (r.result === 'saved' || r.result === 'updated') saved++;
       else if (r.result === 'failed') {
         failed++;
-        event('warn', course, r.reason, `${ref.name ?? ref.url} をダウンロードできませんでした${r.status ? `（${r.status}）` : ''}`);
+        event(
+          'warn',
+          course,
+          r.reason,
+          `${ref.name ?? ref.url} をダウンロードできませんでした${r.status ? `（${r.status}）` : ''}`
+        );
       }
     }
     await this.files.trashDuplicates(course);
@@ -438,9 +499,20 @@ export class SyncEngine {
       const tries = Number(this.repo.getSetting(key, 0)) + 1;
       if (failed && tries < MAX_CRAWL_RETRIES) {
         this.repo.setSetting(key, tries);
-        event('info', course, null, `ダウンロードできなかった資料があるので、次の同期でも全部の回を確かめます（${tries} 回目）`);
+        event(
+          'info',
+          course,
+          null,
+          `ダウンロードできなかった資料があるので、次の同期でも全部の回を確かめます（${tries} 回目）`
+        );
       } else {
-        if (failed) event('warn', course, 'download', `${MAX_CRAWL_RETRIES} 回試しても取れない資料があるため、以後は前後 7 日の回だけ確かめます（全部を確かめ直すには「全部の回を確かめ直す」）`);
+        if (failed)
+          event(
+            'warn',
+            course,
+            'download',
+            `${MAX_CRAWL_RETRIES} 回試しても取れない資料があるため、以後は前後 7 日の回だけ確かめます（全部を確かめ直すには「全部の回を確かめ直す」）`
+          );
         this.repo.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
         this.repo.updateCourse(course.id, {full_synced_at: new Date().toISOString()});
       }

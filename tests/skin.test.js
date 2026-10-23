@@ -31,7 +31,10 @@ test('テンプレートの形：知らない項目は捨て、範囲外は既�
         folder: {card: '#ffffff', tab: 'course'},
         tape: {color: 'course', pattern: 'check'}
       },
-      stickers: [{place: 'folder', asset: SHA, x: 2, y: -1, scale: 9, rotate: 270, z: 3}, {place: 'wall', asset: SHA}],
+      stickers: [
+        {place: 'folder', asset: SHA, x: 2, y: -1, scale: 9, rotate: 270, z: 3},
+        {place: 'wall', asset: SHA}
+      ],
       assets: {[SHA]: {w: 9999, h: 100}}
     },
     {id: 'T1', now: '2026-10-21T00:00:00.000Z'}
@@ -46,7 +49,11 @@ test('テンプレートの形：知らない項目は捨て、範囲外は既�
   assert.deepEqual(t.parts.note, {type: 'ruled', paper: 'default', line: '#abcdef', gap: 'wide', margin: true});
   assert.deepEqual(t.parts.folder, {card: '#ffffff', tab: 'default'}, 'タブに course は使えない');
   assert.deepEqual(t.parts.tape, {color: 'course', pattern: 'check', image: null});
-  assert.deepEqual(t.stickers, [{place: 'folder', asset: SHA, x: 1, y: 0, scale: 2, rotate: 180, z: 3}], '貼れない場所は捨て、値は範囲に収める');
+  assert.deepEqual(
+    t.stickers,
+    [{place: 'folder', asset: SHA, x: 1, y: 0, scale: 2, rotate: 180, z: 3}],
+    '貼れない場所は捨て、値は範囲に収める'
+  );
   assert.deepEqual(t.assets, {[SHA]: {mime: 'image/png', w: 512, h: 100}});
 });
 
@@ -61,8 +68,17 @@ test('シールは 1 か所 5 枚まで', () => {
 });
 
 test('どのテンプレートが当たるか：授業のテンプレート > 全体。ノートは全体だけ。シールは sticker_mode で', () => {
-  const mine = normalizeTemplate({parts: {folder: {card: '#111111'}, note: {type: 'grid'}}, stickers: [{place: 'folder', asset: SHA, z: 1}]}, {id: 'M'});
-  const glob = normalizeTemplate({parts: {folder: {card: '#eeeeee'}, note: {type: 'dot'}}, stickers: [{place: 'folder', asset: 'b'.repeat(64), z: 0}]}, {id: 'G'});
+  const mine = normalizeTemplate(
+    {parts: {folder: {card: '#111111'}, note: {type: 'grid'}}, stickers: [{place: 'folder', asset: SHA, z: 1}]},
+    {id: 'M'}
+  );
+  const glob = normalizeTemplate(
+    {
+      parts: {folder: {card: '#eeeeee'}, note: {type: 'dot'}},
+      stickers: [{place: 'folder', asset: 'b'.repeat(64), z: 0}]
+    },
+    {id: 'G'}
+  );
   const all = [...BUILTIN_TEMPLATES, mine, glob];
   const plain = resolveSkin(all, 'G', {skin_template_id: null});
   assert.equal(plain.folder.card, '#eeeeee');
@@ -70,10 +86,23 @@ test('どのテンプレートが当たるか：授業のテンプレート > �
   const own = resolveSkin(all, 'G', {skin_template_id: 'M', sticker_mode: 'global'});
   assert.equal(own.folder.card, '#111111');
   assert.equal(own.note.type, 'dot', 'ノートは全体のテンプレートから');
-  assert.deepEqual(own.stickers.map((s) => s.asset[0]), ['b']);
-  assert.deepEqual(resolveSkin(all, 'G', {skin_template_id: 'M', sticker_mode: 'course'}).stickers.map((s) => s.asset[0]), ['a']);
-  assert.deepEqual(resolveSkin(all, 'G', {skin_template_id: 'M', sticker_mode: 'both'}).stickers.map((s) => s.asset[0]), ['b', 'a']);
-  assert.equal(resolveSkin(all, 'gone', {skin_template_id: 'gone'}).template.id, CLASSIC_ID, '消えたテンプレートはクラシックに');
+  assert.deepEqual(
+    own.stickers.map((s) => s.asset[0]),
+    ['b']
+  );
+  assert.deepEqual(
+    resolveSkin(all, 'G', {skin_template_id: 'M', sticker_mode: 'course'}).stickers.map((s) => s.asset[0]),
+    ['a']
+  );
+  assert.deepEqual(
+    resolveSkin(all, 'G', {skin_template_id: 'M', sticker_mode: 'both'}).stickers.map((s) => s.asset[0]),
+    ['b', 'a']
+  );
+  assert.equal(
+    resolveSkin(all, 'gone', {skin_template_id: 'gone'}).template.id,
+    CLASSIC_ID,
+    '消えたテンプレートはクラシックに'
+  );
 });
 
 test('クラシックは今の見た目のまま（テーマの色・授業ごとのテープ）', () => {
@@ -126,20 +155,42 @@ test('シールの場所：フォルダ・ホームの余白・授業ページ�
       {place: 'viewer', asset: 'builtin-nothing'}
     ]
   });
-  assert.deepEqual(t.stickers.map((s) => s.place), ['home', 'heading', 'viewer']);
+  assert.deepEqual(
+    t.stickers.map((s) => s.place),
+    ['home', 'heading', 'viewer']
+  );
   assert.deepEqual(Object.keys(t.assets), [SHA], 'はじめから入っているシールは assets に入れない');
 });
 
 test('テープの柄に画像：画像がなければ無地に戻す', () => {
-  assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: SHA}}}).parts.tape, {color: 'course', pattern: 'image', image: SHA});
-  assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: 'x'}}}).parts.tape, {color: 'course', pattern: 'plain', image: null});
-  assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'stripe', image: SHA}}}).parts.tape.image, null, '画像の柄でなければ画像は持たない');
-  assert.ok(SHA in normalizeTemplate({parts: {tape: {pattern: 'image', image: SHA}}}).assets, 'テープの画像も assets に');
+  assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: SHA}}}).parts.tape, {
+    color: 'course',
+    pattern: 'image',
+    image: SHA
+  });
+  assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: 'x'}}}).parts.tape, {
+    color: 'course',
+    pattern: 'plain',
+    image: null
+  });
+  assert.deepEqual(
+    normalizeTemplate({parts: {tape: {pattern: 'stripe', image: SHA}}}).parts.tape.image,
+    null,
+    '画像の柄でなければ画像は持たない'
+  );
+  assert.ok(
+    SHA in normalizeTemplate({parts: {tape: {pattern: 'image', image: SHA}}}).assets,
+    'テープの画像も assets に'
+  );
 });
 
 test('はじめから入っているシール：20 枚ほど、意味のあるシール（試験・課題…）を含む', () => {
   assert.ok(BUILTIN_STICKERS.length >= 20);
-  for (const n of ['試験', '課題', '小テスト', '重要', '休講']) assert.ok(BUILTIN_STICKERS.some((s) => s.name === n && s.kind === 'mark'), n);
+  for (const n of ['試験', '課題', '小テスト', '重要', '休講'])
+    assert.ok(
+      BUILTIN_STICKERS.some((s) => s.name === n && s.kind === 'mark'),
+      n
+    );
   for (const s of BUILTIN_STICKERS) assert.match(builtinStickerUrl(s.id), /^data:image\/svg\+xml/);
 });
 
@@ -178,10 +229,15 @@ test('決まった位置のシール：回の付箋・しおりは 1 枚、資�
 });
 
 test('資料のイラストの中身：印とラベルのずれは ±40 に収め、出すかどうかは真偽だけ。前の版のテンプレートは元のまま', () => {
-  const t = normalizeTemplate({parts: {fileArt: {pdf: {mark: {dx: 99, dy: -3.14, on: false}, label: {on: 'no'}}, nope: {mark: {dx: 1}}}}});
+  const t = normalizeTemplate({
+    parts: {fileArt: {pdf: {mark: {dx: 99, dy: -3.14, on: false}, label: {on: 'no'}}, nope: {mark: {dx: 1}}}}
+  });
   assert.deepEqual(t.parts.fileArt.pdf, {mark: {dx: 40, dy: -3.1, on: false}, label: {dx: 0, dy: 0, on: true}});
   assert.equal('nope' in t.parts.fileArt, false);
-  assert.deepEqual(normalizeTemplate({}).parts.fileArt.video, {mark: {dx: 0, dy: 0, on: true}, label: {dx: 0, dy: 0, on: true}});
+  assert.deepEqual(normalizeTemplate({}).parts.fileArt.video, {
+    mark: {dx: 0, dy: 0, on: true},
+    label: {dx: 0, dy: 0, on: true}
+  });
   assert.deepEqual(resolveSkin([t], t.id).fileArt.pdf.mark.on, false, 'テンプレートの中身が当たる');
 });
 
@@ -193,7 +249,10 @@ test('1 か所に 1 枚のシール：動かしたもの（moved）だけ位置�
       {place: 'folder', asset: 'builtin-star', moved: true}
     ]
   });
-  assert.deepEqual(t.stickers.map((s) => s.moved ?? false), [true, false, false]);
+  assert.deepEqual(
+    t.stickers.map((s) => s.moved ?? false),
+    [true, false, false]
+  );
   assert.equal(t.stickers[0].x, 0.3);
 });
 
@@ -203,5 +262,9 @@ test('回の付箋の色：第 1 回から順に 5 色。6 回目からはまた
   assert.equal(roundColorIndex(6), 0);
   assert.equal(roundColorIndex(0), 0);
   assert.equal(normalizeTemplate({parts: {sticky: {round: Array(5).fill('#abcdef')}}}).parts.sticky.round.length, 5);
-  assert.equal(normalizeTemplate({parts: {sticky: {round: Array(15).fill('#abcdef')}}}).parts.sticky.round, 'default', '数が合わない並びは、はじめの色に');
+  assert.equal(
+    normalizeTemplate({parts: {sticky: {round: Array(15).fill('#abcdef')}}}).parts.sticky.round,
+    'default',
+    '数が合わない並びは、はじめの色に'
+  );
 });

@@ -2,7 +2,8 @@
 
 const FORBIDDEN = /[\\/:*?"<>|\u0000-\u001f]/g;
 const RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
-const segmenter = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('ja', {granularity: 'grapheme'}) : null;
+const segmenter =
+  typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('ja', {granularity: 'grapheme'}) : null;
 
 /** 先頭から max コードポイントで切る。結合文字・絵文字（書記素）の途中では切らない */
 export function truncateCodePoints(text, max) {
@@ -57,7 +58,7 @@ export function sanitizeFileName(name) {
   const raw = String(name ?? '').replace(/^.*[\\/]/, '');
   const m = raw.match(/^(.*?)(\.[A-Za-z0-9]{1,8})?$/);
   const stem = sanitizeSegment(m?.[1] ?? raw, {max: 150}) || 'file';
-  const ext = (m?.[2] ?? '').toLowerCase() === m?.[2] ? m?.[2] ?? '' : m?.[2] ?? '';
+  const ext = (m?.[2] ?? '').toLowerCase() === m?.[2] ? (m?.[2] ?? '') : (m?.[2] ?? '');
   return stem + ext;
 }
 

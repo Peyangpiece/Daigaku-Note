@@ -74,7 +74,7 @@
     --tape-alpha: 0.55;
     --note-weak: 100%;
     --note-mix: #a9a59b;
-  --note-ink-weak: #33363b;
+    --note-ink-weak: #33363b;
     --focus: #eceff4;
   }
 }

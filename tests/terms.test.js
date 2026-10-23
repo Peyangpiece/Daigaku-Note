@@ -47,8 +47,21 @@ test('学期名を変えると、パソコンの学期フォルダの名前と�
   await mkdir(courseDir, {recursive: true});
   await writeFile(path.join(courseDir, 'a.pdf'), 'pdf');
   const course = repo.createCourse({term_id: a.id, name: '管理会計', folder_name: '管理会計'});
-  const own = repo.createCourse({term_id: a.id, name: 'メモ', folder_name: 'メモ', kind: 'folder', dir: path.join(root, '2026_秋学期', '自分のフォルダ', 'メモ')});
-  const m = repo.createMaterial({course_id: course.id, name: 'a.pdf', path: path.join(courseDir, 'a.pdf'), sha256: 'x', size: 3, source: 'lms'});
+  const own = repo.createCourse({
+    term_id: a.id,
+    name: 'メモ',
+    folder_name: 'メモ',
+    kind: 'folder',
+    dir: path.join(root, '2026_秋学期', '自分のフォルダ', 'メモ')
+  });
+  const m = repo.createMaterial({
+    course_id: course.id,
+    name: 'a.pdf',
+    path: path.join(courseDir, 'a.pdf'),
+    sha256: 'x',
+    size: 3,
+    source: 'lms'
+  });
   await saveTerm({repo, rootDir: root}, {...fall, id: a.id, label: '後期'});
   assert.ok(await stat(path.join(root, '2026_後期', '管理会計', 'a.pdf')));
   await assert.rejects(stat(path.join(root, '2026_秋学期')));
@@ -60,8 +73,14 @@ test('学期名を変えると、パソコンの学期フォルダの名前と�
 test('ほかの学期と同じ年度・学期名には直せない。新しく足すときに同じ名前があれば、その学期を直す', async (t) => {
   const {root, repo} = await setup(t);
   const a = await saveTerm({repo, rootDir: root}, fall);
-  const b = await saveTerm({repo, rootDir: root}, {year: 2027, label: '前期', start: '2027-04-01', end: '2027-09-30', rounds: 15});
-  await assert.rejects(saveTerm({repo, rootDir: root}, {...fall, id: b.id, year: 2026, label: '秋学期'}), /もうあります/);
+  const b = await saveTerm(
+    {repo, rootDir: root},
+    {year: 2027, label: '前期', start: '2027-04-01', end: '2027-09-30', rounds: 15}
+  );
+  await assert.rejects(
+    saveTerm({repo, rootDir: root}, {...fall, id: b.id, year: 2026, label: '秋学期'}),
+    /もうあります/
+  );
   const again = await saveTerm({repo, rootDir: root}, {...fall, rounds: 14});
   assert.equal(again.id, a.id);
   assert.equal(again.rounds, 14);
@@ -85,7 +104,10 @@ test('授業・フォルダのない学期だけ消せる。最後の 1 つは�
   repo.createCourse({term_id: b.id, name: '会計', folder_name: '会計'});
   assert.throws(() => removeTerm(repo, b.id), /1 件/);
   removeTerm(repo, a.id);
-  assert.deepEqual(repo.listTerms().map((x) => x.id), [b.id]);
+  assert.deepEqual(
+    repo.listTerms().map((x) => x.id),
+    [b.id]
+  );
   assert.throws(() => removeTerm(repo, 'nope'), /見つかりません/);
 });
 
@@ -117,11 +139,24 @@ test('仮の学期をまとめるとき、授業とパソコンのフォルダ�
   await mkdir(dir, {recursive: true});
   await writeFile(path.join(dir, 'a.pdf'), 'a');
   const c = repo.createCourse({term_id: auto.id, name: '会計', folder_name: '会計'});
-  const m = repo.createMaterial({course_id: c.id, name: 'a.pdf', path: path.join(dir, 'a.pdf'), sha256: 'x', size: 1, source: 'lms'});
-  const row = await saveTerm({repo, rootDir: root}, {year: 2026, label: '後期', start: '2026-09-21', end: '2027-02-10', rounds: 15});
+  const m = repo.createMaterial({
+    course_id: c.id,
+    name: 'a.pdf',
+    path: path.join(dir, 'a.pdf'),
+    sha256: 'x',
+    size: 1,
+    source: 'lms'
+  });
+  const row = await saveTerm(
+    {repo, rootDir: root},
+    {year: 2026, label: '後期', start: '2026-09-21', end: '2027-02-10', rounds: 15}
+  );
   assert.notEqual(row.id, auto.id);
   await mergeAutoTerms({repo, rootDir: root}, row);
-  assert.deepEqual(repo.listTerms().map((x) => x.id), [row.id]);
+  assert.deepEqual(
+    repo.listTerms().map((x) => x.id),
+    [row.id]
+  );
   assert.equal(repo.get('course', c.id).term_id, row.id);
   assert.equal(repo.get('material', m.id).path, path.join(root, '2026_後期', '会計', 'a.pdf'));
   assert.equal(await readFile(repo.get('material', m.id).path, 'utf8'), 'a');

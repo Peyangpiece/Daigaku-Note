@@ -26,7 +26,9 @@ const id = (v) => (isUlid(v) ? v : null);
 const httpsUrl = (v) => {
   try {
     const u = new URL(String(v));
-    return u.protocol === 'https:' || (u.protocol === 'http:' && /^(127\.0\.0\.1|localhost)$/.test(u.hostname)) ? u.toString() : null;
+    return u.protocol === 'https:' || (u.protocol === 'http:' && /^(127\.0\.0\.1|localhost)$/.test(u.hostname))
+      ? u.toString()
+      : null;
   } catch {
     return null;
   }
@@ -62,10 +64,16 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     const courses = repo.listCourses().map((c) => ({...c, unread: repo.countUnread(c.id)}));
     const rounds = Object.fromEntries(courses.map((c) => [c.id, repo.listRounds(c.id)]));
     // 自分のフォルダの資料は、フォルダの中のどの下のフォルダにあるか（sub）も渡す。パスそのものは渡さない
-    const sub = (c, m) => (c.kind === 'folder' && c.dir ? path.relative(c.dir, path.dirname(m.path)).split(path.sep).join('/') : '');
+    const sub = (c, m) =>
+      c.kind === 'folder' && c.dir ? path.relative(c.dir, path.dirname(m.path)).split(path.sep).join('/') : '';
     const marks = repo.bookmarkCounts();
     const materials = Object.fromEntries(
-      courses.map((c) => [c.id, repo.listMaterials(c.id).map(({path: p, ...m}) => ({...m, sub: sub(c, {path: p}), bookmarks: marks[m.sha256] ?? 0}))])
+      courses.map((c) => [
+        c.id,
+        repo
+          .listMaterials(c.id)
+          .map(({path: p, ...m}) => ({...m, sub: sub(c, {path: p}), bookmarks: marks[m.sha256] ?? 0}))
+      ])
     );
     const today = new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'});
     return {
@@ -106,8 +114,17 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       status: ctx.status ?? '',
       jobs: repo.pendingJobs().map((j) => ({id: j.id, kind: j.kind, status: j.status})),
       presets: Object.keys(PERIOD_PRESETS),
-      quizzes: Object.fromEntries(courses.map((c) => [c.id, repo.listQuizzes(c.id).map(({source_json, ...z}) => ({...z, notes: JSON.parse(source_json ?? '{}').notes ?? []}))])),
-      quiz: ctx.quiz ? {...ctx.quiz.status(), key: await ctx.quiz.keyInfo(), reviewDue: ctx.quiz.review().questions.length} : null,
+      quizzes: Object.fromEntries(
+        courses.map((c) => [
+          c.id,
+          repo
+            .listQuizzes(c.id)
+            .map(({source_json, ...z}) => ({...z, notes: JSON.parse(source_json ?? '{}').notes ?? []}))
+        ])
+      ),
+      quiz: ctx.quiz
+        ? {...ctx.quiz.status(), key: await ctx.quiz.keyInfo(), reviewDue: ctx.quiz.review().questions.length}
+        : null,
       version: app.getVersion()
     };
   });
@@ -122,19 +139,27 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       /* 取れなくても URL だけで判定する */
     }
     const candidates = await registry.detect(u, html);
-    return {candidates, base: new URL(u).origin + new URL(u).pathname.replace(/\/(login\/index\.php|my\/?|index\.php)?$/, '')};
+    return {
+      candidates,
+      base: new URL(u).origin + new URL(u).pathname.replace(/\/(login\/index\.php|my\/?|index\.php)?$/, '')
+    };
   });
 
   handle('setup.createConnection', ({connectorId, kind, baseUrl, label}) => {
     const cid = str(connectorId, 32) ?? bad('コネクタが不正です');
     if (!['api', 'recipe', 'generic', 'manual'].includes(kind)) bad('接続の種類が不正です');
     // 大学サービスとつなぐのは、いまの版の利用規約に同意してから
-    if (kind !== 'manual' && repo.getSetting('lms.terms', null)?.version !== LMS_TERMS_VERSION) bad('先に利用規約に同意してください');
-    const base = kind === 'manual' ? null : httpsUrl(baseUrl) ?? bad('URL が不正です');
+    if (kind !== 'manual' && repo.getSetting('lms.terms', null)?.version !== LMS_TERMS_VERSION)
+      bad('先に利用規約に同意してください');
+    const base = kind === 'manual' ? null : (httpsUrl(baseUrl) ?? bad('URL が不正です'));
     const recipe = registry.recipes.find((r) => r.id === cid);
     // 同じ LMS への接続がもうあれば、それを使う（作り直すと授業が 2 つずつできてしまう）
     const host = base ? new URL(base).hostname.toLowerCase() : null;
-    const same = repo.listConnections().find((c) => c.connector_id === cid && c.kind === kind && (c.university_host ?? '').toLowerCase() === (host ?? ''));
+    const same = repo
+      .listConnections()
+      .find(
+        (c) => c.connector_id === cid && c.kind === kind && (c.university_host ?? '').toLowerCase() === (host ?? '')
+      );
     const name = (str(label, 200) ?? '').trim().slice(0, 60);
     if (same) {
       if (name && name !== same.label) repo.updateConnection(same.id, {label: name}); // 入れ直した名前にする
@@ -198,7 +223,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
             isLoggedIn: () => false,
             capture: {
               urlPattern: /\/admin\/tool\/mobile\/launch\.php/,
-              extract: ({headers, body}) => connector.parseLaunchToken(headers?.location ?? '') ?? connector.parseLaunchToken(body)
+              extract: ({headers, body}) =>
+                connector.parseLaunchToken(headers?.location ?? '') ?? connector.parseLaunchToken(body)
             }
           });
           await connector.login(c, 'visible', {tokenFromBrowser: captured});
@@ -344,7 +370,10 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
   handle('skin.recentColor', ({color}) => {
     if (!isHex(color)) bad('色が不正です');
-    const list = [color.toLowerCase(), ...repo.getSetting('skin.recentColors', []).filter((c) => c !== color.toLowerCase())].slice(0, 8);
+    const list = [
+      color.toLowerCase(),
+      ...repo.getSetting('skin.recentColors', []).filter((c) => c !== color.toLowerCase())
+    ].slice(0, 8);
     repo.setSetting('skin.recentColors', list);
     return {recent: list};
   });
@@ -355,7 +384,9 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
 
   // ---- 文房具（SPEC §15）：ショップで入手する（いまは無料の品だけ）・筆箱の中身とペンケースを変える ----
   handle('stationery.acquire', ({itemId}) => {
-    const st = acquire(repo.getSetting('stationery', null), String(itemId ?? ''), {experiments: repo.getSetting('experiments.makerPens', false) === true});
+    const st = acquire(repo.getSetting('stationery', null), String(itemId ?? ''), {
+      experiments: repo.getSetting('experiments.makerPens', false) === true
+    });
     repo.setSetting('stationery', st);
     return {stationery: st};
   });
@@ -380,7 +411,14 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     await fsp.mkdir(stickersDir(), {recursive: true});
     await fsp.writeFile(stickerFile(sid), buf);
     if (!repo.get('sticker', sid))
-      repo.insert('sticker', {id: sid, w, h, shape: SHAPES.includes(shape) ? shape : 'cut', favorite: 0, created_at: new Date().toISOString()});
+      repo.insert('sticker', {
+        id: sid,
+        w,
+        h,
+        shape: SHAPES.includes(shape) ? shape : 'cut',
+        favorite: 0,
+        created_at: new Date().toISOString()
+      });
     return {sticker: repo.get('sticker', sid)};
   });
   handle('sticker.update', ({id: sid, shape, favorite, folder}) => {
@@ -389,7 +427,12 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (SHAPES.includes(shape)) patch.shape = shape;
     if (typeof favorite === 'boolean') patch.favorite = favorite ? 1 : 0;
     // シール帳のフォルダ分け（名前。空なら分けない）
-    if (typeof folder === 'string') patch.folder = folder.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 20) || null;
+    if (typeof folder === 'string')
+      patch.folder =
+        folder
+          .replace(/[\u0000-\u001f]/g, '')
+          .trim()
+          .slice(0, 20) || null;
     repo.update('sticker', sid, patch);
     return {sticker: repo.get('sticker', sid)};
   });
@@ -422,7 +465,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
   handle('skin.import', async () => {
     const win = getWindow();
-    const opts = {title: 'テンプレートを読み込む', properties: ['openFile'], filters: [{name: '大学ノートのテンプレート', extensions: ['dnskin', 'json']}]};
+    const opts = {
+      title: 'テンプレートを読み込む',
+      properties: ['openFile'],
+      filters: [{name: '大学ノートのテンプレート', extensions: ['dnskin', 'json']}]
+    };
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
     if (r.canceled || !r.filePaths?.[0]) return {ok: false};
     const stat = await fsp.stat(r.filePaths[0]);
@@ -450,12 +497,22 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       const sid = sha256(png);
       await fsp.writeFile(stickerFile(sid), png);
       const size = img.getSize();
-      if (!repo.get('sticker', sid)) repo.insert('sticker', {id: sid, w: size.width, h: size.height, shape: 'cut', favorite: 0, created_at: new Date().toISOString()});
+      if (!repo.get('sticker', sid))
+        repo.insert('sticker', {
+          id: sid,
+          w: size.width,
+          h: size.height,
+          shape: 'cut',
+          favorite: 0,
+          created_at: new Date().toISOString()
+        });
       renamed[old] = sid;
     }
     // 画像のないシールは捨てる（はじめから入っているシールと、もうシール帳にある画像はそのまま）
     const fix = (sid) => (isSha(sid) ? (renamed[sid] ?? (repo.get('sticker', sid) ? sid : null)) : sid);
-    const stickers = (Array.isArray(raw.stickers) ? raw.stickers : []).map((s) => ({...s, asset: fix(s?.asset)})).filter((s) => s.asset);
+    const stickers = (Array.isArray(raw.stickers) ? raw.stickers : [])
+      .map((s) => ({...s, asset: fix(s?.asset)}))
+      .filter((s) => s.asset);
     const tape = {...(raw.parts?.tape ?? {}), image: raw.parts?.tape?.image ? fix(raw.parts.tape.image) : null};
     // 同じ識別番号の自作テンプレートがあれば、置き換えるか別のものとして加えるかを選ぶ
     let tid = isUlid(raw.id) && !isBuiltin(raw.id) ? raw.id : ulid();
@@ -492,7 +549,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
 
   handle('sync.run', async ({connectionId, courseId, full}) => {
-    if (courseId && repo.get('course', id(courseId) ?? bad('授業が不正です'))?.kind === 'folder') return folders.scan(courseId);
+    if (courseId && repo.get('course', id(courseId) ?? bad('授業が不正です'))?.kind === 'folder')
+      return folders.scan(courseId);
     const payload = {};
     if (connectionId) payload.connectionId = id(connectionId) ?? bad('接続が不正です');
     if (courseId) payload.courseId = id(courseId) ?? bad('授業が不正です');
@@ -520,7 +578,9 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   handle('pdf.open', async ({materialId}) => {
     const m = pdfMaterial(materialId);
     // 上書き保存したことがあれば、注釈を描き込む前の写しを開く（描き込み済みの上に注釈を重ねて 2 重にしない）
-    const base = await readBase(m, originalsDir()).catch(() => bad('ファイルを読めませんでした（移動または削除された可能性があります）'));
+    const base = await readBase(m, originalsDir()).catch(() =>
+      bad('ファイルを読めませんでした（移動または削除された可能性があります）')
+    );
     if (!base.pristine) log.warn(`元の PDF の写しがありません：${m.name}（描き込み済みのファイルを開きます）`);
     const bytes = base.bytes;
     repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
@@ -552,7 +612,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
   handle('annotation.save', ({materialId, annotation}) => {
     const m = pdfMaterial(materialId);
-    const aid = annotation?.id == null ? null : id(annotation.id) ?? bad('注釈が不正です');
+    const aid = annotation?.id == null ? null : (id(annotation.id) ?? bad('注釈が不正です'));
     const row = repo.saveAnnotation(annoKey(m), aid, normalizeAnnotation(annotation));
     return {annotation: annotationToClient(row)};
   });
@@ -580,7 +640,13 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   handle('pdf.save', async ({materialId, texts}) => {
     const m = pdfMaterial(materialId);
     const rows = repo.listAnnotations(annoKey(m)).map(annotationToClient);
-    const r = await overwritePdf({repo, material: m, annotations: rows, images: textImages(rows, texts), originalsDir: originalsDir()});
+    const r = await overwritePdf({
+      repo,
+      material: m,
+      annotations: rows,
+      images: textImages(rows, texts),
+      originalsDir: originalsDir()
+    });
     if (r.changed) getWindow()?.webContents.send('state.changed', {});
     return {ok: true, changed: r.changed, name: m.name};
   });
@@ -639,9 +705,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   // 資料を別の回へ移す。roundId が null なら「自分の付箋」へ。すぐ動かす（同期の列に並べると、長い同期のあいだ待たされる）
   handle('material.move', async ({materialId, roundId}) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
-    const r = roundId === null ? null : (repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません'));
+    const r =
+      roundId === null ? null : (repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません'));
     if (r && r.course_id !== m.course_id) bad('別の授業の回には移せません');
-    if (repo.get('course', m.course_id)?.kind === 'folder') bad('自分のフォルダの中では移せません（Finder で動かしてください）');
+    if (repo.get('course', m.course_id)?.kind === 'folder')
+      bad('自分のフォルダの中では移せません（Finder で動かしてください）');
     if ((r?.id ?? null) === m.round_id) return {ok: true};
     if (m.status !== 'ok') bad('ファイルが見つからないため移せません');
     const course = repo.get('course', m.course_id);
@@ -668,7 +736,17 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         const r = await files.addOwn({...place, name, data: await read()});
         if (r.result === 'dup') {
           const where = r.material.round_id ? repo.get('round', r.material.round_id) : null;
-          out.dup.push({name, where: place.course.kind === 'folder' ? 'このフォルダ' : where ? (where.number === 0 ? where.title_user || 'その他' : `第${where.number}回`) : '「付箋を追加」'});
+          out.dup.push({
+            name,
+            where:
+              place.course.kind === 'folder'
+                ? 'このフォルダ'
+                : where
+                  ? where.number === 0
+                    ? where.title_user || 'その他'
+                    : `第${where.number}回`
+                  : '「付箋を追加」'
+          });
         } else out.added++;
       } catch (e) {
         log.warn(`ファイルを入れられませんでした: ${name}（${e.message}）`);
@@ -679,7 +757,10 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   };
   handle('material.upload', async ({courseId, roundId = null}) => {
     const place = placeFor(courseId, roundId);
-    const r = await dialog.showOpenDialog({title: `${place.course.name} に入れるファイル`, properties: ['openFile', 'multiSelections']});
+    const r = await dialog.showOpenDialog({
+      title: `${place.course.name} に入れるファイル`,
+      properties: ['openFile', 'multiSelections']
+    });
     if (r.canceled || !r.filePaths.length) return {added: 0, dup: [], failed: [], canceled: true};
     const items = [];
     for (const p of r.filePaths) {
@@ -694,7 +775,12 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (!Array.isArray(list) || !list.length || list.length > 50) bad('ファイルが不正です');
     const items = list.map((f) => {
       const name = str(f?.name, 255) ?? bad('ファイル名が不正です');
-      const data = f?.data instanceof Uint8Array ? f.data : f?.data instanceof ArrayBuffer ? new Uint8Array(f.data) : bad('ファイルの中身が不正です');
+      const data =
+        f?.data instanceof Uint8Array
+          ? f.data
+          : f?.data instanceof ArrayBuffer
+            ? new Uint8Array(f.data)
+            : bad('ファイルの中身が不正です');
       if (data.byteLength > MAX_UPLOAD) bad(`${name} は大きすぎます（300MB まで）`);
       return {name, read: async () => Buffer.from(data.buffer, data.byteOffset, data.byteLength)};
     });
@@ -739,7 +825,10 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   // 自分のフォルダの中の下のフォルダ（付箋 1 枚）の名前を変える：パソコンのフォルダの名前を変えて、読み直す（中身の記録は SHA-256 で付いていく）
   handle('folder.renameSub', async ({courseId, sub, name}) => {
     const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
-    return {ok: true, ...(await folders.renameSub(c.id, str(sub, 1000) ?? bad('フォルダが不正です'), str(name, 200) ?? ''))};
+    return {
+      ok: true,
+      ...(await folders.renameSub(c.id, str(sub, 1000) ?? bad('フォルダが不正です'), str(name, 200) ?? ''))
+    };
   });
   handle('folder.reveal', async ({courseId}) => {
     const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
@@ -761,14 +850,19 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
 
   handle('settings.pickDownloadDir', async () => {
-    const r = await dialog.showOpenDialog({title: '資料の保存先のフォルダ', defaultPath: ctx.rootDir(), properties: ['openDirectory', 'createDirectory']});
+    const r = await dialog.showOpenDialog({
+      title: '資料の保存先のフォルダ',
+      defaultPath: ctx.rootDir(),
+      properties: ['openDirectory', 'createDirectory']
+    });
     if (r.canceled) return {dir: null};
     const dir = checkDownloadDir(r.filePaths[0], app.getPath('home'));
     repo.setSetting('storage.root', dir);
     return {dir};
   });
   handle('settings.update', ({patch}) => {
-    if (typeof patch.syncTime === 'string' && /^\d{2}:\d{2}$/.test(patch.syncTime)) repo.setSetting('sync.time', patch.syncTime);
+    if (typeof patch.syncTime === 'string' && /^\d{2}:\d{2}$/.test(patch.syncTime))
+      repo.setSetting('sync.time', patch.syncTime);
     if (typeof patch.classStart === 'boolean') repo.setSetting('sync.classStart', patch.classStart);
     if ([0, 1, 3, 6].includes(patch.everyHours)) repo.setSetting('sync.everyHours', patch.everyHours);
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
@@ -779,9 +873,12 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (isRole(patch.role)) {
       repo.setSetting('profile.role', patch.role);
       repo.setSetting('profile.uses', cleanUses(patch.role, patch.uses ?? repo.getSetting('profile.uses', [])));
-    } else if (patch.uses !== undefined) repo.setSetting('profile.uses', cleanUses(repo.getSetting('profile.role', null), patch.uses));
-    if (patch.acceptLmsTerms === LMS_TERMS_VERSION) repo.setSetting('lms.terms', {version: LMS_TERMS_VERSION, at: new Date().toISOString()});
-    if (typeof patch.university === 'string') repo.setSetting('profile.university', patch.university.trim().slice(0, 60));
+    } else if (patch.uses !== undefined)
+      repo.setSetting('profile.uses', cleanUses(repo.getSetting('profile.role', null), patch.uses));
+    if (patch.acceptLmsTerms === LMS_TERMS_VERSION)
+      repo.setSetting('lms.terms', {version: LMS_TERMS_VERSION, at: new Date().toISOString()});
+    if (typeof patch.university === 'string')
+      repo.setSetting('profile.university', patch.university.trim().slice(0, 60));
     // フォルダごとの色（タブ・フォルダ・マスキングテープ・新着の知らせ）。color が null ならその色を元に戻す。reset ですべて元に戻す
     if (patch.folderLook && typeof patch.folderLook === 'object') {
       const {courseId: fcid, part, color: c, reset} = patch.folderLook;
@@ -831,13 +928,22 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return {ok: true};
   });
   handle('shell.openRoot', () => shell.openPath(ctx.rootDir()).then((e) => (e ? {error: e} : {ok: true})));
-  handle('app.version', () => ({version: app.getVersion(), recipes: registry.recipes.map((r) => ({id: r.id, version: r.version, verified: r.verified === true}))}));
+  handle('app.version', () => ({
+    version: app.getVersion(),
+    recipes: registry.recipes.map((r) => ({id: r.id, version: r.version, verified: r.verified === true}))
+  }));
   // ---- クイズ（SPEC §11） ----
   const quiz = ctx.quiz;
-  const ids = (list, max = 50) => (Array.isArray(list) ? list.slice(0, max).map((x) => id(x) ?? bad('ID が不正です')) : bad('ID の一覧が不正です'));
+  const ids = (list, max = 50) =>
+    Array.isArray(list) ? list.slice(0, max).map((x) => id(x) ?? bad('ID が不正です')) : bad('ID の一覧が不正です');
   const parseQ = ({o_json, tags_json, ...q}) => {
     const o = JSON.parse(o_json ?? '[]');
-    return {...q, o: Array.isArray(o) ? o : [], unit: Array.isArray(o) ? '' : o.unit ?? '', tags: JSON.parse(tags_json ?? '[]')};
+    return {
+      ...q,
+      o: Array.isArray(o) ? o : [],
+      unit: Array.isArray(o) ? '' : (o.unit ?? ''),
+      tags: JSON.parse(tags_json ?? '[]')
+    };
   };
   handle('quiz.status', async () => ({...quiz.status(), key: await quiz.keyInfo()}));
   handle('quiz.setKey', async ({apiKey}) => quiz.setKey(str(apiKey, 300) ?? bad('API キーを入れてください')));
@@ -846,24 +952,33 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (patch.model !== undefined) repo.setSetting('quiz.model', str(patch.model, 40) ?? bad('モデルが不正です'));
     if (patch.mix && typeof patch.mix === 'object') {
       const mix = {};
-      for (const t of quiz.status().types) mix[t] = Math.max(0, Math.min(30, Number.isInteger(patch.mix[t]) ? patch.mix[t] : 0));
+      for (const t of quiz.status().types)
+        mix[t] = Math.max(0, Math.min(30, Number.isInteger(patch.mix[t]) ? patch.mix[t] : 0));
       const total = Object.values(mix).reduce((a, b) => a + b, 0);
       if (total < 1 || total > 30) bad('問題数は 1〜30 問にしてください');
       repo.setSetting('quiz.mix', mix);
     }
-    if (patch.perDay !== undefined) repo.setSetting('quiz.perDay', Math.max(1, Math.min(200, Number(patch.perDay) || 30)));
-    if (patch.perMonthUsd !== undefined) repo.setSetting('quiz.perMonthUsd', Math.max(0.5, Math.min(500, Number(patch.perMonthUsd) || 5)));
+    if (patch.perDay !== undefined)
+      repo.setSetting('quiz.perDay', Math.max(1, Math.min(200, Number(patch.perDay) || 30)));
+    if (patch.perMonthUsd !== undefined)
+      repo.setSetting('quiz.perMonthUsd', Math.max(0.5, Math.min(500, Number(patch.perMonthUsd) || 5)));
     return {ok: true};
   });
   handle('quiz.generate', ({roundIds}) => ({queued: quiz.generate(ids(roundIds))}));
-  handle('quiz.list', ({courseId}) => repo.listQuizzes(id(courseId) ?? bad('授業が不正です')).map((z) => ({...z, source: JSON.parse(z.source_json ?? '{}'), source_json: undefined})));
+  handle('quiz.list', ({courseId}) =>
+    repo
+      .listQuizzes(id(courseId) ?? bad('授業が不正です'))
+      .map((z) => ({...z, source: JSON.parse(z.source_json ?? '{}'), source_json: undefined}))
+  );
   handle('quiz.questions', ({quizIds, courseId}) =>
-    repo.listQuestions(quizIds ? {quizIds: ids(quizIds)} : {courseId: id(courseId) ?? bad('授業が不正です')}).map(parseQ)
+    repo
+      .listQuestions(quizIds ? {quizIds: ids(quizIds)} : {courseId: id(courseId) ?? bad('授業が不正です')})
+      .map(parseQ)
   );
   handle('quiz.answer', ({questionId, answer, mode, seconds}) =>
     quiz.answer({
       questionId: id(questionId) ?? bad('問題が不正です'),
-      answer: typeof answer === 'boolean' ? answer : str(String(answer ?? ''), 300) ?? '',
+      answer: typeof answer === 'boolean' ? answer : (str(String(answer ?? ''), 300) ?? ''),
       mode: ['quiz', 'review', 'retry', 'exam', 'card'].includes(mode) ? mode : 'quiz',
       seconds: Number.isFinite(seconds) ? Math.round(seconds) : null
     })
@@ -876,15 +991,24 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     const qid = id(questionId) ?? bad('問題が不正です');
     const q = repo.get('question', qid) ?? bad('問題がありません');
     const allowed = {};
-    for (const k of ['q', 'a', 'n']) if (typeof patch[k] === 'string') allowed[k] = str(patch[k].trim(), k === 'n' ? 400 : k === 'q' ? 300 : 120) ?? bad(`${k} が長すぎます`);
-    if (Array.isArray(patch.o)) allowed.o_json = JSON.stringify(patch.o.slice(0, 3).map((x) => str(String(x).trim(), 120) ?? bad('誤答が長すぎます')));
+    for (const k of ['q', 'a', 'n'])
+      if (typeof patch[k] === 'string')
+        allowed[k] = str(patch[k].trim(), k === 'n' ? 400 : k === 'q' ? 300 : 120) ?? bad(`${k} が長すぎます`);
+    if (Array.isArray(patch.o))
+      allowed.o_json = JSON.stringify(
+        patch.o.slice(0, 3).map((x) => str(String(x).trim(), 120) ?? bad('誤答が長すぎます'))
+      );
     if (patch.reviewed === true) allowed.review = null;
     if (typeof patch.report === 'string') allowed.report_reason = str(patch.report, 60) || null;
     if (patch.report === null) allowed.report_reason = null;
     if (patch.deleted === true) allowed.deleted = 1;
     const next = {...q, ...allowed, o: allowed.o_json ? JSON.parse(allowed.o_json) : JSON.parse(q.o_json ?? '[]')};
     if (allowed.q || allowed.a || allowed.o_json) {
-      const errs = checkQuestion({...next, o: Array.isArray(next.o) ? next.o : [], src: {quote: 'x'.repeat(20)}}).filter((e) => !/引用/.test(e));
+      const errs = checkQuestion({
+        ...next,
+        o: Array.isArray(next.o) ? next.o : [],
+        src: {quote: 'x'.repeat(20)}
+      }).filter((e) => !/引用/.test(e));
       if (errs.length) bad(errs.join('／'));
       allowed.review = null; // 本人が直した問題は「要確認」を外す
     }

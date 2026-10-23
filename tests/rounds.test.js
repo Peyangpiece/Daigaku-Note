@@ -53,7 +53,10 @@ test('ファイル名から回を読む（先頭の番号も）', () => {
 test('優先順で回を決める', () => {
   assert.deepEqual(resolveRound({connector: 4, section: '第2回', filename: '03.pdf'}), {round: 4, from: 'lms'});
   assert.deepEqual(resolveRound({section: '第2回 x', filename: '03.pdf'}), {round: 2, from: 'lms'});
-  assert.deepEqual(resolveRound({section: '一般', notice: '【第03回，10/09】', filename: 'x.pdf'}), {round: 3, from: 'notice'});
+  assert.deepEqual(resolveRound({section: '一般', notice: '【第03回，10/09】', filename: 'x.pdf'}), {
+    round: 3,
+    from: 'notice'
+  });
   assert.deepEqual(resolveRound({section: '一般', filename: '05_資料.pdf'}), {round: 5, from: 'filename'});
   assert.deepEqual(resolveRound({section: '一般', filename: '資料.pdf'}), {round: 0, from: 'none'});
 });
@@ -72,11 +75,30 @@ test('授業画面の並び：今週の回が先頭、前の回は新しい順�
   assert.equal(weekStart('2026-10-25'), '2026-10-19', '日曜は前の月曜から');
   assert.equal(weekStart('2026-10-19'), '2026-10-19');
   const r = (number, date) => ({id: `r${number}`, number, date});
-  const rounds = [r(0, null), r(3, '2026-10-16'), r(1, '2026-10-02'), r(4, '2026-10-23'), r(2, '2026-10-09'), r(5, '2026-10-30')];
+  const rounds = [
+    r(0, null),
+    r(3, '2026-10-16'),
+    r(1, '2026-10-02'),
+    r(4, '2026-10-23'),
+    r(2, '2026-10-09'),
+    r(5, '2026-10-30')
+  ];
   const ids = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v.map((x) => x.id)]));
-  assert.deepEqual(ids(orderRounds(rounds, '2026-10-20')), {current: ['r4', 'r5'], past: ['r1', 'r2', 'r3'], other: ['r0']});
+  assert.deepEqual(ids(orderRounds(rounds, '2026-10-20')), {
+    current: ['r4', 'r5'],
+    past: ['r1', 'r2', 'r3'],
+    other: ['r0']
+  });
   assert.deepEqual(ids(orderRounds(rounds, '2026-10-24')).current[0], 'r4', '授業の日が過ぎても同じ週なら先頭');
   assert.deepEqual(ids(orderRounds(rounds, '2026-10-26')).current, ['r5'], '今週に回がなければ次の回');
-  assert.deepEqual(ids(orderRounds(rounds, '2026-11-10')), {current: [], past: ['r1', 'r2', 'r3', 'r4', 'r5'], other: ['r0']}, '学期のあと');
-  assert.deepEqual(ids(orderRounds([r(2, null), r(1, null)], '2026-10-20')).current, ['r1', 'r2'], '日付がなければ回の順');
+  assert.deepEqual(
+    ids(orderRounds(rounds, '2026-11-10')),
+    {current: [], past: ['r1', 'r2', 'r3', 'r4', 'r5'], other: ['r0']},
+    '学期のあと'
+  );
+  assert.deepEqual(
+    ids(orderRounds([r(2, null), r(1, null)], '2026-10-20')).current,
+    ['r1', 'r2'],
+    '日付がなければ回の順'
+  );
 });

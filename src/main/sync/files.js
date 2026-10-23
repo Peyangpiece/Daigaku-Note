@@ -77,7 +77,13 @@ export class FileManager {
       const existing = await fsp.readFile(path.join(dir, name)).catch(() => null);
       if (existing && sha256(existing) === hash) return {path: path.join(dir, name), existed: true};
     }
-    return {path: path.join(dir, uniqueName(name, (c) => taken.has(c))), existed: false};
+    return {
+      path: path.join(
+        dir,
+        uniqueName(name, (c) => taken.has(c))
+      ),
+      existed: false
+    };
   }
 
   /** 一時ファイルに書いてから rename（途中で落ちても壊れたファイルを残さない） */
@@ -119,7 +125,8 @@ export class FileManager {
     } catch (e) {
       return {result: 'failed', reason: 'download', error: e};
     }
-    if (!res?.ok || /text\/html/i.test(res.contentType ?? '')) return {result: 'failed', reason: 'download', status: res?.status};
+    if (!res?.ok || /text\/html/i.test(res.contentType ?? ''))
+      return {result: 'failed', reason: 'download', status: res?.status};
     const body = Buffer.isBuffer(res.body) ? res.body : Buffer.from(res.body);
 
     // 3. ハッシュ
@@ -226,7 +233,12 @@ export class FileManager {
     const {path: target, existed} = await this.uniquePath(dir, path.basename(material.path), material.sha256);
     if (!existed && target !== material.path) await fsp.rename(material.path, target);
     else if (existed && target !== material.path) await fsp.rm(material.path, {force: true}); // 同じ中身が移動先にある
-    return this.repo.updateMaterial(material.id, {path: target, name: path.basename(target), round_id: round?.id ?? null, round_from: 'user'});
+    return this.repo.updateMaterial(material.id, {
+      path: target,
+      name: path.basename(target),
+      round_id: round?.id ?? null,
+      round_from: 'user'
+    });
   }
 
   /** 授業フォルダ・回フォルダの改名（名前が変わったとき）。移動先があれば中身を合流させる */
@@ -284,7 +296,10 @@ export class FileManager {
       return scanned;
     };
     for (const m of materials) {
-      const exists = await fsp.access(m.path).then(() => true, () => false);
+      const exists = await fsp.access(m.path).then(
+        () => true,
+        () => false
+      );
       if (exists) {
         if (m.status === 'missing') {
           this.repo.updateMaterial(m.id, {status: 'ok'});
@@ -323,7 +338,10 @@ export class FileManager {
       const original = path.join(path.dirname(m.path), num.base);
       const [data, origExists] = await Promise.all([
         fsp.readFile(m.path).catch(() => null),
-        fsp.access(original).then(() => true, () => false)
+        fsp.access(original).then(
+          () => true,
+          () => false
+        )
       ]);
       if (!data || !origExists || sha256(data) !== m.sha256) continue;
       await this.trash(m.path);

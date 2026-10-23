@@ -113,7 +113,8 @@ export function validateRecipe(r) {
         errors.push(`${sec}.${k}: ${e.message}`);
       }
     }
-    if ((r[sec].items === 'auto' || r[sec].openBeforeRead === 'auto') && !r[sec].container) errors.push(`${sec}: items や openBeforeRead を auto にするには container が要ります`);
+    if ((r[sec].items === 'auto' || r[sec].openBeforeRead === 'auto') && !r[sec].container)
+      errors.push(`${sec}: items や openBeforeRead を auto にするには container が要ります`);
   }
   for (const sec of ['notices']) {
     if (!r[sec] || typeof r[sec] !== 'object') continue;
@@ -126,7 +127,8 @@ export function validateRecipe(r) {
         errors.push(`${sec}.${k}: ${e.message}`);
       }
     }
-    if ((r[sec].items === 'auto' || r[sec].openBeforeRead === 'auto') && !r[sec].container) errors.push(`${sec}: items や openBeforeRead を auto にするには container が要ります`);
+    if ((r[sec].items === 'auto' || r[sec].openBeforeRead === 'auto') && !r[sec].container)
+      errors.push(`${sec}: items や openBeforeRead を auto にするには container が要ります`);
   }
   for (const k of Object.keys(r)) {
     if (/^(script|code|eval|js)$/i.test(k)) errors.push(`レシピにコードは入れられません: ${k}`);
@@ -152,6 +154,7 @@ export function applyUniversityOverride(recipe, host) {
 export function detectScore(recipe, url, html = '') {
   let score = 0;
   for (const p of recipe.detect?.urlPatterns ?? []) if (new RegExp(p, 'i').test(url)) score = Math.max(score, 0.8);
-  for (const m of recipe.detect?.htmlMarkers ?? []) if (html && html.includes(m)) score = Math.max(score, score ? 0.95 : 0.6);
+  for (const m of recipe.detect?.htmlMarkers ?? [])
+    if (html && html.includes(m)) score = Math.max(score, score ? 0.95 : 0.6);
   return score;
 }

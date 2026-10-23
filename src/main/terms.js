@@ -38,9 +38,16 @@ export async function saveTerm({repo, rootDir}, input) {
   const start = DATE.test(input.start ?? '') ? input.start : d.start;
   const end = DATE.test(input.end ?? '') ? input.end : d.end;
   if (start >= end) throw err('終了日は開始日より後にしてください');
-  const rounds = Number.isInteger(Number(input.rounds)) && Number(input.rounds) >= 1 && Number(input.rounds) <= 30 ? Number(input.rounds) : 15;
+  const rounds =
+    Number.isInteger(Number(input.rounds)) && Number(input.rounds) >= 1 && Number(input.rounds) <= 30
+      ? Number(input.rounds)
+      : 15;
   const periods =
-    input.preset && PERIOD_PRESETS[input.preset] ? PERIOD_PRESETS[input.preset] : input.periods && typeof input.periods === 'object' ? input.periods : null;
+    input.preset && PERIOD_PRESETS[input.preset]
+      ? PERIOD_PRESETS[input.preset]
+      : input.periods && typeof input.periods === 'object'
+        ? input.periods
+        : null;
   const holidays = Array.isArray(input.holidays) ? input.holidays.filter((x) => DATE.test(x)) : [];
 
   const terms = repo.listTerms();
@@ -95,9 +102,13 @@ export async function moveTermFolder({repo, rootDir}, fromName, toName) {
   const a = from + path.sep;
   const b = to + path.sep;
   repo.transaction(() => {
-    repo.db.prepare('UPDATE material SET path = ? || substr(path, ?) WHERE substr(path, 1, ?) = ?').run(b, a.length + 1, a.length, a);
+    repo.db
+      .prepare('UPDATE material SET path = ? || substr(path, ?) WHERE substr(path, 1, ?) = ?')
+      .run(b, a.length + 1, a.length, a);
     repo.db.prepare('UPDATE course SET dir = ? WHERE dir = ?').run(to, from);
-    repo.db.prepare('UPDATE course SET dir = ? || substr(dir, ?) WHERE substr(dir, 1, ?) = ?').run(b, a.length + 1, a.length, a);
+    repo.db
+      .prepare('UPDATE course SET dir = ? || substr(dir, ?) WHERE substr(dir, 1, ?) = ?')
+      .run(b, a.length + 1, a.length, a);
   });
 }
 
@@ -132,11 +143,15 @@ export async function moveDir(from, to) {
  */
 export async function mergeAutoTerms({repo, rootDir}, row) {
   for (const t of repo.listTerms()) {
-    if (t.source !== 'auto' || t.id === row.id || !(t.start_date <= row.end_date && row.start_date <= t.end_date)) continue;
+    if (t.source !== 'auto' || t.id === row.id || !(t.start_date <= row.end_date && row.start_date <= t.end_date))
+      continue;
     // 同じ名前の授業フォルダが両方の学期にあれば、まとめずに知らせる（上書きしない）
     const names = new Set(repo.listCourses({termId: row.id}).map((c) => c.folder_name));
     const same = repo.listCourses({termId: t.id}).find((c) => names.has(c.folder_name));
-    if (same) throw err(`「${same.folder_name}」が ${t.label} と ${row.label} の両方にあるので、学期をまとめられません。どちらかの名前を変えてください`);
+    if (same)
+      throw err(
+        `「${same.folder_name}」が ${t.label} と ${row.label} の両方にあるので、学期をまとめられません。どちらかの名前を変えてください`
+      );
     if (t.folder !== row.folder) await moveTermFolder({repo, rootDir}, t.folder, row.folder);
     repo.transaction(() => {
       for (const c of repo.listCourses({termId: t.id})) repo.updateCourse(c.id, {term_id: row.id});

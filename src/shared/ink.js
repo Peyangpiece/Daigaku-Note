@@ -161,7 +161,8 @@ export function createCapture({minGap = 0.2, streamline = 0.35} = {}) {
     },
     /** 離したところ：なめらかにして遅れた分、最後の点を指の位置まで届かせる */
     finish(x, y, p) {
-      if (last && dist(last, [x, y]) >= minGap * 0.5 && points.length < POINTS_MAX) points.push([x, y, last[2] * 0.5 + p * 0.5]);
+      if (last && dist(last, [x, y]) >= minGap * 0.5 && points.length < POINTS_MAX)
+        points.push([x, y, last[2] * 0.5 + p * 0.5]);
       return points;
     }
   };

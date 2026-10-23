@@ -21,7 +21,10 @@ test('字の切れ目：PDF の送り幅（ws。1 em = 1000）があればそれ
   );
   // 送り幅のない字（pdf.js が足した空白など）だけ measure で測る（100px の字の幅にそろえる）
   const mixed = {...item('原 価', 0, 250), ws: [1000, null, 1000]};
-  assert.deepEqual(charEdges(mixed, (c) => (c === ' ' ? 50 : 100)), [0, 100, 150, 250]);
+  assert.deepEqual(
+    charEdges(mixed, (c) => (c === ' ' ? 50 : 100)),
+    [0, 100, 150, 250]
+  );
 });
 
 test('なぞった端をいちばん近い字の切れ目に合わせる。1 字に満たなければその字', () => {
@@ -53,7 +56,8 @@ test('押した位置の単語を覆う。句読点・字の外なら null', () 
 
 test('描かれた字に合わせる：見積もりの箱と重なる字を丸ごと覆う。上下ははみ出した字まで広げる', () => {
   // 字は 20px ごと（x = 2〜17, 22〜37, …）、y = 8〜27 に描かれている
-  const ink = (x, y) => x >= 0 && x < 100 && y >= 8 && y <= 27 && ((x % 20) + 20) % 20 >= 2 && ((x % 20) + 20) % 20 <= 17;
+  const ink = (x, y) =>
+    x >= 0 && x < 100 && y >= 8 && y <= 27 && ((x % 20) + 20) % 20 >= 2 && ((x % 20) + 20) % 20 <= 17;
   const r = fitToInk({left: 1, right: 55, top: 10, bottom: 25}, ink, {fh: 20, pad: 0});
   assert.deepEqual([r.left, r.right], [2, 58], '3 字目（42〜57）は大半が箱の中 → 丸ごと覆う');
   assert.deepEqual([r.top, r.bottom], [8, 27], '上下ははみ出した字まで');
@@ -72,7 +76,10 @@ test('描かれた字に合わせる：字の中のすき間（「が」の濁�
   assert.deepEqual([r2.left, r2.right], [40, 57], '「は」を丸ごと（左の棒だけにしない）。次の字は覆わない');
   // 見積もりの字の切れ目（edges）があれば、かたまりはその字ごとにまとめる。「に」（右の部分 20〜34）と「は」の左の棒（36〜38）は
   // 合わせると 1 字の幅に収まるが、見積もりでは別の字なのでまとめない
-  const niha = (x, y) => y >= 0 && y <= 20 && ((x >= 13 && x < 16) || (x >= 20 && x < 34) || (x >= 36 && x < 39) || (x >= 42 && x < 54) || (x >= 58 && x < 63));
+  const niha = (x, y) =>
+    y >= 0 &&
+    y <= 20 &&
+    ((x >= 13 && x < 16) || (x >= 20 && x < 34) || (x >= 36 && x < 39) || (x >= 42 && x < 54) || (x >= 58 && x < 63));
   const edges = [12, 35, 56, 66]; // に・は・，
   const r4 = fitToInk({left: 35, right: 56, top: 0, bottom: 20}, niha, {fh: 30, pad: 0, edges});
   assert.deepEqual([r4.left, r4.right], [36, 54], '「は」だけを丸ごと（「に」も「，」も覆わない）');
@@ -87,5 +94,8 @@ test('ImageData から字（背景より暗い画素）を見分ける。背景�
   const ink = inkFromImage(img([0, 0, 0]), {x0: 10, y0: 0, scale: 1});
   assert.equal(ink(10, 0), true, '黒い字');
   assert.equal(ink(11, 0), false, '黄色の背景');
-  assert.equal(inkFromImage({width: 1, height: 1, data: Uint8ClampedArray.from([20, 20, 20, 255])}, {x0: 0, y0: 0, scale: 1}), null);
+  assert.equal(
+    inkFromImage({width: 1, height: 1, data: Uint8ClampedArray.from([20, 20, 20, 255])}, {x0: 0, y0: 0, scale: 1}),
+    null
+  );
 });

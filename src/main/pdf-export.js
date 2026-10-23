@@ -85,7 +85,8 @@ export async function exportAnnotatedPdf(
       if (!points) continue;
       // drawSvgPath は y が下向きなので、上下を返したパスを原点に置く（PDF の座標そのままで描かれる）
       const d = strokePath(points, a.style?.width ?? 1.1, {pressure: a.style?.pressure !== false, flipY: true});
-      if (d) page.drawSvgPath(d, {x: 0, y: 0, color: rgb(...hexToRgb(isHex(a.style?.color) ? a.style.color : '#222222'))});
+      if (d)
+        page.drawSvgPath(d, {x: 0, y: 0, color: rgb(...hexToRgb(isHex(a.style?.color) ? a.style.color : '#222222'))});
     } else if (a.kind === 'text') {
       const png = images.get(a.id);
       if (!png) continue;

@@ -4,33 +4,145 @@ import {normalizeTemplate, rotationFor} from '../../shared/skin.js';
 
 const COLUMNS = {
   connection: [
-    'id', 'kind', 'connector_id', 'label', 'base_url', 'university_host', 'recipe_version', 'save_password',
-    'session_json', 'status', 'last_sync_at', 'allowed_hosts_json', 'created_at', 'updated_at'
+    'id',
+    'kind',
+    'connector_id',
+    'label',
+    'base_url',
+    'university_host',
+    'recipe_version',
+    'save_password',
+    'session_json',
+    'status',
+    'last_sync_at',
+    'allowed_hosts_json',
+    'created_at',
+    'updated_at'
   ],
-  term: ['id', 'label', 'year', 'folder', 'start_date', 'end_date', 'rounds', 'holidays_json', 'periods_json', 'source'],
+  term: [
+    'id',
+    'label',
+    'year',
+    'folder',
+    'start_date',
+    'end_date',
+    'rounds',
+    'holidays_json',
+    'periods_json',
+    'source'
+  ],
   course: [
-    'id', 'term_id', 'connection_id', 'lms_id', 'lms_url', 'name', 'folder_name', 'weekday', 'period', 'weekday_from',
-    'color', 'tape_pattern', 'sort_order', 'hidden', 'sync_enabled', 'generic_json', 'font_json', 'quiz_json', 'full_synced_at',
-    'kind', 'dir', 'scope', 'skin_template_id', 'sticker_mode', 'created_at', 'updated_at'
+    'id',
+    'term_id',
+    'connection_id',
+    'lms_id',
+    'lms_url',
+    'name',
+    'folder_name',
+    'weekday',
+    'period',
+    'weekday_from',
+    'color',
+    'tape_pattern',
+    'sort_order',
+    'hidden',
+    'sync_enabled',
+    'generic_json',
+    'font_json',
+    'quiz_json',
+    'full_synced_at',
+    'kind',
+    'dir',
+    'scope',
+    'skin_template_id',
+    'sticker_mode',
+    'created_at',
+    'updated_at'
   ],
   round: ['id', 'course_id', 'number', 'title', 'title_user', 'folder_name', 'date', 'lms_ref'],
   round_note: ['round_id', 'body', 'updated_at'],
   material: [
-    'id', 'course_id', 'round_id', 'round_from', 'url', 'name', 'path', 'sha256', 'size', 'mime', 'pages', 'layout',
-    'version', 'lms_modified', 'source', 'status', 'read_at', 'downloaded_at', 'base_sha256'
+    'id',
+    'course_id',
+    'round_id',
+    'round_from',
+    'url',
+    'name',
+    'path',
+    'sha256',
+    'size',
+    'mime',
+    'pages',
+    'layout',
+    'version',
+    'lms_modified',
+    'source',
+    'status',
+    'read_at',
+    'downloaded_at',
+    'base_sha256'
   ],
-  sync_run: ['id', 'connection_id', 'kind', 'course_id', 'started_at', 'finished_at', 'courses', 'materials', 'failures', 'timing_json'],
+  sync_run: [
+    'id',
+    'connection_id',
+    'kind',
+    'course_id',
+    'started_at',
+    'finished_at',
+    'courses',
+    'materials',
+    'failures',
+    'timing_json'
+  ],
   sync_event: ['id', 'run_id', 'level', 'course_id', 'code', 'message', 'at'],
   job: ['id', 'kind', 'payload_json', 'status', 'result_json', 'tries', 'created_at', 'updated_at'],
-  quiz: ['id', 'round_id', 'version', 'title', 'status', 'source_json', 'generated_by', 'error', 'created_at', 'updated_at'],
+  quiz: [
+    'id',
+    'round_id',
+    'version',
+    'title',
+    'status',
+    'source_json',
+    'generated_by',
+    'error',
+    'created_at',
+    'updated_at'
+  ],
   question: [
-    'id', 'quiz_id', 'seq', 'type', 'q', 'a', 'o_json', 'n', 'src_sha256', 'src_page', 'src_quote', 'tags_json', 'difficulty',
-    'review', 'report_reason', 'deleted', 'updated_at'
+    'id',
+    'quiz_id',
+    'seq',
+    'type',
+    'q',
+    'a',
+    'o_json',
+    'n',
+    'src_sha256',
+    'src_page',
+    'src_quote',
+    'tags_json',
+    'difficulty',
+    'review',
+    'report_reason',
+    'deleted',
+    'updated_at'
   ],
   attempt: ['id', 'question_id', 'mode', 'ok', 'answer', 'seconds', 'at'],
   srs: ['question_id', 's', 'due', 'at', 'c', 'lapses'],
   ai_usage: ['id', 'quiz_id', 'model', 'input', 'output', 'cache_read', 'cache_write', 'cost_usd', 'purpose', 'at'],
-  annotation: ['id', 'sha256', 'page', 'kind', 'rect_json', 'body', 'style_json', 'memorized', 'z', 'created_at', 'updated_at'],
+  annotation: [
+    'id',
+    'sha256',
+    'page',
+    'kind',
+    'rect_json',
+    'body',
+    'style_json',
+    'memorized',
+    'z',
+    'created_at',
+    'updated_at'
+  ],
   bookmark: ['id', 'sha256', 'page', 'y', 'name', 'created_at', 'updated_at'],
   skin_template: ['id', 'json', 'created_at', 'updated_at'],
   sticker: ['id', 'w', 'h', 'shape', 'folder', 'favorite', 'created_at']
@@ -105,12 +217,18 @@ export class Repo {
     return this.get('round_note', roundId, 'round_id');
   }
   latestQuiz(roundId) {
-    return this.db.prepare("SELECT * FROM quiz WHERE round_id = ? AND status != 'replaced' ORDER BY version DESC LIMIT 1").get(roundId) ?? null;
+    return (
+      this.db
+        .prepare("SELECT * FROM quiz WHERE round_id = ? AND status != 'replaced' ORDER BY version DESC LIMIT 1")
+        .get(roundId) ?? null
+    );
   }
   insertQuiz(row) {
     const t = now();
     // 同じ回の古い版は「置き換えた」にする（記録は残す）
-    this.db.prepare("UPDATE quiz SET status = 'replaced', updated_at = ? WHERE round_id = ? AND status != 'replaced'").run(t, row.round_id);
+    this.db
+      .prepare("UPDATE quiz SET status = 'replaced', updated_at = ? WHERE round_id = ? AND status != 'replaced'")
+      .run(t, row.round_id);
     return this.insert('quiz', {created_at: t, updated_at: t, ...row});
   }
   insertQuestion(row) {
@@ -138,8 +256,10 @@ export class Repo {
   listQuestions({quizIds = null, courseId = null, includeDeleted = false} = {}) {
     const where = [];
     const args = [];
-    if (quizIds) where.push(`q.quiz_id IN (${quizIds.map(() => '?').join(',')})`), args.push(...quizIds);
-    if (courseId) where.push("z.round_id IN (SELECT id FROM round WHERE course_id = ?) AND z.status != 'replaced'"), args.push(courseId);
+    if (quizIds) (where.push(`q.quiz_id IN (${quizIds.map(() => '?').join(',')})`), args.push(...quizIds));
+    if (courseId)
+      (where.push("z.round_id IN (SELECT id FROM round WHERE course_id = ?) AND z.status != 'replaced'"),
+        args.push(courseId));
     if (!includeDeleted) where.push('q.deleted = 0');
     return this.db
       .prepare(
@@ -172,9 +292,16 @@ export class Repo {
   }
   addAiUsage({model, usage, cost, purpose, quizId = null}) {
     return this.insert('ai_usage', {
-      id: ulid(), quiz_id: quizId, model, input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0,
-      cache_read: usage.cache_read_input_tokens ?? 0, cache_write: usage.cache_creation_input_tokens ?? 0,
-      cost_usd: cost, purpose, at: now()
+      id: ulid(),
+      quiz_id: quizId,
+      model,
+      input: usage.input_tokens ?? 0,
+      output: usage.output_tokens ?? 0,
+      cache_read: usage.cache_read_input_tokens ?? 0,
+      cache_write: usage.cache_creation_input_tokens ?? 0,
+      cost_usd: cost,
+      purpose,
+      at: now()
     });
   }
   /** 今日の生成回数（日本時間）と今月の費用 */
@@ -183,8 +310,12 @@ export class Repo {
     const day = jst.slice(0, 10);
     const month = jst.slice(0, 7);
     const toJst = "strftime('%Y-%m-%d', datetime(at, '+9 hours'))";
-    const today = this.db.prepare(`SELECT COUNT(*) c FROM ai_usage WHERE purpose = 'generate' AND ${toJst} = ?`).get(day).c;
-    const monthUsd = this.db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) c FROM ai_usage WHERE substr(${toJst}, 1, 7) = ?`).get(month).c;
+    const today = this.db
+      .prepare(`SELECT COUNT(*) c FROM ai_usage WHERE purpose = 'generate' AND ${toJst} = ?`)
+      .get(day).c;
+    const monthUsd = this.db
+      .prepare(`SELECT COALESCE(SUM(cost_usd), 0) c FROM ai_usage WHERE substr(${toJst}, 1, 7) = ?`)
+      .get(month).c;
     return {today, monthUsd};
   }
 
@@ -230,7 +361,12 @@ export class Repo {
   }
   /** 資料（SHA-256）ごとのしおりの数（授業画面で、しおりのある資料にリボンを出す） */
   bookmarkCounts() {
-    return Object.fromEntries(this.db.prepare('SELECT sha256, COUNT(*) AS n FROM bookmark GROUP BY sha256').all().map((r) => [r.sha256, Number(r.n)]));
+    return Object.fromEntries(
+      this.db
+        .prepare('SELECT sha256, COUNT(*) AS n FROM bookmark GROUP BY sha256')
+        .all()
+        .map((r) => [r.sha256, Number(r.n)])
+    );
   }
   listStickers() {
     return this.db.prepare('SELECT * FROM sticker ORDER BY created_at DESC').all();
@@ -240,8 +376,19 @@ export class Repo {
   createConnection({kind, connector_id, label, base_url = null, university_host = null, recipe_version = null}) {
     const t = now();
     return this.insert('connection', {
-      id: ulid(), kind, connector_id, label, base_url, university_host, recipe_version,
-      save_password: 0, session_json: null, status: 'ok', last_sync_at: null, created_at: t, updated_at: t
+      id: ulid(),
+      kind,
+      connector_id,
+      label,
+      base_url,
+      university_host,
+      recipe_version,
+      save_password: 0,
+      session_json: null,
+      status: 'ok',
+      last_sync_at: null,
+      created_at: t,
+      updated_at: t
     });
   }
   listConnections() {
@@ -258,7 +405,10 @@ export class Repo {
     this.db
       .prepare(
         `INSERT INTO term (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})
-         ON CONFLICT(id) DO UPDATE SET ${keys.filter((k) => k !== 'id').map((k) => `${k} = excluded.${k}`).join(', ')}`
+         ON CONFLICT(id) DO UPDATE SET ${keys
+           .filter((k) => k !== 'id')
+           .map((k) => `${k} = excluded.${k}`)
+           .join(', ')}`
       )
       .run(...keys.map((k) => r[k]));
     return this.get('term', r.id);
@@ -271,25 +421,39 @@ export class Repo {
   listCourses({termId = null, connectionId = null} = {}) {
     const where = [],
       args = [];
-    if (termId) where.push('term_id = ?'), args.push(termId);
-    if (connectionId) where.push('connection_id = ?'), args.push(connectionId);
+    if (termId) (where.push('term_id = ?'), args.push(termId));
+    if (connectionId) (where.push('connection_id = ?'), args.push(connectionId));
     return this.db
       .prepare(`SELECT * FROM course ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY sort_order, name`)
       .all(...args);
   }
   findCourseByLms(connectionId, lmsId) {
-    return this.db.prepare('SELECT * FROM course WHERE connection_id = ? AND lms_id = ?').get(connectionId, String(lmsId)) ?? null;
+    return (
+      this.db.prepare('SELECT * FROM course WHERE connection_id = ? AND lms_id = ?').get(connectionId, String(lmsId)) ??
+      null
+    );
   }
   courseFolderNames(termId) {
-    return this.db.prepare('SELECT folder_name FROM course WHERE term_id = ?').all(termId).map((r) => r.folder_name);
+    return this.db
+      .prepare('SELECT folder_name FROM course WHERE term_id = ?')
+      .all(termId)
+      .map((r) => r.folder_name);
   }
   createCourse(row) {
     const t = now();
-    const maxOrder = this.db.prepare('SELECT COALESCE(MAX(sort_order), 0) m FROM course WHERE term_id = ?').get(row.term_id).m;
+    const maxOrder = this.db
+      .prepare('SELECT COALESCE(MAX(sort_order), 0) m FROM course WHERE term_id = ?')
+      .get(row.term_id).m;
     const count = this.db.prepare('SELECT COUNT(*) c FROM course WHERE term_id = ?').get(row.term_id).c;
     // 新しい授業には、はじめからあるテンプレートを順に割り当てる（となり同士が同じ見た目にならないように。SPEC-KISEKAE §4.4）
     return this.insert('course', {
-      id: ulid(), color: (count % 8) + 1, skin_template_id: rotationFor(count), sort_order: maxOrder + 1, created_at: t, updated_at: t, ...row
+      id: ulid(),
+      color: (count % 8) + 1,
+      skin_template_id: rotationFor(count),
+      sort_order: maxOrder + 1,
+      created_at: t,
+      updated_at: t,
+      ...row
     });
   }
   updateCourse(id, patch) {
@@ -325,8 +489,11 @@ export class Repo {
   /** 中身で探す。注釈を描き込んで上書きした PDF は、元の中身（base_sha256）でも同じものとして見つける（同期で 2 重に取らない） */
   findMaterialByHash(courseId, sha256) {
     return (
-      this.db.prepare('SELECT * FROM material WHERE course_id = ? AND (sha256 = ? OR base_sha256 = ?) ORDER BY sha256 = ? DESC').get(courseId, sha256, sha256, sha256) ??
-      null
+      this.db
+        .prepare(
+          'SELECT * FROM material WHERE course_id = ? AND (sha256 = ? OR base_sha256 = ?) ORDER BY sha256 = ? DESC'
+        )
+        .get(courseId, sha256, sha256, sha256) ?? null
     );
   }
   findMaterialByPath(p) {
@@ -340,7 +507,9 @@ export class Repo {
     return this.get('material', id);
   }
   countUnread(courseId) {
-    return this.db.prepare("SELECT COUNT(*) c FROM material WHERE course_id = ? AND read_at IS NULL AND status = 'ok'").get(courseId).c;
+    return this.db
+      .prepare("SELECT COUNT(*) c FROM material WHERE course_id = ? AND read_at IS NULL AND status = 'ok'")
+      .get(courseId).c;
   }
 
   // ---- annotation（SPEC §9.6：ファイルの SHA-256 に結び付ける。パスではない）----
@@ -351,7 +520,9 @@ export class Repo {
   saveAnnotation(sha256, id, row) {
     const t = now();
     if (!id) {
-      const z = this.db.prepare('SELECT COALESCE(MAX(z), 0) m FROM annotation WHERE sha256 = ? AND page = ?').get(sha256, row.page).m;
+      const z = this.db
+        .prepare('SELECT COALESCE(MAX(z), 0) m FROM annotation WHERE sha256 = ? AND page = ?')
+        .get(sha256, row.page).m;
       return this.insert('annotation', {id: ulid(), sha256, z: z + 1, created_at: t, updated_at: t, ...row});
     }
     const cur = this.get('annotation', id);
@@ -385,29 +556,62 @@ export class Repo {
     return this.insert('sync_run', {id: ulid(), connection_id, kind, course_id, started_at: now()});
   }
   finishSyncRun(id, {courses, materials, failures, timing}) {
-    this.update('sync_run', id, {finished_at: now(), courses, materials, failures, timing_json: JSON.stringify(timing ?? {})});
+    this.update('sync_run', id, {
+      finished_at: now(),
+      courses,
+      materials,
+      failures,
+      timing_json: JSON.stringify(timing ?? {})
+    });
   }
   addSyncEvent(run_id, {level, course_id = null, code = null, message}) {
-    return this.insert('sync_event', {id: ulid(), run_id, level, course_id, code, message: String(message).slice(0, 500), at: now()});
+    return this.insert('sync_event', {
+      id: ulid(),
+      run_id,
+      level,
+      course_id,
+      code,
+      message: String(message).slice(0, 500),
+      at: now()
+    });
   }
   lastSyncRun(connectionId = null) {
     return connectionId
-      ? this.db.prepare('SELECT * FROM sync_run WHERE connection_id = ? AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1').get(connectionId) ?? null
-      : this.db.prepare('SELECT * FROM sync_run WHERE finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1').get() ?? null;
+      ? (this.db
+          .prepare(
+            'SELECT * FROM sync_run WHERE connection_id = ? AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1'
+          )
+          .get(connectionId) ?? null)
+      : (this.db
+          .prepare('SELECT * FROM sync_run WHERE finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1')
+          .get() ?? null);
   }
 
   // ---- job ----
   enqueueJob(kind, payload = {}) {
     const t = now();
-    return this.insert('job', {id: ulid(), kind, payload_json: JSON.stringify(payload), status: 'pending', tries: 0, created_at: t, updated_at: t});
+    return this.insert('job', {
+      id: ulid(),
+      kind,
+      payload_json: JSON.stringify(payload),
+      status: 'pending',
+      tries: 0,
+      created_at: t,
+      updated_at: t
+    });
   }
   /**
    * 次に動かすジョブ。pending はすぐに、waiting（やり直し待ち）は retryDelays[tries - 1] ミリ秒たってから拾う。
    * waiting をすぐ拾うと、失敗したジョブが待たずに何度も回る（オフラインのあいだずっと）
    */
   claimJob({retryDelays = [], at = Date.now()} = {}) {
-    const due = (j) => j.status === 'pending' || (retryDelays[j.tries - 1] != null && Date.parse(j.updated_at) + retryDelays[j.tries - 1] <= at);
-    const j = this.db.prepare("SELECT * FROM job WHERE status IN ('pending','waiting') ORDER BY created_at").all().find(due);
+    const due = (j) =>
+      j.status === 'pending' ||
+      (retryDelays[j.tries - 1] != null && Date.parse(j.updated_at) + retryDelays[j.tries - 1] <= at);
+    const j = this.db
+      .prepare("SELECT * FROM job WHERE status IN ('pending','waiting') ORDER BY created_at")
+      .all()
+      .find(due);
     if (!j) return null;
     this.update('job', j.id, {status: 'running', tries: j.tries + 1, updated_at: now()});
     return {...j, status: 'running', tries: j.tries + 1, payload: JSON.parse(j.payload_json)};
@@ -417,9 +621,12 @@ export class Repo {
   }
   /** 前に落ちたときに「実行中」のまま残ったジョブを、やり直せるよう pending に戻す（起動のときに呼ぶ） */
   resetRunningJobs() {
-    return this.db.prepare("UPDATE job SET status = 'pending', updated_at = ? WHERE status = 'running'").run(now()).changes;
+    return this.db.prepare("UPDATE job SET status = 'pending', updated_at = ? WHERE status = 'running'").run(now())
+      .changes;
   }
   pendingJobs() {
-    return this.db.prepare("SELECT * FROM job WHERE status IN ('pending','waiting','running') ORDER BY created_at").all();
+    return this.db
+      .prepare("SELECT * FROM job WHERE status IN ('pending','waiting','running') ORDER BY created_at")
+      .all();
   }
 }

@@ -6,15 +6,24 @@ export class MoodleApiError extends Error {
   constructor(errorcode, message) {
     super(message || errorcode);
     this.errorcode = errorcode;
-    this.code = ['invalidtoken', 'accessexception', 'invalidlogin'].includes(errorcode) ? 'login-required' : 'moodle-api';
+    this.code = ['invalidtoken', 'accessexception', 'invalidlogin'].includes(errorcode)
+      ? 'login-required'
+      : 'moodle-api';
   }
 }
 
 const SERVICE = 'moodle_mobile_app';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function createMoodleConnector({fetch: fetchImpl = globalThis.fetch, secrets, retryDelays = [1000, 5000, 15000]} = {}) {
-  const normBase = (u) => String(u).replace(/\/+$/, '').replace(/\/(login\/index\.php|my\/?|course\/.*)$/, '');
+export function createMoodleConnector({
+  fetch: fetchImpl = globalThis.fetch,
+  secrets,
+  retryDelays = [1000, 5000, 15000]
+} = {}) {
+  const normBase = (u) =>
+    String(u)
+      .replace(/\/+$/, '')
+      .replace(/\/(login\/index\.php|my\/?|course\/.*)$/, '');
 
   async function call(ctx, wsfunction, params = {}) {
     const body = new URLSearchParams({wstoken: ctx.token ?? '', wsfunction, moodlewsrestformat: 'json'});
@@ -41,7 +50,10 @@ export function createMoodleConnector({fetch: fetchImpl = globalThis.fetch, secr
         await sleep(retryDelays[attempt]);
         continue;
       }
-      if (!res.ok) throw Object.assign(new Error(`Moodle API が ${res.status} を返しました`), {code: res.status >= 500 ? 'network' : 'moodle-api'});
+      if (!res.ok)
+        throw Object.assign(new Error(`Moodle API が ${res.status} を返しました`), {
+          code: res.status >= 500 ? 'network' : 'moodle-api'
+        });
       const json = await res.json();
       if (json && typeof json === 'object' && json.exception) throw new MoodleApiError(json.errorcode, json.message);
       return json;
@@ -103,17 +115,23 @@ export function createMoodleConnector({fetch: fetchImpl = globalThis.fetch, secr
     async login(ctx, mode = 'headless', {credentials, tokenFromBrowser} = {}) {
       const cred = credentials ?? (await secrets?.get(`conn:${ctx.connectionId}:password`));
       if (mode === 'headless') {
-        if (!cred?.user) throw Object.assign(new Error('保存した ID とパスワードがありません'), {code: 'login-required'});
+        if (!cred?.user)
+          throw Object.assign(new Error('保存した ID とパスワードがありません'), {code: 'login-required'});
         const res = await fetchImpl(`${ctx.base}/login/token.php`, {
           method: 'POST',
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
           body: new URLSearchParams({username: cred.user, password: cred.password, service: SERVICE})
         });
         const j = await res.json().catch(() => ({}));
-        if (!j.token) throw Object.assign(new Error(j.error || 'ID かパスワードが違います'), {code: 'login-required', errorcode: j.errorcode});
+        if (!j.token)
+          throw Object.assign(new Error(j.error || 'ID かパスワードが違います'), {
+            code: 'login-required',
+            errorcode: j.errorcode
+          });
         ctx.token = j.token;
       } else {
-        if (!tokenFromBrowser) throw Object.assign(new Error('ブラウザからトークンを受け取れませんでした'), {code: 'login-required'});
+        if (!tokenFromBrowser)
+          throw Object.assign(new Error('ブラウザからトークンを受け取れませんでした'), {code: 'login-required'});
         ctx.token = tokenFromBrowser;
       }
       await secrets?.set(`conn:${ctx.connectionId}:token`, ctx.token);

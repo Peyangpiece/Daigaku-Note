@@ -41,9 +41,16 @@ test('式の解釈', () => {
 });
 
 test('URL の差し込みと解決', () => {
-  const vars = {base: 'https://lms.example.ac.jp', course: {url: 'https://lms.example.ac.jp/c/1', lmsId: '1'}, round: {lmsRef: 'd9'}};
+  const vars = {
+    base: 'https://lms.example.ac.jp',
+    course: {url: 'https://lms.example.ac.jp/c/1', lmsId: '1'},
+    round: {lmsRef: 'd9'}
+  };
   assert.equal(fillTemplate('{base}/ct/home_course', vars), 'https://lms.example.ac.jp/ct/home_course');
-  assert.equal(fillTemplate('{course.url}_page?d={round.lmsRef}&x={nothing}', vars), 'https://lms.example.ac.jp/c/1_page?d=d9&x=');
+  assert.equal(
+    fillTemplate('{course.url}_page?d={round.lmsRef}&x={nothing}', vars),
+    'https://lms.example.ac.jp/c/1_page?d=d9&x='
+  );
   assert.equal(resolveHref('/file/3/', 'https://lms.example.ac.jp/class/1/'), 'https://lms.example.ac.jp/file/3/');
   assert.equal(resolveHref('::bad', 'not a url'), '');
 });
@@ -84,7 +91,10 @@ test('レシピの検査', () => {
   assert.ok(errors.some((e) => e.includes('コード')));
   const auto = structuredClone(good);
   auto.notices = {url: '{course.url}', items: 'auto', openBeforeRead: 'auto', files: 'a'};
-  assert.ok(validateRecipe(auto).some((e) => e.includes('container')), 'auto には container が要る');
+  assert.ok(
+    validateRecipe(auto).some((e) => e.includes('container')),
+    'auto には container が要る'
+  );
   auto.notices.container = '#news';
   assert.deepEqual(validateRecipe(auto), []);
 });

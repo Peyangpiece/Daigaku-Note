@@ -21,7 +21,8 @@ export const MAX_FILES = 2000;
  */
 export async function renameFolder(from, to) {
   if (from === to) return false;
-  if (from.toLowerCase() !== to.toLowerCase() && (await fsp.stat(to).catch(() => null))) throw err(`「${path.basename(to)}」はもうあります`);
+  if (from.toLowerCase() !== to.toLowerCase() && (await fsp.stat(to).catch(() => null)))
+    throw err(`「${path.basename(to)}」はもうあります`);
   if (!(await fsp.stat(from).catch(() => null))?.isDirectory()) throw err('パソコンのフォルダが見つかりません');
   await fsp.rename(from, to);
   return true;
@@ -248,7 +249,9 @@ export function createFolders({
   /** フォルダの名前を変える。パソコンのフォルダの名前も変える（同じ親フォルダの中のまま）。戻りは course 行 */
   async function rename(courseId, name) {
     const c = folderCourse(courseId);
-    const label = String(name ?? '').trim().slice(0, 80);
+    const label = String(name ?? '')
+      .trim()
+      .slice(0, 80);
     if (!label) throw err('名前を入れてください');
     const patch = {name: label};
     const to = path.join(path.dirname(c.dir), sanitizeSegment(label, {max: 80}) || 'フォルダ');
@@ -262,7 +265,8 @@ export function createFolders({
   async function renameSub(courseId, sub, name) {
     const c = folderCourse(courseId);
     const to = String(name ?? '').trim();
-    if (!to || to.length > 80 || /[\\/:*?"<>|]/.test(to) || to === '.' || to === '..') throw err('フォルダの名前に使えない文字があります');
+    if (!to || to.length > 80 || /[\\/:*?"<>|]/.test(to) || to === '.' || to === '..')
+      throw err('フォルダの名前に使えない文字があります');
     const from = path.resolve(c.dir, String(sub ?? ''));
     if (!from.startsWith(path.resolve(c.dir) + path.sep)) throw err('フォルダが不正です');
     const dest = path.join(path.dirname(from), to);
@@ -279,7 +283,9 @@ export function createFolders({
     const base = path.resolve(String(dir ?? ''));
     const entries = await fsp.readdir(base, {withFileTypes: true}).catch(() => null);
     if (!entries) throw err('フォルダが見つかりません');
-    const subs = entries.filter((e) => e.isDirectory() && !SKIP.test(e.name)).sort((a, b) => a.name.localeCompare(b.name, 'ja', {numeric: true}));
+    const subs = entries
+      .filter((e) => e.isDirectory() && !SKIP.test(e.name))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ja', {numeric: true}));
     const dirs = subs.length ? subs.map((e) => path.join(base, e.name)) : [base];
     const added = [],
       failed = [];

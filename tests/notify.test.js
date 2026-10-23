@@ -25,7 +25,12 @@ function fakes({enabled = true, rounds = {}} = {}) {
     get: (table, id) => (table === 'round' ? (rounds[id] ?? null) : null)
   };
   let day = '2026-10-23';
-  const n = createNotifier({repo, Notification, openWindow: (r) => opened.push(r), now: () => new Date(`${day}T03:00:00Z`)});
+  const n = createNotifier({
+    repo,
+    Notification,
+    openWindow: (r) => opened.push(r),
+    now: () => new Date(`${day}T03:00:00Z`)
+  });
   return {n, shown, opened, setDay: (d) => (day = d)};
 }
 
@@ -48,7 +53,11 @@ test('通知：新しい資料・ログインの必要・クイズの完成。�
 test('通知：同じ失敗は 1 日 1 回。設定で止められる', () => {
   const {n, shown, setDay} = fakes();
   assert.equal(n.onEvent('sync.finished', {status: 'failed', message: 'LMS に接続できませんでした'}), true);
-  assert.equal(n.onEvent('sync.finished', {status: 'failed', message: 'LMS に接続できませんでした'}), false, '同じ日はもう出さない');
+  assert.equal(
+    n.onEvent('sync.finished', {status: 'failed', message: 'LMS に接続できませんでした'}),
+    false,
+    '同じ日はもう出さない'
+  );
   assert.equal(n.onEvent('login.required', {connectionId: 'a', label: 'A'}), true);
   assert.equal(n.onEvent('login.required', {connectionId: 'a', label: 'A'}), false);
   assert.equal(n.onEvent('login.required', {connectionId: 'b', label: 'B'}), true, '別の接続は別に数える');

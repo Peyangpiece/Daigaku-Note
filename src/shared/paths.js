@@ -11,7 +11,8 @@ export function checkDownloadDir(input, home = homedir(), p = path) {
   if (!raw) return '';
   if (raw.length > 500) throw new Error('フォルダのパスが長すぎます');
   const expanded = raw === '~' ? home : /^~[\\/]/.test(raw) ? p.join(home, raw.slice(2)) : raw;
-  if (!p.isAbsolute(expanded)) throw new Error('フォルダは絶対パス（/Users/… や C:\\Users\\…、または ~/…）で指定してください');
+  if (!p.isAbsolute(expanded))
+    throw new Error('フォルダは絶対パス（/Users/… や C:\\Users\\…、または ~/…）で指定してください');
   const full = p.resolve(expanded);
   const rel = p.relative(home, full);
   if (rel.startsWith('..') || p.isAbsolute(rel) || p.resolve(home, rel) !== full)

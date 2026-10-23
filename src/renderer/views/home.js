@@ -50,7 +50,15 @@ const longestRun = (html) => Math.max(...html.split('<wbr>').map((s) => [...s.re
  * edit.still は動かない見本（テンプレートの一覧）
  */
 // 新着のバッジの色：授業の曜日ごと（曜日のない授業・自分のフォルダは授業の色）
-const WEEKDAY_BADGE = {月: 'var(--c2)', 火: 'var(--c6)', 水: 'var(--c1)', 木: 'var(--c3)', 金: 'var(--c4)', 土: 'var(--c5)', 日: 'var(--c8)'};
+const WEEKDAY_BADGE = {
+  月: 'var(--c2)',
+  火: 'var(--c6)',
+  水: 'var(--c1)',
+  木: 'var(--c3)',
+  金: 'var(--c4)',
+  土: 'var(--c5)',
+  日: 'var(--c8)'
+};
 export const badgeColor = (course) => WEEKDAY_BADGE[course.weekday] ?? `var(--c${course.color ?? 1})`;
 
 /** フォルダごとに選んだ色（右クリック →「着せ替え…」）。タブ・フォルダ・マスキングテープ・新着の知らせ。選んでいなければ空 */
@@ -58,7 +66,11 @@ export const folderLookOf = (data, course) => data?.settings?.folderLooks?.[cour
 /** テンプレートの見た目に、フォルダごとに選んだ色を重ねる */
 export function withFolderLook(sk, over) {
   if (!over.card && !over.tab && !over.tape) return sk;
-  return {...sk, folder: {card: over.card ?? sk.folder.card, tab: over.tab ?? sk.folder.tab}, tape: {...sk.tape, color: over.tape ?? sk.tape.color}};
+  return {
+    ...sk,
+    folder: {card: over.card ?? sk.folder.card, tab: over.tab ?? sk.folder.tab},
+    tape: {...sk.tape, color: over.tape ?? sk.tape.color}
+  };
 }
 
 export function folderCard(course, {today = false, data = null, skin = null, edit = null} = {}) {
@@ -132,7 +144,9 @@ export function renderHome({data, progress}) {
   const hasLms = data.connections.some((c) => c.kind !== 'manual' && c.status !== 'disabled');
   // 規約の版が上がった（または v0.5.11 より前につないだ）ときは、同意し直すまで同期しない
   if (hasLms && data.settings.lmsTerms?.version !== LMS_TERMS_VERSION)
-    attention.push('<li>大学サービスとの連携の利用規約に同意すると、同期を続けます。<button class="btn btn--small" data-action="nav" data-route="/settings/lms-terms">利用規約を読む</button></li>');
+    attention.push(
+      '<li>大学サービスとの連携の利用規約に同意すると、同期を続けます。<button class="btn btn--small" data-action="nav" data-route="/settings/lms-terms">利用規約を読む</button></li>'
+    );
   if (hasLms && data.browser?.state === 'failed')
     attention.push(
       `<li>LMS を読むためのブラウザの${browserState(data.browser)}<button class="btn btn--small" data-action="install-browser">準備し直す</button></li>`

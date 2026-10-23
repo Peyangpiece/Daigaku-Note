@@ -28,8 +28,15 @@ export async function openDatabase(file = ':memory:', {migrationsDir = MIGRATION
 
 /** migrations/NNNN_name.sql を番号順に当てる。当てた版は schema_migrations に残す。戻りは今回当てた版の一覧 */
 export function migrate(db, dir = MIGRATIONS_DIR) {
-  db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)');
-  const done = new Set(db.prepare('SELECT version FROM schema_migrations').all().map((r) => Number(r.version)));
+  db.exec(
+    'CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)'
+  );
+  const done = new Set(
+    db
+      .prepare('SELECT version FROM schema_migrations')
+      .all()
+      .map((r) => Number(r.version))
+  );
   const files = readdirSync(dir)
     .filter((f) => /^\d{4}_.+\.sql$/.test(f))
     .sort();

@@ -55,7 +55,10 @@ function applyTheme() {
   document.documentElement.dataset.rules = s.rules ?? 'normal';
   applySkin(state.data); // 着せ替えのノート（紙の種類・色。SPEC-KISEKAE）
 }
-watchTheme(() => state.data, () => render());
+watchTheme(
+  () => state.data,
+  () => render()
+);
 setStickerReload(() => render()); // シールの画像が届いたら描き直す
 
 export function navigate(route) {
@@ -149,7 +152,10 @@ function render() {
   // アプリ全体の拡大は 100% にする（PDF だけを拡大し、ツールバーや背景は拡大しない）
   // 上の固定ボタン（ホーム・着せ替え・筆箱）：今いる画面を押した状態に
   for (const b of document.querySelectorAll('.topnav [data-nav]'))
-    b.setAttribute('aria-current', (b.dataset.nav === 'home' ? route === '/' : route.startsWith(`/${b.dataset.nav}`)) ? 'page' : 'false');
+    b.setAttribute(
+      'aria-current',
+      (b.dataset.nav === 'home' ? route === '/' : route.startsWith(`/${b.dataset.nav}`)) ? 'page' : 'false'
+    );
   const inViewer = route.startsWith('/viewer/');
   app.classList.toggle('paper--viewer', inViewer);
   document.documentElement.classList.toggle('paper-canvas', inViewer);
@@ -171,7 +177,11 @@ function render() {
     // PDF のまわりの紙に貼るシール（窓に固定。PDF の下に置く）。着せ替えやシールの画像が変わったら貼り直す
     document.getElementById('viewer-stickers')?.remove();
     const layer = stickerLayer(skinOf(state.data, course ?? null).stickers, 'viewer', state.data);
-    if (layer) view.insertAdjacentHTML('afterbegin', layer.replace('<div class="sticker-layer', '<div id="viewer-stickers" class="sticker-layer'));
+    if (layer)
+      view.insertAdjacentHTML(
+        'afterbegin',
+        layer.replace('<div class="sticker-layer', '<div id="viewer-stickers" class="sticker-layer')
+      );
     return;
   }
   // 編集画面を出たら読み直す（足したしおりなどを授業画面に出すため）
@@ -186,10 +196,12 @@ function render() {
   if (route === '/settings/term' && !same) resetTerm();
   if (!same && !route.startsWith('/quiz') && !route.startsWith('/review')) leaveQuiz();
   if (!same && !route.startsWith('/quiz-edit/')) leaveQuizEdit();
-  if (route === '/setup' || route === '/settings/lms' || route === '/settings/lms-terms') view.innerHTML = renderSetup(state);
+  if (route === '/setup' || route === '/settings/lms' || route === '/settings/lms-terms')
+    view.innerHTML = renderSetup(state);
   else if (route.startsWith('/course/')) {
     const course = state.data.courses.find((c) => c.id === route.slice('/course/'.length));
-    view.innerHTML = course?.kind === 'folder' ? renderFolder(state, course) : renderCourse(state, route.slice('/course/'.length));
+    view.innerHTML =
+      course?.kind === 'folder' ? renderFolder(state, course) : renderCourse(state, route.slice('/course/'.length));
   } else if (route.startsWith('/folder-new')) view.innerHTML = renderFolderNew(state, route);
   else if (route === '/settings/term') view.innerHTML = renderTerm(state);
   else if (route.startsWith('/quiz-edit/')) view.innerHTML = renderQuizEdit(state, route.slice('/quiz-edit/'.length));
@@ -298,7 +310,12 @@ document.addEventListener('click', async (e) => {
       const r = await api['folder.importCourses']();
       if (r?.error) return toast(r.error, {error: true});
       if (r.canceled) return;
-      toast(r.added.length ? `${r.added.length} 個の授業フォルダを取り込みました${r.failed.length ? `（${r.failed.length} 個は取り込めませんでした）` : ''}` : '取り込めるフォルダがありませんでした', {error: !r.added.length});
+      toast(
+        r.added.length
+          ? `${r.added.length} 個の授業フォルダを取り込みました${r.failed.length ? `（${r.failed.length} 個は取り込めませんでした）` : ''}`
+          : '取り込めるフォルダがありませんでした',
+        {error: !r.added.length}
+      );
       await reload();
     } else if (action === 'upload') {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
@@ -330,7 +347,13 @@ document.addEventListener('click', async (e) => {
     } else if (action === 'folder-scope') {
       const r = await api['folder.update']({courseId: el.dataset.courseId, scope: el.dataset.scope});
       if (r?.error) toast(r.error, {error: true});
-      else (toast(el.dataset.scope === 'always' ? 'マイフォルダにしました（学期が変わっても残ります）' : '今学期のフォルダにしました'), reload());
+      else
+        (toast(
+          el.dataset.scope === 'always'
+            ? 'マイフォルダにしました（学期が変わっても残ります）'
+            : '今学期のフォルダにしました'
+        ),
+          reload());
     } else if (action === 'folder-hide') {
       const r = await api['course.update']({courseId: el.dataset.courseId, patch: {hidden: true}});
       if (r?.error) return toast(r.error, {error: true});
@@ -438,11 +461,13 @@ export function renameAt(target, value, save) {
   input.addEventListener('blur', () => finish(true));
 }
 /** 名前を変えられる授業か：自分のフォルダと、LMS を使わない授業（LMS の授業名は LMS に合わせる） */
-export const canRename = (course) => course.kind === 'folder' || state.data?.connections.find((c) => c.id === course.connection_id)?.kind === 'manual';
+export const canRename = (course) =>
+  course.kind === 'folder' || state.data?.connections.find((c) => c.id === course.connection_id)?.kind === 'manual';
 /** 名前を変える：自分のフォルダ・LMS を使わない授業・回の付箋・自分のフォルダの中のフォルダ */
 function renameCourse(course, target) {
   if (!canRename(course)) return;
-  if (course.kind === 'folder') return renameAt(target, course.name, (name) => api['folder.update']({courseId: course.id, name}));
+  if (course.kind === 'folder')
+    return renameAt(target, course.name, (name) => api['folder.update']({courseId: course.id, name}));
   return renameAt(target, course.name, (name) => api['course.update']({courseId: course.id, patch: {name}}));
 }
 // 名前をダブルクリックしても変えられる（そばに ✎ のある名前だけ）
@@ -501,8 +526,7 @@ document.addEventListener('contextmenu', (e) => {
     else if (what === 'skin') {
       const r = card.getBoundingClientRect();
       openSkinPicker(course, card, r.right + 8, r.top);
-    }
-    else removeCourse(course).catch((err) => toast(err.message, {error: true}));
+    } else removeCourse(course).catch((err) => toast(err.message, {error: true}));
   };
 });
 document.addEventListener('pointerdown', (e) => cardMenu && !cardMenu.contains(e.target) && closeCardMenu());
@@ -514,17 +538,26 @@ window.addEventListener('hashchange', closeCardMenu);
 async function removeCourse(course) {
   // 消すのではなく、ホームに出さないだけ（同期もやめる。資料・メモ・パソコンのフォルダは残る）。すぐ「元に戻す」で戻せるので確認は出さない
   const folder = course.kind === 'folder';
-  const r = await api['course.update']({courseId: course.id, patch: folder ? {hidden: true} : {hidden: true, sync_enabled: false}});
+  const r = await api['course.update']({
+    courseId: course.id,
+    patch: folder ? {hidden: true} : {hidden: true, sync_enabled: false}
+  });
   if (r?.error) return toast(r.error, {error: true});
-  toast(`「${course.name}」をホームから外しました（${folder ? 'パソコンのフォルダとファイルはそのまま' : '資料とメモは残ります'}。設定からも戻せます）`, {
-    action: {
-      label: '元に戻す',
-      run: async () => {
-        await api['course.update']({courseId: course.id, patch: folder ? {hidden: false} : {hidden: false, sync_enabled: course.sync_enabled !== 0}});
-        await reload();
+  toast(
+    `「${course.name}」をホームから外しました（${folder ? 'パソコンのフォルダとファイルはそのまま' : '資料とメモは残ります'}。設定からも戻せます）`,
+    {
+      action: {
+        label: '元に戻す',
+        run: async () => {
+          await api['course.update']({
+            courseId: course.id,
+            patch: folder ? {hidden: false} : {hidden: false, sync_enabled: course.sync_enabled !== 0}
+          });
+          await reload();
+        }
       }
     }
-  });
+  );
   await reload();
 }
 
