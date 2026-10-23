@@ -57,8 +57,14 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
   const pen05 = series.find((s) => s.id === 'pen-05');
   assert.equal(pen05.name, 'ボールペン 0.5');
   assert.equal(pen05.maker, '大学ノート');
-  assert.ok(pen05.items.length >= 10, '0.5 の公式のボールペンは 10 色以上');
+  assert.ok(pen05.items.length >= 9, '0.5 の公式のボールペンは 9 色以上');
   assert.ok(pen05.items.every((it) => it.mm === '0.5' && !it.maker));
+  // 軸の色・柄で選ぶペンは、インクの色ちがいの札と分けて 1 枚に
+  const art = series.find((s) => s.id === 'pen-art');
+  assert.deepEqual(
+    art.items.map((it) => it.id),
+    ['pen-sakura-05', 'pen-mint-05', 'pen-wood-07', 'pen-navy-038']
+  );
   const js = series.find((s) => s.id === 'jetstream');
   assert.deepEqual(
     js.items.map((it) => it.id),

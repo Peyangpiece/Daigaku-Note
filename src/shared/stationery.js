@@ -15,7 +15,7 @@ export const TYPE_LABEL = {pen: 'ボールペン', marker: 'マーカー', hider
 /** 道具の種類 → 編集画面の注釈の種類（shared/annotation.js） */
 export const KIND_OF = {pen: 'ink', marker: 'line', hider: 'mask'};
 
-const pen = (id, name, color, mm, body, accent = color) => ({
+const pen = (id, name, color, mm, body, accent = color, series = `pen-${mm.replace('.', '')}`) => ({
   id,
   type: 'pen',
   name,
@@ -25,7 +25,7 @@ const pen = (id, name, color, mm, body, accent = color) => ({
   body,
   accent,
   price: 0,
-  series: `pen-${mm.replace('.', '')}`
+  series
 });
 const marker = (id, name, color, thick = false) => ({
   id,
@@ -107,10 +107,10 @@ export const CATALOG = [
   pen('pen-pink-05', 'ピンクのボールペン 0.5', '#d6457a', '0.5', '#fbe3ec'),
   pen('pen-orange-05', 'オレンジのボールペン 0.5', '#e37400', '0.5', '#fdebd3'),
   pen('pen-purple-05', '紫のボールペン 0.5', '#7b3fbf', '0.5', '#ece2f7'),
-  pen('pen-sakura-05', 'さくら軸 黒 0.5', '#222222', '0.5', '#f7c5d5', '#e98aa8'),
-  pen('pen-mint-05', 'ミント軸 青 0.5', '#1a5fd0', '0.5', '#bfe8dc', '#5fbfa3'),
-  pen('pen-wood-07', '木軸 黒 0.7', '#222222', '0.7', '#c89b6d', '#8a6440'),
-  pen('pen-navy-038', 'ネイビー軸 赤 0.38', '#d93025', '0.38', '#24365c', '#c9a227'),
+  pen('pen-sakura-05', 'さくら軸 黒 0.5', '#222222', '0.5', '#f7c5d5', '#e98aa8', 'pen-art'),
+  pen('pen-mint-05', 'ミント軸 青 0.5', '#1a5fd0', '0.5', '#bfe8dc', '#5fbfa3', 'pen-art'),
+  pen('pen-wood-07', '木軸 黒 0.7', '#222222', '0.7', '#c89b6d', '#8a6440', 'pen-art'),
+  pen('pen-navy-038', 'ネイビー軸 赤 0.38', '#d93025', '0.38', '#24365c', '#c9a227', 'pen-art'),
   marker('marker-yellow', '黄色のマーカー', '#ffe14d'),
   marker('marker-pink', 'ピンクのマーカー', '#ff9ec7'),
   marker('marker-orange', 'オレンジのマーカー', '#ffbf6b'),
@@ -387,6 +387,7 @@ const SERIES_INFO = {
   'pen-05': {name: 'ボールペン 0.5'},
   'pen-038': {name: 'ボールペン 0.38'},
   'pen-07': {name: 'ボールペン 0.7'},
+  'pen-art': {name: 'デザイン軸のボールペン'}, // 軸の色・柄で選ぶペン（インクの色ちがいの札と分ける）
   jetstream: {name: 'ジェットストリーム 0.5'},
   sarasa: {name: 'サラサクリップ 0.5'},
   marker: {name: 'マーカー'},
