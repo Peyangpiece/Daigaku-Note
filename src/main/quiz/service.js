@@ -66,7 +66,7 @@ export function createQuizService({repo, secrets, log = () => {}, notify = () =>
       const message = friendlyAiError(e, await loadSdk().catch(() => null));
       log(`[quiz] 作れませんでした：回 ${roundId}：${e.code ?? ''} ${e.message}`);
       setState(roundId, {state: 'failed', message});
-      notify('quiz.finished', {roundId, ok: false, message});
+      notify('quiz.finished', {roundId, ok: false, message, detail: String(e?.message ?? e).slice(0, 300)});
       notify('state.changed', {kind: 'quiz'});
     }
   }

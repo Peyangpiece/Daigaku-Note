@@ -664,7 +664,7 @@ h2[tabindex='-1']:focus {
 }
 .file__tool,
 .file__move {
-  padding: 2px 10px;
+  padding: 5px 10px; /* 押し目標はおよそ 32px（文字 13px ＋ 上下 5px ずつ ＋ 行間） */
   border: 0;
   border-radius: 999px;
   background: var(--card);
@@ -777,7 +777,7 @@ h2[tabindex='-1']:focus {
   color: var(--paper-ink-weak);
 }
 .btn--small {
-  padding: 2px 12px;
+  padding: 5px 12px; /* 高さおよそ 32px。指でも押しやすい大きさ（以前は 2px で 26px ほどだった） */
   font-size: var(--fs-small);
 }
 .btn--quiet {
@@ -1427,7 +1427,7 @@ textarea.input {
 
 /* ---- PDF ビューア（SPEC §8.4・§9）：ノートは薄く、PDF が主役。ツールバーは上部の白い帯 ---- */
 .btn--small {
-  padding: 4px 12px;
+  padding: 5px 12px;
   font-size: var(--fs-small);
 }
 /* 編集画面のツールバー：窓に固定（拡大してページを横にスクロールしても動かない。sticky だと横には一緒に流れていた） */
@@ -1448,8 +1448,8 @@ textarea.input {
   font-size: var(--fs-small);
 }
 .viewer-bar button:not(.btn) {
-  min-width: 30px;
-  height: 30px;
+  min-width: 32px;
+  height: 32px;
   padding: 0 8px;
   border: 1.5px solid transparent;
   border-radius: 8px;
@@ -1648,6 +1648,14 @@ textarea.input {
 }
 .anno-text.is-selected {
   box-shadow: 0 0 0 1px var(--c4);
+}
+/* キーボードで注釈に来たとき（Tab）。押して選んだときの印に加えて、フォーカスの輪を出す */
+.anno-text:focus-visible,
+.anno-mask:focus-visible,
+.anno-line:focus-visible,
+.anno-note__icon:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 .anno-text.is-editing {
   cursor: text;
@@ -2398,7 +2406,7 @@ textarea.input {
   box-shadow: var(--card-shadow);
 }
 .topnav__btn {
-  padding: 4px 14px;
+  padding: 7px 14px; /* 高さおよそ 32px */
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -2445,8 +2453,47 @@ textarea.input {
     color: #ff8a80;
   }
 }
+.toast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.toast__text {
+  flex: 1 1 auto;
+}
+.toast__close {
+  margin-left: auto;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--paper-ink-weak);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast__close:hover,
+.toast__close:focus-visible {
+  color: var(--paper-ink);
+}
+.toast__detail {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--paper-ink) 6%, transparent);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 8em;
+  overflow: auto;
+  cursor: text;
+}
 .toast__action {
-  margin-left: 12px;
+  margin-left: 0;
   padding: 2px 10px;
   border: 1.5px solid currentColor;
   border-radius: 999px;

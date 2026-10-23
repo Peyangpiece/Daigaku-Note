@@ -1,5 +1,6 @@
 // 授業画面（SPEC §8.2）：回ごとの付箋に、資料がイラスト付きの紙で貼ってある。
-// 自分のファイルは「付箋を追加」に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
+// 自分のファイルは「振り分け前」の付箋に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
+// 「振り分け前」の呼び名は main/ipc.js（取り込みの知らせ）と合わせる
 import {canRename, esc, jaWrap, progressText, state} from '../app.js';
 import {extOf, fileArt, kindOf} from './file-art.js';
 import {bookmarkLook, fixedSticker, skinOf, stickerLayer} from '../skin.js';
@@ -48,9 +49,10 @@ const tilt = (id) => ((hash32(id) % 7) - 3) * 0.5; // -1.5 〜 +1.5 度
 const EXTRACTABLE = /\.(pdf|docx|pptx|txt|md)$/i;
 // 「その他」は回の名前ではないので、名前を自分で変えられる（title_user。空ならその他）
 const otherName = (r) => r.title_user || 'その他';
-const placeName = (r) => (r ? (r.number === 0 ? otherName(r) : `第${r.number}回`) : '付箋を追加');
+export const OWN_LABEL = '振り分け前'; // 回を決めていないファイルの置き場（PDF の中の「メモ」や回の付箋と紛れない名前に）
+const placeName = (r) => (r ? (r.number === 0 ? otherName(r) : `第${r.number}回`) : OWN_LABEL);
 
-// places：移せる先（「付箋を追加」と回）。資料の紙はドラッグで別の付箋へ移せる。キーボードでは「移す」の選択で
+// places：移せる先（「振り分け前」と回）。資料の紙はドラッグで別の付箋へ移せる。キーボードでは「移す」の選択で
 export function fileCard(m, course, places) {
   const ok = m.status === 'ok';
   const unread = !m.read_at && ok;
@@ -94,7 +96,7 @@ export function fileCard(m, course, places) {
   </div>`;
 }
 
-// 付箋を追加：授業画面で入れたファイルが最初に置かれる。回の付箋と同じ大きさで、ここから回の付箋へ振り分ける。
+// 振り分け前：授業画面で入れたファイルが最初に置かれる。回の付箋と同じ大きさで、ここから回の付箋へ振り分ける。
 // 色は回の付箋の 5 色から選べる（選ばなければ罫線入りの白）
 function ownNote(course, list, places) {
   const sk = skinOf(state.data, course);
@@ -105,9 +107,9 @@ function ownNote(course, list, places) {
   const color = Number.isInteger(picked) ? colors[picked] : null;
   const dot = (c, i) =>
     `<button type="button" class="own-color" style="--sw: ${c}" data-action="own-color" data-course-id="${esc(course.id)}" data-index="${i === picked ? '' : i}" aria-pressed="${i === picked}" title="${i + 1} 番目の色" aria-label="付箋の色：${i + 1} 番目"></button>`;
-  return `<section class="round-note round-note--own${color ? ' round-note--own-colored' : ''}" data-drop="own" data-course-id="${esc(course.id)}"${color ? ` style="--note-color: ${color}"` : ''} aria-label="付箋を追加">
+  return `<section class="round-note round-note--own${color ? ' round-note--own-colored' : ''}" data-drop="own" data-course-id="${esc(course.id)}"${color ? ` style="--note-color: ${color}"` : ''} aria-label="振り分け前のファイル（回を決めていないファイル）">
     <header class="round-note__head">
-      <span class="round-note__round">付箋を追加</span>
+      <span class="round-note__round" title="ここに入れたファイルは、回の付箋へドラッグか「移す」で振り分けます">${OWN_LABEL}</span>
       <button class="btn btn--small" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
     </header>
     ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course, places)).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグ<br>（元のファイルは残ります）</p>'}
@@ -133,7 +135,7 @@ function makePicker(makeable, byRound) {
       <button class="btn btn--small btn--quiet" data-action="quiz-pick" data-pick="new">まだない回を選ぶ</button>
       <button class="btn btn--small btn--quiet" data-action="quiz-pick" data-pick="none">選ぶのをやめる</button>
     </div>
-    <p class="muted">回ごとに作ります（1 回 1〜2 分・数円〜十数円）。作成済みの回は作り直しになります（前の版の記録は残ります）。</p>
+    <p class="muted">回ごとに作ります（1 回 1〜2 分・およそ十数円。資料の量で前後します）。作成済みの回は作り直しになります（前の版の記録は残ります）。</p>
   </details>`;
 }
 
@@ -149,7 +151,7 @@ function testPanel(course, quizzes, makeable, byRound, hasKey) {
   if (!ready.length && !hasKey) return '';
   if (!ready.length)
     return `<section class="test-panel"><h3>この授業のテスト</h3>
-      <p class="muted">${hasKey ? (makeable.length ? '下で回を選んでクイズを作ると、テストができます。' : '資料（PDF・Word・PowerPoint・テキスト）のある回ができると、クイズを作れます。') : 'クイズを作るには Claude API キーが必要です。<button class="btn btn--small" data-action="nav" data-route="/settings">設定 → クイズ</button>'}</p>${make}</section>`;
+      <p class="muted">${hasKey ? (makeable.length ? '下で回を選んでクイズを作ると、テストができます。' : '資料（PDF・Word・PowerPoint・テキスト）のある回ができると、クイズを作れます。') : 'クイズを作るには、自分の Claude API キーが要ります（費用は使った分だけで、1 回の作成はおよそ十数円。資料の量で前後します）。<button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">設定 → クイズ で入れる</button>'}</p>${make}</section>`;
   return `<section class="test-panel"><h3>この授業のテスト</h3>
     <p class="muted">${ready.length} 回分・${total} 問${tries ? `・これまでの正答率 ${Math.round((correct / tries) * 100)}%` : ''}</p>
     <div class="actions">
@@ -168,7 +170,7 @@ function testPanel(course, quizzes, makeable, byRound, hasKey) {
 export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この回', {hintWhenNoKey = false} = {}) {
   const extractable = list.some((m) => m.status === 'ok' && EXTRACTABLE.test(m.name));
   if (gen)
-    return `<div class="round-quiz round-quiz--busy" role="status">${gen.state === 'failed' ? `<span>クイズを作れませんでした：${esc(gen.message)}</span> <button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">もう一度</button>` : `<span class="spinner" aria-hidden="true"></span><span>${esc(gen.message)}</span>`}</div>`;
+    return `<div class="round-quiz round-quiz--busy" role="status">${gen.state === 'failed' ? `<span>${esc(/^クイズを作れませんでした/.test(gen.message) ? gen.message : `クイズを作れませんでした：${gen.message}`)}</span> <button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">もう一度</button>` : `<span class="spinner" aria-hidden="true"></span><span>${esc(gen.message)}</span>`}</div>`;
   if (quiz) {
     const rate = quiz.tries ? `正答率 ${Math.round(((quiz.correct ?? 0) / quiz.tries) * 100)}%` : 'まだ解いていません';
     return `<div class="round-quiz">
@@ -184,7 +186,7 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
   // hintWhenNoKey で 1 行だけ案内する（入口がどこにもないと、クイズの機能に気づけない）
   if (!hasKey)
     return hintWhenNoKey
-      ? `<div class="round-quiz"><span class="muted">資料からクイズを作れます（Claude API キーが要ります）</span> <button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">設定 → クイズ</button></div>`
+      ? `<div class="round-quiz"><span class="muted">資料からクイズを作れます（自分の Claude API キーが要ります。1 回およそ十数円）</span> <button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">設定 → クイズ</button></div>`
       : '';
   return `<div class="round-quiz"><button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button></div>`;
 }
@@ -260,9 +262,9 @@ export function renderCourse({data, progress}, courseId) {
     (byRound.get(r.id) ?? []).some((m) => m.status === 'ok' && EXTRACTABLE.test(m.name))
   );
   const own = materials.filter((m) => !m.round_id);
-  // 移せる先：「付箋を追加」・回（「その他」はまだなくても選べるようにはしない。回は資料の有無にかかわらず全部）
+  // 移せる先：「振り分け前」・回（「その他」はまだなくても選べるようにはしない。回は資料の有無にかかわらず全部）
   const places = [
-    {value: 'own', label: '付箋を追加'},
+    {value: 'own', label: OWN_LABEL},
     ...rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length).map((r) => ({value: r.id, label: placeName(r)}))
   ];
   const note = (r) => roundNote(r, byRound.get(r.id) ?? [], course, today, quizInfo, places);
@@ -297,5 +299,5 @@ export function renderCourse({data, progress}, courseId) {
       ${order.other.map(note).join('')}
       ${ownNote(course, own, places)}
     </div>
-    ${shown.length ? '' : `<div class="empty"><p>${syncable ? 'まだ回がありません。同期すると、回ごとの付箋がここに並びます。' : 'ファイルは「付箋を追加」へドラッグするか、「ファイルを追加…」で入れます。'}</p></div>`}`;
+    ${shown.length ? '' : `<div class="empty"><p>${syncable ? 'まだ回がありません。同期すると、回ごとの付箋がここに並びます。' : 'ファイルは上の「振り分け前」へドラッグするか、「ファイルを追加…」で入れます。'}</p></div>`}`;
 }

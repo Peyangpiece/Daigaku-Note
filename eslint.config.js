@@ -23,6 +23,7 @@ export default [
         Intl: 'readonly',
         confirm: 'readonly',
         window: 'readonly',
+        navigator: 'readonly',
         document: 'readonly',
         location: 'readonly',
         CustomEvent: 'readonly',

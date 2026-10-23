@@ -142,7 +142,7 @@ export function acquire(raw, id, {experiments = false} = {}) {
   const st = stationeryState(raw);
   const item = itemOf(id);
   if (!item || (item.experimental && !experiments)) throw new Error('その文房具はありません');
-  if (item.price !== 0) throw new Error('この文房具はまだ入手できません');
+  if (item.price !== 0) throw new Error('この文房具はまだ足せません');
   if (st.owned.includes(id)) return st;
   return stationeryState({...st, owned: [...st.owned, id]});
 }

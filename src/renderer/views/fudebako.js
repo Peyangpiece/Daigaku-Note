@@ -1,6 +1,6 @@
 // 筆箱のページ（SPEC §15）。上の切り替えタブの「筆箱」。
 // 「わたしの筆箱」：筆箱に入れる 6 本（編集画面の PDF の横に出る）とペンケースを選ぶ。持っている文房具の一覧。
-// 「ショップ」：新しい文房具を入手する。いまは公式の品だけで、すべて無料（「無料で入手」）。
+// 「文房具をふやす」：新しい文房具を筆箱に足す。いまは公式の品だけで、すべて無料（値段は出さない）。
 // 持ち物・筆箱の中身はメインの設定（stationery）に保存する（ipc.js の stationery.acquire・stationery.arrange）
 import {esc, navigate, refresh, state, toast} from '../app.js';
 import {strokePath} from '../../shared/ink.js';
@@ -55,7 +55,7 @@ const art = (item) => (item.type === 'case' ? caseArt(item) : toolArt(item));
 function tabs(shop) {
   return `<div class="fb-tabs" role="tablist">
     <button type="button" role="tab" class="fb-tab" aria-selected="${!shop}" data-action="nav" data-route="/fudebako">わたしの筆箱</button>
-    <button type="button" role="tab" class="fb-tab" aria-selected="${shop}" data-action="nav" data-route="/fudebako?tab=shop">ショップ</button>
+    <button type="button" role="tab" class="fb-tab" aria-selected="${shop}" data-action="nav" data-route="/fudebako?tab=shop">文房具をふやす</button>
   </div>`;
 }
 
@@ -114,13 +114,13 @@ function mine(s) {
         .join('')}
     </div></section>
     ${list}
-    <p class="fb-more"><button type="button" class="btn" data-action="nav" data-route="/fudebako?tab=shop">ショップで新しい文房具を入手する →</button></p>`;
+    <p class="fb-more"><button type="button" class="btn" data-action="nav" data-route="/fudebako?tab=shop">文房具をふやす →</button></p>`;
 }
 
-/** ショップ：公式の文房具。いまはすべて無料 */
+/** 文房具をふやす：公式の文房具。いまはすべて無料（無料のものは値段を出さない） */
 function shop(s) {
   const has = new Set(s.owned);
-  return `<p class="muted fb-note">公式の文房具をそろえています。いまはすべて無料です。入手したペンは「わたしの筆箱」で筆箱に入れると、PDF の編集画面で使えます。</p>
+  return `<p class="muted fb-note">公式の文房具をそろえています。足したペンは「わたしの筆箱」で筆箱に入れると、PDF の編集画面で使えます。</p>
     ${TYPES.map(
       (type) => `<section class="fb-group"><h3>${TYPE_LABEL[type]}</h3><div class="fb-grid">
         ${CATALOG.filter(
@@ -132,11 +132,11 @@ function shop(s) {
               <div class="fb-card__name">${esc(it.name)}</div>
               <div class="muted fb-card__spec">${spec(it)}</div>
               ${sample(it)}
-              <div class="fb-card__buy"><span class="fb-price">${priceLabel(it)}</span>
+              <div class="fb-card__buy">${it.price === 0 ? '' : `<span class="fb-price">${priceLabel(it)}</span>`}
                 ${
                   has.has(it.id)
-                    ? '<button type="button" class="btn btn--small" disabled>入手済み</button>'
-                    : `<button type="button" class="btn btn--small btn--primary" data-fb="get" data-id="${it.id}">無料で入手</button>`
+                    ? '<button type="button" class="btn btn--small" disabled>筆箱にあります</button>'
+                    : `<button type="button" class="btn btn--small btn--primary" data-fb="get" data-id="${it.id}">筆箱に足す</button>`
                 }</div>
             </div>`
           )
@@ -144,7 +144,7 @@ function shop(s) {
     ).join('')}`;
 }
 
-/** 筆箱のページ（#/fudebako、ショップは #/fudebako?tab=shop） */
+/** 筆箱のページ（#/fudebako、文房具をふやすのは #/fudebako?tab=shop） */
 export function renderFudebako(_state, route) {
   const isShop = new URLSearchParams(route.split('?')[1] ?? '').get('tab') === 'shop';
   const s = st();
@@ -190,7 +190,7 @@ document.addEventListener('click', (e) => {
     save('stationery.acquire', {itemId: id}).then(() => {
       if (!st().owned.includes(id)) return;
       const action = it.type === 'case' ? null : {label: '筆箱に入れる', run: () => navigate('/fudebako')};
-      toast(`${it.name} を入手しました`, {action});
+      toast(`${it.name} を筆箱に足しました`, {action});
     });
   }
 });

@@ -36,7 +36,7 @@ function quizSection(q, focus = false) {
   if (!q) return '';
   const key = q.key?.set
     ? `<p>API キー：<code>••••${esc(q.key.last4)}</code> <button class="btn btn--small" data-quiz-removekey>削除</button></p>`
-    : `<p class="muted">クイズを作るには、自分の Claude API キーが要ります（<a href="#" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">Anthropic Console</a> で作れます。使った分だけ費用がかかります）。</p>
+    : `<p class="muted">クイズを作るには、自分の Claude API キーが要ります（<a href="#" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">Anthropic Console</a> で作れます）。費用は使った分だけで、1 回の作成はおよそ十数円（資料の量で前後します）。月の上限は下で決められます。</p>
        <details class="consent"><summary>AI に送るもの・送らないもの</summary>
          <p><strong>送る</strong>：その回の資料の本文（学籍番号などの ID・メール・電話番号は消してから）、授業名、回のタイトル、その回のメモ。</p>
          <p><strong>送らない</strong>：大学のアカウント・パスワード・Cookie、資料のファイルそのもの、ほかの回の資料、成績、名前、LMS の URL。</p>
@@ -130,10 +130,14 @@ export function renderSettings({data}, route = '/settings') {
           <p class="muted" style="align-self:end">ノートの種類・色・線の濃さは<button class="btn btn--small" data-action="nav" data-route="/kisekae">着せ替え</button>で、PDF に書くペンは<button class="btn btn--small" data-action="nav" data-route="/fudebako">筆箱</button>で変えられます</p>
         </div>
       </section>
-      <section class="card"><h3>実験</h3>
-        <label><input type="checkbox" id="st-experiments" ${s.experiments ? 'checked' : ''} /> 既製品の見た目のペン（ジェットストリーム・サラサクリップ）を筆箱のショップに出す</label>
-        <p class="muted">個人で試すための試作です。メーカーの許しを得ていないので、一般に配る版では使わないでください。</p>
-      </section>
+      ${
+        data.dev
+          ? `<section class="card"><h3>実験（開発中の起動でだけ出ます）</h3>
+        <label><input type="checkbox" id="st-experiments" ${s.experiments ? 'checked' : ''} /> 既製品の見た目のペン（ジェットストリーム・サラサクリップ）を筆箱に出す</label>
+        <p class="muted">個人で試すための試作です。メーカーの許しを得ていないので、配る版には出しません。</p>
+      </section>`
+          : ''
+      }
         ${
           hidden.length
             ? `<section class="card"><h3>非表示の授業・フォルダ</h3>
@@ -287,6 +291,12 @@ function bind() {
   );
   document.querySelectorAll('[data-forget-pass]').forEach((b) =>
     b.addEventListener('click', async () => {
+      if (
+        !confirm(
+          '自動ログインをやめますか？ 保存した ID とパスワードを消します（資料と注釈は残ります。次の同期からはログインの窓が出ます）'
+        )
+      )
+        return;
       const r = await api['connection.forgetPassword']({connectionId: b.dataset.forgetPass});
       if (r?.error) return toast(r.error, {error: true});
       toast('自動ログインをやめ、保存した ID とパスワードを消しました');

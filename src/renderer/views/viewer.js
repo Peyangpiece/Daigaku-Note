@@ -1,5 +1,5 @@
 // PDF ビューアと編集（SPEC §9）。アプリ内で開けて編集できるのは PDF だけ。
-// 編集は「文字入れ」（フォントはヒラギノ角ゴのみ。サイズ・太字・色を変えられる）・「付箋」（メモ）・「文字隠し」。
+// 編集は「文字入れ」（フォントはヒラギノ角ゴのみ。サイズ・太字・色を変えられる）・「メモ」（PDF の注釈のメモ。授業画面の付箋とは別物）・「文字隠し」。
 // 文字隠しは水色のマーカー。ふだんは下の文字が読め、赤シートをかぶせたところだけ黒くつぶれて読めなくなる。
 //   仕組み：マーカーの水色は赤の成分が 0（#00d2ff）で、ページに「乗算」で重ねる。赤シートも赤（赤だけ通す）を乗算で重ねるので、
 //   マーカーの部分は 赤 0 × … = 黒 になる。白い紙は赤に、黒い文字は黒のままになり、本物の赤シートと同じ見え方になる
@@ -64,6 +64,12 @@ const SIZE_MIN = 6,
   DEFAULT_SIZE = 12,
   NOTE_SIZE = 20;
 const FONT = "'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif"; // notebook.css の .anno-text と同じ
+// OS に合わせた表記（SPEC §9）：Mac では ⌘、Windows・Linux では Ctrl。フォント名も Mac 以外ではヒラギノは入っていないので「標準のゴシック」
+const IS_MAC = /Mac/i.test(navigator.platform);
+const MOD = IS_MAC ? '⌘' : 'Ctrl';
+const key = (...parts) => (IS_MAC ? parts.join('') : parts.join('+')); // key('⇧', MOD, 'Z') → ⇧⌘Z ／ Shift+Ctrl+Z
+const SHIFT = IS_MAC ? '⇧' : 'Shift';
+const FONT_LABEL = IS_MAC ? 'ヒラギノ角ゴ' : '標準のゴシック';
 /** 行の字の上下（覆う範囲）と、その行をなぞったとみなす上下 */
 const lineOf = (items) => ({
   top: Math.min(...items.map((it) => it.top)),
@@ -127,7 +133,7 @@ const BAR = `
     <div class="seg" role="group" aria-label="ツール">
       <button type="button" data-tool="select" title="選択・移動（V）">選択</button>
       <button type="button" data-tool="text" title="文字入れ（T）">文字</button>
-      <button type="button" data-tool="note" title="付箋（M）">付箋</button>
+      <button type="button" data-tool="note" title="メモ（M）">メモ</button>
     </div>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
@@ -143,20 +149,20 @@ const BAR = `
     <button type="button" class="viewer-bar__sheet" data-v="sheet" aria-pressed="false" title="赤シートを出す・しまう（R）。マーカーのところだけ黒く隠れます">赤シート</button>
     </div>
     <div class="viewer-bar__history">
-      <button type="button" data-v="undo" disabled title="取り消す（Ctrl/⌘+Z）" aria-label="取り消す">↶</button>
-      <button type="button" data-v="redo" disabled title="やり直す（Shift+Ctrl/⌘+Z）" aria-label="やり直す">↷</button>
+      <button type="button" data-v="undo" disabled title="取り消す（${key(MOD, 'Z')}）" aria-label="取り消す">↶</button>
+      <button type="button" data-v="redo" disabled title="やり直す（${key(SHIFT, MOD, 'Z')}）" aria-label="やり直す">↷</button>
     </div>
     <div class="viewer-bar__group" data-group="text" hidden>
-      <span class="viewer-bar__font" title="文字入れのフォントはヒラギノ角ゴです">ヒラギノ角ゴ</span>
+      <span class="viewer-bar__font" title="文字入れのフォントは${IS_MAC ? 'ヒラギノ角ゴ' : 'この OS の標準のゴシック体'}です（変えられません）">${FONT_LABEL}</span>
       <label class="viewer-bar__size">サイズ<input type="number" data-v="size" min="${SIZE_MIN}" max="${SIZE_MAX}" step="0.5" />pt</label>
       <button type="button" class="viewer-bar__bold" data-v="bold" aria-pressed="false" title="太字">B</button>
       <span class="swatches">${swatches(TEXT_COLORS, 'text-color')}</span>
       <input type="color" data-v="text-custom" title="ほかの色" aria-label="文字のほかの色" />
     </div>
     <div class="viewer-bar__group" data-group="note" hidden>
-      <span class="muted">付箋の色</span>
+      <span class="muted">メモの色</span>
       <span class="swatches">${swatches(NOTE_COLORS, 'note-color')}</span>
-      <input type="color" data-v="note-custom" title="ほかの色" aria-label="付箋のほかの色" />
+      <input type="color" data-v="note-custom" title="ほかの色" aria-label="メモのほかの色" />
     </div>
     <button type="button" class="btn btn--small" data-v="delete" hidden title="選んだ注釈を消す（Delete）">削除</button>
     <span class="viewer-bar__spacer"></span>
@@ -169,23 +175,24 @@ const BAR = `
       <button type="button" data-v="zoom-in" aria-label="拡大">＋</button>
       <button type="button" data-v="fit" title="ページの幅を画面の幅に合わせる">ページ幅</button>
     </div>
-    <span class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（Ctrl/⌘+S ですぐに保存）"></span>
-    <button type="button" class="btn btn--small btn--quiet" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（Ctrl/⌘+E）">書き出す…</button>
+    <span class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（${key(MOD, 'S')} ですぐに保存）"></span>
+    <button type="button" class="btn btn--small btn--quiet" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（${key(MOD, 'E')}）">書き出す…</button>
     <div class="viewer-bar__help">
       <button type="button" data-v="help" aria-expanded="false" aria-haspopup="true" title="キーボードの操作（?）" aria-label="キーボードの操作">?</button>
       <div class="help-panel" data-v="help-panel" hidden>
         <strong>キーボードの操作</strong>
         <dl>
-          <dt>V・T・M</dt><dd>選択・文字・付箋</dd>
+          <dt>V・T・M</dt><dd>選択・文字・メモ</dd>
           <dt>1〜6</dt><dd>筆箱の 1〜6 本目のペン</dd>
           <dt>H・E</dt><dd>文字隠しペン・消しゴム</dd>
           <dt>B</dt><dd>今の場所にしおり</dd>
           <dt>R</dt><dd>赤シートを出す・しまう</dd>
+          <dt>Tab・Enter</dt><dd>注釈を順に選ぶ・選んだ文字を直す／メモを開く</dd>
           <dt>Delete</dt><dd>選んだ注釈を消す</dd>
           <dt>Esc</dt><dd>選択をやめる</dd>
-          <dt>⌘Z・⇧⌘Z</dt><dd>取り消す・やり直す</dd>
-          <dt>⌘S・⌘E</dt><dd>すぐに保存（ふだんは自動）・書き出す</dd>
-          <dt>ピンチ・⌘＋ホイール</dt><dd>拡大・縮小</dd>
+          <dt>${key(MOD, 'Z')}・${key(SHIFT, MOD, 'Z')}</dt><dd>取り消す・やり直す</dd>
+          <dt>${key(MOD, 'S')}・${key(MOD, 'E')}</dt><dd>すぐに保存（ふだんは自動）・書き出す</dd>
+          <dt>ピンチ・${MOD}＋ホイール</dt><dd>拡大・縮小</dd>
         </dl>
       </div>
     </div>
@@ -199,7 +206,7 @@ const BAR = `
         <label><input type="radio" name="markers" value="blue" checked /> 水色のまま（印刷して赤シートをかぶせると隠れます）</label>
         <label><input type="radio" name="markers" value="black" /> 黒く塗りつぶす</label>
       </fieldset>
-      <label><input type="checkbox" name="notes" checked /> 付箋を PDF のメモ（注釈）として入れる</label>
+      <label><input type="checkbox" name="notes" checked /> メモを PDF の注釈として入れる（ほかの PDF アプリでも読めます）</label>
       <div class="export-dialog__foot">
         <button type="submit" class="btn" value="cancel">やめる</button>
         <button type="submit" class="btn btn--primary" value="ok">書き出す…</button>
@@ -721,7 +728,7 @@ class Viewer {
       el.innerHTML = '<span class="anno-mask__cover"></span>';
     } else {
       el.className = 'anno-note';
-      el.innerHTML = `<button type="button" class="anno-note__icon" aria-label="付箋"></button>
+      el.innerHTML = `<button type="button" class="anno-note__icon" aria-label="メモ"></button>
         <div class="anno-note__pop" hidden>
           <textarea maxlength="5000" placeholder="メモを書く"></textarea>
           <div class="anno-note__foot"><button type="button" class="btn btn--small" data-note="delete">削除</button><button type="button" class="btn btn--small" data-note="close">閉じる</button></div>
@@ -739,6 +746,12 @@ class Viewer {
         if (a.bodyBefore) this.record(a.key, a.bodyBefore, this.snap(a));
         a.bodyBefore = null;
       });
+    }
+    // キーボードでも選べる（Tab で順に。Enter で文字を直す／メモを開く。Delete で消す）。メモは中のボタンが受けるので外側には付けない
+    if (a.kind !== 'note') {
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+      if (a.kind === 'text') el.setAttribute('aria-label', `文字入れ：${a.body.slice(0, 40)}`);
     }
     a.el = el;
     p.layer.append(el);
@@ -768,7 +781,7 @@ class Viewer {
     const head = a.body.trim().slice(0, 80);
     a.el.querySelector('.anno-note__icon').title = head
       ? head + (a.body.trim().length > 80 ? '…' : '')
-      : '付箋（押すと開きます）';
+      : 'メモ（押すと開きます）';
   }
 
   /**
@@ -1162,7 +1175,7 @@ class Viewer {
     });
     panel.innerHTML = `<div class="case-panel__head"><strong>筆箱</strong><span class="muted">押したペンを ${at + 1} 本目に入れて持ちます</span></div>
       ${groups.join('')}
-      <div class="case-panel__foot"><button type="button" class="btn btn--small" data-case-go>筆箱を整理する・ショップ →</button></div>`;
+      <div class="case-panel__foot"><button type="button" class="btn btn--small" data-case-go>筆箱を整理する・文房具をふやす →</button></div>`;
     panel.dataset.at = String(at);
   }
   /** 筆箱の外のペンを、at 本目に入れて持つ（入っていたペンは出す）。もう入っていればそのまま持つ */
@@ -1424,6 +1437,11 @@ class Viewer {
       else this.openNote(a, false);
     });
     this.on(document, 'keydown', (e) => this.onKey(e));
+    // Tab で注釈にフォーカスが来たら、押したときと同じく選ぶ（メモは中のアイコンのボタンに来る）
+    this.on(el, 'focusin', (e) => {
+      const a = this.annoOf(e.target);
+      if (a && a !== this.editing) this.select(a);
+    });
     this.on(window, 'beforeunload', () => this.flushAll());
     this.on(window, 'scroll', () => this.sheet && this.syncCovers(), {passive: true});
   }
@@ -1451,7 +1469,7 @@ class Viewer {
     const penEraser = e.pointerType === 'pen' && (e.button === 5 || (e.buttons & 32) !== 0);
     if (penEraser || DRAW_TOOLS.includes(this.tool)) return this.startDraw(e, penEraser);
     if (e.button !== 0) return;
-    if (e.target.closest('.anno-note__pop')) return; // 付箋の本文は普通に打てる
+    if (e.target.closest('.anno-note__pop')) return; // メモの本文は普通に打てる
     const a = this.annoOf(e.target);
     if (this.editing && this.editing !== a) this.finishEdit();
     if (a) {
@@ -2276,6 +2294,16 @@ class Viewer {
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.selected) {
       e.preventDefault();
       this.removeAnno(this.selected);
+    } else if (e.key === 'Enter' && this.selected && this.annoOf(t) === this.selected) {
+      // フォーカスのある注釈で Enter：文字入れは直す、メモは開く（マウスで押したときと同じ）
+      const a = this.selected;
+      if (a.kind === 'text') {
+        e.preventDefault();
+        this.edit(a);
+      } else if (a.kind === 'note') {
+        e.preventDefault();
+        this.openNote(a, true);
+      }
     }
   }
 

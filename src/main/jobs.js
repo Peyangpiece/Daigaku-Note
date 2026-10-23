@@ -21,8 +21,11 @@ export function friendlyError(e) {
   if (e?.code === 'blocked-navigation') return '想定外のページに移動したため中断しました';
   if (/ENOSPC|EACCES|EPERM/.test(m)) return '保存先に書き込めません';
   if (/未対応の接続の種類/.test(m)) return 'この接続の種類はまだ同期できません。設定 → 大学の LMS から削除してください';
-  return `処理に失敗しました：${m.split('\n')[0].slice(0, 120)}`;
+  return '処理に失敗しました'; // 元の例外文は rawDetail で別に渡し、画面では「くわしく」を押したときだけ見せる
 }
+
+/** 元の例外文（画面では「くわしく」を押したときだけ見せる。長すぎれば切る） */
+export const rawDetail = (e) => String(e?.stack?.split('\n')[0] ?? e?.message ?? e ?? '').slice(0, 300);
 
 export class JobRunner {
   constructor(ctx, {notify = () => {}} = {}) {
@@ -74,10 +77,19 @@ export class JobRunner {
     } catch (e) {
       this.ctx.log.error(`ジョブ失敗 ${job.kind}: ${(e.stack || e.message || '').split('\n').slice(0, 3).join(' | ')}`);
       const message = friendlyError(e);
-      this.ctx.repo.finishJob(job.id, 'failed', {message, raw: String(e.message).slice(0, 300)});
+      const detail = rawDetail(e);
+      this.ctx.repo.finishJob(job.id, 'failed', {message, raw: detail});
       this.notify('state.changed', {kind: job.kind, error: message});
       if (job.kind === 'sync')
-        this.notify('sync.finished', {jobId: job.id, status: 'failed', message, courses: 0, materials: 0, failures: 1});
+        this.notify('sync.finished', {
+          jobId: job.id,
+          status: 'failed',
+          message,
+          detail,
+          courses: 0,
+          materials: 0,
+          failures: 1
+        });
     } finally {
       this.running = false;
       this.ctx.status = '';
@@ -117,7 +129,7 @@ export class JobRunner {
               c.status !== 'disabled' &&
               c.kind !== 'manual'
           );
-        const totals = {courses: 0, materials: 0, failures: 0, status: 'ok', messages: []};
+        const totals = {courses: 0, materials: 0, failures: 0, status: 'ok', messages: [], details: []};
         for (const connection of connections) {
           if (connection.kind === 'recipe' && this.ctx.browser?.state !== 'ready') {
             totals.failures++;
@@ -143,6 +155,7 @@ export class JobRunner {
             totals.failures++;
             totals.status = totals.status === 'ok' ? 'failed' : totals.status;
             totals.messages.push(`${connection.label}：${friendlyError(e)}`);
+            totals.details.push(`${connection.label}：${rawDetail(e)}`);
             continue;
           }
           totals.courses += r.courses;
@@ -164,6 +177,8 @@ export class JobRunner {
           }
         }
         totals.message = totals.messages.join(' / ');
+        totals.detail = totals.details.join('\n'); // 元の例外文（画面では「くわしく」を押したときだけ見せる）
+        delete totals.details;
         return totals;
       }
       case 'login': {
