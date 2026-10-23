@@ -11,6 +11,7 @@ import {PERIOD_PRESETS} from '../shared/schedule.js';
 import {cleanUses, isRole} from '../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../shared/lms-terms.js';
 import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
 import {isOpenable, sha256} from './sync/files.js';
 import {renameCourse} from './folders.js';
 import {mergeAutoTerms, recomputeRoundDates, removeTerm, saveTerm} from './terms.js';
@@ -21,7 +22,7 @@ import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
 import {annotationToClient, normalizeAnnotation, clampSize} from '../shared/annotation.js';
 import {normalizeBookmark} from '../shared/bookmark.js';
-import {acquire, arrange, stationeryState} from '../shared/stationery.js';
+import {CATALOG, acquire, arrange, stationeryState} from '../shared/stationery.js';
 
 const str = (v, max = 500) => (typeof v === 'string' && v.length <= max ? v : null);
 const id = (v) => (isUlid(v) ? v : null);
@@ -36,6 +37,7 @@ const httpsUrl = (v) => {
   }
 };
 // pdf.js の補助データ（日本語の CMap・標準フォント・wasm）。レンダラは file:// を読まないので、ここから渡す
+const here = path.dirname(fileURLToPath(import.meta.url));
 const PDFJS_DIR = path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
 const PDFJS_ASSET = {cMapUrl: 'cmaps', standardFontDataUrl: 'standard_fonts', wasmUrl: 'wasm'};
 // ログイン時に起動（Mac・Windows）。npm start の開発版で登録すると Electron 本体が登録されるので、アプリとして入れたときだけ
@@ -428,10 +430,18 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     repo.setSetting('stationery', st);
     return {stationery: st};
   });
-  handle('stationery.arrange', ({slots, caseId}) => {
-    const st = arrange(repo.getSetting('stationery', null), {slots, caseId});
+  handle('stationery.arrange', ({slots, caseId, refills}) => {
+    const st = arrange(repo.getSetting('stationery', null), {slots, caseId, refills});
     repo.setSetting('stationery', st);
     return {stationery: st};
+  });
+  // 3D モデルの品の GLB（renderer/assets/stationery/<model>.glb）。レンダラは file:// を fetch できないので、ここで読んで渡す
+  const modelsDir = path.join(here, '..', 'renderer', 'assets', 'stationery');
+  handle('stationery.model', async ({model}) => {
+    const id = String(model ?? '');
+    if (!/^[a-z0-9-]+$/.test(id) || !CATALOG.some((it) => it.model === id)) bad('そのモデルはありません');
+    const bytes = await fsp.readFile(path.join(modelsDir, `${id}.glb`));
+    return {bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)};
   });
 
   // シールの素：レンダラで長辺 512px 以内の PNG に描き直したもの（画像の中の付加情報を落とす）を受け取り、

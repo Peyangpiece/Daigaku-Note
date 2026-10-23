@@ -15,7 +15,7 @@
 // pdf.js は互換版（legacy）を使う。通常版は Map.prototype.getOrInsertComputed などの新しい機能を前提にしており、
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
-import {isTyping, navigate, state, toast} from '../app.js';
+import {esc, isTyping, navigate, state, toast} from '../app.js';
 import {bookmarkLook, fixedSticker, skinOf} from '../skin.js';
 import {ROUND_DEFAULTS} from '../../shared/skin.js';
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
@@ -33,7 +33,9 @@ import {
   KIND_OF,
   TYPE_LABEL,
   TOOL_TYPES,
+  heldPen,
   itemOf,
+  nextRefill,
   stationeryState,
   toolArt
 } from '../../shared/stationery.js';
@@ -166,6 +168,7 @@ const BAR = `
       <span class="swatches">${swatches(NOTE_COLORS, 'note-color')}</span>
       <input type="color" data-v="note-custom" title="ほかの色" aria-label="メモのほかの色" />
     </div>
+    <div class="viewer-bar__group viewer-bar__refills" data-group="refill" role="group" aria-label="多機能ペンの芯" hidden></div>
     <button type="button" class="btn btn--small" data-v="delete" hidden title="選んだ注釈を消す（Delete）">削除</button>
     <span class="viewer-bar__spacer"></span>
     <div class="viewer-bar__nav">
@@ -187,7 +190,7 @@ const BAR = `
         <strong>キーボードの操作</strong>
         <dl>
           <dt>${key(MOD, 'T')}・${key(MOD, 'M')}</dt><dd>文字入れ・メモ</dd>
-          <dt>${key(MOD, '1')}〜${key(MOD, '6')}</dt><dd>筆箱の 1〜6 本目のペン</dd>
+          <dt>${key(MOD, '1')}〜${key(MOD, '6')}</dt><dd>筆箱の 1〜6 本目のペン（多機能ペンは、もう一度押すと次の芯に回る）</dd>
           <dt>${key(SHIFT, MOD, 'H')}・${key(MOD, 'E')}</dt><dd>文字隠しペン・消しゴム</dd>
           <dt>${key(MOD, 'B')}</dt><dd>太字（文字入れを選んでいるとき）</dd>
           <dt>${key(MOD, 'D')}</dt><dd>今の場所にしおり</dd>
@@ -1188,17 +1191,36 @@ class Viewer {
   /** 筆箱の i 本目（null なら筆箱の外の品）のペンを持つ */
   usePen(item, i = null) {
     if (!item) return;
-    this.penItem = item;
+    this.penItem = heldPen(item, this.st.refills?.[item.id]); // 多機能ペンは選んだ芯の色・太さ
+
     this.slot = i;
     this.setTool(KIND_OF[item.type]);
     this.slot = i; // setTool が外したのを戻す
     for (const b of this.root.querySelectorAll('[data-slot]'))
       b.setAttribute('aria-pressed', String(i !== null && Number(b.dataset.slot) === i));
   }
-  /** 筆箱の i 本目を持つ（空なら何もしない） */
+  /** 筆箱の i 本目を持つ（空なら何もしない）。持っている多機能ペンをもう一度押すと、次の芯に回す（回転式） */
   useSlot(i) {
     const item = itemOf(this.st.slots[i]);
-    if (item) this.usePen(item, i);
+    if (!item) return;
+    if (item.refills && this.slot === i && this.tool === KIND_OF[item.type]) {
+      const next = nextRefill(item, this.penItem?.refill?.id);
+      this.pickRefill(next);
+      toast(`${item.name}：${heldPen(item, next).refill.name}に回しました`);
+    } else this.usePen(item, i);
+  }
+  /** 持っている多機能ペンの芯を選ぶ（設定に残す） */
+  async pickRefill(rid) {
+    const item = itemOf(this.penItem?.id);
+    if (!item?.refills || !item.refills.some((r) => r.id === rid)) return;
+    this.st = {...this.st, refills: {...this.st.refills, [item.id]: rid}};
+    if (state.data) state.data.stationery = this.st;
+    this.usePen(item, this.slot);
+    this.renderSlots();
+    const r = await api['stationery.arrange']({refills: {[item.id]: rid}});
+    if (r?.error) return toast(r.error, {error: true});
+    this.st = r.stationery;
+    if (state.data) state.data.stationery = r.stationery;
   }
   /** 文字隠しペン（⇧⌘H）：筆箱の中の最初の文字隠しペン。なければ水色 */
   useHider() {
@@ -1217,8 +1239,11 @@ class Viewer {
         const it = itemOf(id);
         if (!it)
           return `<button type="button" class="fude-side__pen is-empty" data-slot="${i}" disabled title="空き（「ペンを入れ替える」で入れる）" aria-label="${i + 1} 本目：空き"><span class="fude-side__num">${i + 1}</span></button>`;
-        const tip = `${it.name}（${TYPE_LABEL[it.type]}・キー ${i + 1}）`;
-        return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${it.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
+        const held = heldPen(it, this.st.refills?.[it.id]);
+        const tip = held.refill
+          ? `${it.name}（${held.refill.name}・キー ${i + 1}。もう一度押すと次の芯）`
+          : `${it.name}（${TYPE_LABEL[it.type]}・キー ${i + 1}）`;
+        return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${held.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
       })
       .join('');
     // 使っていたペンが筆箱から出たら、選択に戻す
@@ -1388,6 +1413,22 @@ class Viewer {
     for (const b of this.root.querySelectorAll('[data-note-color]'))
       b.setAttribute('aria-pressed', String(b.dataset.noteColor === nc));
     this.$('note-custom').value = nc;
+    // 多機能ペンを持っているとき：芯の切り替え
+    const rg = this.root.querySelector('[data-group="refill"]');
+    const multi = this.tool === 'ink' && this.penItem?.refills ? this.penItem : null;
+    rg.hidden = !multi;
+    if (multi) {
+      const cur = multi.refill?.id;
+      const html =
+        `<span class="viewer-bar__refills-name">${esc(multi.name)}</span>` +
+        multi.refills
+          .map(
+            (r) =>
+              `<button type="button" class="viewer-bar__refill" data-refill="${r.id}" aria-pressed="${r.id === cur}" style="--swatch: ${r.color}" title="${esc(r.name)} ${r.mm} mm">${esc(r.name)}</button>`
+          )
+          .join('');
+      if (rg.innerHTML !== html) rg.innerHTML = html;
+    }
     this.$('delete').hidden = !a; // 選んでいるときだけ出す（ツールバーを 1 行に収める）
   }
 
@@ -1415,6 +1456,7 @@ class Viewer {
       const fromSide = !!t.closest('.fude-side');
       if (t.dataset.v === 'side-tab') return this.openSide(true);
       if (t.dataset.tool) this.setTool(t.dataset.tool);
+      else if (t.dataset.refill) this.pickRefill(t.dataset.refill);
       else if (t.dataset.slot !== undefined) this.useSlot(Number(t.dataset.slot));
       else if (t.dataset.v === 'case') this.openCase(this.$('case-panel').hidden);
       else if (t.dataset.textColor) this.setTextStyle({color: t.dataset.textColor});

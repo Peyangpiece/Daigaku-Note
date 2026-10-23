@@ -83,3 +83,55 @@ test('実験：既製品の見た目のペンは、実験をオンにしたと�
   assert.match(toolArt(js), /JETSTREAM/);
   assert.match(toolArt(itemOf('maker-sarasa-red')), /SARASA/);
 });
+
+test('多機能ペン（サクラクラフトラボ 004）：3 本の芯を回して使い、選んだ芯は設定に残る', async () => {
+  const {heldPen, listed, nextRefill, refillOf} = await import('../src/shared/stationery.js');
+  const it = itemOf('maker-craftlab-004');
+  assert.equal(it.type, 'pen');
+  assert.equal(it.experimental, true, '既製品なので、実験をオンにしたときだけ');
+  assert.equal(listed(it), false);
+  assert.equal(it.art, 'model');
+  assert.equal(it.model, 'craftlab-004');
+  assert.equal(it.refill, '4C');
+  assert.deepEqual(
+    it.refills.map((r) => r.id),
+    ['black', 'red', 'sharp']
+  );
+  assert.deepEqual([it.color, it.width, it.mm], [it.refills[0].color, it.refills[0].width, '0.5'], '最初は黒');
+  // 芯：知らない id は最初の芯。回転式：最後の次は最初
+  assert.equal(refillOf(it, 'red').name, '赤ボールペン');
+  assert.equal(refillOf(it, 'nope').id, 'black');
+  assert.equal(nextRefill(it, 'black'), 'red');
+  assert.equal(nextRefill(it, 'sharp'), 'black');
+  assert.equal(refillOf(itemOf('pen-black-05')), null);
+  const red = heldPen(it, 'red');
+  assert.equal(red.color, '#d0202e');
+  assert.equal(red.refill.id, 'red');
+  assert.equal(red.id, it.id, '持っても品の id は変わらない（筆箱の場所と照らす）');
+  assert.equal(heldPen(itemOf('pen-black-05'), 'red'), itemOf('pen-black-05'), 'ふつうのペンはそのまま');
+  const sharp = heldPen(it, 'sharp');
+  assert.ok(sharp.refill.sharp && sharp.width < it.width * 1.3 && sharp.color !== it.color, 'シャープは灰色');
+  // 選んだ芯は設定に残る。持っていない品・ない芯は捨てる
+  const owned = acquire(null, 'maker-craftlab-004', {experiments: true});
+  assert.deepEqual(owned.refills, {});
+  const picked = arrange(owned, {refills: {'maker-craftlab-004': 'red'}});
+  assert.deepEqual(picked.refills, {'maker-craftlab-004': 'red'});
+  assert.deepEqual(
+    stationeryState({...picked, refills: {'maker-craftlab-004': 'nope', 'pen-black-05': 'red'}}).refills,
+    {}
+  );
+  assert.deepEqual(
+    stationeryState({refills: {'maker-craftlab-004': 'red'}}).refills,
+    {},
+    '持っていない品の芯は残さない'
+  );
+  assert.throws(() => arrange(owned, {refills: {'maker-craftlab-004': 'blue'}}), /ありません/);
+  assert.throws(() => arrange(null, {refills: {'maker-craftlab-004': 'red'}}), /ありません/);
+  assert.throws(() => arrange(owned, {refills: 'red'}), /不正/);
+  // 絵：3D モデルの札（画像は renderer/model3d.js が入れる）
+  const art = toolArt(it);
+  assert.match(art, /data-model="craftlab-004"/);
+  assert.match(art, /<image data-model-img/);
+  assert.match(art, /サクラクラフトラボ 004/);
+  assert.doesNotMatch(toolArt({...it, art: null}), /data-model/, '描けないときはふつうのペンの絵');
+});

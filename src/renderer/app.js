@@ -21,6 +21,7 @@ import {
   renderQuizEdit
 } from './views/quiz.js';
 import {mountViewer} from './views/viewer.js';
+import {watchModels} from './model3d.js';
 
 const api = window.daigaku;
 export const state = {data: null, progress: null};
@@ -61,6 +62,7 @@ watchTheme(
   () => render()
 );
 setStickerReload(() => render()); // シールの画像が届いたら描き直す
+watchModels(); // 文房具の 3D モデル（画面に出たときに描く）
 
 /**
  * 文字を打っている最中か（入力欄・テキストエリア・選択肢・編集中の要素、日本語入力の変換中）。
