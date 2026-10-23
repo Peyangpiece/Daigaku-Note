@@ -4651,6 +4651,7 @@ button.fb-card {
   initial-value: 26px;
 }
 .fb-try {
+  container-type: inline-size; /* 付箋の大きさ・赤シートの置き場所は、欄の幅で決める（画面の幅ではなく） */
   margin-top: var(--space-3);
   padding: var(--space-2) var(--space-3) var(--space-3);
   border-radius: var(--radius);
@@ -4676,7 +4677,7 @@ button.fb-card {
   vertical-align: -1px;
 }
 .ts-desk {
-  --note: min(300px, calc(100vw - 150px));
+  --note: min(300px, calc(100cqi - 2 * var(--frame) - 2 * var(--gap)));
   /* 木のメモトレー：縁の幅・付箋とくぼみの壁のすき間（付箋のまわりは同じ幅） */
   --frame: 18px;
   --frame-top: 18px;
@@ -4871,8 +4872,8 @@ button.fb-card {
   letter-spacing: 0.1em;
   pointer-events: none;
 }
-/* 狭い画面：赤シートは付箋の下に横長で置く */
-@media (max-width: 560px) {
+/* 狭い欄（メモトレーの横に赤シートが入らない）：赤シートはメモトレーの下に横長で置く */
+@container (max-width: 560px) {
   .ts-desk--sheet {
     height: calc(var(--tray-h) + 150px);
   }
