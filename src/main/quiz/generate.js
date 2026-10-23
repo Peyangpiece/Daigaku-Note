@@ -173,7 +173,10 @@ export async function generateQuiz(deps, opts) {
   });
   if (!text.docs.length) {
     const why = text.skipped.length ? `（${text.skipped.map((s) => `${s.name}：${s.reason}`).join('、')}）` : '';
-    throw err('no-text', `この回には、文字を読める資料がありません${why}`);
+    throw err(
+      'no-text',
+      `この回には、文字を読める資料がありません${why}。画像だけの PDF（スキャン）は読めないので、文字の入った PDF か、内容を書いたテキストファイルを回に入れてください`
+    );
   }
   const notes = [];
   if (text.truncatedAt)

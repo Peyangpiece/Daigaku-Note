@@ -168,6 +168,7 @@ const BAR = `
     </div>
     <button type="button" class="btn btn--small" data-v="delete" hidden title="選んだ注釈を消す（Delete）">削除</button>
     <span class="viewer-bar__spacer"></span>
+    <div class="viewer-bar__nav">
     <label class="viewer-bar__page" title="ページ番号を入れて Enter で移る">
       <input type="number" data-v="page" min="1" value="1" aria-label="ページ" /><span data-v="page-count">/ 1</span>
     </label>
@@ -177,7 +178,8 @@ const BAR = `
       <button type="button" data-v="zoom-in" aria-label="拡大">＋</button>
       <button type="button" data-v="fit" title="ページの幅を画面の幅に合わせる">ページ幅</button>
     </div>
-    <span class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（${key(MOD, 'S')} ですぐに保存）"></span>
+    </div>
+    <button type="button" class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（${key(MOD, 'S')} ですぐに保存）。保存できなかったときは押すともう一度保存します"></button>
     <button type="button" class="btn btn--small btn--quiet" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（${key(SHIFT, MOD, 'E')}）">書き出す…</button>
     <div class="viewer-bar__help">
       <button type="button" data-v="help" aria-expanded="false" aria-haspopup="true" title="キーボードの操作（${key(MOD, '/')}）" aria-label="キーボードの操作">?</button>
@@ -199,6 +201,7 @@ const BAR = `
           <dt>ピンチ・${MOD}＋ホイール</dt><dd>拡大・縮小</dd>
           <dt class="muted">文字を打っている間</dt><dd class="muted">ショートカットは効きません（1 文字のショートカットはありません）</dd>
         </dl>
+        <p class="help-panel__note">変更は自動で保存されます（右上の「保存しました」が目印）。赤シートは、マーカーのところを黒く隠し、赤い字・赤ペンの線を見えなくします。</p>
       </div>
     </div>
   </div>
@@ -1036,6 +1039,7 @@ class Viewer {
         (e) => {
           this.failed = true;
           console.error(e);
+          this.saveFailed(a, e);
         }
       )
       .finally(() => {
@@ -1125,12 +1129,30 @@ class Viewer {
     for (const a of this.annos.values()) if (a.timer) this.flush(a);
   }
 
+  /** 注釈を保存できなかったとき：原因と「もう一度」を知らせる（続けて失敗しても 10 秒に 1 回だけ） */
+  saveFailed(a, e) {
+    const now = Date.now();
+    if (now - (this.failToastAt ?? 0) < 10000) return;
+    this.failToastAt = now;
+    toast('注釈を保存できませんでした', {
+      error: true,
+      detail: String(e?.message ?? e),
+      action: {label: 'もう一度', run: () => this.retrySaves()}
+    });
+  }
+  /** 保存できなかった注釈をもう一度保存する（右上の「保存できませんでした」を押したときも） */
+  retrySaves() {
+    this.failed = false;
+    for (const x of this.annos.values()) if (!x.removed) this.scheduleSave(x, 0);
+    if (this.fileDirty) this.saveFile();
+  }
+
   setStatus(state) {
     const el = this.$('status');
     if (!el) return;
     const pending = state === 'saving' || this.inflight > 0 || [...this.annos.values()].some((a) => a.timer);
     el.textContent = this.failed
-      ? '保存できませんでした'
+      ? '保存できませんでした（押すともう一度）'
       : pending || this.fileSaving || this.fileDirty
         ? '保存中…'
         : this.fileBlocked
@@ -1409,6 +1431,7 @@ class Viewer {
       else if (t.dataset.v === 'undo') this.undo();
       else if (t.dataset.v === 'redo') this.redo();
       else if (t.dataset.v === 'sheet') this.toggleSheet();
+      else if (t.dataset.v === 'status') this.failed && this.retrySaves();
       else if (t.dataset.v === 'export') this.openExport();
       else if (t.dataset.v === 'help') this.openHelp(this.$('help-panel').hidden);
       // 筆箱からペン（消しゴム）を持ったら、少し見せてから画面の外へしまう

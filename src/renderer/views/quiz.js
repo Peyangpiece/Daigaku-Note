@@ -1,7 +1,7 @@
 // クイズの画面（SPEC §11.7・§11.10）。単語カードのような 1 問 1 枚。答えるとすぐ正誤・解説・根拠を出し、終わったら結果。
 // 経路：#/quiz?course=<授業>&quizzes=<id,id>&mode=quiz|exam|retry|card|review ／ #/review（今日の復習）／ #/quiz-edit/<quizId>
 // カテキョにならう：選択肢の並びは解くたびに変わる seed で決める、正解でも解説を出す、半分未満ならカードで覚えるを主に、途中でやめても続きから
-import {esc, refresh, reload, toast, navigate} from '../app.js';
+import {confirmDialog, esc, navigate, refresh, reload, toast} from '../app.js';
 import {BLANK, TYPE_LABEL, choicesOf} from '../../shared/quiz.js';
 
 const api = window.daigaku;
@@ -373,7 +373,8 @@ export async function quizEditAction(action, el) {
   } else if (action === 'qe-ok') patch = {reviewed: true};
   else if (action === 'qe-unreport') patch = {report: null};
   else if (action === 'qe-delete') {
-    if (!confirm('この問題を削除しますか？（記録は残ります）')) return true;
+    if (!(await confirmDialog('この問題を削除しますか？（記録は残ります）', {ok: '削除する', danger: true})))
+      return true;
     patch = {deleted: true};
   } else return false;
   const r = await api['question.update']({questionId: id, patch});

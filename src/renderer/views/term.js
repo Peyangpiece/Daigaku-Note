@@ -1,6 +1,6 @@
 // 学期の設定（SPEC §6.14・§12.2）。セットアップの手順 4 と、設定 → 学期 の編集画面で同じ入力欄を使う。
 // 学期名は候補から選ぶか、自由に入力する（大学によって「1学期」「Fall」などがあるため）
-import {esc, navigate, refresh, reload, toast} from '../app.js';
+import {confirmDialog, esc, navigate, refresh, reload, toast} from '../app.js';
 import {TERM_LABELS, overlapping} from '../../shared/term.js';
 import {WD, cleanCalendar, termCalendar} from '../../shared/calendar.js';
 
@@ -57,18 +57,19 @@ function defaults() {
 }
 
 /** 入力欄。term があればその値を入れる（id は tm-*） */
-export function termForm(data, term) {
+export function termForm(data, term, {compact = false} = {}) {
   const d = defaults();
   const year = term?.year ?? d.year;
   const label = term?.label ?? d.label;
   return `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
       <label>年度<input class="input" id="tm-year" type="number" value="${esc(year)}"></label>
       <label>学期名<input class="input" id="tm-label" list="tm-labels" maxlength="20" value="${esc(label)}" placeholder="例：前期・秋学期" autocomplete="off"><datalist id="tm-labels">${TERM_LABELS.map((l) => `<option value="${esc(l)}"></option>`).join('')}</datalist></label>
+      ${compact ? '</div><details class="settings__more"><summary>くわしく設定（開始日・終了日・回数・時限の開始時刻。空のままなら学期名からの既定）</summary><div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2)">' : ''}
       <label>開始日<input class="input" id="tm-start" type="date" value="${esc(term?.start_date ?? '')}"></label>
       <label>終了日<input class="input" id="tm-end" type="date" value="${esc(term?.end_date ?? '')}"></label>
       <label>回数<select class="input" id="tm-rounds">${[...new Set([...ROUNDS, term?.rounds ?? 15])].map((n) => `<option ${n === (term?.rounds ?? 15) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       <label>時限の開始時刻<select class="input" id="tm-preset"><option value="">${term?.periods_json ? '（いまの設定のまま）' : '（あとで設定）'}</option>${(data.presets ?? []).map((p) => `<option>${esc(p)}</option>`).join('')}</select></label>
-    </div>
+    </div>${compact ? '</details>' : ''}
     <p class="muted">開始日・終了日を空にすると学期名からの既定（春・前期 4/1〜9/30、秋・後期 10/1〜3/31）になります。学期名を変えても日付は変わらないので、時期も変わるときは開始日・終了日を直してください。</p>`;
 }
 
@@ -199,7 +200,13 @@ function bind(term) {
     };
   if ($('tm-remove'))
     $('tm-remove').onclick = async () => {
-      if (!window.confirm(`${term.year} ${term.label} を消しますか？（授業・フォルダはありません）`)) return;
+      if (
+        !(await confirmDialog(`${term.year} ${term.label} を消しますか？（授業・フォルダはありません）`, {
+          ok: '消す',
+          danger: true
+        }))
+      )
+        return;
       const r = await api['term.remove']({termId: term.id});
       if (r.error) return toast(r.error, {error: true});
       editingId = undefined;

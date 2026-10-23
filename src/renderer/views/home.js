@@ -62,17 +62,8 @@ const longestRun = (html) => Math.max(...html.split('<wbr>').map((s) => [...s.re
  * 着せ替えページの見本では skin（直している途中の見た目）を渡し、edit で貼ったシールを選べるようにする（ボタンにしない）。
  * edit.still は動かない見本（テンプレートの一覧）
  */
-// 新着のバッジの色：授業の曜日ごと（曜日のない授業・自分のフォルダは授業の色）
-const WEEKDAY_BADGE = {
-  月: 'var(--c2)',
-  火: 'var(--c6)',
-  水: 'var(--c1)',
-  木: 'var(--c3)',
-  金: 'var(--c4)',
-  土: 'var(--c5)',
-  日: 'var(--c8)'
-};
-export const badgeColor = (course) => WEEKDAY_BADGE[course.weekday] ?? `var(--c${course.color ?? 1})`;
+// 新着のバッジの色：授業の色（曜日ごとの色はやめた。色の体系を授業の色に寄せ、ホームと授業画面で同じ色が同じ授業を指すように）
+export const badgeColor = (course) => `var(--c${course.color ?? 1})`;
 
 /** フォルダごとに選んだ色（右クリック →「着せ替え…」）。タブ・フォルダ・マスキングテープ・新着の知らせ。選んでいなければ空 */
 export const folderLookOf = (data, course) => data?.settings?.folderLooks?.[course.id] ?? {};

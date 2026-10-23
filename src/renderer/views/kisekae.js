@@ -1,7 +1,7 @@
 // 着せ替えページ（SPEC-KISEKAE.md §3.2）と、フォルダの右クリックから出す選択パネル（§3.3）。
 // 着せ替えページ（#/kisekae）「おすすめから選ぶ」：押すとすぐ当たる。
 // 細かい編集のページ（#/kisekae/edit）：見本を見ながら直し、自作のテンプレートとして保存する
-import {esc, navigate, refresh, reload, state, toast} from '../app.js';
+import {confirmDialog, esc, navigate, refresh, reload, state, toast} from '../app.js';
 import {folderCard, folderLookOf} from './home.js';
 import {
   LICENSES,
@@ -192,7 +192,7 @@ function galleryCard(data, t, course, current) {
     </button>
     <div class="ks-card__tools">
       <button type="button" class="btn btn--small" data-ks="edit" data-id="${esc(t.id)}">${isBuiltin(t.id) ? 'これをもとに作る' : '直す'}</button>
-      ${isBuiltin(t.id) ? '' : `<button type="button" class="btn btn--small" data-ks="dup" data-id="${esc(t.id)}">複製</button><button type="button" class="btn btn--small" data-ks="export" data-id="${esc(t.id)}" title="ファイル（.dnskin）に書き出して、ほかのパソコンや友だちに渡せます">書き出す</button><button type="button" class="btn btn--small btn--danger" data-ks="remove" data-id="${esc(t.id)}">消す</button>`}
+      ${isBuiltin(t.id) ? '' : `<button type="button" class="btn btn--small" data-ks="dup" data-id="${esc(t.id)}">複製</button><button type="button" class="btn btn--small" data-ks="export" data-id="${esc(t.id)}" title="着せ替えのファイルに書き出して、ほかのパソコンや友だちに渡せます">書き出す</button><button type="button" class="btn btn--small btn--danger" data-ks="remove" data-id="${esc(t.id)}">消す</button>`}
     </div>
   </div>`;
 }
@@ -670,7 +670,7 @@ export function renderKisekae({data}, route) {
       </div>
       <section class="ks-mine" aria-labelledby="ks-mine-title">
         <div class="ks-sechead"><h3 id="ks-mine-title">マイノート</h3>
-          <button type="button" class="btn btn--small" data-ks="import" title="友だちからもらった着せ替えのファイル（.dnskin）を入れる">ファイルから読み込む…</button></div>
+          <button type="button" class="btn btn--small" data-ks="import" title="友だちからもらった着せ替えのファイルを入れる">ファイルから読み込む…</button></div>
         <div class="ks-gallery">
           <div class="ks-card"><button type="button" class="ks-card__pick ks-card__new" data-ks="open-editor">
             <span class="ks-card__plus" aria-hidden="true">＋</span><span class="ks-card__name">新しく作る</span></button></div>
@@ -871,9 +871,10 @@ document.addEventListener('click', async (e) => {
       const t = allTemplates(data).find((x) => x.id === el.dataset.id);
       const u = usageText(data, t);
       if (
-        !window.confirm(
-          `「${t.name}」を消しますか？${u ? `\n${u}です。使っていた授業は「すべての授業と同じ」に戻ります。` : ''}`
-        )
+        !(await confirmDialog(
+          `「${t.name}」を消しますか？${u ? `\n${u}です。使っていた授業は「すべての授業と同じ」に戻ります。` : ''}`,
+          {ok: '消す', danger: true}
+        ))
       )
         return;
       const r = await api['skin.remove']({id: t.id});
@@ -884,7 +885,11 @@ document.addEventListener('click', async (e) => {
     }
     if (!ui.draft) return;
     if (ks === 'back' || ks === 'discard') {
-      if (ui.history.length && !window.confirm('変更が保存されていません。保存せずに戻りますか？')) return;
+      if (
+        ui.history.length &&
+        !(await confirmDialog('変更が保存されていません。保存せずに戻りますか？', {ok: '保存せずに戻る', danger: true}))
+      )
+        return;
       ui.draft = null;
       return navigate(galleryRoute());
     }
@@ -946,7 +951,13 @@ document.addEventListener('click', async (e) => {
       return reload();
     } else if (ks === 'sticker-add') addSticker(el.dataset.id);
     else if (ks === 'sticker-del') {
-      if (!window.confirm('このシールをシール帳から消しますか？（貼ってある所からも消えます）')) return;
+      if (
+        !(await confirmDialog('このシールをシール帳から消しますか？（貼ってある所からも消えます）', {
+          ok: '消す',
+          danger: true
+        }))
+      )
+        return;
       const r = await api['sticker.remove']({id: el.dataset.id});
       if (r?.error) return toast(r.error, {error: true});
       forgetSticker(el.dataset.id);
