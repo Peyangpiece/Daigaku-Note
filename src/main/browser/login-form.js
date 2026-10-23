@@ -14,13 +14,20 @@ export const noAutofillHost = (host) => NO_AUTOFILL_HOSTS.some((h) => host === h
 
 // 日本の属性型の第 2 レベル（ac.jp・co.jp など）。この下の 1 つまでを「同じ組織のドメイン」とみなす
 const JP_SECOND = new Set(['ac', 'co', 'or', 'ne', 'go', 'ed', 'lg', 'gr', 'ad']);
+// 日本以外で「国 + 種類」の 2 段が公共の接尾辞になっている国（ac.uk・com.au など）。この下の 1 つまでを「同じ組織」とみなす。
+// これがないと lms.example.ac.uk の組織が ac.uk になり、英国の大学すべてが同じ組織に見えてしまう
+const SECOND_LEVEL = new Set([
+  'uk', 'au', 'nz', 'kr', 'tw', 'cn', 'hk', 'sg', 'my', 'th', 'in', 'id', 'ph', 'vn', 'br', 'ar', 'mx', 'za', 'il', 'tr'
+]);
+const COMMON_SECOND = new Set(['ac', 'co', 'com', 'edu', 'gov', 'org', 'net', 'or', 'ne', 'go', 'sch', 'ltd', 'plc', 'nhs', 'police']);
 const LOCAL = new Set(['localhost', '127.0.0.1']);
-/** 組織のドメイン（lms.example-u.ac.jp → example-u.ac.jp、lms.example.edu → example.edu） */
+/** 組織のドメイン（lms.example-u.ac.jp → example-u.ac.jp、lms.example.edu → example.edu、lms.example.ac.uk → example.ac.uk） */
 export function siteOf(host) {
   const h = String(host ?? '').toLowerCase();
   if (LOCAL.has(h) || /^\d+(\.\d+){3}$/.test(h)) return h;
   const p = h.split('.').filter(Boolean);
-  const n = p.length >= 3 && p.at(-1) === 'jp' && JP_SECOND.has(p.at(-2)) ? 3 : 2;
+  const second = p.at(-1) === 'jp' ? JP_SECOND : SECOND_LEVEL.has(p.at(-1)) ? COMMON_SECOND : null;
+  const n = p.length >= 3 && second?.has(p.at(-2)) ? 3 : 2;
   return p.slice(-n).join('.');
 }
 /**

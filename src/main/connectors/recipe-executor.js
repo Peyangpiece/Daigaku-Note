@@ -464,12 +464,14 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const raw = await page.$$eval(itemsSel, pageExtract, section.spec);
       if (!raw.length) {
         if (await this._looksLikeLogin(page)) throw err('login-required', 'ログインページに戻されました');
+        // 欄（container）そのものがなければ、画面の構成が変わった可能性が高い（資料のない回なら欄は空のまま残る）
+        const containerMissing = !!container && (await page.locator(container).count().catch(() => 0)) === 0;
         // files は「資料のない回」で空になるのがふつうなので、画面の保存は接続ごとに 1 回だけ
         if (section.label !== 'files' || !ctx.dumpedFiles) {
           ctx.dumpedFiles = ctx.dumpedFiles || section.label === 'files';
           await this._dump(page, section.label ?? 'items');
         }
-        throw err('selector-missing', `要素が見つかりません（${section.items}）`);
+        throw Object.assign(err('selector-missing', `要素が見つかりません（${containerMissing ? container : section.items}）`), {containerMissing});
       }
       const base = page.url();
       return raw.map((item) => {
@@ -535,7 +537,8 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       try {
         items = await this._collect(page, ctx, sec, vars);
       } catch (e) {
-        if (e.code === 'selector-missing') return []; // 資料のない回
+        // 資料のない回は空。欄そのものがないときは画面の構成が変わった可能性があるので、黙って「0 件」にせず知らせる
+        if (e.code === 'selector-missing' && !e.containerMissing) return [];
         throw e;
       }
       return items.filter((it) => it.link && FILE_LINK.test(it.link)).map((it) => ({url: it.link, name: it.name || undefined}));

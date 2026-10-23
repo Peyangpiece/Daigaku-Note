@@ -29,7 +29,9 @@
 
 ```
 npm ci        # 依存を入れる（Electron・Playwright など）
-npm test      # node --test（純粋ロジック・DB・ファイル管理・同期エンジン・Moodle コネクタ）
+npm test      # node --test（純粋ロジック・DB・ファイル管理・同期エンジン・Moodle コネクタ・バックアップ・通知）
+npm run lint  # eslint
+npm run format:check  # prettier（CI でも確かめる。直すには npm run format）
 npm start     # Electron で起動
 ```
 
@@ -75,7 +77,7 @@ npm run install:mac   # アプリを作って /Applications/大学ノート.app 
 
 ## 状態
 
-仕様 0.4 確定。M0（土台）はおおむね済み（v0.5 系で公開中）：
+仕様 0.4 確定。M0（土台）〜M3（クイズ）は動く状態で、v0.6 系を GitHub Releases で公開中：
 
-- 済：`src/shared/`（命名・回の判定・1up・保存先・祝日・学期・時限・復習・レシピ式）、SQLite のマイグレーションと repo、ファイル管理（取り込み・回の移動・追跡・複製整理・検疫属性）、同期エンジン、Moodle（API 型）コネクタ、**レシピ実行器**（Playwright。模擬 LMS への e2e 済）、**ブラウザ文脈と見えるログイン窓**（Cookie の保存・許可ホスト・Moodle の launch.php トークン捕捉）、Chromium の初回取り込み、コネクタの登録と判定、Electron の入口・IPC・ジョブ・スケジューラ・秘密・ログ、デザイントークンと罫線ノート・テープ・付箋の CSS、ホーム／授業／設定／セットアップの画面、electron-builder の設定、manabo レシピ（実物は未検証）、**クイズ**（資料の文字の読み取り・Claude API での生成と検査・根拠照合・検算、回ごとのクイズと授業のテスト、今日の復習、問題の編集。本物の API での生成は未確認）、**自分のファイルの追加と回への振り分け**（授業画面の自分の付箋・ドラッグ・「移す」）、**PDF ビューアと編集**（pdf.js。文字入れ：ヒラギノ角ゴ・サイズ・太字・色、付箋、文字隠しマーカーと赤シート、取り消し・やり直し、注釈付き PDF の書き出し。注釈は SHA-256 に結び付けて DB へ自動保存）、**配布と自動更新**（GitHub Actions・Releases・electron-updater）
-- 未：Mac／Windows の実機での動作確認（`npm start`・見えるログイン窓・検疫属性・自動更新）、本物の Moodle・manabo での確認、PDF 編集の残り（暗記モード・検索・サムネイル・コピー＆ペースト）
+- 済：`src/shared/`（命名・回の判定・1up・保存先・祝日・学期・時限・復習・レシピ式）、SQLite のマイグレーションと repo、ファイル管理（取り込み・回の移動・追跡・複製整理・検疫属性・保存先の変更）、同期エンジン（全回の確認と取りこぼしの再試行）、Moodle（API 型）コネクタ、**レシピ実行器**（Playwright。模擬 LMS への e2e 済）、**ブラウザ文脈と見えるログイン窓**（Cookie の保存・許可ホスト・Moodle の launch.php トークン捕捉）、Chromium の初回取り込み、コネクタの登録と判定、Electron の入口・IPC・ジョブ・スケジューラ・秘密・ログ・**日次バックアップ**（`userData/backups/` に 7 日分）・**OS の通知**、デザイントークンと罫線ノート・テープ・付箋の CSS、ホーム／授業／設定／セットアップの画面、着せ替えと文房具、electron-builder の設定、manabo レシピ（実物は未検証）、**クイズ**（資料の文字の読み取り・Claude API での生成と検査・根拠照合・検算、回ごとのクイズと授業のテスト、今日の復習、問題の編集）、**自分のファイルの追加と回への振り分け**、**PDF ビューアと編集**（pdf.js。文字入れ・付箋・文字隠しマーカーと赤シート・ボールペン・しおり、取り消し・やり直し、注釈付き PDF の書き出しと上書き保存。注釈は SHA-256 に結び付けて DB へ自動保存）、**配布と自動更新**（GitHub Actions・Releases・electron-updater。Mac は自分の証明書で署名し、指紋を確かめて入れ替える。MSIX での動作確認の仕組み）
+- 未：本物の Moodle・manabo での確認、レシピの GitHub からの更新と Ed25519 の署名検証（SPEC §6.15）、バックアップの手動の書き出し・読み込み（SPEC §12.3。自動バックアップは済）、PDF 編集の残り（暗記モード・検索・サムネイル・コピー＆ペースト）、Canvas・manaba・WebClass・Google Classroom・Microsoft Teams・汎用型のコネクタ

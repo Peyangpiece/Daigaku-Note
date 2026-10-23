@@ -47,6 +47,7 @@ function fakeConnector(data, opts = {}) {
     },
     async fetchFile(ctx, ref) {
       calls.fetch++;
+      if (opts.failUrls?.has(ref.url)) return {ok: false, status: 500, contentType: '', body: Buffer.alloc(0)};
       for (const c of data.courses) for (const r of [...c.rounds, {files: c.notices ?? []}]) for (const f of r.files) if (f.url === ref.url) return {ok: true, status: 200, contentType: 'application/pdf', body: Buffer.from(f.body)};
       return {ok: false, status: 404, contentType: '', body: Buffer.alloc(0)};
     }
@@ -234,8 +235,25 @@ test('同じ LMS の接続が 2 つあると授業が 2 つずつできる → �
   assert.deepEqual((await readdir(path.join(root, '2026_秋学期'))).sort(), ['意思決定論', '意思決定論 (2)', '管理会計Ⅱ', '管理会計Ⅱ (2)']);
 
   assert.ok(repo.findCourseByLms(connection.id, '2').full_synced_at, '前提：全部の回を確かめ終えた印がある');
+  // 消すほうの授業（1 つ目の管理会計Ⅱ）と残すほうの授業（1 つ目の意思決定論）にクイズがある。
+  // 外部キー（foreign_keys=ON）で round を消せず、統合がまるごと失敗していた
+  const addQuiz = (courseId, title) => {
+    const round = repo.listRounds(courseId).find((r) => r.number > 0);
+    const quiz = repo.insertQuiz({id: `quiz-${title}`, round_id: round.id, version: 1, title, status: 'ready', source_json: '{}', generated_by: 'test'});
+    const q = repo.insertQuestion({quiz_id: quiz.id, seq: 1, type: 'tf', q: '問い', a: '○', o_json: '[]', n: '解説', src_page: 1, src_quote: 'x'.repeat(20), tags_json: '[]', difficulty: 1});
+    repo.addAttempt({question_id: q.id, mode: 'quiz', ok: 1});
+    repo.saveSrs(q.id, {s: 3, due: Date.now() + 864e5, at: Date.now(), c: 0, lapses: 0});
+    repo.addAiUsage({model: 'm', usage: {input_tokens: 1, output_tokens: 1}, cost: 0.001, purpose: 'generate', quizId: quiz.id});
+    return quiz;
+  };
+  addQuiz(repo.findCourseByLms(connection.id, '1').id, 'loser');
+  const kept = addQuiz(repo.findCourseByLms(connection.id, '2').id, 'survivor');
   const r = await engine.mergeDuplicateConnections();
   assert.deepEqual(r, {merged: 1, removedCourses: 2});
+  assert.equal(repo.get('quiz', 'quiz-loser'), null, '消した授業のクイズも消える');
+  assert.ok(repo.get('quiz', kept.id), '残す授業のクイズは残る');
+  assert.equal(repo.db.prepare('SELECT COUNT(*) AS n FROM question').get().n, 1);
+  assert.equal(repo.db.prepare('SELECT COUNT(*) AS n FROM srs').get().n, 1);
   const conns = repo.listConnections();
   assert.equal(conns.length, 1);
   assert.equal(conns[0].id, second.id, '新しいほう（本人が最後に設定したほう）を残す');
@@ -254,6 +272,50 @@ test('同じ LMS の接続が 2 つあると授業が 2 つずつできる → �
   assert.ok(kanri.full_synced_at, '取りこぼしがなければ印はそのまま');
   assert.equal(trashed.length, 2, '消すほうのフォルダはゴミ箱へ');
   assert.equal(await engine.mergeDuplicateConnections().then((x) => x.merged), 0, '2 回目は何もしない');
+});
+
+test('全部の回を確かめるときにダウンロードが失敗したら、次の同期でも全部の回を確かめる（3 回まで）', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  const d = data();
+  d.courses = [d.courses[0]];
+  d.courses[0].notices = [];
+  const failUrls = new Set(['https://lms/f/1']); // 第 1 回（今日 10/16 の前後 7 日の外）の資料が落とせない
+  // 1 回目：失敗があるので「全部の回を確かめ終えた」にしない
+  let r = await engine.run({connection, connector: fakeConnector(d, {failUrls}), term, kind: 'initial'});
+  const course = () => repo.findCourseByLms(connection.id, '1');
+  const conn = () => repo.get('connection', connection.id); // 2 回目からは DB の接続行（last_sync_at 付き）を渡す（jobs.js と同じ）
+  assert.equal(r.materials, 3, '第4回（4up は 1up があるので除く）・第5回・その他');
+  assert.equal(course().full_synced_at, null, '失敗があれば印を付けない');
+  assert.ok(r.events.some((e) => e.level === 'info' && /次の同期でも全部の回/.test(e.message)));
+  // 2 回目：まだ失敗 → まだ付けない
+  r = await engine.run({connection: conn(), connector: fakeConnector(d, {failUrls}), term});
+  assert.equal(course().full_synced_at, null);
+  // 3 回目：取れた → 保存され、印が付く
+  failUrls.clear();
+  r = await engine.run({connection: conn(), connector: fakeConnector(d), term});
+  assert.equal(r.materials, 1, '前に落とせなかった第 1 回の資料が入る');
+  assert.ok(course().full_synced_at);
+  assert.equal(repo.getSetting(`sync.crawlRetries.${course().id}`, null), null, '数え直しは消す');
+  // 4 回目：ふだんの同期は前後 7 日だけ（全部は読まない）
+  const c = fakeConnector(d);
+  await engine.run({connection: conn(), connector: c, term});
+  assert.equal(c.calls.listFiles, 3, '第4回・第5回・その他（日付なし）だけ');
+});
+
+test('何度試しても取れない資料があれば、3 回で「全部の回を確かめ終えた」にする（毎回全部を読み直さない）', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  const d = data();
+  d.courses = [d.courses[0]];
+  d.courses[0].notices = [];
+  const failUrls = new Set(['https://lms/f/1']);
+  const course = () => repo.findCourseByLms(connection.id, '1');
+  const conn = () => repo.get('connection', connection.id);
+  for (let i = 0; i < 2; i++) await engine.run({connection: conn(), connector: fakeConnector(d, {failUrls}), term, kind: i ? 'full' : 'initial'});
+  assert.equal(course().full_synced_at, null);
+  const r = await engine.run({connection: conn(), connector: fakeConnector(d, {failUrls}), term});
+  assert.ok(course().full_synced_at, '3 回目で印を付ける');
+  assert.ok(r.events.some((e) => e.level === 'warn' && /3 回試しても/.test(e.message)));
+  assert.equal(repo.getSetting(`sync.crawlRetries.${course().id}`, null), null);
 });
 
 test('ログインが必要・授業一覧の失敗・1 授業の失敗はほかを止めない', async (t) => {

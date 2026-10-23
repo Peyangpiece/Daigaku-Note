@@ -80,6 +80,31 @@ test('取り込み：新規・同じ URL・同じ中身・同名で別の中身�
   assert.equal((await readdir(dir)).filter((f) => f.startsWith('.')).length, 0, '一時ファイルが残らない');
 });
 
+test('保存先を変えたあとの同期：同じ中身の記録を新しい保存先へ付け替える（UNIQUE 違反で止まらない）', async (t) => {
+  const {root, repo, term, course, r2, r3} = await setup(t);
+  let current = path.join(root, '大学ノート');
+  const files = new FileManager({repo, root: () => current, trash: async () => {}});
+  const fetchFile = fetchOf({'https://lms/file/1': {body: 'pdf one'}, 'https://lms/file/2': {body: 'pdf two'}});
+  const first = await files.ingest({term, course, round: r2, fileRef: {url: 'https://lms/file/1', name: 'a.pdf'}, fetchFile});
+  assert.equal(first.result, 'saved');
+  const moved = await files.ingest({term, course, round: r2, fileRef: {url: 'https://lms/file/2', name: 'b.pdf'}, fetchFile});
+  repo.updateMaterial(moved.material.id, {round_id: r3.id, round_from: 'user'}); // 本人が別の回へ動かした資料
+
+  current = path.join(root, '別の場所'); // 設定 → 保存先 を変えた
+  const again = await files.ingest({term, course, round: r2, fileRef: {url: 'https://lms/file/1', name: 'a.pdf'}, fetchFile});
+  assert.equal(again.result, 'saved');
+  assert.equal(again.material.id, first.material.id, '記録は同じもの（授業ごとに同じ中身の記録は 1 つ）');
+  assert.ok(again.material.path.startsWith(current), '新しい保存先のパスになる');
+  assert.equal(await readFile(again.material.path, 'utf8'), 'pdf one');
+  assert.equal(repo.listMaterials(course.id).length, 2, '記録が増えない');
+
+  const b = await files.ingest({term, course, round: r2, fileRef: {url: 'https://lms/file/2', name: 'b.pdf'}, fetchFile});
+  assert.equal(b.material.round_id, r3.id, '本人が動かした回は保つ');
+  assert.equal(b.material.round_from, 'user');
+  const third = await files.ingest({term, course, round: r2, fileRef: {url: 'https://lms/file/1', name: 'a.pdf'}, fetchFile});
+  assert.equal(third.result, 'skip', '付け替えたあとは同じ URL として飛ばす');
+});
+
 test('回の移動・名前変更の追跡・複製の整理', async (t) => {
   const {root, repo, term, course, r2, r3, r0, files, trashed} = await setup(t);
   const fetchFile = fetchOf({'https://lms/file/1': {body: 'A'}, 'https://lms/file/2': {body: 'B'}, 'https://lms/file/3': {body: 'A'}});

@@ -167,8 +167,15 @@ export class JobRunner {
         const term = repo.get('term', course.term_id);
         return {material: await files.relocate({term, course, material, round})};
       }
+      case 'backup': {
+        // 毎日 1 回（scheduler）：データベースの写しを 7 日分取り、古い記録を刈り込む（main/backup.js）
+        if (!this.ctx.backup) return {message: 'バックアップの仕組みがありません'};
+        const r = await this.ctx.backup();
+        this.ctx.log?.info?.(`バックアップ: ${r.file}（${r.size} バイト。古いもの ${r.removed.length} 件を消去。刈り込み: 同期 ${r.pruned.syncRuns}・出来事 ${r.pruned.syncEvents}・ジョブ ${r.pruned.jobs}）`);
+        return {file: r.file, removed: r.removed.length, pruned: r.pruned};
+      }
       default:
-        return {message: `未対応のジョブ: ${job.kind}`};
+        throw new Error(`未対応のジョブ: ${job.kind}`);
     }
   }
 }

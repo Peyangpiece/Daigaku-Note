@@ -1,6 +1,6 @@
 // 大学ノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
 // M0 の骨格：DB・設定・ジョブ・スケジューラ・IPC をつなぐ。LMS 操作とファイル操作はここ（メイン）だけで行う。
-import {app, BrowserWindow, Menu, Tray, dialog, nativeImage, nativeTheme, net, shell} from 'electron';
+import {app, BrowserWindow, Menu, Notification, Tray, dialog, nativeImage, nativeTheme, net, shell} from 'electron';
 import {existsSync, mkdirSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -23,6 +23,8 @@ import {createUpdater} from './updater.js';
 import {createFolders} from './folders.js';
 import {createQuizService} from './quiz/service.js';
 import {runSelfTest, selfTestPath} from './self-check.js';
+import {runBackup} from './backup.js';
+import {createNotifier} from './notify.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(here, '..', 'renderer', 'index.html');
@@ -259,9 +261,16 @@ app.whenReady().then(async () => {
       .mergeDuplicateConnections()
       .then((r) => r.merged && log.info(`同じ LMS の接続を ${r.merged} 件まとめ、重なった授業 ${r.removedCourses} 件を 1 つにしました`))
       .catch((e) => log.error(`接続をまとめられませんでした: ${e.message}`));
-    ctx.jobs = new JobRunner(ctx, {notify: (ch, payload) => win?.webContents.send(ch, payload)});
+    // レンダラへの知らせ。窓が前面になくても分かるよう、新しい資料・ログインの必要・クイズの完成・同期の失敗は OS の通知にも出す（notify.js）
+    const notifier = createNotifier({repo, Notification, openWindow, log: (m) => log.warn(m)});
+    const notify = (ch, payload) => {
+      win?.webContents.send(ch, payload);
+      notifier.onEvent(ch, payload);
+    };
+    ctx.backup = async () => runBackup({db, dir: path.join(userData, 'backups')});
+    ctx.jobs = new JobRunner(ctx, {notify});
     ctx.scheduler = new Scheduler(ctx);
-    ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify: (ch, payload) => win?.webContents.send(ch, payload)});
+    ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify});
     registerIpc(ctx, {openWindow, getWindow: () => win});
     buildAppMenu();
     buildTray();

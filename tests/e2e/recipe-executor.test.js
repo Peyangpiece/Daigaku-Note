@@ -123,6 +123,15 @@ test('レシピ実行器：ログイン → 授業 → 回 → ファイル → 
     const files3 = await connector.listFiles(ctx, course, rounds[1]);
     assert.deepEqual(files3.map((f) => f.name), ['第3回 資料.pdf', '第3回 資料 4up.pdf'], 'ファイルでないリンクは除く（1up の選別は同期エンジンが行う）');
     assert.ok(files3[0].url.startsWith(base + '/file/3/'), '相対リンクを絶対 URL に');
+    assert.deepEqual(await connector.listFiles(ctx, course, rounds[2]), [], '欄はあるが資料のない回は空');
+    // 欄（container）そのものがなければ「資料のない回」ではなく、画面の構成が変わったとして知らせる（黙って 0 件にしない）
+    const noBox = createRecipeExecutor({...recipe, files: {...recipe.files, container: '#no-such-box'}}, {session, secrets});
+    const ctxNoBox = await noBox.createContext(connection);
+    try {
+      await assert.rejects(noBox.listFiles(ctxNoBox, course, rounds[2]), (e) => e.code === 'selector-missing' && e.containerMissing === true);
+    } finally {
+      await noBox.releaseContext(ctxNoBox);
+    }
     assert.deepEqual(await connector.listFiles(ctx, course, rounds[2]), [], '資料のない回は空');
 
     const notices = await connector.listNoticeFiles(ctx, course);

@@ -761,7 +761,10 @@ document.addEventListener('click', async (e) => {
         await api['settings.update']({patch: {rules: el.dataset.value}});
         return reload();
       }
-      peek = null; // 乗せて試していた色は、押した色で決まる
+      // 乗せて試していた色は、押した色で決まる。試していた値は下書きに入ったままなので、履歴に積む前に元へ戻す
+      // （戻さないと「変更後」が履歴に積まれ、取り消しを 1 回押しても何も変わらない）
+      if (peek) ui.draft.parts[peek.a][peek.b] = peek.value;
+      peek = null;
       if (el.dataset.key === 'fileKind') {
         ui.fileKind = el.dataset.value;
         ui.part = 'file';

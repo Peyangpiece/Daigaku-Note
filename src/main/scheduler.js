@@ -31,8 +31,8 @@ export class Scheduler {
     if (lastDay !== date) {
       repo.setSetting('scheduler.lastDay', date);
       repo.setSetting('scheduler.classSynced', {});
-      jobs.enqueue('backup', {});
-      jobs.enqueue('recipes', {});
+      jobs.enqueue('backup', {}); // 1 日 1 回のバックアップと古い記録の刈り込み（jobs.js・backup.js）
+      // レシピの更新（SPEC §6.15）はまだない。仕組みができるまでジョブは積まない（積んでも処理がなく、失敗の記録だけが残るため）
     }
 
     // LMS をつないでいなければ同期しない（自分のフォルダだけで使っているとき、空の同期の知らせを出さない）

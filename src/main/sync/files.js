@@ -126,6 +126,9 @@ export class FileManager {
     const h = sha256(body);
     const same = this.repo.findMaterialByHash(course.id, h);
     if (same && here(same)) return {result: 'dup', material: same};
+    // 同じ中身の記録が別の保存先（保存先を変える前の場所）にある：記録を新しい保存先へ付け替える（授業ごとに同じ中身の記録は 1 つ）。
+    // 回は LMS が言うとおりにし、本人が動かした回（round_from = 'user'）は保つ
+    const relink = same ?? null;
 
     // 4. 回フォルダ
     const dir = this.roundDir(term, course, round);
@@ -149,6 +152,19 @@ export class FileManager {
     }
 
     // 7. 記録
+    if (relink) {
+      const material = this.repo.updateMaterial(relink.id, {
+        ...(relink.round_from === 'user' ? {} : {round_id: round.id, round_from: roundFrom}),
+        url: fileRef.url ?? relink.url ?? null,
+        name: path.basename(file),
+        path: file,
+        size: body.length,
+        lms_modified: fileRef.modified != null ? String(fileRef.modified) : relink.lms_modified,
+        status: 'ok'
+      });
+      this.log(`[files] 別の保存先にあった記録を付け替えました: ${material.name}`);
+      return {result: 'saved', material};
+    }
     const material = this.repo.createMaterial({
       course_id: course.id,
       round_id: round.id,

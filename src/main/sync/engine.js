@@ -5,6 +5,9 @@ import {parseRound, resolveRound, roundTitle} from '../../shared/rounds.js';
 import {roundDates} from '../../shared/term.js';
 import {addDays} from '../../shared/holidays.js';
 
+/** 全部の回を確かめるとき、ダウンロードに失敗した資料があれば次の同期でも全部を確かめ直す回数の上限 */
+export const MAX_CRAWL_RETRIES = 3;
+
 export class SyncError extends Error {
   constructor(code, message, cause) {
     super(message);
@@ -289,7 +292,16 @@ export class SyncEngine {
     const dir = term ? this.files.courseDir(term, loser) : null;
     const db = this.repo.db;
     this.repo.transaction(() => {
-      db.prepare('DELETE FROM round_note WHERE round_id IN (SELECT id FROM round WHERE course_id = ?)').run(loser.id);
+      // 回に結び付くクイズ（問題・答えの記録・復習の段階・API の使用量）も消す。外部キー（foreign_keys=ON）で round を消せなくなるため
+      const rounds = 'SELECT id FROM round WHERE course_id = ?';
+      const quizzes = `SELECT id FROM quiz WHERE round_id IN (${rounds})`;
+      const questions = `SELECT id FROM question WHERE quiz_id IN (${quizzes})`;
+      db.prepare(`DELETE FROM srs WHERE question_id IN (${questions})`).run(loser.id);
+      db.prepare(`DELETE FROM attempt WHERE question_id IN (${questions})`).run(loser.id);
+      db.prepare(`DELETE FROM question WHERE quiz_id IN (${quizzes})`).run(loser.id);
+      db.prepare(`DELETE FROM ai_usage WHERE quiz_id IN (${quizzes})`).run(loser.id);
+      db.prepare(`DELETE FROM quiz WHERE round_id IN (${rounds})`).run(loser.id);
+      db.prepare(`DELETE FROM round_note WHERE round_id IN (${rounds})`).run(loser.id);
       db.prepare('DELETE FROM material WHERE course_id = ?').run(loser.id);
       db.prepare('DELETE FROM round WHERE course_id = ?').run(loser.id);
       db.prepare('DELETE FROM course WHERE id = ?').run(loser.id);
@@ -399,6 +411,7 @@ export class SyncEngine {
     }
 
     let saved = 0;
+    let failed = 0;
     for (const ref of preferLayout(refs, (r) => r.name ?? '')) {
       const r = await this.files.ingest({
         term,
@@ -411,11 +424,27 @@ export class SyncEngine {
       });
       touch();
       if (r.result === 'saved' || r.result === 'updated') saved++;
-      else if (r.result === 'failed') event('warn', course, r.reason, `${ref.name ?? ref.url} をダウンロードできませんでした${r.status ? `（${r.status}）` : ''}`);
+      else if (r.result === 'failed') {
+        failed++;
+        event('warn', course, r.reason, `${ref.name ?? ref.url} をダウンロードできませんでした${r.status ? `（${r.status}）` : ''}`);
+      }
     }
     await this.files.trashDuplicates(course);
-    // ここまで来れば全部の回の一覧は読めている（読めなければ上で例外になる）。ダウンロードの失敗は次回の窓で拾い直す
-    if (crawlAll) this.repo.updateCourse(course.id, {full_synced_at: new Date().toISOString()});
+    // ここまで来れば全部の回の一覧は読めている（読めなければ上で例外になる）。
+    // ダウンロードの失敗があれば「全部の回を確かめ終えた」にはしない（ふだんの同期は前後 7 日の回しか見ないので、古い回の失敗分が二度と拾われないため）。
+    // ただし何度試しても取れない資料で毎回全部の回を読み直さないよう、3 回まで
+    if (crawlAll) {
+      const key = `sync.crawlRetries.${course.id}`;
+      const tries = Number(this.repo.getSetting(key, 0)) + 1;
+      if (failed && tries < MAX_CRAWL_RETRIES) {
+        this.repo.setSetting(key, tries);
+        event('info', course, null, `ダウンロードできなかった資料があるので、次の同期でも全部の回を確かめます（${tries} 回目）`);
+      } else {
+        if (failed) event('warn', course, 'download', `${MAX_CRAWL_RETRIES} 回試しても取れない資料があるため、以後は前後 7 日の回だけ確かめます（全部を確かめ直すには「全部の回を確かめ直す」）`);
+        this.repo.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+        this.repo.updateCourse(course.id, {full_synced_at: new Date().toISOString()});
+      }
+    }
     return saved;
   }
 }

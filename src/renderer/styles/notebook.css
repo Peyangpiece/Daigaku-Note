@@ -785,6 +785,12 @@ h2[tabindex='-1']:focus {
   outline: none;
   border-bottom-color: var(--accent, var(--c4));
 }
+/* キーボードで来たときは下線の色だけでなく枠も出す（どこにいるか分かるように） */
+.input:focus-visible {
+  outline: 2px solid var(--accent, var(--c4));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
 /* 紙片（資料の行・カード） */
 .slip {

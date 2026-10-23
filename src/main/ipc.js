@@ -90,6 +90,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         university: repo.getSetting('profile.university', ''),
         lmsTerms: repo.getSetting('lms.terms', null), // 大学サービスとの連携の利用規約に同意した版と日時
         experiments: repo.getSetting('experiments.makerPens', false), // 実験：既製品の見た目のペンをショップに出す（個人の試作）
+        notifications: repo.getSetting('ui.notifications', true) !== false, // OS の通知（新しい資料・ログインの必要・クイズの完成・同期の失敗）
         openAtLogin: loginItem()
       },
       skin: {
@@ -773,6 +774,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (['system', 'light', 'dark'].includes(patch.theme)) repo.setSetting('ui.theme', patch.theme);
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
     if (typeof patch.experiments === 'boolean') repo.setSetting('experiments.makerPens', patch.experiments);
+    if (typeof patch.notifications === 'boolean') repo.setSetting('ui.notifications', patch.notifications);
     // 使う人・使い方・大学名（大学名はいまは記録するだけ）。人を変えたら、その人の使い方に合わないものは外す
     if (isRole(patch.role)) {
       repo.setSetting('profile.role', patch.role);

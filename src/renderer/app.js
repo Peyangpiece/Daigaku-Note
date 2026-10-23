@@ -485,8 +485,12 @@ document.addEventListener('contextmenu', (e) => {
   cardMenu.innerHTML = `<button type="button" role="menuitem" data-card-menu="open">開く</button>${canRename(course) ? '<button type="button" role="menuitem" data-card-menu="rename">名前を変える…</button>' : ''}<button type="button" role="menuitem" data-card-menu="skin">着せ替え…</button><button type="button" role="menuitem" data-card-menu="remove">ホームから外す</button>`;
   document.body.append(cardMenu);
   const {width, height} = cardMenu.getBoundingClientRect();
-  cardMenu.style.left = `${Math.min(e.clientX, window.innerWidth - width - 8)}px`;
-  cardMenu.style.top = `${Math.min(e.clientY, window.innerHeight - height - 8)}px`;
+  // キーボードのメニューキー（Shift+F10）では座標が (0,0) なので、フォルダの位置に出す
+  const r = card.getBoundingClientRect();
+  const x = e.clientX || e.clientY ? e.clientX : r.left + 16;
+  const y = e.clientX || e.clientY ? e.clientY : r.top + 16;
+  cardMenu.style.left = `${Math.min(x, window.innerWidth - width - 8)}px`;
+  cardMenu.style.top = `${Math.min(y, window.innerHeight - height - 8)}px`;
   cardMenu.querySelector('button').focus();
   cardMenu.onclick = (ev) => {
     const what = ev.target.closest('[data-card-menu]')?.dataset.cardMenu;

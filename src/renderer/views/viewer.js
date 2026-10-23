@@ -28,9 +28,17 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).href;
 
 const api = window.daigaku;
+/** 画面の画素密度（dpr）を、ページの絵が MAX_CANVAS_PIXELS に収まるところまで下げる */
+export const canvasScale = (vp, dpr) => {
+  const px = vp.width * vp.height;
+  return px > 0 ? Math.min(dpr, Math.sqrt(MAX_CANVAS_PIXELS / px)) : dpr;
+};
 const CSS_UNITS = 96 / 72; // 拡大率 100% で紙の実寸
 const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 const clampZoom = (z) => Math.min(4, Math.max(0.25, z));
+// 1 ページの絵（canvas）の画素数の上限。拡大 4 倍 × Retina で A4 が 5,700 万画素（約 228 MB）になるのを防ぐ。
+// 超えるときは描く解像度を落とし、CSS で大きさを合わせる（pdf.js の maxCanvasPixels と同じ考え）
+const MAX_CANVAS_PIXELS = 16 * 1024 * 1024;
 const FILE_SAVE_DELAY = 1500; // 注釈を保存してからファイルを上書きするまで（ms）。続けて書いている間は待つ
 const PINCH_IDLE = 180; // ピンチの指が止まってから描き直すまで（ms）
 const PINCH_SPEED = 0.01; // wheel の deltaY 1 あたりの拡大率の変化（指数）
@@ -632,8 +640,8 @@ class Viewer {
   async renderPage(p) {
     p.renderTask?.cancel();
     p.rendered = true;
-    const dpr = window.devicePixelRatio || 1;
     const vp = p.viewport;
+    const dpr = canvasScale(vp, window.devicePixelRatio || 1);
     const canvas = document.createElement('canvas');
     canvas.className = 'pdf-page__canvas';
     canvas.width = Math.floor(vp.width * dpr);
@@ -883,11 +891,13 @@ class Viewer {
     this.annos.delete(a.key);
     if (this.selected === a) this.select(null);
     if (this.editing === a) this.editing = null;
+    // 同じ注釈の保存と消去は 1 本の鎖で順に行う。保存中に消されたときは flush の末尾が先に消すので、removedOnServer で 2 回送らない
     if (a.id || a.chain)
-      this.track(
-        a,
-        async () => a.id && (await api['annotation.remove']({materialId: this.materialId, annotationId: a.id}))
-      );
+      this.track(a, async () => {
+        if (!a.id || a.removedOnServer) return;
+        a.removedOnServer = true;
+        await api['annotation.remove']({materialId: this.materialId, annotationId: a.id});
+      });
     this.updateBar();
   }
 
@@ -911,7 +921,11 @@ class Viewer {
       });
       if (r?.error) throw new Error(r.error);
       a.id = r.annotation.id;
-      if (a.removed) await api['annotation.remove']({materialId: this.materialId, annotationId: a.id}); // 保存中に消された
+      if (a.removed && !a.removedOnServer) {
+        // 保存中に消された
+        a.removedOnServer = true;
+        await api['annotation.remove']({materialId: this.materialId, annotationId: a.id});
+      }
     });
   }
 
@@ -2141,6 +2155,7 @@ class Viewer {
 
   onKey(e) {
     const t = e.target;
+    if (this.$('export-dialog')?.open) return; // 書き出しの窓が開いている間は、1 文字のショートカット（R・B など）を効かせない
     const typing = t.closest?.('input, textarea, [contenteditable="plaintext-only"], [contenteditable="true"]');
     if (typing) {
       if (e.key === 'Escape' && t.tagName === 'TEXTAREA') {
