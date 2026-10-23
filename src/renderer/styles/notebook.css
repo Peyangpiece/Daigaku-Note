@@ -3956,6 +3956,595 @@ button.fb-card {
   text-align: center;
 }
 
+/* ---- ショップ（SPEC §15）：帯・検索・絞り込み・シリーズの札・カート・レジ ---- */
+.shop-cart {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--paper-ink);
+  background: var(--card);
+  color: var(--paper-ink);
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.shop-cart svg,
+.shop-search svg,
+.btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.shop-cart__n {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--c2);
+  color: #2b2b2b;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+/* 上の「新しく入りました」の帯。紙なので暗い表示でも同じ色・黒い文字 */
+.shop-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 340px);
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: 20px 26px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fff8e6, #fdebd3);
+  box-shadow: var(--card-shadow);
+  color: #2b2b2b;
+}
+.shop-hero--premium {
+  background: linear-gradient(135deg, #2b2f3a, #4a4f5e);
+  color: #f4ecd8;
+}
+.shop-hero--premium .muted {
+  color: #cfc6ad;
+}
+@media (max-width: 760px) {
+  .shop-hero {
+    grid-template-columns: 1fr;
+  }
+}
+.shop-hero__pill {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--c1);
+  color: #2b2b2b;
+  font-size: 12px;
+  font-weight: 700;
+}
+.shop-hero__text h3 {
+  margin: 0 0 4px;
+  font-size: var(--fs-h2);
+}
+.shop-hero__text p {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.shop-hero__act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.shop-hero--premium .shop-hero__act .btn:not(.btn--primary) {
+  background: transparent;
+  border-color: #e9c66b;
+  color: #f4ecd8;
+}
+.shop-hero--premium .shop-hero__act .btn--primary {
+  background: #e9c66b;
+  border-color: #e9c66b;
+  color: #2b2b2b;
+}
+.shop-hero__art .model-view {
+  height: 150px;
+  background: radial-gradient(ellipse at 50% 62%, rgba(255, 255, 255, 0.55), transparent 68%);
+}
+.shop-hero__hint {
+  margin: 4px 0 0;
+  font-size: var(--fs-small);
+  text-align: center;
+}
+.shop-hero__art .st-art {
+  display: block;
+  width: 100%;
+  height: 48px;
+}
+/* 検索と絞り込み */
+.shop-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.shop-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  color: var(--paper-ink-weak);
+}
+.shop-search:focus-within {
+  border-color: var(--paper-ink);
+}
+.shop-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+}
+.shop-search input:focus {
+  outline: none;
+}
+.shop-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.shop-chips__label {
+  font-size: var(--fs-small);
+}
+.shop-chips__sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: color-mix(in srgb, var(--paper-ink) 20%, transparent);
+}
+.shop-chip {
+  padding: 5px 13px;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 22%, transparent);
+  background: var(--card);
+  color: var(--paper-ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.shop-chip.is-on {
+  background: var(--paper-ink);
+  border-color: var(--paper-ink);
+  color: var(--paper);
+}
+.shop-chip:focus-visible,
+.shop-dot:focus-visible,
+.shop-card__stage:focus-visible,
+.shop-card__name:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.shop-sort {
+  margin-left: auto;
+}
+.shop-sort select {
+  padding: 5px 10px;
+  border-radius: 10px;
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 22%, transparent);
+  background: var(--card);
+  color: var(--paper-ink);
+  font: inherit;
+  font-size: 14px;
+}
+.shop-note {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-small);
+}
+.shop-count {
+  margin: 0 0 10px;
+  font-size: var(--fs-small);
+}
+.shop-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* シリーズの札。無料は白い札にグレーの枠。有料は値段帯で紙が変わる（紙なので暗い表示でも同じ色・黒い文字） */
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-2);
+}
+.shop-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 2px solid #cfcfcf;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  color: var(--paper-ink);
+  --stage-bg: radial-gradient(ellipse at 50% 60%, #ffffff, #f4f1ea);
+}
+.shop-card--daily {
+  border-color: #ead3a0;
+  background: linear-gradient(135deg, #fffaf0, #fdebd3);
+  color: #2b2b2b;
+  --stage-bg: radial-gradient(ellipse at 50% 60%, #fffdf8, #f7eedc);
+}
+.shop-card--fine {
+  border-color: #d9b45a;
+  background: linear-gradient(135deg, #fdf7e4, #f2dfa9);
+  color: #2b2b2b;
+  --stage-bg: radial-gradient(ellipse at 50% 60%, #fffcf3, #f6ead0);
+}
+.shop-card--premium {
+  border-color: #c9a24d;
+  background: linear-gradient(135deg, #2b2f3a, #4a4f5e);
+  color: #f4ecd8;
+  --stage-bg: radial-gradient(ellipse at 50% 60%, #6a7080, #3b404b);
+}
+.shop-card--daily .muted,
+.shop-card--fine .muted {
+  color: #5f5a4e;
+}
+.shop-card--premium .muted {
+  color: #cfc6ad;
+}
+.shop-card--premium .btn:not(.btn--primary) {
+  background: transparent;
+  border-color: #e9c66b;
+  color: #f4ecd8;
+}
+.shop-card--premium .btn--primary {
+  background: #e9c66b;
+  border-color: #e9c66b;
+  color: #2b2b2b;
+}
+.shop-card.is-owned {
+  border-style: dashed;
+}
+.shop-ribbons {
+  position: absolute;
+  top: 10px;
+  left: -2px;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+.shop-ribbon {
+  padding: 2px 10px 2px 8px;
+  border-radius: 0 999px 999px 0;
+  background: var(--c1);
+  color: #2b2b2b;
+  font-size: 11px;
+  font-weight: 700;
+}
+.shop-ribbon--new {
+  background: var(--c2);
+}
+.shop-ribbon--3d {
+  background: var(--c4);
+}
+.shop-card__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 96px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--stage-bg);
+  cursor: pointer;
+}
+.shop-card__stage .st-art {
+  display: block;
+  width: 100%;
+  height: 36px;
+}
+.shop-card__stage .st-art--case {
+  height: 72px;
+}
+.shop-card__name {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+.shop-card__spec {
+  font-size: 12.5px;
+}
+.shop-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.shop-card__act {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 30px;
+}
+.shop-card__state {
+  font-size: var(--fs-small);
+}
+/* 値段の札 */
+.shop-tag {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.shop-tag--free {
+  background: #e9e9ea;
+  color: #55595f;
+}
+.shop-tag--daily {
+  background: #fff1cc;
+  color: #8a5f00;
+}
+.shop-tag--fine {
+  background: #f6e3a3;
+  color: #6b4a00;
+}
+.shop-tag--premium {
+  background: #e9c66b;
+  color: #2b2b2b;
+}
+.shop-tag--own {
+  background: #e4f4ea;
+  color: #1f6b3a;
+}
+/* 色の丸：外が軸の色、中がインクの色 */
+.shop-dots {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.shop-dot {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--body);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+}
+.shop-dot::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.shop-dot.is-on {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.shop-dot--static {
+  cursor: default;
+}
+/* 暗い表示：白い札（無料）も暗くなるので、黒い軸の丸が沈まないように薄い縁を足す */
+:root[data-theme='dark'] .shop-card--free .shop-dot {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .shop-card--free .shop-dot {
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 0, 0, 0.22),
+      0 0 0 1px rgba(255, 255, 255, 0.35);
+  }
+}
+.shop-dots--big {
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.shop-dots--big .shop-dot {
+  width: 24px;
+  height: 24px;
+}
+.shop-dots--big .shop-dot::after {
+  inset: 6px;
+}
+.fb-detail__colorname {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-small);
+}
+.fb-detail__price {
+  margin: 0 0 var(--space-2);
+}
+.fb-detail__info .shop-ribbons {
+  position: static;
+  margin-bottom: 6px;
+}
+.fb-detail__info .shop-ribbon {
+  border-radius: 999px;
+}
+/* カート・レジ・注文完了 */
+.shop-h {
+  margin: 0 0 var(--space-2);
+}
+.shop-checkout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .shop-checkout {
+    grid-template-columns: 1fr;
+  }
+}
+.shop-checkout h4 {
+  margin: 0 0 10px;
+}
+.shop-rows {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.shop-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.shop-row__art {
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--stage-bg, #f4f1ea);
+  cursor: pointer;
+}
+.shop-row__art .st-art {
+  display: block;
+  width: 100%;
+  height: 22px;
+}
+.shop-row__art .st-art--case {
+  height: 44px;
+}
+.shop-row__name {
+  font-weight: 700;
+}
+.shop-row__text .muted {
+  font-size: var(--fs-small);
+}
+.shop-row__price {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.shop-side {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.shop-side__note {
+  margin: 0;
+  font-size: var(--fs-small);
+}
+.shop-side__go {
+  justify-content: center;
+  width: 100%;
+}
+.shop-total {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  margin: 0 0 6px;
+}
+.shop-total dd {
+  margin: 0;
+  text-align: right;
+}
+.shop-total__sum {
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--paper-ink) 20%, transparent);
+  font-size: var(--fs-h3);
+  font-weight: 700;
+}
+.shop-pay h4 {
+  margin: 0 0 8px;
+}
+.shop-pay__demo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff1cc;
+  color: #2b2b2b;
+  font-size: var(--fs-small);
+}
+.shop-pay__method {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
+.shop-pay__radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.shop-pay .field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.shop-pay .field label {
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+.shop-pay .field small {
+  font-size: 12px;
+}
+.shop-pay__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.field__error {
+  color: #b3261e;
+  min-height: 1em;
+}
+.input.is-invalid {
+  border-bottom-color: #b3261e;
+}
+.shop-done {
+  max-width: 760px;
+}
+.shop-done__act {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.shop-row__act {
+  white-space: nowrap;
+}
+
 /* ---- 設定 → 学期 → 学年暦（休講日・振替授業日）の一覧 ---- */
 .cal-cols {
   display: grid;

@@ -67,6 +67,7 @@ const INVOKE = [
   'skin.export',
   'skin.import',
   'stationery.acquire',
+  'stationery.purchase',
   'stationery.arrange',
   'stationery.model'
 ];

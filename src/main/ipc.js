@@ -22,7 +22,7 @@ import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
 import {annotationToClient, normalizeAnnotation, clampSize} from '../shared/annotation.js';
 import {normalizeBookmark} from '../shared/bookmark.js';
-import {CATALOG, acquire, arrange, stationeryState} from '../shared/stationery.js';
+import {CATALOG, acquire, arrange, purchase, stationeryState} from '../shared/stationery.js';
 
 const str = (v, max = 500) => (typeof v === 'string' && v.length <= max ? v : null);
 const id = (v) => (isUlid(v) ? v : null);
@@ -120,6 +120,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         introduced: repo.getSetting('skin.introduced', false)
       },
       stationery: stationeryState(repo.getSetting('stationery', null)), // 文房具：持ち物・筆箱の中身・ペンケース（shared/stationery.js）
+      orders: repo.getSetting('stationery.orders', []), // ショップの注文の記録（新しい順。α 版はデモ決済）
       lastSync: repo.lastSyncRun(),
       browser: ctx.browser ?? {state: 'pending', message: ''},
       status: ctx.status ?? '',
@@ -427,6 +428,18 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     const st = acquire(repo.getSetting('stationery', null), String(itemId ?? ''));
     repo.setSetting('stationery', st);
     return {stationery: st};
+  });
+  // レジ：カートの品をまとめて買う（α 版はデモ決済。実際の請求はなく、注文の記録を設定に残す）
+  handle('stationery.purchase', ({itemIds, payment}) => {
+    const {stationery: st, order} = purchase(
+      repo.getSetting('stationery', null),
+      Array.isArray(itemIds) ? itemIds : [],
+      payment && typeof payment === 'object' ? {method: String(payment.method ?? ''), last4: payment.last4} : null
+    );
+    repo.setSetting('stationery', st);
+    const orders = [order, ...repo.getSetting('stationery.orders', [])].slice(0, 200);
+    repo.setSetting('stationery.orders', orders);
+    return {stationery: st, order, orders};
   });
   handle('stationery.arrange', ({slots, caseId, refills}) => {
     const st = arrange(repo.getSetting('stationery', null), {slots, caseId, refills});

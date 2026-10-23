@@ -1,5 +1,7 @@
 // 文房具（SPEC §9.8・§15）：ボールペン・マーカー（アンダーライン用）・文字隠しペン・ペンケース。副作用なし。
-// 品ぞろえはアプリに入っている（公式のみ。いまはすべて無料）。持ち物と筆箱の中身は設定（stationery）に保存する。
+// 品ぞろえはアプリに入っている（公式の品は無料。既製品の見た目の品は定価）。持ち物と筆箱の中身は設定（stationery）に保存する。
+// ショップはシリーズ（series：同じ品の色ちがい）ごとに 1 枚の札で出し、色は札の右下の丸で選ぶ（SERIES・shopSeries）。
+// 買うときはカートに入れてレジへ。α 版の決済はデモ（purchase：実際の請求はなく、注文の記録だけ残す）
 // 筆箱には道具（ペン・マーカー・文字隠しペン）を 6 本まで入れられ、編集画面の PDF の横に出る。
 // 道具ごとに、書いた線の色・太さが決まる（軸の色は見た目だけ）。
 // 文字隠しペンの色は赤の成分が 0 のものに限る（赤シートを乗算で重ねたとき黒くなって隠れる。viewer.js の冒頭）
@@ -22,7 +24,8 @@ const pen = (id, name, color, mm, body, accent = color) => ({
   mm,
   body,
   accent,
-  price: 0
+  price: 0,
+  series: `pen-${mm.replace('.', '')}`
 });
 const marker = (id, name, color, thick = false) => ({
   id,
@@ -33,12 +36,22 @@ const marker = (id, name, color, thick = false) => ({
   thick,
   body: '#f4f4f2',
   accent: color,
-  price: 0
+  price: 0,
+  series: thick ? 'marker-wide' : 'marker'
 });
-const hider = (id, name, color) => ({id, type: 'hider', name, color, body: '#ffffff', accent: color, price: 0});
+const hider = (id, name, color) => ({
+  id,
+  type: 'hider',
+  name,
+  color,
+  body: '#ffffff',
+  accent: color,
+  price: 0,
+  series: 'hider'
+});
 const pencase = (id, name, style, base, trim) => ({id, type: 'case', name, style, base, trim, price: 0});
-/** 既製品の見た目のペン（実験）。art で絵を分ける。ゲルインク（サラサ）は少し太く濃い線 */
-const maker = (id, name, makerName, art, color, body, accent) => ({
+/** 既製品の見た目のペン（実験）。art で絵を分ける。ゲルインク（サラサ）は少し太く濃い線。price はその品の定価（税込） */
+const maker = (id, name, makerName, art, color, body, accent, price, series) => ({
   id,
   type: 'pen',
   name,
@@ -47,9 +60,10 @@ const maker = (id, name, makerName, art, color, body, accent) => ({
   mm: '0.5',
   body,
   accent,
-  price: 0,
+  price,
   maker: makerName,
   art,
+  series,
   experimental: true
 });
 
@@ -62,7 +76,7 @@ const SHARP = {color: '#4a4a4a', width: 1.3};
  * 実験：既製品の多機能ペン（3D モデルの見た目）。refills の最初の芯で書き始める。
  * 各芯：{id, name, color, mm, width, sharp?}。item の color・width・mm は最初の芯のもの（筆箱の一覧の色などに使う）
  */
-const multi = (id, name, makerName, {model, body, accent, refills, refill}) => ({
+const multi = (id, name, makerName, {model, body, accent, refills, refill, price, featured = false}) => ({
   id,
   type: 'pen',
   name,
@@ -71,7 +85,8 @@ const multi = (id, name, makerName, {model, body, accent, refills, refill}) => (
   mm: refills[0].mm,
   body,
   accent,
-  price: 0,
+  price,
+  featured, // ショップの上の「新しく入りました」の帯に出す
   maker: makerName,
   art: 'model',
   model,
@@ -115,17 +130,60 @@ export const CATALOG = [
   pencase('case-clear', 'クリアケース', 'clear', '#e9f3f8', '#9fb7c4'),
   // 既製品の見た目のペン（試作。メーカーの許しを得ていないので、正式な公開の前に見直す。
   // α 版のあいだはショップに出す：MAKER_ITEMS_LISTED）
-  maker('maker-jetstream-black', 'ジェットストリーム 黒 0.5', '三菱鉛筆', 'jetstream', '#1f1f22', '#1d1e21', '#121214'),
-  maker('maker-jetstream-red', 'ジェットストリーム 赤 0.5', '三菱鉛筆', 'jetstream', '#d0202e', '#c8102e', '#121214'),
-  maker('maker-sarasa-black', 'サラサクリップ 黒 0.5', 'ゼブラ', 'sarasa', '#141414', '#e8eef2', '#1b1b1b'),
-  maker('maker-sarasa-red', 'サラサクリップ 赤 0.5', 'ゼブラ', 'sarasa', '#e4002b', '#e8eef2', '#e4002b'),
-  // サクラクラフトラボ 004：回転式の 2&1（黒・赤のボールペンと 0.5 のシャープ）。替え芯は 4C 規格。
+  // 値段は各メーカーの参考価格・希望小売価格（税込。2026 年 10 月に確かめた）
+  maker(
+    'maker-jetstream-black',
+    'ジェットストリーム 黒 0.5',
+    '三菱鉛筆',
+    'jetstream',
+    '#1f1f22',
+    '#1d1e21',
+    '#121214',
+    165,
+    'jetstream'
+  ),
+  maker(
+    'maker-jetstream-red',
+    'ジェットストリーム 赤 0.5',
+    '三菱鉛筆',
+    'jetstream',
+    '#d0202e',
+    '#c8102e',
+    '#121214',
+    165,
+    'jetstream'
+  ),
+  maker(
+    'maker-sarasa-black',
+    'サラサクリップ 黒 0.5',
+    'ゼブラ',
+    'sarasa',
+    '#141414',
+    '#e8eef2',
+    '#1b1b1b',
+    110,
+    'sarasa'
+  ),
+  maker(
+    'maker-sarasa-red',
+    'サラサクリップ 赤 0.5',
+    'ゼブラ',
+    'sarasa',
+    '#e4002b',
+    '#e8eef2',
+    '#e4002b',
+    110,
+    'sarasa'
+  ),
+  // サクラクラフトラボ 004：回転式の 2&1（黒・赤のボールペンと 0.5 のシャープ）。替え芯は 4C 規格。定価 ¥8,800（税込）。
   // 見た目は 3D モデル（assets/stationery/craftlab-004.glb。写真の質感をそのまま使う）
   multi('maker-craftlab-004', 'サクラクラフトラボ 004', 'サクラクレパス', {
     model: 'craftlab-004',
     body: '#5c5d55',
     accent: '#a99d80',
     refill: '4C',
+    price: 8800,
+    featured: true,
     refills: [
       {id: 'black', name: '黒ボールペン', color: '#1f1f22', mm: '0.5', width: PEN_WIDTH[0.5]},
       {id: 'red', name: '赤ボールペン', color: '#d0202e', mm: '0.5', width: PEN_WIDTH[0.5]},
@@ -201,14 +259,56 @@ export function stationeryState(raw) {
   return {owned, slots, caseId, refills};
 }
 
-/** ショップで入手する。無料の品だけ（有料の品はまだない）。新しい状態を返す。入手できなければ Error */
+/** ショップで無料の品を入手する（カートを通らない近道。有料の品は purchase）。新しい状態を返す。入手できなければ Error */
 export function acquire(raw, id) {
   const st = stationeryState(raw);
   const item = itemOf(id);
   if (!item || !listed(item)) throw new Error('その文房具はありません');
-  if (item.price !== 0) throw new Error('この文房具はまだ足せません');
+  if (item.price !== 0) throw new Error('この文房具は有料です。カートからレジへ進んでください');
   if (st.owned.includes(id)) return st;
   return stationeryState({...st, owned: [...st.owned, id]});
+}
+
+/** カートの合計（持っている品・ない品は数えない） */
+export function cartTotal(ids) {
+  return (Array.isArray(ids) ? ids : []).reduce((sum, id) => sum + (itemOf(id)?.price ?? 0), 0);
+}
+
+/** α 版の決済：デモ（実際の請求はない）。カード番号は下 4 桁だけ記録する */
+export const PAYMENT_METHODS = {demo: 'デモ決済（実際の請求はありません）'};
+
+/**
+ * レジ：カートの品をまとめて買う。無料の品だけなら支払いはいらない。有料の品があれば payment が必要
+ * （α 版は {method: 'demo', last4?} だけ受け付ける）。持っている品・ない品・出していない品があれば Error。
+ * 戻り値：{stationery: 新しい状態, order: {id, at, items: [{id, name, price}], total, payment: {method, last4}}}
+ */
+export function purchase(raw, ids, payment = null, {now = new Date(), orderId = null} = {}) {
+  const st = stationeryState(raw);
+  const list = [...new Set(Array.isArray(ids) ? ids.map(String) : [])];
+  if (!list.length) throw new Error('カートが空です');
+  for (const id of list) {
+    const it = itemOf(id);
+    if (!it || !listed(it)) throw new Error('その文房具はありません');
+    if (st.owned.includes(id)) throw new Error(`${it.name} はもう持っています`);
+  }
+  const items = list.map((id) => ({id, name: itemOf(id).name, price: itemOf(id).price}));
+  const total = items.reduce((sum, it) => sum + it.price, 0);
+  let pay = {method: 'free'};
+  if (total > 0) {
+    if (!payment || !PAYMENT_METHODS[payment.method]) throw new Error('支払いの方法を選んでください');
+    const last4 = String(payment.last4 ?? '')
+      .replace(/\D/g, '')
+      .slice(-4);
+    pay = {method: payment.method, ...(last4 ? {last4} : {})};
+  }
+  const order = {
+    id: orderId ?? `order-${now.getTime().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    at: now.toISOString(),
+    items,
+    total,
+    payment: pay
+  };
+  return {stationery: stationeryState({...st, owned: [...st.owned, ...list]}), order};
 }
 
 /** 筆箱の中身・ペンケース・多機能ペンの芯を変える。持っていない品は入れられない（Error） */
@@ -243,8 +343,64 @@ export const MAKER_ITEMS_LISTED = true;
 /** ショップに出す品か */
 export const listed = (item) => !item.experimental || MAKER_ITEMS_LISTED;
 
+/** 円の表示（¥8,800） */
+export const yen = (n) => `¥${Number(n).toLocaleString('ja-JP')}`;
 /** 値段の表示。無料は「無料」 */
-export const priceLabel = (item) => (item.price === 0 ? '無料' : `¥${item.price}`);
+export const priceLabel = (item) => (item.price === 0 ? '無料' : yen(item.price));
+
+/**
+ * 値段帯：札の見た目（背景）を変える。無料は白い札にグレーの枠、有料は値段が上がるほど上質な紙に
+ * （daily：ふだん使い＝クリーム色、fine：ちょっといいもの＝シャンパンゴールド、premium：高級＝濃紺に金の文字）
+ */
+export const TIERS = [
+  {id: 'free', label: '無料', min: 0},
+  {id: 'daily', label: 'ふだん使い', min: 1},
+  {id: 'fine', label: 'ちょっといいもの', min: 1000},
+  {id: 'premium', label: '高級', min: 5000}
+];
+export const tierOf = (price) => [...TIERS].reverse().find((t) => price >= t.min) ?? TIERS[0];
+
+// ---- ショップの札：シリーズ（同じ品の色ちがい）----
+// items の series が同じ品を 1 枚の札にまとめ、色は札の右下の丸で選ぶ。series のない品は 1 品で 1 枚
+const SERIES_INFO = {
+  'pen-05': {name: 'ボールペン 0.5'},
+  'pen-038': {name: 'ボールペン 0.38'},
+  'pen-07': {name: 'ボールペン 0.7'},
+  jetstream: {name: 'ジェットストリーム 0.5'},
+  sarasa: {name: 'サラサクリップ 0.5'},
+  marker: {name: 'マーカー'},
+  'marker-wide': {name: 'マーカー（太）'},
+  hider: {name: '文字隠しペン'}
+};
+/** 品のシリーズの id（series がなければ品の id） */
+export const seriesIdOf = (item) => item.series ?? item.id;
+/**
+ * ショップに出すシリーズの一覧（品ぞろえの順）。各 {id, name, maker, type, items, price（いちばん安い品）, from（値段に幅があるか）}
+ */
+export function shopSeries(items = CATALOG) {
+  const map = new Map();
+  for (const it of items) {
+    if (!listed(it)) continue;
+    const sid = seriesIdOf(it);
+    if (!map.has(sid))
+      map.set(sid, {
+        id: sid,
+        name: SERIES_INFO[sid]?.name ?? it.name,
+        maker: it.maker ?? '大学ノート',
+        type: it.type,
+        items: []
+      });
+    map.get(sid).items.push(it);
+  }
+  for (const s of map.values()) {
+    const prices = s.items.map((it) => it.price);
+    s.price = Math.min(...prices);
+    s.from = Math.max(...prices) !== s.price;
+  }
+  return [...map.values()];
+}
+/** 同じシリーズの品（色ちがい）。自分も含む */
+export const siblingsOf = (item) => CATALOG.filter((it) => listed(it) && seriesIdOf(it) === seriesIdOf(item));
 
 // ---- 見た目（SVG。画像ファイルを持たない）----
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
