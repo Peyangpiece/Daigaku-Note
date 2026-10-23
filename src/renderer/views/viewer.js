@@ -1268,7 +1268,7 @@ class Viewer {
     });
     panel.innerHTML = `<div class="case-panel__head"><strong>筆箱</strong><span class="muted">押したペンを ${at + 1} 本目に入れて持ちます</span></div>
       ${groups.join('')}
-      <div class="case-panel__foot"><button type="button" class="btn btn--small" data-case-go>筆箱を整理する・文房具をふやす →</button></div>`;
+      <div class="case-panel__foot"><button type="button" class="btn btn--small" data-case-go>筆箱を整理する・ショップへ →</button></div>`;
     panel.dataset.at = String(at);
   }
   /** 筆箱の外のペンを、at 本目に入れて持つ（入っていたペンは出す）。もう入っていればそのまま持つ */

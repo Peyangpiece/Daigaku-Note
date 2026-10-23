@@ -8,25 +8,119 @@ import {
   STARTER_SLOTS,
   acquire,
   arrange,
+  cartTotal,
   caseArt,
   hiderColorOk,
   itemOf,
   priceLabel,
+  purchase,
+  shopSeries,
+  siblingsOf,
   stationeryState,
-  toolArt
+  tierOf,
+  toolArt,
+  yen
 } from '../src/shared/stationery.js';
 
-test('品ぞろえ：id は重ならず、いまはすべて無料。文字隠しペンは赤の成分が 0 の色だけ', () => {
+test('品ぞろえ：id は重ならず、公式の品は無料、既製品の見た目の品は定価（税込）。文字隠しペンは赤の成分が 0 の色だけ', () => {
   assert.equal(new Set(CATALOG.map((it) => it.id)).size, CATALOG.length);
   for (const it of CATALOG) {
-    assert.equal(it.price, 0, it.id);
-    assert.equal(priceLabel(it), '無料');
+    assert.ok(Number.isInteger(it.price) && it.price >= 0, it.id);
+    if (!it.maker) assert.equal(it.price, 0, `${it.id} は無料`);
+    assert.equal(priceLabel(it), it.price === 0 ? '無料' : yen(it.price));
     if (it.type === 'hider') assert.ok(hiderColorOk(it.color), it.id);
     if (it.type === 'pen' || it.type === 'marker') assert.ok(it.width > 0 && /^#[0-9a-f]{6}$/.test(it.color), it.id);
   }
   assert.ok(hiderColorOk('#00d2ff'));
   assert.ok(!hiderColorOk('#ff9ec7'));
   assert.ok(!hiderColorOk('#000000'), '暗い色は下の字が読めない');
+  // 定価：三菱鉛筆の参考価格 ¥165、ゼブラの希望小売価格 ¥110、サクラクレパス ¥8,800（2026 年 10 月）
+  assert.equal(itemOf('maker-jetstream-black').price, 165);
+  assert.equal(itemOf('maker-sarasa-red').price, 110);
+  assert.equal(itemOf('maker-craftlab-004').price, 8800);
+  assert.equal(priceLabel(itemOf('maker-craftlab-004')), '¥8,800');
+});
+
+test('値段帯：無料・ふだん使い（¥1〜）・ちょっといいもの（¥1,000〜）・高級（¥5,000〜）で札の紙が変わる', () => {
+  assert.equal(tierOf(0).id, 'free');
+  assert.equal(tierOf(110).id, 'daily');
+  assert.equal(tierOf(999).id, 'daily');
+  assert.equal(tierOf(1000).id, 'fine');
+  assert.equal(tierOf(8800).id, 'premium');
+});
+
+test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。値段はいちばん安い品のもの', () => {
+  const series = shopSeries();
+  assert.equal(new Set(series.map((s) => s.id)).size, series.length);
+  const pen05 = series.find((s) => s.id === 'pen-05');
+  assert.equal(pen05.name, 'ボールペン 0.5');
+  assert.equal(pen05.maker, '大学ノート');
+  assert.ok(pen05.items.length >= 10, '0.5 の公式のボールペンは 10 色以上');
+  assert.ok(pen05.items.every((it) => it.mm === '0.5' && !it.maker));
+  const js = series.find((s) => s.id === 'jetstream');
+  assert.deepEqual(
+    js.items.map((it) => it.id),
+    ['maker-jetstream-black', 'maker-jetstream-red']
+  );
+  assert.equal(js.price, 165);
+  assert.equal(js.from, false);
+  const craft = series.find((s) => s.id === 'maker-craftlab-004');
+  assert.equal(craft.items.length, 1, 'シリーズのない品は 1 品で 1 枚');
+  assert.ok(craft.items[0].featured, '新しく入った品は上の帯に出す');
+  for (const s of series)
+    assert.ok(
+      s.items.every((it) => it.type === s.type),
+      '札の中の種類はそろう'
+    );
+  assert.deepEqual(
+    siblingsOf(itemOf('maker-sarasa-black')).map((it) => it.id),
+    ['maker-sarasa-black', 'maker-sarasa-red']
+  );
+  assert.deepEqual(
+    siblingsOf(itemOf('case-clear')).map((it) => it.id),
+    ['case-clear']
+  );
+  // 品ぞろえの順に並ぶ（公式の品 → 既製品の見た目の品）
+  assert.equal(series[0].id, 'pen-05');
+});
+
+test('カートとレジ：合計は品の値段の和。無料だけなら支払いなし、有料があればデモ決済が要る。注文の記録が残る', () => {
+  assert.equal(cartTotal(['maker-sarasa-red', 'pen-wood-07', 'nope']), 110);
+  assert.equal(cartTotal([]), 0);
+  // 無料の品だけ
+  const free = purchase(null, ['pen-wood-07', 'case-tin-silver'], null, {
+    now: new Date('2026-10-23T12:00:00Z'),
+    orderId: 'o1'
+  });
+  assert.ok(free.stationery.owned.includes('pen-wood-07') && free.stationery.owned.includes('case-tin-silver'));
+  assert.equal(free.order.total, 0);
+  assert.deepEqual(free.order.payment, {method: 'free'});
+  assert.equal(free.order.id, 'o1');
+  assert.equal(free.order.at, '2026-10-23T12:00:00.000Z');
+  // 有料の品は支払いの方法が要る（α 版はデモだけ）
+  assert.throws(() => purchase(null, ['maker-craftlab-004']), /支払い/);
+  assert.throws(() => purchase(null, ['maker-craftlab-004'], {method: 'card'}), /支払い/);
+  const paid = purchase(null, ['maker-craftlab-004', 'maker-sarasa-red'], {
+    method: 'demo',
+    last4: '4242 4242 4242 4242'
+  });
+  assert.equal(paid.order.total, 8910);
+  assert.deepEqual(paid.order.payment, {method: 'demo', last4: '4242'});
+  assert.deepEqual(
+    paid.order.items.map((x) => [x.id, x.price]),
+    [
+      ['maker-craftlab-004', 8800],
+      ['maker-sarasa-red', 110]
+    ]
+  );
+  assert.ok(paid.order.id.startsWith('order-'));
+  assert.ok(paid.stationery.owned.includes('maker-craftlab-004'));
+  // 同じ品を 2 回は買えない。空のカート・ない品は断る
+  assert.throws(() => purchase(paid.stationery, ['maker-sarasa-red'], {method: 'demo'}), /持っています/);
+  assert.throws(() => purchase(null, []), /空/);
+  assert.throws(() => purchase(null, ['gold-pen']), /ありません/);
+  // 無料の近道（acquire）は有料の品を断る
+  assert.throws(() => acquire(null, 'maker-craftlab-004'), /有料/);
 });
 
 test('はじめの状態：6 本の筆箱と帆布のペンケース。はじめの品はいつも持っている', () => {
@@ -78,7 +172,7 @@ test('既製品の見た目のペン：α 版のあいだはショップに出�
   assert.equal(MAKER_ITEMS_LISTED, true);
   assert.equal(listed(js), true);
   assert.equal(listed(itemOf('pen-black-05')), true);
-  assert.ok(acquire(null, 'maker-sarasa-red').owned.includes('maker-sarasa-red'));
+  assert.ok(purchase(null, ['maker-sarasa-red'], {method: 'demo'}).stationery.owned.includes('maker-sarasa-red'));
   assert.throws(() => acquire(null, 'gold-pen'), /ありません/);
   assert.match(toolArt(js), /JETSTREAM/);
   assert.match(toolArt(itemOf('maker-sarasa-red')), /SARASA/);
@@ -112,7 +206,7 @@ test('多機能ペン（サクラクラフトラボ 004）：3 本の芯を回�
   const sharp = heldPen(it, 'sharp');
   assert.ok(sharp.refill.sharp && sharp.width < it.width * 1.3 && sharp.color !== it.color, 'シャープは灰色');
   // 選んだ芯は設定に残る。持っていない品・ない芯は捨てる
-  const owned = acquire(null, 'maker-craftlab-004');
+  const owned = purchase(null, ['maker-craftlab-004'], {method: 'demo'}).stationery;
   assert.deepEqual(owned.refills, {});
   const picked = arrange(owned, {refills: {'maker-craftlab-004': 'red'}});
   assert.deepEqual(picked.refills, {'maker-craftlab-004': 'red'});
