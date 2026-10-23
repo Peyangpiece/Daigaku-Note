@@ -368,6 +368,11 @@ function hslToRgb([h, s, l]) {
  * 紙は 0.12〜0.20、カードは 0.17〜0.25、線は 0.24〜0.34 ほど。彩度も少し落として、暗い所で色が浮かないようにする
  */
 export function darken(hex, {lo = 0.12, span = 0.08, sat = 0.6} = {}) {
-  const [h, s, l] = rgbToHsl(hexToRgb(hex));
-  return rgbToHex(hslToRgb([h, s * sat, lo + span * l]));
+  const rgb = hexToRgb(hex);
+  const [h, s, l] = rgbToHsl(rgb);
+  // ほぼ白い色（クリーム色・生成り色など）は HSL の彩度が高く出るが、見た目の色味は薄い。暗くしたときも見た目どおり薄く残す：
+  // 色の濃さ（RGB の最大と最小の差）が 0.3 に満たない分だけ彩度を落とす（白いカードと暗い表示で並んでも黄土色・茶色に浮かない）
+  const chroma = (Math.max(...rgb) - Math.min(...rgb)) / 255;
+  const keep = Math.min(1, chroma / 0.3);
+  return rgbToHex(hslToRgb([h, s * sat * keep, lo + span * l]));
 }
