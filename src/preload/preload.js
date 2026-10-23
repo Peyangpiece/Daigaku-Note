@@ -43,6 +43,7 @@ const INVOKE = [
   'pdf.asset',
   'pdf.export',
   'pdf.save',
+  'pdf.textStyle',
   'annotation.save',
   'annotation.remove',
   'bookmark.save',

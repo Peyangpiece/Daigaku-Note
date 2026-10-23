@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
-import {annotationToClient, clampSize, normalizeAnnotation} from '../src/shared/annotation.js';
+import {annotationToClient, clampSize, hidesUnderRedSheet, normalizeAnnotation} from '../src/shared/annotation.js';
+import {encodePoints} from '../src/shared/ink.js';
 
 const text = (over = {}) => ({
   kind: 'text',
@@ -141,4 +142,60 @@ test('マーカー（アンダーライン）と文字隠しの色：文字隠�
   assert.deepEqual(mask('#00C98D'), {color: '#00c98d'});
   assert.deepEqual(mask('#00d2ff'), {}, '既定の水色は保存しない');
   assert.deepEqual(mask('#ff0000'), {}, '赤を含む色は使わない（赤シートで隠れない）');
+});
+
+test('メモ：吹き出しの大きさと中の手書きを残す。形の悪い線は捨て、大きさは範囲に収める', () => {
+  const ink = [
+    {
+      p: encodePoints([
+        [10, 10, 0.5],
+        [40, 30, 0.6],
+        [80, 20, 0.5]
+      ]),
+      c: '#D93025',
+      w: 1.1
+    },
+    {p: 'broken', c: '#000000', w: 1},
+    {
+      p: encodePoints([
+        [0, 0, 0.5],
+        [5, 5, 0.5]
+      ]),
+      c: 'red',
+      w: 99,
+      pressure: false
+    }
+  ];
+  const r = normalizeAnnotation({
+    kind: 'note',
+    page: 1,
+    rect: {x: 10, y: 20, w: 0, h: 0},
+    body: 'メモ',
+    style: {color: '#f6c445', w: 320.4, h: 2000, ink}
+  });
+  const st = JSON.parse(r.style_json);
+  assert.equal(st.w, 320);
+  assert.equal(st.h, 900, '大きさは 900px まで');
+  assert.equal(st.ink.length, 2, '壊れた線は捨てる');
+  assert.equal(st.ink[0].c, '#d93025');
+  assert.deepEqual(st.ink[1], {p: ink[2].p, c: '#2b2b2b', w: 12, pressure: false}, '色が不正なら黒、太さは上限に');
+  const plain = normalizeAnnotation({
+    kind: 'note',
+    page: 1,
+    rect: {x: 10, y: 20, w: 0, h: 0},
+    body: '',
+    style: {color: '#f6c445'}
+  });
+  assert.deepEqual(JSON.parse(plain.style_json), {color: '#f6c445'}, '手書き・大きさがなければ前の版と同じ形');
+});
+
+test('赤シートで消える色：赤い字・赤のボールペンは当たり、黒・橙・桃・青は当たらない', () => {
+  assert.ok(hidesUnderRedSheet('#d93025'), '文字入れの赤');
+  assert.ok(hidesUnderRedSheet('#e03131'), '赤のボールペン');
+  assert.ok(hidesUnderRedSheet('#ff0000'));
+  assert.ok(!hidesUnderRedSheet('#2b2b2b'), '黒');
+  assert.ok(!hidesUnderRedSheet('#e37400'), '橙');
+  assert.ok(!hidesUnderRedSheet('#c2185b'), '桃');
+  assert.ok(!hidesUnderRedSheet('#1a73e8'), '青');
+  assert.ok(!hidesUnderRedSheet('#ffffff') && !hidesUnderRedSheet('red'));
 });
