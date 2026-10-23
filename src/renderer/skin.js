@@ -1,6 +1,6 @@
 // 着せ替えをレンダラに当てる（SPEC-KISEKAE.md）。どのテンプレートが当たるかと色の計算は shared/skin.js。
 // ノートは html の data-note・data-margin と CSS 変数で、フォルダとテープは各カードの style で変える。シールの画像は main から data: URL でもらう
-import {BUILTIN_TEMPLATES, CLASSIC_ID, NOTE_GAPS, darken, inkOn, resolveSkin} from '../shared/skin.js';
+import {BUILTIN_TEMPLATES, CLASSIC_ID, NOTE_GAPS, INK_LIGHT, darken, inkOn, resolveSkin} from '../shared/skin.js';
 import {builtinStickerUrl, isBuiltinSticker} from '../shared/stickers.js';
 
 /** 今が暗い表示か（設定のテーマ、または OS に合わせる） */
@@ -30,17 +30,47 @@ export function noteVars(note, dark = isDark()) {
   const paper = tone(note.paper, 'paper', dark);
   const line = tone(note.line, 'line', dark);
   const vars = {'--rule-gap': `${NOTE_GAPS[note.gap] ?? 32}px`};
+  let surface = 'theme';
   if (paper) {
     vars['--paper'] = paper;
     const ink = inkOn(paper);
     vars['--paper-ink'] = ink;
     vars['--paper-ink-weak'] = `color-mix(in srgb, ${ink} 68%, ${paper})`;
+    // 明るい表示で暗い紙（ブラック系など）を選んだとき：文字は白になるので、カード・付箋・上のボタンなどの
+    // 面も暗い表示と同じ暗さにする（白い面に白い文字にならないように）。カードは紙より少し明るく
+    if (!dark && ink === INK_LIGHT) {
+      surface = 'dark';
+      Object.assign(vars, {
+        '--card': `color-mix(in srgb, ${paper} 86%, #ffffff)`,
+        '--card-shadow': '0 2px 8px rgba(0, 0, 0, 0.35)',
+        '--card-shadow-hover': '0 6px 16px rgba(0, 0, 0, 0.45)',
+        '--tape-alpha': '0.55',
+        '--note-weak': '100%',
+        '--note-mix': '#a9a59b',
+        '--note-ink-weak': '#33363b',
+        '--focus': ink
+      });
+    }
   }
   if (line) vars['--rule'] = line;
-  return {attrs: {'data-note': note.type, 'data-margin': note.margin ? 'on' : 'off'}, vars};
+  return {attrs: {'data-note': note.type, 'data-margin': note.margin ? 'on' : 'off', 'data-surface': surface}, vars};
 }
 
-const NOTE_PROPS = ['--rule-gap', '--paper', '--paper-ink', '--paper-ink-weak', '--rule'];
+const NOTE_PROPS = [
+  '--rule-gap',
+  '--paper',
+  '--paper-ink',
+  '--paper-ink-weak',
+  '--rule',
+  '--card',
+  '--card-shadow',
+  '--card-shadow-hover',
+  '--tape-alpha',
+  '--note-weak',
+  '--note-mix',
+  '--note-ink-weak',
+  '--focus'
+];
 /** 全体のノートを画面に当てる。テーマが変わったら当て直す */
 export function applySkin(data) {
   const root = document.documentElement;

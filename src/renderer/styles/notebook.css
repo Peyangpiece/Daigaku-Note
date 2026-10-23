@@ -2449,7 +2449,8 @@ textarea.input {
 .card-menu__danger {
   color: #c5221f !important;
 }
-:root[data-theme='dark'] .card-menu__danger {
+:root[data-theme='dark'] .card-menu__danger,
+:root[data-surface='dark'] .card-menu__danger {
   color: #ff8a80 !important;
 }
 @media (prefers-color-scheme: dark) {
@@ -2513,7 +2514,8 @@ textarea.input {
 .btn--danger {
   color: #c5221f;
 }
-:root[data-theme='dark'] .btn--danger {
+:root[data-theme='dark'] .btn--danger,
+:root[data-surface='dark'] .btn--danger {
   color: #ff8a80;
 }
 @media (prefers-color-scheme: dark) {
@@ -3700,6 +3702,10 @@ textarea.input {
   padding: 10px 12px;
   border-radius: 10px;
   background: #fff8e1;
+  color: #5c4300; /* 明るい紙の色なので、ノートが暗くても文字は濃いまま */
+}
+.shop-pay__points .muted {
+  color: #6b5a2e;
 }
 .shop-pay__points b {
   display: inline-flex;
@@ -3750,6 +3756,9 @@ textarea.input {
 .pts-balance p {
   margin: 6px 0 0;
   color: inherit;
+}
+.pts-balance .muted {
+  color: #7a5a14; /* 明るい札なので、ノートが暗くても濃いまま */
 }
 .pts-ways,
 .pts-history {
@@ -4522,14 +4531,18 @@ button.fb-card {
 .shop-dot--static {
   cursor: default;
 }
-/* 暗い表示：白い札（無料）も暗くなるので、黒い軸の丸が沈まないように薄い縁を足す */
-:root[data-theme='dark'] .shop-card--free .shop-dot {
+/* 暗い表示・暗いノート：白い札（ポイントの品）や詳細ページの面も暗くなるので、黒い軸の丸が沈まないように薄い縁を足す */
+:root[data-theme='dark'] .shop-card--free .shop-dot,
+:root[data-theme='dark'] .shop-dots--big .shop-dot,
+:root[data-surface='dark'] .shop-card--free .shop-dot,
+:root[data-surface='dark'] .shop-dots--big .shop-dot {
   box-shadow:
     inset 0 0 0 1px rgba(0, 0, 0, 0.22),
     0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .shop-card--free .shop-dot {
+  :root:not([data-theme='light']) .shop-card--free .shop-dot,
+  :root:not([data-theme='light']) .shop-dots--big .shop-dot {
     box-shadow:
       inset 0 0 0 1px rgba(0, 0, 0, 0.22),
       0 0 0 1px rgba(255, 255, 255, 0.35);
