@@ -3811,7 +3811,7 @@ button.fb-card {
 .model-view {
   position: relative;
   border-radius: 10px;
-  background: radial-gradient(ellipse at 50% 60%, rgba(0, 0, 0, 0.1), transparent 70%);
+  background: radial-gradient(ellipse at 50% 62%, rgba(0, 0, 0, 0.07), transparent 68%);
   cursor: grab;
   touch-action: none;
   user-select: none;

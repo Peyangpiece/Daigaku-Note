@@ -29,6 +29,7 @@ async function loadNow(id) {
   gl(); // 環境光を先に用意する
   const gltf = await new GLTFLoader().parseAsync(buf, '');
   const obj = gltf.scene;
+  await useLookMaterials(gltf);
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
   const c = box.getCenter(new THREE.Vector3());
@@ -43,12 +44,31 @@ async function loadNow(id) {
   const scene = new THREE.Scene();
   scene.add(group);
   scene.environment = envMap;
-  scene.environmentIntensity = 0.9;
+  scene.environmentIntensity = 1.05;
   const key = new THREE.DirectionalLight(0xffffff, 0.9);
   key.position.set(-1, 2, 2.5);
   scene.add(key);
   scene.add(new THREE.AmbientLight(0xffffff, 0.35));
   return {scene, group};
+}
+
+/**
+ * 部品ごとの設計上の材質を使う。GLB には、写真を貼った材質のほかに「〜_look」という名前の材質（部品の数だけ。
+ * 金属の軸・ローレット・クリップなどの色と粗さ）が入っていることがある。写真は解像度が低くぼやけるので、
+ * 「〜_look」が部品（プリミティブ）の数とそろっていれば、順に割り当てて描く（参考の描画と同じ見え方）
+ */
+async function useLookMaterials(gltf) {
+  const defs = gltf.parser.json.materials ?? [];
+  const looks = defs.map((m, i) => ({name: m.name ?? '', i})).filter((m) => /_look$/i.test(m.name));
+  if (!looks.length) return;
+  const parts = [];
+  gltf.scene.traverse((o) => o.isMesh && parts.push(o));
+  // プリミティブの順（ノード → メッシュ → プリミティブ）。traverse はこの順に子を回る
+  if (parts.length !== looks.length) return;
+  const mats = await Promise.all(looks.map((m) => gltf.parser.getDependency('material', m.i)));
+  parts.forEach((mesh, k) => {
+    mesh.material = mats[k];
+  });
 }
 
 function load(id) {
@@ -82,7 +102,7 @@ export function mount(el, id) {
   el.replaceChildren(canvas);
   const ctx = canvas.getContext('2d');
   const cam = new THREE.PerspectiveCamera(26, 1, 0.01, 20);
-  cam.position.set(0.08, 0.4, 1.75);
+  cam.position.set(0.06, 0.34, 1.55);
   const controls = new OrbitControls(cam, canvas);
   controls.enablePan = false;
   controls.enableZoom = false;
