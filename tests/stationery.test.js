@@ -8,6 +8,7 @@ import {
   STARTER_SLOTS,
   acquire,
   arrange,
+  cartPoints,
   cartTotal,
   caseArt,
   fadesUnderRedSheet,
@@ -24,12 +25,20 @@ import {
   yen
 } from '../src/shared/stationery.js';
 
-test('品ぞろえ：id は重ならず、公式の品は無料、既製品の見た目の品は定価（税込）。文字隠しペンは赤の成分が 0 の色だけ', () => {
+test('品ぞろえ：id は重ならず、公式の品はポイント（はじめの品は 0）、既製品の見た目の品は定価（税込）。文字隠しペンは赤の成分が 0 の色だけ', () => {
   assert.equal(new Set(CATALOG.map((it) => it.id)).size, CATALOG.length);
   for (const it of CATALOG) {
     assert.ok(Number.isInteger(it.price) && it.price >= 0, it.id);
-    if (!it.maker) assert.equal(it.price, 0, `${it.id} は無料`);
-    assert.equal(priceLabel(it), it.price === 0 ? '無料' : yen(it.price));
+    assert.ok(Number.isInteger(it.points) && it.points >= 0, it.id);
+    if (!it.maker) {
+      assert.equal(it.price, 0, `${it.id} は円では売らない`);
+      if (STARTER.includes(it.id)) assert.equal(it.points, 0, `${it.id} ははじめから持っている`);
+      else assert.ok(it.points > 0, `${it.id} はポイントで買う`);
+    } else assert.equal(it.points, 0, `${it.id} は円で買う`);
+    assert.equal(
+      priceLabel(it),
+      it.price ? yen(it.price) : it.points ? `${it.points.toLocaleString('ja-JP')} pt` : '無料'
+    );
     if (it.type === 'hider') assert.ok(hiderColorOk(it.color), it.id);
     if (it.type === 'pen' || it.type === 'marker') assert.ok(it.width > 0 && /^#[0-9a-f]{6}$/.test(it.color), it.id);
   }
@@ -41,6 +50,8 @@ test('品ぞろえ：id は重ならず、公式の品は無料、既製品の�
   assert.equal(itemOf('maker-sarasa-red').price, 110);
   assert.equal(itemOf('maker-craftlab-004').price, 8800);
   assert.equal(priceLabel(itemOf('maker-craftlab-004')), '¥8,800');
+  assert.equal(priceLabel(itemOf('case-leather-brown')), '600 pt');
+  assert.equal(priceLabel(itemOf('pen-black-05')), '無料', 'はじめの品');
 });
 
 test('値段帯：無料・ふだん使い（¥1〜）・ちょっといいもの（¥1,000〜）・高級（¥5,000〜）で札の紙が変わる', () => {
@@ -95,14 +106,16 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
 test('カートとレジ：合計は品の値段の和。無料だけなら支払いなし、有料があればデモ決済が要る。注文の記録が残る', () => {
   assert.equal(cartTotal(['maker-sarasa-red', 'pen-wood-07', 'nope']), 110);
   assert.equal(cartTotal([]), 0);
-  // 無料の品だけ
+  assert.equal(cartPoints(['maker-sarasa-red', 'pen-wood-07', 'case-tin-silver', 'nope']), 800);
+  // ポイントの品だけ：カードは要らない。引く量は order.points（残高から引くのは呼ぶ側。shared/points.js）
   const free = purchase(null, ['pen-wood-07', 'case-tin-silver'], null, {
     now: new Date('2026-10-23T12:00:00Z'),
     orderId: 'o1'
   });
   assert.ok(free.stationery.owned.includes('pen-wood-07') && free.stationery.owned.includes('case-tin-silver'));
   assert.equal(free.order.total, 0);
-  assert.deepEqual(free.order.payment, {method: 'free'});
+  assert.equal(free.order.points, 800);
+  assert.deepEqual(free.order.payment, {method: 'points'});
   assert.equal(free.order.id, 'o1');
   assert.equal(free.order.at, '2026-10-23T12:00:00.000Z');
   // 有料の品は支払いの方法が要る（α 版はデモだけ）
@@ -113,6 +126,7 @@ test('カートとレジ：合計は品の値段の和。無料だけなら支�
     last4: '4242 4242 4242 4242'
   });
   assert.equal(paid.order.total, 8910);
+  assert.equal(paid.order.points, 0);
   assert.deepEqual(paid.order.payment, {method: 'demo', last4: '4242'});
   assert.deepEqual(
     paid.order.items.map((x) => [x.id, x.price]),
@@ -127,8 +141,14 @@ test('カートとレジ：合計は品の値段の和。無料だけなら支�
   assert.throws(() => purchase(paid.stationery, ['maker-sarasa-red'], {method: 'demo'}), /持っています/);
   assert.throws(() => purchase(null, []), /空/);
   assert.throws(() => purchase(null, ['gold-pen']), /ありません/);
-  // 無料の近道（acquire）は有料の品を断る
-  assert.throws(() => acquire(null, 'maker-craftlab-004'), /有料/);
+  // 近道（acquire）は円の品もポイントの品も断る（カートからレジへ）
+  assert.throws(() => acquire(null, 'maker-craftlab-004'), /カート/);
+  assert.throws(() => acquire(null, 'pen-wood-07'), /カート/);
+  // 円とポイントの品をいっしょに買える
+  const mixed = purchase(null, ['maker-sarasa-red', 'pen-green-05'], {method: 'demo'});
+  assert.equal(mixed.order.total, 110);
+  assert.equal(mixed.order.points, 150);
+  assert.equal(mixed.order.payment.method, 'demo');
 });
 
 test('はじめの状態：6 本の筆箱と帆布のペンケース。はじめの品はいつも持っている', () => {
@@ -146,15 +166,15 @@ test('はじめの状態：6 本の筆箱と帆布のペンケース。はじめ
   assert.equal(odd.caseId, STARTER_CASE);
 });
 
-test('ショップ：無料の品を入手でき、2 回入手しても 1 つ。ない品は入手できない', () => {
-  const a = acquire(null, 'pen-wood-07');
-  assert.ok(a.owned.includes('pen-wood-07'));
-  assert.equal(acquire(a, 'pen-wood-07').owned.filter((id) => id === 'pen-wood-07').length, 1);
+test('ショップ：近道（acquire）で入手できるのは円もポイントも要らない品だけ。2 回入手しても 1 つ。ない品は入手できない', () => {
+  const a = acquire(null, 'pen-black-05');
+  assert.equal(a.owned.filter((id) => id === 'pen-black-05').length, 1);
+  assert.equal(acquire(a, 'pen-black-05').owned.filter((id) => id === 'pen-black-05').length, 1);
   assert.throws(() => acquire(a, 'gold-pen'), /ありません/);
 });
 
 test('筆箱：持っている道具だけを 6 本まで入れる。ペンケースを変えられる', () => {
-  const a = acquire(acquire(null, 'pen-wood-07'), 'case-tin-silver');
+  const a = purchase(null, ['pen-wood-07', 'case-tin-silver']).stationery;
   const b = arrange(a, {slots: ['pen-wood-07', null, null, null, null, 'hider-cyan'], caseId: 'case-tin-silver'});
   assert.deepEqual(b.slots, ['pen-wood-07', null, null, null, null, 'hider-cyan']);
   assert.equal(b.caseId, 'case-tin-silver');

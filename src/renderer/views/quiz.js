@@ -1,7 +1,7 @@
 // クイズの画面（SPEC §11.7・§11.10）。単語カードのような 1 問 1 枚。答えるとすぐ正誤・解説・根拠を出し、終わったら結果。
 // 経路：#/quiz?course=<授業>&quizzes=<id,id>&mode=quiz|exam|retry|card|review ／ #/review（今日の復習）／ #/quiz-edit/<quizId>
 // カテキョにならう：選択肢の並びは解くたびに変わる seed で決める、正解でも解説を出す、半分未満ならカードで覚えるを主に、途中でやめても続きから
-import {confirmDialog, esc, navigate, refresh, reload, toast} from '../app.js';
+import {confirmDialog, esc, navigate, refresh, reload, state, toast} from '../app.js';
 import {BLANK, TYPE_LABEL, choicesOf} from '../../shared/quiz.js';
 
 const api = window.daigaku;
@@ -188,7 +188,7 @@ function feedbackHtml(q, res, data) {
     : null;
   const answer = q.type === 'num' ? `${q.a}${q.unit ? ` ${q.unit}` : ''}` : q.a;
   return `<div class="qcard__feedback" role="status">
-      <p class="qcard__verdict">${q.type === 'card' ? (res.ok ? 'できた' : 'まだ（今度また）') : res.ok ? '正解！' : `ざんねん。正解は「${esc(answer)}」`}</p>
+      <p class="qcard__verdict">${q.type === 'card' ? (res.ok ? 'できた' : 'まだ（今度また）') : res.ok ? `正解！${res.points ? `<span class="qcard__points">+${res.points} pt</span>` : ''}` : `ざんねん。正解は「${esc(answer)}」`}</p>
       ${!res.ok && q.type !== 'card' && res.answer !== undefined ? `<p class="muted">あなたの答え：${esc(String(res.answer))}</p>` : ''}
       <p class="qcard__note">${esc(q.n)}</p>
       ${q.src_quote ? `<blockquote class="qcard__src">「${esc(q.src_quote)}」<cite>${mat ? esc(mat.name) : '資料'}${q.src_page ? ` p.${q.src_page}` : ''}</cite></blockquote>` : ''}
@@ -245,7 +245,12 @@ async function submit(value) {
   const r = await api['quiz.answer']({questionId: q.id, answer: value, mode: s.mode, seconds});
   s.busy = false;
   if (r?.error) return toast(r.error, {error: true});
-  s.results[q.id] = {ok: r.ok, answer: value === true ? 'できた' : value === false ? 'まだ' : value};
+  s.results[q.id] = {
+    ok: r.ok,
+    answer: value === true ? 'できた' : value === false ? 'まだ' : value,
+    points: r.points ?? 0
+  };
+  if (r.points && state.data.points) state.data.points = {...state.data.points, balance: r.balance}; // 正解のポイント（shared/points.js）
   persist();
   refresh();
   document.getElementById('quiz-next')?.focus({preventScroll: true});

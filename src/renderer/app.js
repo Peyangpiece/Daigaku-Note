@@ -40,6 +40,14 @@ export async function reload() {
   if (state.data?.error) throw new Error(state.data.error);
   applyTheme();
   render();
+  // ログインボーナス（その日に初めて開いたとき。main の state.get が付ける。shared/points.js）
+  if (state.data.pointsGained > 0)
+    toast(
+      `ログインボーナス +${state.data.pointsGained} pt（いま ${state.data.points.balance.toLocaleString('ja-JP')} pt）`,
+      {
+        action: {label: 'ポイントを見る', run: () => navigate('/fudebako/points')}
+      }
+    );
   // 着せ替えを入れた版に更新したあと 1 回だけ知らせる（SPEC-KISEKAE §4.4）
   if (state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
     state.data.skin.introduced = true;

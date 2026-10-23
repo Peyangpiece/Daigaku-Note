@@ -1,5 +1,6 @@
 // 文房具（SPEC §9.8・§15）：ボールペン・マーカー（アンダーライン用）・文字隠しペン・ペンケース。副作用なし。
-// 品ぞろえはアプリに入っている（公式の品は無料。既製品の見た目の品は定価）。持ち物と筆箱の中身は設定（stationery）に保存する。
+// 品ぞろえはアプリに入っている（公式の品はアプリ内のポイントで買う〔POINTS。はじめから持っている品は 0〕。既製品の見た目の品は定価）。
+// 持ち物と筆箱の中身は設定（stationery）に保存する。ポイントの残高は shared/points.js。
 // ショップはシリーズ（series：同じ品の色ちがい）ごとに 1 枚の札で出し、色は札の右下の丸で選ぶ（SERIES・shopSeries）。
 // 買うときはカートに入れてレジへ。α 版の決済はデモ（purchase：実際の請求はなく、注文の記録だけ残す）
 // 筆箱には道具（ペン・マーカー・文字隠しペン）を 6 本まで入れられ、編集画面の PDF の横に出る。
@@ -191,6 +192,38 @@ export const CATALOG = [
     ]
   })
 ];
+/**
+ * 公式の品のポイントの値段（pt。品ごとに決める）。ふつうの色のボールペン・マーカーは安く、
+ * 細字・太字・少し変わった色はやや高く、デザイン軸・ペンケースは高め。はじめから持っている品（STARTER）は載せない（0）
+ */
+const POINTS = {
+  'pen-black-038': 200,
+  'pen-black-07': 200,
+  'pen-green-05': 150,
+  'pen-blueblack-05': 180,
+  'pen-sepia-05': 180,
+  'pen-pink-05': 150,
+  'pen-orange-05': 150,
+  'pen-purple-05': 150,
+  'pen-sakura-05': 300,
+  'pen-mint-05': 300,
+  'pen-wood-07': 400,
+  'pen-navy-038': 350,
+  'marker-orange': 120,
+  'marker-green': 120,
+  'marker-blue': 120,
+  'marker-purple': 120,
+  'marker-yellow-wide': 180,
+  'marker-pink-wide': 180,
+  'hider-green': 200,
+  'hider-blue': 200,
+  'case-tin-silver': 400,
+  'case-leather-brown': 600,
+  'case-pastel-pink': 400,
+  'case-sage': 400,
+  'case-clear': 500
+};
+for (const it of CATALOG) it.points = POINTS[it.id] ?? 0;
 const ITEMS = new Map(CATALOG.map((it) => [it.id, it]));
 export const itemOf = (id) => ITEMS.get(id) ?? null;
 export const isTool = (id) => TOOL_TYPES.includes(itemOf(id)?.type);
@@ -280,28 +313,33 @@ export function stationeryState(raw) {
   return {owned, slots, caseId, refills};
 }
 
-/** ショップで無料の品を入手する（カートを通らない近道。有料の品は purchase）。新しい状態を返す。入手できなければ Error */
+/** 円もポイントも要らない品を入手する（カートを通らない近道。いまははじめから持っている品だけが当たる）。入手できなければ Error */
 export function acquire(raw, id) {
   const st = stationeryState(raw);
   const item = itemOf(id);
   if (!item || !listed(item)) throw new Error('その文房具はありません');
-  if (item.price !== 0) throw new Error('この文房具は有料です。カートからレジへ進んでください');
+  if (item.price !== 0 || item.points !== 0) throw new Error('この文房具はカートからレジへ進んでください');
   if (st.owned.includes(id)) return st;
   return stationeryState({...st, owned: [...st.owned, id]});
 }
 
-/** カートの合計（持っている品・ない品は数えない） */
+/** カートの合計（円。ない品は数えない） */
 export function cartTotal(ids) {
   return (Array.isArray(ids) ? ids : []).reduce((sum, id) => sum + (itemOf(id)?.price ?? 0), 0);
+}
+/** カートの合計（ポイント。ない品は数えない） */
+export function cartPoints(ids) {
+  return (Array.isArray(ids) ? ids : []).reduce((sum, id) => sum + (itemOf(id)?.points ?? 0), 0);
 }
 
 /** α 版の決済：デモ（実際の請求はない）。カード番号は下 4 桁だけ記録する */
 export const PAYMENT_METHODS = {demo: 'デモ決済（実際の請求はありません）'};
 
 /**
- * レジ：カートの品をまとめて買う。無料の品だけなら支払いはいらない。有料の品があれば payment が必要
- * （α 版は {method: 'demo', last4?} だけ受け付ける）。持っている品・ない品・出していない品があれば Error。
- * 戻り値：{stationery: 新しい状態, order: {id, at, items: [{id, name, price}], total, payment: {method, last4}}}
+ * レジ：カートの品をまとめて買う。円の品があれば payment が必要（α 版は {method: 'demo', last4?} だけ受け付ける）。
+ * ポイントの品の分（order.points）は、呼ぶ側が shared/points.js の spend で残高から引く（足りなければそこで止める）。
+ * 持っている品・ない品・出していない品があれば Error。
+ * 戻り値：{stationery: 新しい状態, order: {id, at, items: [{id, name, price, points}], total（円）, points, payment: {method, last4}}}
  */
 export function purchase(raw, ids, payment = null, {now = new Date(), orderId = null} = {}) {
   const st = stationeryState(raw);
@@ -312,9 +350,10 @@ export function purchase(raw, ids, payment = null, {now = new Date(), orderId = 
     if (!it || !listed(it)) throw new Error('その文房具はありません');
     if (st.owned.includes(id)) throw new Error(`${it.name} はもう持っています`);
   }
-  const items = list.map((id) => ({id, name: itemOf(id).name, price: itemOf(id).price}));
+  const items = list.map((id) => ({id, name: itemOf(id).name, price: itemOf(id).price, points: itemOf(id).points}));
   const total = items.reduce((sum, it) => sum + it.price, 0);
-  let pay = {method: 'free'};
+  const points = items.reduce((sum, it) => sum + it.points, 0);
+  let pay = {method: points > 0 ? 'points' : 'free'}; // 円の支払いがない注文：ポイントだけ・無料だけ
   if (total > 0) {
     if (!payment || !PAYMENT_METHODS[payment.method]) throw new Error('支払いの方法を選んでください');
     const last4 = String(payment.last4 ?? '')
@@ -327,6 +366,7 @@ export function purchase(raw, ids, payment = null, {now = new Date(), orderId = 
     at: now.toISOString(),
     items,
     total,
+    points,
     payment: pay
   };
   return {stationery: stationeryState({...st, owned: [...st.owned, ...list]}), order};
@@ -366,15 +406,16 @@ export const listed = (item) => !item.experimental || MAKER_ITEMS_LISTED;
 
 /** 円の表示（¥8,800） */
 export const yen = (n) => `¥${Number(n).toLocaleString('ja-JP')}`;
-/** 値段の表示。無料は「無料」 */
-export const priceLabel = (item) => (item.price === 0 ? '無料' : yen(item.price));
+/** 値段の表示。円の品は ¥、ポイントの品は pt、どちらも 0 なら「無料」 */
+export const priceLabel = (item) =>
+  item.price > 0 ? yen(item.price) : item.points > 0 ? `${item.points.toLocaleString('ja-JP')} pt` : '無料';
 
 /**
  * 値段帯：札の見た目（背景）を変える。無料は白い札にグレーの枠、有料は値段が上がるほど上質な紙に
  * （daily：ふだん使い＝クリーム色、fine：ちょっといいもの＝シャンパンゴールド、premium：高級＝濃紺に金の文字）
  */
 export const TIERS = [
-  {id: 'free', label: '無料', min: 0},
+  {id: 'free', label: 'ポイント', min: 0}, // 円で売らない品（ポイントの品・はじめから持っている品）
   {id: 'daily', label: 'ふだん使い', min: 1},
   {id: 'fine', label: 'ちょっといいもの', min: 1000},
   {id: 'premium', label: '高級', min: 5000}

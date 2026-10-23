@@ -23,6 +23,7 @@ import {checkQuestion} from '../shared/quiz.js';
 import {annotationToClient, normalizeAnnotation, clampSize} from '../shared/annotation.js';
 import {normalizeBookmark} from '../shared/bookmark.js';
 import {CATALOG, acquire, arrange, purchase, stationeryState} from '../shared/stationery.js';
+import {claimLogin, claimQuiz, pointsState, spend} from '../shared/points.js';
 
 const str = (v, max = 500) => (typeof v === 'string' && v.length <= max ? v : null);
 const id = (v) => (isUlid(v) ? v : null);
@@ -69,6 +70,9 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     });
 
   handle('state.get', async () => {
+    // ログインボーナス：その日に初めて状態を読んだとき（アプリを開いた日）に 1 回だけ（shared/points.js）
+    const login = claimLogin(repo.getSetting('points', null));
+    if (login.gained) repo.setSetting('points', login.points);
     const terms = repo.listTerms();
     const connections = repo.listConnections().map(({session_json: _session, ...c}) => c); // ログインの記録は渡さない
     const courses = repo.listCourses().map((c) => ({...c, unread: repo.countUnread(c.id)}));
@@ -121,6 +125,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       },
       stationery: stationeryState(repo.getSetting('stationery', null)), // 文房具：持ち物・筆箱の中身・ペンケース（shared/stationery.js）
       orders: repo.getSetting('stationery.orders', []), // ショップの注文の記録（新しい順。α 版はデモ決済）
+      points: pointsState(login.points), // アプリ内のポイント：残高・履歴（shared/points.js）
+      pointsGained: login.gained, // いまの読み込みでもらったログインボーナス（画面が知らせる。0 なら知らせない）
       lastSync: repo.lastSyncRun(),
       browser: ctx.browser ?? {state: 'pending', message: ''},
       status: ctx.status ?? '',
@@ -436,10 +442,18 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       Array.isArray(itemIds) ? itemIds : [],
       payment && typeof payment === 'object' ? {method: String(payment.method ?? ''), last4: payment.last4} : null
     );
+    // ポイントの品の分を残高から引く（足りなければここで止まり、何も保存しない）
+    const points = spend(repo.getSetting('points', null), order.points, {
+      note: order.items
+        .filter((it) => it.points)
+        .map((it) => it.name)
+        .join('・')
+    });
+    repo.setSetting('points', points);
     repo.setSetting('stationery', st);
     const orders = [order, ...repo.getSetting('stationery.orders', [])].slice(0, 200);
     repo.setSetting('stationery.orders', orders);
-    return {stationery: st, order, orders};
+    return {stationery: st, order, orders, points};
   });
   handle('stationery.arrange', ({slots, caseId, refills}) => {
     const st = arrange(repo.getSetting('stationery', null), {slots, caseId, refills});
@@ -1054,14 +1068,21 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       .listQuestions(quizIds ? {quizIds: ids(quizIds)} : {courseId: id(courseId) ?? bad('授業が不正です')})
       .map(parseQ)
   );
-  handle('quiz.answer', ({questionId, answer, mode, seconds}) =>
-    quiz.answer({
-      questionId: id(questionId) ?? bad('問題が不正です'),
+  handle('quiz.answer', ({questionId, answer, mode, seconds}) => {
+    const qid = id(questionId) ?? bad('問題が不正です');
+    const m = ['quiz', 'review', 'retry', 'exam', 'card'].includes(mode) ? mode : 'quiz';
+    const r = quiz.answer({
+      questionId: qid,
       answer: typeof answer === 'boolean' ? answer : (str(String(answer ?? ''), 300) ?? ''),
-      mode: ['quiz', 'review', 'retry', 'exam', 'card'].includes(mode) ? mode : 'quiz',
+      mode: m,
       seconds: Number.isFinite(seconds) ? Math.round(seconds) : null
-    })
-  );
+    });
+    // 正解でポイント（単語カードの「できた」は自分で付けるので数えない。同じ問題は 1 日 1 回まで）
+    if (!r.ok || m === 'card') return r;
+    const got = claimQuiz(repo.getSetting('points', null), qid);
+    if (got.gained) repo.setSetting('points', got.points);
+    return {...r, points: got.gained, balance: got.points.balance};
+  });
   handle('quiz.review', () => {
     const r = quiz.review();
     return {...r, questions: r.questions.map(parseQ)};
