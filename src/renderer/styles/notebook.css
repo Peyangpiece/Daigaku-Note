@@ -5023,6 +5023,13 @@ button.fb-card {
   stroke-linejoin: round;
   mix-blend-mode: multiply;
 }
+/* 赤シートを通した写しの、文字隠しペンの線：不透明の黒（下の字を完全に隠す） */
+.ts-cover {
+  fill: none;
+  stroke: #000;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .ts-seen {
   display: none;
   position: absolute;
