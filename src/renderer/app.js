@@ -22,6 +22,7 @@ import {
 } from './views/quiz.js';
 import {mountViewer} from './views/viewer.js';
 import {watchModels} from './model3d.js';
+import './swipe.js'; // トラックパッドの 2 本指の横スワイプで戻る・進む
 
 const api = window.daigaku;
 export const state = {data: null, progress: null};
