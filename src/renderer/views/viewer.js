@@ -37,6 +37,7 @@ import {
   stationeryState,
   toolArt
 } from '../../shared/stationery.js';
+import {hidesUnderRedSheet} from '../../shared/annotation.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -57,6 +58,8 @@ const clampZoom = (z) => Math.min(4, Math.max(0.25, z));
 const MAX_CANVAS_PIXELS = 16 * 1024 * 1024;
 const FILE_SAVE_DELAY = 1500; // 注釈を保存してからファイルを上書きするまで（ms）。続けて書いている間は待つ
 const PINCH_IDLE = 180; // ピンチの指が止まってから描き直すまで（ms）
+const NOTE_INK_SCALE = 1.6; // メモの中の手書きの太さ：ペンの太さ（pt）を吹き出しの px に（ページの 100% 表示より少し太く）
+const NOTE_DEFAULT_PEN = {type: 'pen', color: '#2b2b2b', width: 1.1}; // 筆箱のボールペンを持っていないときのメモの手書き（黒の 0.5 相当）
 const PINCH_SPEED = 0.01; // wheel の deltaY 1 あたりの拡大率の変化（指数）
 // shared/annotation.js と同じ値（レンダラは shared を読まないので写す）
 const SIZE_MIN = 6,
@@ -298,6 +301,13 @@ class Viewer {
     if (r?.error) return this.fail(r.error);
     this.$('name').textContent = r.material.name;
     this.$('name').title = r.material.name;
+    // 文字入れの書式：この PDF で最後に使ったもの（なければ同じ授業で最後に使ったもの）を引き継ぐ
+    if (r.textStyle && typeof r.textStyle === 'object')
+      this.textStyle = {
+        size: clampSize(r.textStyle.size, this.textStyle.size),
+        bold: r.textStyle.bold === true,
+        color: /^#[0-9a-f]{6}$/i.test(r.textStyle.color ?? '') ? r.textStyle.color.toLowerCase() : this.textStyle.color
+      };
     document.title = `${r.material.name} — 大学ノート`;
     try {
       this.task = pdfjs.getDocument({
@@ -537,6 +547,7 @@ class Viewer {
       if (p.visible) this.renderPage(p);
     }
     for (const a of this.annos.values()) this.place(a);
+    if (this.sheet) this.syncCovers();
     this.$('zoom-label').textContent = `${Math.round(this.zoom * 100)}%`;
     if (anchor && frac > 0) {
       const top = anchor.el.getBoundingClientRect().top + window.scrollY;
@@ -731,8 +742,11 @@ class Viewer {
       el.innerHTML = `<button type="button" class="anno-note__icon" aria-label="メモ"></button>
         <div class="anno-note__pop" hidden>
           <textarea maxlength="5000" placeholder="メモを書く"></textarea>
-          <div class="anno-note__foot"><button type="button" class="btn btn--small" data-note="delete">削除</button><button type="button" class="btn btn--small" data-note="close">閉じる</button></div>
+          <div class="anno-note__draw" title="筆箱のボールペンで手書きできます（ペンを持っていなければ黒の 0.5）"><svg class="anno-note__ink" aria-label="手書き"></svg></div>
+          <div class="anno-note__foot"><button type="button" class="btn btn--small" data-note="clear-ink" hidden>手書きを消す</button><button type="button" class="btn btn--small" data-note="delete">削除</button><button type="button" class="btn btn--small" data-note="close">閉じる</button></div>
         </div>`;
+      this.bindNoteInk(a, el.querySelector('.anno-note__ink'));
+      this.watchNoteSize(a, el.querySelector('.anno-note__pop'));
       const ta = el.querySelector('textarea');
       ta.value = a.body;
       ta.addEventListener('input', () => {
@@ -774,7 +788,37 @@ class Viewer {
     } else if (a.kind === 'note') {
       a.el.style.setProperty('--note', a.style.color);
       this.noteTitle(a);
+      this.applyNotePop(a);
     }
+    // 赤く見える色の文字入れ・ペンの線は、赤シートの下に入ると見えなくなる（本物の赤シートと同じ）。syncCovers が隠す
+    if (a.kind === 'text' || a.kind === 'ink') {
+      const red = hidesUnderRedSheet(a.style.color);
+      if (red) a.el.dataset.red = '1';
+      else {
+        delete a.el.dataset.red;
+        a.el.style.clipPath = '';
+      }
+      if (this.sheet) this.syncCovers();
+    }
+  }
+
+  /** メモの吹き出し：大きさ（style.w・h）と中の手書き（style.ink）を画面に当てる */
+  applyNotePop(a) {
+    const pop = a.el.querySelector('.anno-note__pop');
+    if (!pop) return;
+    pop.style.width = a.style.w ? `${a.style.w}px` : '';
+    pop.style.height = a.style.h ? `${a.style.h}px` : '';
+    const svg = pop.querySelector('.anno-note__ink');
+    const strokes = Array.isArray(a.style.ink) ? a.style.ink : [];
+    svg.innerHTML = '';
+    for (const s of strokes) {
+      const points = decodePoints(s.p) ?? [];
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('fill', s.c);
+      path.setAttribute('d', strokePath(points, s.w * NOTE_INK_SCALE, {pressure: s.pressure !== false}));
+      svg.append(path);
+    }
+    pop.querySelector('[data-note="clear-ink"]').hidden = !strokes.length;
   }
 
   noteTitle(a) {
@@ -1278,7 +1322,16 @@ class Viewer {
       }
     }
     Object.assign(this.textStyle, patch);
+    this.rememberTextStyle();
     this.updateBar();
+  }
+
+  /** 文字入れの書式を覚える（少し待ってまとめて。この PDF と同じ授業の次の PDF の初期値になる） */
+  rememberTextStyle() {
+    clearTimeout(this.textStyleTimer);
+    this.textStyleTimer = setTimeout(() => {
+      api['pdf.textStyle']({materialId: this.materialId, style: {...this.textStyle}}).catch(() => {});
+    }, 500);
   }
 
   setNoteColor(color, record = true) {
@@ -1434,7 +1487,14 @@ class Viewer {
       const a = btn && this.annoOf(btn);
       if (!a) return;
       if (btn.dataset.note === 'delete') this.removeAnno(a);
-      else this.openNote(a, false);
+      else if (btn.dataset.note === 'clear-ink') {
+        const before = this.snap(a);
+        a.style = {...a.style};
+        delete a.style.ink;
+        this.applyNotePop(a);
+        this.record(a.key, before, this.snap(a));
+        this.scheduleSave(a, 0);
+      } else this.openNote(a, false);
     });
     this.on(document, 'keydown', (e) => this.onKey(e));
     // Tab で注釈にフォーカスが来たら、押したときと同じく選ぶ（メモは中のアイコンのボタンに来る）
@@ -1961,6 +2021,10 @@ class Viewer {
       this.coverFrame = 0;
       const sr = this.sheet?.getBoundingClientRect();
       for (const a of this.annos.values()) {
+        if ((a.kind === 'text' || a.kind === 'ink') && a.el.dataset.red) {
+          this.hideRed(a, sr);
+          continue;
+        }
         if (a.kind !== 'mask') continue;
         const cover = a.el.firstElementChild;
         const r = a.el.getBoundingClientRect();
@@ -1975,11 +2039,136 @@ class Viewer {
     });
   }
 
+  /**
+   * 赤く見える文字入れ・ペンの線のうち、赤シートの下に入った部分だけを見えなくする（本物の赤シートの下では赤い字が消える）。
+   * 全体の四角から、シートと重なる四角を穴にした clip-path（evenodd）をかける。文字入れは画面 px、ペンの線は PDF の座標（path の座標系）で
+   */
+  hideRed(a, sr) {
+    const el = a.el;
+    const r = el.getBoundingClientRect();
+    const over = sr && sr.left < r.right && sr.right > r.left && sr.top < r.bottom && sr.bottom > r.top;
+    if (!over) {
+      el.style.clipPath = '';
+      return;
+    }
+    const poly = (x0, y0, x1, y1, hx0, hy0, hx1, hy1) =>
+      `polygon(evenodd, ${x0}px ${y0}px, ${x1}px ${y0}px, ${x1}px ${y1}px, ${x0}px ${y1}px, ${x0}px ${y0}px, ${hx0}px ${hy0}px, ${hx1}px ${hy0}px, ${hx1}px ${hy1}px, ${hx0}px ${hy1}px, ${hx0}px ${hy0}px)`;
+    if (a.kind === 'text') {
+      const hx0 = Math.max(sr.left, r.left) - r.left,
+        hy0 = Math.max(sr.top, r.top) - r.top,
+        hx1 = Math.min(sr.right, r.right) - r.left,
+        hy1 = Math.min(sr.bottom, r.bottom) - r.top;
+      el.style.clipPath = poly(-4, -4, r.width + 4, r.height + 4, hx0, hy0, hx1, hy1);
+      return;
+    }
+    // ペンの線：clip-path の座標は path の座標系（PDF の pt。基準の箱は線の囲み）
+    const p = this.pages[a.page - 1];
+    const pr = p.el.getBoundingClientRect();
+    const [ax, ay] = p.viewport.convertToPdfPoint(sr.left - pr.left, sr.top - pr.top);
+    const [bx, by] = p.viewport.convertToPdfPoint(sr.right - pr.left, sr.bottom - pr.top);
+    const box = el.getBBox();
+    const hx0 = Math.min(ax, bx) - box.x,
+      hx1 = Math.max(ax, bx) - box.x,
+      hy0 = Math.min(ay, by) - box.y,
+      hy1 = Math.max(ay, by) - box.y;
+    el.style.clipPath = poly(-8, -8, box.width + 8, box.height + 8, hx0, hy0, hx1, hy1);
+  }
+
+  // ---- メモの中の手書き：吹き出しの中の SVG に、筆箱のボールペン（持っていなければ黒の 0.5）で書く ----
+  notePen() {
+    return this.penItem?.type === 'pen' ? this.penItem : NOTE_DEFAULT_PEN;
+  }
+  bindNoteInk(a, svg) {
+    let d = null;
+    const point = (ev, box, pressure) => [
+      ev.clientX - box.left,
+      ev.clientY - box.top,
+      pressure ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5
+    ];
+    const draw = () => {
+      if (!d) return;
+      d.path.setAttribute('d', strokePath(d.cap.points, d.pen.width * NOTE_INK_SCALE, {pressure: d.pressure}));
+    };
+    svg.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      e.preventDefault();
+      this.finishEdit();
+      const pen = this.notePen();
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('fill', pen.color);
+      svg.append(path);
+      d = {
+        pointer: e.pointerId,
+        pen,
+        path,
+        pressure: e.pointerType === 'pen',
+        box: svg.getBoundingClientRect(),
+        cap: createCapture({minGap: 0.3, streamline: e.pointerType === 'pen' ? 0.2 : 0.4})
+      };
+      svg.setPointerCapture(e.pointerId);
+      const [x, y, pr] = point(e, d.box, d.pressure);
+      d.cap.add(x, y, pr);
+      draw();
+    });
+    svg.addEventListener('pointermove', (e) => {
+      if (!d || e.pointerId !== d.pointer) return;
+      e.stopPropagation();
+      for (const ev of e.getCoalescedEvents?.() ?? [e]) {
+        const [x, y, pr] = point(ev, d.box, d.pressure);
+        d.cap.add(x, y, pr);
+      }
+      draw();
+    });
+    const finish = (e) => {
+      if (!d || e.pointerId !== d.pointer) return;
+      e.stopPropagation();
+      const [x, y, pr] = point(e, d.box, d.pressure);
+      const points = d.cap.finish(x, y, pr);
+      d.path.remove();
+      const {pen, pressure} = d;
+      d = null;
+      if (!points.length) return;
+      const before = this.snap(a);
+      const stroke = {p: encodePoints(points), c: pen.color, w: pen.width, ...(pressure ? {} : {pressure: false})};
+      a.style = {...a.style, ink: [...(a.style.ink ?? []), stroke]};
+      this.applyNotePop(a);
+      this.record(a.key, before, this.snap(a));
+      this.scheduleSave(a, 0);
+    };
+    svg.addEventListener('pointerup', finish);
+    svg.addEventListener('pointercancel', finish);
+  }
+  /** メモの吹き出しは右下の角で大きさを変えられる。変えたら style.w・h に覚える（開いている間だけ見る） */
+  watchNoteSize(a, pop) {
+    const ro = new ResizeObserver(() => {
+      if (pop.hidden || a.removed) return;
+      const w = Math.round(pop.offsetWidth),
+        h = Math.round(pop.offsetHeight);
+      if (!w || !h || (a.style.w === w && a.style.h === h)) return;
+      if (!a.style.w && !a.style.h && !a.sizeSeen) {
+        a.sizeSeen = true; // 初めて開いたときの大きさ（CSS の既定）は覚えない
+        return;
+      }
+      clearTimeout(a.sizeTimer);
+      a.sizeTimer = setTimeout(() => {
+        if (a.removed || pop.hidden) return;
+        const before = this.snap(a);
+        a.style = {...a.style, w, h};
+        this.record(a.key, before, this.snap(a));
+        this.scheduleSave(a);
+      }, 300);
+    });
+    ro.observe(pop);
+    this.listeners.push(() => ro.disconnect());
+  }
+
   // ---- 赤シート：画面の上に置く赤い下敷き。ドラッグで動かし、右下の角で大きさを変える ----
   toggleSheet(on = !this.sheet) {
     if (!on) {
       this.sheet?.remove();
       this.sheet = null;
+      for (const a of this.annos.values()) if (a.el.dataset?.red) a.el.style.clipPath = '';
     } else if (!this.sheet) {
       const el = document.createElement('div');
       el.className = 'red-sheet';

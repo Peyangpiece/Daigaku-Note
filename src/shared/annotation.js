@@ -17,6 +17,53 @@ export const DEFAULT_SIZE = 12;
 export const DEFAULT_TEXT_COLOR = '#2b2b2b';
 export const DEFAULT_NOTE_COLOR = '#f6c445';
 export const NOTE_SIZE = 20; // 付箋アイコンの一辺（pt）
+export const NOTE_POP_MIN = 160; // メモの吹き出しの幅・高さ（画面 px）の範囲
+export const NOTE_POP_MAX = 900;
+export const NOTE_INK_MAX = 300; // メモの中の手書きの線の数の上限
+const NOTE_INK_COORD_MAX = 4000; // メモの中の点の座標（吹き出しの左上からの px）
+
+/**
+ * 赤シートで消える色か：赤く見える色（赤が強く、緑・青が弱い）。文字入れの赤・赤のボールペンは、本物の赤シートと同じく下に入ると見えなくなる
+ * 条件：赤 160 以上、緑 100 以下、青 70 以下、赤と緑・青の差が 70 以上（#d93025 の赤、#e03131 などが当たり、橙 #e37400・桃 #c2185b は当たらない）
+ */
+export function hidesUnderRedSheet(hex) {
+  if (!isHex(hex)) return false;
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255,
+    g = (n >> 8) & 255,
+    b = n & 255;
+  return r >= 160 && g <= 100 && b <= 70 && r - Math.max(g, b) >= 70;
+}
+
+/** メモの中の手書き（style.ink）を整える。形の悪い線は捨てる。戻りは配列（なければ空） */
+function cleanNoteInk(ink) {
+  if (!Array.isArray(ink)) return [];
+  const out = [];
+  for (const s of ink.slice(0, NOTE_INK_MAX)) {
+    const points = typeof s?.p === 'string' ? decodePoints(s.p) : null;
+    if (
+      !points ||
+      points.some(
+        ([x, y]) =>
+          x < -NOTE_INK_COORD_MAX || y < -NOTE_INK_COORD_MAX || x > NOTE_INK_COORD_MAX || y > NOTE_INK_COORD_MAX
+      )
+    )
+      continue;
+    const w = num(s.w);
+    const stroke = {
+      p: encodePoints(points),
+      c: isHex(s.c) ? s.c.toLowerCase() : DEFAULT_TEXT_COLOR,
+      w: Number.isNaN(w) ? 1.1 : Math.min(WIDTH_MAX, Math.max(WIDTH_MIN, round2(w)))
+    };
+    if (s.pressure === false) stroke.pressure = false;
+    out.push(stroke);
+  }
+  return out;
+}
+const popSize = (v) => {
+  const n = num(v);
+  return Number.isNaN(n) ? null : Math.round(Math.min(NOTE_POP_MAX, Math.max(NOTE_POP_MIN, n)));
+};
 
 const COORD_MAX = 20000; // A0 の長辺が約 3370pt。これを超える値は壊れた入力とみなす
 const isHex = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
@@ -80,7 +127,14 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
       color: isHex(s.color) ? s.color.toLowerCase() : DEFAULT_TEXT_COLOR
     };
   } else if (kind === 'note') {
+    // メモ：色のほかに、吹き出しの大きさ（w・h。画面 px）と中の手書き（ink：線ごとに点・色・太さ）
     cleanStyle = {color: isHex(s.color) ? s.color.toLowerCase() : DEFAULT_NOTE_COLOR};
+    const w = popSize(s.w),
+      h = popSize(s.h);
+    if (w) cleanStyle.w = w;
+    if (h) cleanStyle.h = h;
+    const ink = cleanNoteInk(s.ink);
+    if (ink.length) cleanStyle.ink = ink;
   } else if (kind === 'line') {
     if (w === 0 || h === 0) throw new Error('マーカーの大きさが不正です');
     cleanStyle = {color: isHex(s.color) ? s.color.toLowerCase() : '#ffe14d', width: width(s.width, 2.5)};

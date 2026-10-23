@@ -19,7 +19,7 @@ import {extractPages} from './quiz/extract.js';
 import {exportAnnotatedPdf, isPng} from './pdf-export.js';
 import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
-import {annotationToClient, normalizeAnnotation} from '../shared/annotation.js';
+import {annotationToClient, normalizeAnnotation, clampSize} from '../shared/annotation.js';
 import {normalizeBookmark} from '../shared/bookmark.js';
 import {acquire, arrange, stationeryState} from '../shared/stationery.js';
 
@@ -626,8 +626,24 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       material: {id: m.id, name: m.name, course_id: m.course_id, round_id: m.round_id},
       bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
       annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient),
-      bookmarks: repo.listBookmarks(annoKey(m)).map(bookmarkToClient)
+      bookmarks: repo.listBookmarks(annoKey(m)).map(bookmarkToClient),
+      // 文字入れの書式（サイズ・太字・色）：この PDF で最後に使ったもの。初めて開く PDF では同じ授業（フォルダ）で最後に使ったもの
+      textStyle:
+        repo.getSetting(`viewer.text.${m.id}`, null) ?? repo.getSetting(`viewer.text.course.${m.course_id}`, null)
     };
+  });
+  // 文字入れの書式を覚える（PDF ごと。同じ授業の次の PDF の初期値にもなる）
+  handle('pdf.textStyle', ({materialId, style}) => {
+    const m = pdfMaterial(materialId);
+    const s = style && typeof style === 'object' ? style : bad('書式が不正です');
+    const clean = {
+      size: clampSize(s.size),
+      bold: s.bold === true,
+      color: typeof s.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color.toLowerCase() : '#2b2b2b'
+    };
+    repo.setSetting(`viewer.text.${m.id}`, clean);
+    repo.setSetting(`viewer.text.course.${m.course_id}`, clean);
+    return {ok: true};
   });
   // しおり（名前・ページ・位置）。追加・名前の変更・移動は同じ窓口（id がなければ追加）
   const bookmarkToClient = ({id: bid, page, y, name}) => ({id: bid, page, y, name});
