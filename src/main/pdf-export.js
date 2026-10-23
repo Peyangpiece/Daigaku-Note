@@ -3,11 +3,13 @@
 //   「黒く塗る」を選ぶと不透明の黒で塗りつぶす
 // - 文字入れ：画面と同じヒラギノ角ゴで描いた画像（レンダラが 288dpi で作る）を貼る。
 //   フォントそのものは埋め込まない（ヒラギノは OS のフォントで、埋め込みの可否と .ttc の扱いが確かめられていないため）
-// - 付箋：PDF の「テキスト注釈」（ほかの PDF アプリでもメモとして開ける）
+// - 付箋（メモ）：PDF の「テキスト注釈」（ほかの PDF アプリでもメモとして開ける）。中の手書きは、アイコンの右に「スタンプ注釈」として
+//   貼る（線を塗りつぶした図形で描いた見た目を持つ注釈。ページの中身は変えず、PDF アプリで動かしたり消したりできる）
 // - ボールペン：画面と同じ輪郭（shared/ink.js）を、塗りつぶした図形として描く（拡大しても粗くならない）
 // - アンダーライン：マーカーの色を乗算で重ねる（文字隠しと同じ。下の文字は読める）
-import {BlendMode, PDFDocument, PDFHexString, PDFString, degrees, rgb} from 'pdf-lib';
+import {BlendMode, PDFDocument, PDFHexString, PDFString, degrees, drawSvgPath, rgb} from 'pdf-lib';
 import {decodePoints, strokePath} from '../shared/ink.js';
+import {NOTE_INK_PT_PER_PX, NOTE_INK_SCALE} from '../shared/annotation.js';
 
 export const MARKER_HEX = '#00d2ff'; // レンダラの表示と同じ。赤の成分が 0 なので赤シートの下で黒になる
 const hexToRgb = (hex) => {
@@ -106,8 +108,67 @@ export async function exportAnnotatedPdf(
         M: PDFString.fromDate(new Date())
       });
       page.node.addAnnot(doc.context.register(annot));
+      const stamp = noteInkStamp(doc, a, page);
+      if (stamp) page.node.addAnnot(doc.context.register(stamp));
     }
   }
   doc.setProducer('大学ノート');
   return doc.save();
+}
+
+/**
+ * メモの中の手書き（style.ink）を、アイコンの右に置くスタンプ注釈にする。見た目（/AP）は線を塗りつぶした図形。
+ * 吹き出しの px を pt にして（NOTE_INK_PT_PER_PX）、線の囲みにそろえた大きさにする。手書きがなければ null
+ */
+export function noteInkStamp(doc, a, page) {
+  const strokes = (Array.isArray(a.style?.ink) ? a.style.ink : [])
+    .map((s) => ({
+      points: decodePoints(s.p),
+      color: isHex(s.c) ? s.c : '#2b2b2b',
+      width: (s.w ?? 1.1) * NOTE_INK_SCALE,
+      pressure: s.pressure !== false
+    }))
+    .filter((s) => s.points?.length);
+  if (!strokes.length) return null;
+  const pad = Math.max(...strokes.map((s) => s.width)) + 2;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const s of strokes)
+    for (const [px, py] of s.points) {
+      minX = Math.min(minX, px);
+      minY = Math.min(minY, py);
+      maxX = Math.max(maxX, px);
+      maxY = Math.max(maxY, py);
+    }
+  const k = NOTE_INK_PT_PER_PX;
+  const W = (maxX - minX + pad * 2) * k;
+  const H = (maxY - minY + pad * 2) * k;
+  // 見た目：左上を原点にした px の線を、pt に縮めて描く（drawSvgPath は y を下向きに扱うので、上端 H から描く）
+  const ops = strokes.flatMap((s) =>
+    drawSvgPath(
+      strokePath(
+        s.points.map(([px, py, pr]) => [px - minX + pad, py - minY + pad, pr]),
+        s.width,
+        {pressure: s.pressure}
+      ),
+      {x: 0, y: H, scale: k, color: rgb(...hexToRgb(s.color)), borderColor: undefined, borderWidth: 0}
+    )
+  );
+  const form = doc.context.formXObject(ops, {BBox: doc.context.obj([0, 0, W, H])});
+  const {x, y, w, h} = a.rect;
+  const pageW = page.getWidth();
+  const x0 = Math.max(0, Math.min(x + w + 4, pageW - W));
+  const y0 = Math.max(0, y + h - H);
+  return doc.context.obj({
+    Type: 'Annot',
+    Subtype: 'Stamp',
+    Rect: [x0, y0, x0 + W, y0 + H],
+    F: 4,
+    T: PDFHexString.fromText('大学ノート'),
+    Contents: PDFHexString.fromText('メモの手書き'),
+    M: PDFString.fromDate(new Date()),
+    AP: {N: doc.context.register(form)}
+  });
 }
