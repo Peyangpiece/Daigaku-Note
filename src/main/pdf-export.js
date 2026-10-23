@@ -7,6 +7,8 @@
 //   貼る（線を塗りつぶした図形で描いた見た目を持つ注釈。ページの中身は変えず、PDF アプリで動かしたり消したりできる）
 // - ボールペン：画面と同じ輪郭（shared/ink.js）を、塗りつぶした図形として描く（拡大しても粗くならない）
 // - アンダーライン：マーカーの色を乗算で重ねる（文字隠しと同じ。下の文字は読める）
+// - 貼りもの（シール・素材の図・メモ帳からちぎった紙）：レンダラが描いた画像を貼る（文字入れと同じ）。いちばん下に置き、
+//   上からマーカー・ペンの線・文字を重ねる（画面と同じ重なり）
 import {BlendMode, PDFDocument, PDFHexString, PDFString, degrees, drawSvgPath, rgb} from 'pdf-lib';
 import {decodePoints, strokePath} from '../shared/ink.js';
 import {NOTE_INK_PT_PER_PX, NOTE_INK_SCALE} from '../shared/annotation.js';
@@ -16,7 +18,8 @@ const hexToRgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 };
-const ORDER = {mask: 0, line: 0, ink: 1, text: 2, note: 3}; // マーカーの上にペンの線と文字、いちばん上に付箋
+// 貼りものの上にマーカー、その上にペンの線と文字、いちばん上に付箋
+const ORDER = {stamp: 0, mask: 1, line: 1, ink: 2, text: 3, note: 4};
 const isHex = (v) => /^#[0-9a-f]{6}$/i.test(v ?? '');
 
 /**
@@ -89,7 +92,7 @@ export async function exportAnnotatedPdf(
       const d = strokePath(points, a.style?.width ?? 1.1, {pressure: a.style?.pressure !== false, flipY: true});
       if (d)
         page.drawSvgPath(d, {x: 0, y: 0, color: rgb(...hexToRgb(isHex(a.style?.color) ? a.style.color : '#222222'))});
-    } else if (a.kind === 'text') {
+    } else if (a.kind === 'text' || a.kind === 'stamp') {
       const png = images.get(a.id);
       if (!png) continue;
       const img = await doc.embedPng(png);

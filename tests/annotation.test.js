@@ -199,3 +199,39 @@ test('赤シートで消える色：赤い字・赤のボールペンは当た�
   assert.ok(!hidesUnderRedSheet('#1a73e8'), '青');
   assert.ok(!hidesUnderRedSheet('#ffffff') && !hidesUnderRedSheet('red'));
 });
+
+test('貼りもの：シール・素材の図・ちぎった紙だけを通し、ないものは断る', () => {
+  const stamp = (style, over = {}) => ({
+    kind: 'stamp',
+    page: 1,
+    rect: {x: 10, y: 20, w: 72, h: 54.321},
+    body: 'x',
+    style,
+    ...over
+  });
+  const fig = normalizeAnnotation(stamp({type: 'figure', ref: 'fig-cube', extra: 1}));
+  assert.deepEqual(JSON.parse(fig.style_json), {type: 'figure', ref: 'fig-cube'});
+  assert.equal(fig.body, '', '図には本文を持たない');
+  assert.deepEqual(JSON.parse(fig.rect_json), {x: 10, y: 20, w: 72, h: 54.32});
+  assert.deepEqual(JSON.parse(normalizeAnnotation(stamp({type: 'sticker', ref: 'builtin-star'})).style_json), {
+    type: 'sticker',
+    ref: 'builtin-star'
+  });
+  assert.ok(normalizeAnnotation(stamp({type: 'sticker', ref: 'a'.repeat(64)})));
+  const memo = normalizeAnnotation(stamp({type: 'memo', color: '#FFF3BF', size: 99}, {body: '買うもの\nノート'}));
+  assert.deepEqual(JSON.parse(memo.style_json), {type: 'memo', color: '#fff3bf', size: 72});
+  assert.equal(memo.body, '買うもの\nノート');
+  assert.deepEqual(JSON.parse(normalizeAnnotation(stamp({type: 'memo'})).style_json), {
+    type: 'memo',
+    color: '#fffdf6',
+    size: 10
+  });
+  assert.throws(() => normalizeAnnotation(stamp({type: 'figure', ref: 'fig-nothing'})), /貼りものが不正/);
+  assert.throws(() => normalizeAnnotation(stamp({type: 'sticker', ref: '../x.png'})), /貼りものが不正/);
+  assert.throws(() => normalizeAnnotation(stamp({type: 'svg', ref: 'fig-cube'})), /貼りものが不正/);
+  assert.throws(
+    () => normalizeAnnotation(stamp({type: 'figure', ref: 'fig-cube'}, {rect: {x: 0, y: 0, w: 4, h: 40}})),
+    /大きさ/
+  );
+  assert.throws(() => normalizeAnnotation(stamp({type: 'memo'}, {body: 'あ'.repeat(2001)})), /長すぎ/);
+});

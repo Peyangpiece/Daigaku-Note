@@ -89,6 +89,26 @@ test('書き出し：黒く塗る・付箋を入れないを選べる。画像�
   assert.equal(p2.page.node.Annots()?.size() ?? 0, 0);
 });
 
+test('書き出し：貼りものは画像として、マーカーより下に描く', async () => {
+  const list = [
+    {id: 'M1', page: 1, kind: 'mask', rect: {x: 72, y: 700, w: 100, h: 14}, body: '', style: {}},
+    {
+      id: 'S1',
+      page: 1,
+      kind: 'stamp',
+      rect: {x: 60, y: 690, w: 80, h: 60},
+      body: '',
+      style: {type: 'figure', ref: 'fig-circle'}
+    }
+  ];
+  const out = await exportAnnotatedPdf(await source(1), list, {images: new Map([['S1', PNG]])});
+  const p1 = await contentOf(out, 0);
+  const img = p1.text.indexOf('Do');
+  const mask = p1.text.indexOf('0 0.8235');
+  assert.ok(img >= 0 && mask > img, '貼りもの（画像）のあとにマーカー');
+  assert.match(p1.text, /1 0 0 1 60 690 cm[\s\S]*80 0 0 60 0 0 cm[\s\S]*Do/, '貼った四角の位置と大きさ');
+});
+
 test('書き出し：読めない PDF はわかる言葉で失敗する', async () => {
   await assert.rejects(() => exportAnnotatedPdf(new Uint8Array([1, 2, 3]), []), /PDF を読めませんでした/);
 });

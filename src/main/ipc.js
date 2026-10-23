@@ -710,9 +710,9 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     repo.removeAnnotation(annoKey(m), id(annotationId) ?? bad('注釈が不正です'));
     return {ok: true};
   });
-  // 文字入れの画像（レンダラが描いた PNG）。DB にある文字入れの分だけ受け取る
+  // 文字入れ・貼りものの画像（レンダラが描いた PNG）。DB にある文字入れ・貼りものの分だけ受け取る
   const textImages = (rows, texts) => {
-    const textIds = new Set(rows.filter((r) => r.kind === 'text').map((r) => r.id));
+    const textIds = new Set(rows.filter((r) => r.kind === 'text' || r.kind === 'stamp').map((r) => r.id));
     const images = new Map();
     let total = 0;
     for (const t of Array.isArray(texts) ? texts : []) {
