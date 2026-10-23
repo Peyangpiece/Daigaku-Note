@@ -25,32 +25,32 @@ function studioScene() {
   const scene = new THREE.Scene();
   const room = new THREE.Mesh(
     new THREE.BoxGeometry(10, 10, 10),
-    new THREE.MeshStandardMaterial({color: 0x1a1a1a, roughness: 1, metalness: 0, side: THREE.BackSide})
+    new THREE.MeshStandardMaterial({color: 0x121212, roughness: 1, metalness: 0, side: THREE.BackSide})
   );
   scene.add(room);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(10, 10),
-    new THREE.MeshStandardMaterial({color: 0x3a3a3a, roughness: 1})
+    new THREE.MeshStandardMaterial({color: 0x2a2a2a, roughness: 1})
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -4.99;
   scene.add(floor);
-  const top = lightPanel(5, 2.4, 6, [1, 0.98, 0.95]);
+  const top = lightPanel(5, 2.4, 2.6, [1, 0.98, 0.95]);
   top.rotation.x = Math.PI / 2;
   top.position.set(0, 4.9, 0.6);
   scene.add(top);
-  const left = lightPanel(1, 6, 3, [1, 0.96, 0.9]);
+  const left = lightPanel(1, 6, 1.3, [1, 0.96, 0.9]);
   left.rotation.y = Math.PI / 2;
   left.position.set(-4.9, 0.8, 0);
   scene.add(left);
-  const right = lightPanel(1, 6, 2.2, [0.92, 0.96, 1]);
+  const right = lightPanel(1, 6, 1, [0.92, 0.96, 1]);
   right.rotation.y = -Math.PI / 2;
   right.position.set(4.9, 0.8, 0);
   scene.add(right);
-  const back = lightPanel(6, 2, 1.2);
+  const back = lightPanel(6, 2, 0.7);
   back.position.set(0, 1.2, -4.9);
   scene.add(back);
-  const front = lightPanel(6, 1.2, 0.8);
+  const front = lightPanel(6, 1.2, 0.5);
   front.rotation.y = Math.PI;
   front.position.set(0, -1.5, 4.9);
   scene.add(front);
@@ -64,7 +64,7 @@ function gl() {
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.95;
+  renderer.toneMappingExposure = 0.85;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.VSMShadowMap; // ぼかせる影（radius・blurSamples が効く）
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -121,8 +121,8 @@ async function loadNow(id) {
   const scene = new THREE.Scene();
   scene.add(group);
   scene.environment = envMap;
-  scene.environmentIntensity = 0.9;
-  const key = new THREE.DirectionalLight(0xfff6ea, 1.1);
+  scene.environmentIntensity = 0.6;
+  const key = new THREE.DirectionalLight(0xfff6ea, 0.7);
   key.position.set(-0.8, 1.6, 1.2);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
@@ -134,7 +134,7 @@ async function loadNow(id) {
   key.shadow.blurSamples = 16;
   key.shadow.bias = -0.0005;
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0xe8f0ff, 0.5);
+  const rim = new THREE.DirectionalLight(0xe8f0ff, 0.4);
   rim.position.set(0.9, 0.6, -1.4);
   scene.add(rim);
   // 机に落ちる影（影だけを描く面。横からの絵では真横から見るので見えない）
@@ -188,15 +188,17 @@ export function mount(el, id, {zoom = false} = {}) {
   /** ペン（長さ 1）が幅の 9 割に収まる距離（視野 26°・縦横比から） */
   const fit = () => {
     const halfW = Math.tan((cam.fov / 2) * (Math.PI / 180)) * cam.aspect;
-    const d = Math.max(0.9, 0.5 / 0.9 / halfW);
+    const d = Math.max(0.8, 0.5 / 0.9 / halfW);
     home.set(0.06 * d, 0.22 * d, d);
+    controls.minDistance = d * 0.3;
+    controls.maxDistance = d * 1.35; // 離しても小さくなりすぎない
     if (!moved) cam.position.copy(home);
   };
   const controls = new OrbitControls(cam, canvas);
   controls.enablePan = false;
   controls.enableZoom = zoom;
-  controls.minDistance = 0.45;
-  controls.maxDistance = 2.6;
+  controls.minDistance = 0.3;
+  controls.maxDistance = 2;
   controls.enableDamping = true;
   controls.target.set(0, 0, 0);
   let dragging = false;
@@ -236,6 +238,7 @@ export function mount(el, id, {zoom = false} = {}) {
     // ペンを軸のまわりにゆっくり転がす（ドラッグ中は止める）
     if (!dragging) model.group.rotation.x += Math.min(0.05, (t - last) / 1000) * 0.6;
     last = t;
+    if (!moved) cam.position.copy(home); // 動かすまでは、いつも収まる位置
     controls.update();
     const g = gl();
     if (g.domElement.width !== canvas.width || g.domElement.height !== canvas.height)

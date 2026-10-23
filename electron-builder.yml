@@ -10,10 +10,10 @@ files:
   - recipes/**
   - package.json
   - '!src/**/*.test.js'
-  # three.js（文房具の 3D モデル）は使う分だけ：本体の ESM と、GLTF の読み込み・回す操作・環境光の addons
+  # three.js（文房具の 3D モデル）は本体の ESM だけ（addons は src/renderer/vendor/three-addons に写してある。
+  # node_modules の examples は electron-builder が自動で外すため）
   - '!node_modules/three/src/**'
   - '!node_modules/three/build/three.{cjs,module.min.js,webgpu.js,webgpu.min.js,webgpu.nodes.js,webgpu.nodes.min.js}'
-  - '!node_modules/three/examples/jsm/!(loaders|controls|environments|utils)/**'
 asarUnpack:
   - node_modules/playwright/**
   - node_modules/playwright-core/**
