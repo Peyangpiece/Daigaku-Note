@@ -127,7 +127,7 @@ export function renderSettings({data}, route = '/settings') {
           ]
             .map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`)
             .join('')}</select></label>
-          <p class="muted" style="align-self:end">ノートの種類・色・線の濃さは<button class="btn btn--small" data-action="nav" data-route="/kisekae">着せ替え</button>で変えられます</p>
+          <p class="muted" style="align-self:end">ノートの種類・色・線の濃さは<button class="btn btn--small" data-action="nav" data-route="/kisekae">着せ替え</button>で、PDF に書くペンは<button class="btn btn--small" data-action="nav" data-route="/fudebako">筆箱</button>で変えられます</p>
         </div>
       </section>
       <section class="card"><h3>実験</h3>
@@ -152,10 +152,10 @@ export function renderSettings({data}, route = '/settings') {
           : ''
       }
       <div${showLms ? '' : ' hidden'}>
-      <h3 class="settings__group">LMS</h3>
+      <h3 class="settings__group">大学の LMS</h3>
       <div class="settings__grid">
-      <section class="card" id="st-lms"><h3>LMS との連携</h3>
-        <p class="muted">つなぐと授業の資料を自動で集めます（いま使えるのは Moodle と manabo（試験中））。</p>
+      <section class="card" id="st-lms"><h3>大学の LMS とつなぐ</h3>
+        <p class="muted">大学の LMS（学習支援サービス）とつなぐと、授業の資料を自動で集めます（いま使えるのは Moodle と manabo（試験中））。</p>
         ${
           lmsConns.length
             ? `<ul style="padding-left: 1.2em">${lmsConns
@@ -169,7 +169,7 @@ export function renderSettings({data}, route = '/settings') {
                     </span>${c.kind === 'recipe' ? autoLogin(c) : ''}</li>`
                 )
                 .join('')}</ul>`
-            : '<p class="muted">LMS とはつないでいません。</p>'
+            : '<p class="muted">大学の LMS（manaba・Moodle など）とはつないでいません。</p>'
         }
         <button class="btn${lmsConns.length ? '' : ' btn--primary'}" data-action="nav" data-route="/settings/lms">${lmsConns.length ? '別の LMS を追加' : 'LMS とつなぐ'}</button>
         <div class="muted" style="margin-top: var(--space-2)">LMS を読むためのブラウザ：${browserState(data.browser)}

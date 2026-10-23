@@ -1,5 +1,6 @@
 // セットアップ（SPEC §6.3）。1 ページ 1 手順、付箋が順に貼られる表現。
-// 初回（#/setup）は あなた・使い方・授業の資料・（利用規約）・学期・保存先。LMS とつなぐ手順（#/settings/lms）は設定画面の「LMS との連携」から入る
+// 初回（#/setup）は あなた・使い方・授業の資料・（利用規約）・学期・保存先、大学の LMS とつなぐ人はそのまま URL・ログイン・授業の確認・最初の同期（1 本の連番）。
+// あとから LMS とつなぐ手順（#/settings/lms）は 設定 → 大学の LMS から入る
 // （利用規約に同意していなければ最初に同意。Moodle の ID・パスワードと画面操作型のブラウザ窓。学期がまだなければ学期の設定も挟む）
 import {esc, reload, toast} from '../app.js';
 import {termForm, readTermForm} from './term.js';
@@ -8,13 +9,18 @@ import {LMS_FEATURE, LMS_NOTICE, LMS_TERMS, LMS_TERMS_VERSION} from '../../share
 
 const api = window.daigaku;
 const FLOWS = {
+  // 初回は 1 本の連番。大学の LMS とつなぐ人は、保存先のあとも同じ番号の続きで LMS の手順へ（番号が 1 に戻らない）
   first: [
     ['あなた', stepRole],
     ['使い方', stepUses],
     ['授業の資料', stepMaterials],
     ['利用規約', stepLmsTerms],
     ['学期の設定', stepTerm],
-    ['保存先', stepRoot]
+    ['保存先', stepRoot],
+    ['LMS の URL', stepUrl],
+    ['ログイン', stepLogin],
+    ['授業の確認', stepCourses],
+    ['最初の同期', stepSync]
   ],
   // 規約の版が上がったとき、今ある接続のために同意し直すだけの手順
   terms: [['利用規約', stepLmsTerms]],
@@ -41,7 +47,7 @@ const blank = () => ({
   role: null,
   uses: null,
   university: null,
-  materials: null, // 授業の資料の集め方：'folder'（PC の授業フォルダ）・'service'（大学サービスとの連携）・'later'
+  materials: null, // 授業の資料の集め方：'folder'（PC の授業フォルダ）・'service'（大学の LMS とつなぐ）・'later'
   imported: null, // 取り込んだ授業フォルダの結果
   detected: false, // 「種類を判定」を押した（候補がなければ、まだ対応していないと知らせる）
   label: null, // 学習支援サービスの名前（自分で付ける。空なら判定した種類の名前）
@@ -65,15 +71,23 @@ export function resetSetup(kind = 'first', data = null) {
         : FLOWS.first;
 }
 const termsAccepted = (data) => data.settings.lmsTerms?.version === LMS_TERMS_VERSION;
-/** 選んだものに合わせた手順。授業の資料は大学生で「授業の資料を活用」を選んだときだけ、利用規約は大学サービスとつなぐときだけ（同意済みなら出さない） */
+const LMS_STEPS = new Set(['LMS の URL', 'ログイン', '授業の確認', '最初の同期']);
+/** 初回の流れで、大学の LMS とつなぐ手順まで進む人か：大学生は「授業の資料」で LMS を選んだとき、社会人は講座で LMS を使うとき */
+function wantsLms(data) {
+  const role = draft.role ?? data.settings.role;
+  const uses = draft.uses ?? data.settings.uses ?? [];
+  return role === 'student' ? draft.materials === 'service' : features({role, uses}).lms;
+}
+/** 選んだものに合わせた手順。授業の資料は大学生で「授業の資料を活用」を選んだときだけ、利用規約と LMS の手順は大学の LMS とつなぐときだけ（同意済みなら規約は出さない） */
 function stepsOf(data) {
   const role = draft.role ?? data.settings.role;
   const uses = draft.uses ?? data.settings.uses ?? [];
   const needTerms = !termsAccepted(data) || draft.agreed;
   return flow.filter(([name]) => {
     // flow は FLOWS.lms を filter した別の配列なので、=== FLOWS.lms では比べない
-    if (name === '利用規約') return needTerms && (flow !== FLOWS.first || draft.materials === 'service');
+    if (name === '利用規約') return needTerms && (flow !== FLOWS.first || wantsLms(data));
     if (flow !== FLOWS.first) return true;
+    if (LMS_STEPS.has(name)) return wantsLms(data);
     if (name === '授業の資料') return role === 'student' && uses.includes('lms');
     if (name === '学期の設定') return features({role, uses: []}).terms;
     return true;
@@ -99,13 +113,13 @@ export function renderSetup({data}) {
 }
 
 function stepUrl(data, n) {
-  return `<h2>${n}. LMS の URL を入れる</h2>
-    <p class="muted">大学の LMS のトップページの URL を入れて「種類を判定」を押します。いま使えるのは Moodle と manabo（試験中）です。LMS をつなぐと、授業の資料を自動で集めます。</p>
+  return `<h2>${n}. 大学の LMS の URL を入れる</h2>
+    <p class="muted">大学の LMS（manaba・Moodle などの学習支援サービス）のトップページの URL を入れて「種類を判定」を押します。いま使えるのは Moodle と manabo（試験中）です。つなぐと、授業の資料を自動で集めます。</p>
     <label class="sr-only" for="su-url">LMS の URL</label>
     <input class="input" id="su-url" type="url" placeholder="https://lms.example-u.ac.jp/" value="${esc(draft.url)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)} <span class="muted">${esc(KIND_LABEL[c.kind] ?? c.kind)}${c.score ? ` ・ 確からしさ ${Math.round(c.score * 100)}%` : ''}</span></label>`).join('')}</div>
-    ${draft.connectorId ? `<label class="su-label">学習支援サービスの名前<input class="input" id="su-label" maxlength="60" placeholder="例：manaba・〇〇大学 LMS" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
-    <div class="actions"><button class="btn" data-action="nav" data-route="/settings">やめる</button><button class="btn" id="su-detect">種類を判定</button><button class="btn btn--primary" id="su-next1" ${draft.connectorId ? '' : 'disabled'}>次へ</button></div>
+    ${draft.connectorId ? `<label class="su-label">LMS の名前（ホームや設定に出ます）<input class="input" id="su-label" maxlength="60" placeholder="例：manaba・〇〇大学 LMS" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
+    <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : '<button class="btn" data-action="nav" data-route="/settings">やめる</button>'}<button class="btn" id="su-detect">種類を判定</button><button class="btn btn--primary" id="su-next1" ${draft.connectorId ? '' : 'disabled'}>次へ</button></div>
     ${draft.connectorId ? '' : draft.detected ? '<p role="status">この LMS には、まだ対応していません（いま使えるのは Moodle と manabo（試験中）です）。URL がトップページかどうかも確かめてください。</p>' : '<p class="muted">先に「種類を判定」を押すと「次へ」が押せます。</p>'}`;
 }
 function stepLogin(data, n) {
@@ -173,7 +187,11 @@ const MATERIALS = [
     'PC内の授業フォルダを取り込む',
     '授業ごとのフォルダが入ったフォルダを選ぶと、そのまま使えます（コピーしません）'
   ],
-  ['service', LMS_FEATURE, '大学の LMS から授業の資料を自動でダウンロードします'],
+  [
+    'service',
+    '大学の LMS とつなぐ',
+    '大学の LMS（manaba・Moodle などの学習支援サービス）から授業の資料を自動でダウンロードします'
+  ],
   ['later', 'あとで設定', '設定からいつでも選べます']
 ];
 function stepMaterials(data, n) {
@@ -193,7 +211,7 @@ function stepMaterials(data, n) {
 // 大学サービスとの連携の注意書きと利用規約。同意にチェックしないと先へ進めない
 function stepLmsTerms(data, n) {
   const ok = draft.agreed;
-  return `<h2>${n}. ${esc(LMS_FEATURE)}の利用規約</h2>
+  return `<h2>${n}. 大学の LMS とつなぐ機能の利用規約</h2>
     <aside class="sticky lms-notice" style="--sticky-color: var(--c2)"><strong>使う前に</strong><ul>${LMS_NOTICE.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></aside>
     <div class="lms-terms" tabindex="0" role="document" aria-label="利用規約">
       <h3>${esc(LMS_FEATURE)} 利用規約</h3>
@@ -211,13 +229,13 @@ function stepTerm(data, n) {
 }
 function stepRoot(data, n) {
   const f = features(data.settings);
-  // 大学サービスとの連携を選んだ大学生と、講座で LMS を使う社会人は、そのまま LMS とつなぐ手順へ
-  const toLms = data.settings.role === 'student' ? draft.materials === 'service' : f.lms;
+  // 大学の LMS とつなぐ人は、同じ番号の続きで LMS の手順へ（「次へ」）。そうでなければここで終わり（「始める」）
+  const toLms = flow === FLOWS.first && wantsLms(data);
   return `<h2>${n}. 保存先</h2>
     <p>${f.terms ? '資料はここに「学期 → 授業 → 回」のフォルダで保存します。' : '資料はここに保存します。'}</p>
     <p><code>${esc(data.settings.root)}</code></p>
-    ${toLms ? '<p class="muted">「始める」のあと、大学サービスとつなぐ手順に進みます。</p>' : ''}
-    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn" data-action="pick-dir">フォルダを選択…</button><button class="btn btn--primary" data-action="finish-setup"${toLms ? ' data-next="/settings/lms"' : ''}>始める</button></div>`;
+    ${toLms ? `<p>次は、大学の LMS とつなぎます（あと ${steps.length - n} 手順）。</p>` : ''}
+    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn" data-action="pick-dir">フォルダを選択…</button>${toLms ? '<button class="btn btn--primary" id="su-root-next">次へ</button>' : '<button class="btn btn--primary" data-action="finish-setup">始める</button>'}</div>`;
 }
 function stepSync(data, n) {
   return `<h2>${n}. 最初の同期</h2>
@@ -298,6 +316,13 @@ function bind() {
       reload();
     };
   if ($('su-materials')) $('su-materials').onclick = next;
+  // 保存先の「次へ」：初回のセットアップは済んだことにして（次の起動で出さない）、同じ流れのまま LMS の手順へ
+  if ($('su-root-next'))
+    $('su-root-next').onclick = async () => {
+      const r = await api['settings.update']({patch: {skipSetup: true}});
+      if (r?.error) return toast(r.error, {error: true});
+      next();
+    };
   if ($('su-agree')) $('su-agree').onchange = (e) => ($('su-terms').disabled = !e.target.checked);
   if ($('su-terms'))
     $('su-terms').onclick = async () => {

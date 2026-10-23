@@ -150,12 +150,19 @@ function render() {
   const app = document.getElementById('app');
   // 編集画面：紙（罫線・余白の縦線）はホームと同じものを窓いっぱいに敷く（拡大して横にはみ出しても途切れない）。
   // アプリ全体の拡大は 100% にする（PDF だけを拡大し、ツールバーや背景は拡大しない）
-  // 上の固定ボタン（ホーム・着せ替え・筆箱）：今いる画面を押した状態に
+  // 上の固定ボタン（ホーム・復習・設定）：今いる画面を押した状態に。復習には今日の問題数
   for (const b of document.querySelectorAll('.topnav [data-nav]'))
     b.setAttribute(
       'aria-current',
       (b.dataset.nav === 'home' ? route === '/' : route.startsWith(`/${b.dataset.nav}`)) ? 'page' : 'false'
     );
+  const due = state.data.quiz?.reviewDue ?? 0;
+  const count = document.getElementById('nav-review-count');
+  if (count) {
+    count.textContent = due ? String(due) : '';
+    count.hidden = !due;
+    count.parentElement.setAttribute('aria-label', due ? `復習（今日 ${due} 問）` : '復習');
+  }
   const inViewer = route.startsWith('/viewer/');
   app.classList.toggle('paper--viewer', inViewer);
   document.documentElement.classList.toggle('paper-canvas', inViewer);
@@ -233,7 +240,7 @@ api.on('sync.progress', (p) => {
 api.on('sync.finished', (r) => {
   state.progress = null;
   if (r.status === 'login-required')
-    toast(r.message || 'LMS へのログインが必要です（設定 → LMS との連携 → ログインし直す）', {error: true});
+    toast(r.message || 'LMS へのログインが必要です（設定 → 大学の LMS → ログインし直す）', {error: true});
   else if (r.status === 'failed' || r.status === 'browser-not-ready')
     toast(r.message || '同期に失敗しました', {error: true});
   else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 学期）', {error: true});
@@ -322,10 +329,10 @@ document.addEventListener('click', async (e) => {
       if (r?.error) toast(r.error, {error: true});
       else if (!r.canceled) uploaded(r);
     } else if (action === 'finish-setup') {
-      // 初回のセットアップを終える（次から起動時に出さない。LMS は 設定 → LMS との連携 からつなぐ）
+      // 初回のセットアップを終える（次から起動時に出さない。LMS はあとからでも 設定 → 大学の LMS からつなげる）
       await api['settings.update']({patch: {skipSetup: true}});
       await reload();
-      navigate(el.dataset.next || '/'); // LMS を使う人は、そのまま LMS とつなぐ手順へ
+      navigate(el.dataset.next || '/');
     } else if (action === 'folder-create') {
       const name = document.getElementById('fn-name')?.value ?? '';
       const scope = document.querySelector('input[name=fn-scope]:checked')?.value ?? 'term';

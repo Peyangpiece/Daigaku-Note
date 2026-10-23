@@ -145,7 +145,7 @@ export function renderHome({data, progress}) {
   // 規約の版が上がった（または v0.5.11 より前につないだ）ときは、同意し直すまで同期しない
   if (hasLms && data.settings.lmsTerms?.version !== LMS_TERMS_VERSION)
     attention.push(
-      '<li>大学サービスとの連携の利用規約に同意すると、同期を続けます。<button class="btn btn--small" data-action="nav" data-route="/settings/lms-terms">利用規約を読む</button></li>'
+      '<li>大学の LMS とつなぐ機能の利用規約に同意すると、同期を続けます。<button class="btn btn--small" data-action="nav" data-route="/settings/lms-terms">利用規約を読む</button></li>'
     );
   if (hasLms && data.browser?.state === 'failed')
     attention.push(
@@ -166,7 +166,9 @@ export function renderHome({data, progress}) {
           ? `${dayLine}<section class="folders" aria-label="授業">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
           : hasLms
             ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
-            : '' /* LMS をつないでいなければ授業の段は出さない（つなぐのは 設定 → LMS との連携 から） */
+            : features(data.settings).lms
+              ? `<div class="empty"><p>大学の LMS（manaba・Moodle など）とつなぐと、授業の資料が自動で集まり、ここに授業のフォルダが貼られます。</p><button class="btn btn--primary" data-action="nav" data-route="/settings/lms">大学の LMS とつなぐ</button></div>`
+              : '' /* LMS を使わない人には授業の段を出さない（自分のフォルダだけ） */
       }
       ${foldersFirst ? '' : myFolders}
       </div>
@@ -180,6 +182,8 @@ export function renderHome({data, progress}) {
           : ''
       }
       <span style="margin-left:auto"></span>
+      <button class="btn btn--quiet" data-action="nav" data-route="/kisekae">✿ 着せ替え</button>
+      <button class="btn btn--quiet" data-action="nav" data-route="/fudebako">✎ 筆箱</button>
       <button class="btn" data-action="open-root">資料のフォルダ</button>
       <button class="btn" data-action="nav" data-route="/settings">⚙ 設定</button>
     </footer>`;

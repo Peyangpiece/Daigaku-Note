@@ -165,7 +165,7 @@ function testPanel(course, quizzes, makeable, byRound, hasKey) {
 }
 
 // 回のクイズの行（SPEC §8.2「クイズ」）：作った問題の数・正答率・要確認と「解く」「作り直す」「編集」。資料があってクイズがなければ「作る」
-export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この回') {
+export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この回', {hintWhenNoKey = false} = {}) {
   const extractable = list.some((m) => m.status === 'ok' && EXTRACTABLE.test(m.name));
   if (gen)
     return `<div class="round-quiz round-quiz--busy" role="status">${gen.state === 'failed' ? `<span>クイズを作れませんでした：${esc(gen.message)}</span> <button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">もう一度</button>` : `<span class="spinner" aria-hidden="true"></span><span>${esc(gen.message)}</span>`}</div>`;
@@ -179,7 +179,13 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
         ${hasKey && extractable ? `<button class="btn btn--small btn--quiet" data-action="quiz-generate" data-rounds="${esc(round.id)}" title="資料から作り直します（前の版の記録は残ります）">作り直す</button>` : ''}
       </span></div>`;
   }
-  if (!extractable || !hasKey) return ''; // API キーがなければ回ごとには案内しない（授業画面の上に 1 つだけ）
+  if (!extractable) return '';
+  // API キーがなければ回ごとには案内しない（授業画面の上に 1 つだけ）。自分のフォルダの画面にはその区画がないので、
+  // hintWhenNoKey で 1 行だけ案内する（入口がどこにもないと、クイズの機能に気づけない）
+  if (!hasKey)
+    return hintWhenNoKey
+      ? `<div class="round-quiz"><span class="muted">資料からクイズを作れます（Claude API キーが要ります）</span> <button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">設定 → クイズ</button></div>`
+      : '';
   return `<div class="round-quiz"><button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button></div>`;
 }
 

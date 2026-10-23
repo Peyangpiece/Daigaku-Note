@@ -50,7 +50,7 @@ export function createNotifier({repo, Notification, openWindow, log = () => {}, 
     if (channel === 'login.required')
       return show({
         title: 'LMS へのログインが必要です',
-        body: payload.message || `${payload.label ?? 'LMS'} にログインし直してください（設定 → LMS との連携）`,
+        body: payload.message || `${payload.label ?? 'LMS'} にログインし直してください（設定 → 大学の LMS）`,
         route: '/settings',
         oncePerDay: `login:${payload.connectionId ?? payload.label ?? ''}`
       });
