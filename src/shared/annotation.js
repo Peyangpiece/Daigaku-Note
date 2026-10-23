@@ -6,13 +6,16 @@
 // アンダーライン（line）：文字の下に引くマーカーの線（乗算で重ねる四角）。style に色と太さ。
 // 貼りもの（stamp）：シール帳のシール・素材の図・メモ帳からちぎった紙。style.type で分け、style.ref にシール・図の id。
 //   ちぎった紙（memo）は body に書いた文字、style に紙の色と文字の大きさ。rect は貼った四角（大きさを変えられる）
+//   付箋（index）はページの端から外へはみ出して貼る目印。body に短い言葉、style に色
 import {WIDTH_MAX, WIDTH_MIN, boundsOf, decodePoints, encodePoints} from './ink.js';
 import {hiderColorOk} from './stationery.js';
 import {isBuiltinSticker} from './stickers.js';
 import {isFigure} from './figures.js';
 
 export const KINDS = ['text', 'note', 'mask', 'ink', 'line', 'stamp'];
-export const STAMP_TYPES = ['sticker', 'figure', 'memo'];
+export const STAMP_TYPES = ['sticker', 'figure', 'memo', 'index'];
+export const INDEX_LABEL_MAX = 12; // 付箋（インデックス）に書ける文字数
+export const INDEX_COLOR = '#f28b82';
 export const STAMP_MIN = 8; // 貼りものの一辺の最小（pt）
 export const MEMO_COLOR = '#fffdf6'; // メモ帳の紙の既定の色
 export const MEMO_SIZE = 10; // ちぎった紙の文字の大きさ（pt）
@@ -138,6 +141,10 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
         color: isHex(s.color) ? s.color.toLowerCase() : MEMO_COLOR,
         size: clampSize(s.size, MEMO_SIZE)
       };
+    } else if (type === 'index') {
+      if (typeof body === 'string' && [...body].length > INDEX_LABEL_MAX)
+        throw new Error(`付箋の言葉が長すぎます（${INDEX_LABEL_MAX} 文字まで）`);
+      cleanStyle = {type, color: isHex(s.color) ? s.color.toLowerCase() : INDEX_COLOR};
     } else if (type === 'figure' && isFigure(s.ref)) cleanStyle = {type, ref: s.ref};
     else if (type === 'sticker' && (isBuiltinSticker(s.ref) || /^[0-9a-f]{64}$/.test(s.ref ?? '')))
       cleanStyle = {type, ref: s.ref};
@@ -146,7 +153,7 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
       page,
       kind,
       rect_json: JSON.stringify({x: round2(x), y: round2(y), w: round2(w), h: round2(h)}),
-      body: type === 'memo' && typeof body === 'string' ? body : '',
+      body: (type === 'memo' || type === 'index') && typeof body === 'string' ? body : '',
       style_json: JSON.stringify(cleanStyle)
     };
   }

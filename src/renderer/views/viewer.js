@@ -13,7 +13,9 @@
 //   出すとき：つまみを押す・マウスを画面の端（上半分・下半分）へ動かす・指（ペン）で画面の端からなでる。1 つ出すとほかはしまう
 //   シール帳・素材：押すと見ているページの真ん中に、ドラッグするとページの好きな所に「貼りもの」（注釈の stamp）として貼る。
 //     貼りものは選択の道具で動かし、右下のつまみで大きさを変える（シール・図は縦横の比を保つ）。ペンの線は上に重ねて書ける
-//   ポーチ：赤シート・電卓・メモ帳。メモ帳はちぎると、書いた紙がページに貼りものとして貼られる（ちぎり口はぎざぎざ）
+//   ポーチ：赤シート・電卓・メモ帳・定規・付箋・タイマー。メモ帳はちぎると、書いた紙がページに貼りものとして貼られる（ちぎり口はぎざぎざ）。
+//     定規はページの上に置き、ふちのすぐ外からボールペンで書くと、ふちに沿ったまっすぐな線になる。
+//     付箋（インデックス）はページの右の端からはみ出して貼る色の目印。タイマーは時間になると音と知らせ
 // 取り消し・やり直し（§9.1：200 手まで。履歴はメモリだけ）。注釈付きの PDF を別のファイルに書き出せる（§9.7）。
 // 元の PDF は変えない（§9.1）。注釈はページ座標（PDF のユーザー空間、左下原点、pt）でメインの DB に保存する。
 // ほかの画面と違い、状態が変わるたびに描き直さない（app.js が mount / unmount だけ呼ぶ）。
@@ -22,7 +24,7 @@
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
 import {esc, isTyping, navigate, state, toast} from '../app.js';
 import {bookmarkLook, fixedSticker, skinOf} from '../skin.js';
-import {ROUND_DEFAULTS} from '../../shared/skin.js';
+import {ROUND_DEFAULTS, inkOn} from '../../shared/skin.js';
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
 import {
   boundsOf,
@@ -48,6 +50,17 @@ import {MEMO_COLOR, MEMO_SIZE, NOTE_INK_SCALE, hidesUnderRedSheet} from '../../s
 import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, builtinStickerUrl, isBuiltinSticker} from '../../shared/stickers.js';
 import {FIGURES, FIGURE_PT_PER_UNIT, FIGURE_SUBJECTS, figureOf, figureUrl} from '../../shared/figures.js';
 import {evaluate, formatNumber} from '../../shared/calc.js';
+import {
+  TIMER_PRESETS,
+  clampMinutes,
+  formatClock,
+  isDone,
+  isRunning,
+  newTimer,
+  pauseTimer,
+  startTimer,
+  timerLeft
+} from '../../shared/timer.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   '../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
@@ -104,6 +117,17 @@ const MEMO_TOP = 12; // 上の余白（ちぎり口の下から）
 const MEMO_LINE = 1.6; // 行の高さ（文字の大きさの倍）
 const MEMO_TOOTH = 8; // ちぎり口のぎざぎざの幅
 const MEMO_DEPTH = 3; // ちぎり口のぎざぎざの深さ
+// 定規：画面の px。目盛りは PDF の実寸（1 mm = 72 / 25.4 pt × 拡大率）。長さは 15 cm
+const RULER_MM = 150;
+const RULER_H = 56; // 定規の幅（px）
+const RULER_PAD = 12; // 目盛りの 0 の左・150 mm の右の余白（px）
+const RULER_SNAP = 28; // ふちの外側、これだけの所から書き始めると、ふちに沿う（px）
+// 付箋（インデックス）：pt。ページに重なる所（OVER）は薄く、はみ出す所は濃い色に言葉
+const INDEX_W = 44;
+const INDEX_H = 16;
+const INDEX_OVER = 14;
+const INDEX_GAP = 4; // 続けて貼るときの間
+const INDEX_COLORS = ['#f28b82', '#fbbc04', '#fff475', '#ccff90', '#a7ffeb', '#aecbfa', '#d7aefb', '#fdcfe8'];
 const CALC_KEYS = [
   'C',
   '⌫',
@@ -152,7 +176,13 @@ const POUCH_ART = {
       .flatMap((r) => [0, 1, 2].map((c) => `<rect x="${18 + c * 7}" y="${17 + r * 7}" width="5" height="5" rx="1"/>`))
       .join('') +
     '</g></svg>',
-  memo: '<svg viewBox="0 0 56 40" aria-hidden="true"><rect x="11" y="6" width="34" height="31" rx="1.5" fill="#fffdf6" stroke="#c9c6bd"/><rect x="11" y="4" width="34" height="6" rx="1.5" fill="#8b6f47"/><path d="M15 17H41M15 23H41M15 29H41" stroke="#bcd3ea" stroke-width="1.2"/></svg>'
+  memo: '<svg viewBox="0 0 56 40" aria-hidden="true"><rect x="11" y="6" width="34" height="31" rx="1.5" fill="#fffdf6" stroke="#c9c6bd"/><rect x="11" y="4" width="34" height="6" rx="1.5" fill="#8b6f47"/><path d="M15 17H41M15 23H41M15 29H41" stroke="#bcd3ea" stroke-width="1.2"/></svg>',
+  ruler:
+    '<svg viewBox="0 0 56 40" aria-hidden="true"><g transform="rotate(-18 28 20)"><rect x="2" y="13" width="52" height="14" rx="2" fill="#dbeefa" stroke="#7aa7c7"/><path d="M6 13v5M11 13v3M16 13v5M21 13v3M26 13v5M31 13v3M36 13v5M41 13v3M46 13v5M51 13v3" stroke="#2f4f66" stroke-width="1"/></g></svg>',
+  index:
+    '<svg viewBox="0 0 56 40" aria-hidden="true"><rect x="8" y="5" width="30" height="30" rx="1" fill="#fff" stroke="#c9c6bd"/><rect x="26" y="8" width="22" height="7" rx="1.5" fill="#f28b82"/><rect x="26" y="17" width="22" height="7" rx="1.5" fill="#aecbfa"/><rect x="26" y="26" width="22" height="7" rx="1.5" fill="#ccff90"/></svg>',
+  timer:
+    '<svg viewBox="0 0 56 40" aria-hidden="true"><circle cx="28" cy="22" r="14" fill="#fff" stroke="#3b4252" stroke-width="2.5"/><rect x="25" y="3" width="6" height="4" rx="1" fill="#3b4252"/><path d="M28 22V13" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/><path d="M28 22L34 26" stroke="#3b4252" stroke-width="2" stroke-linecap="round"/></svg>'
 };
 const ERASER_PX = 9; // 消しゴムの半径（画面の px）
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -311,6 +341,9 @@ const BAR = `
       <button type="button" class="pouch__item" data-v="sheet" aria-pressed="false" title="赤シートを出す・しまう（${key(MOD, 'R')}）。マーカーのところだけ黒く隠れます">${POUCH_ART.sheet}<span>赤シート</span></button>
       <button type="button" class="pouch__item" data-v="calc" aria-pressed="false" title="電卓を出す・しまう">${POUCH_ART.calc}<span>電卓</span></button>
       <button type="button" class="pouch__item" data-v="memo" aria-pressed="false" title="メモ帳を出す・しまう。書いてちぎると、ページに貼れます">${POUCH_ART.memo}<span>メモ帳</span></button>
+      <button type="button" class="pouch__item" data-v="ruler" aria-pressed="false" title="定規を出す・しまう。ふちのすぐ外からボールペンで書くと、まっすぐな線になります">${POUCH_ART.ruler}<span>定規</span></button>
+      <button type="button" class="pouch__item" data-v="index" aria-pressed="false" title="付箋を出す・しまう。ページの端に貼る色の目印です">${POUCH_ART.index}<span>付箋</span></button>
+      <button type="button" class="pouch__item" data-v="timer" aria-pressed="false" title="タイマーを出す・しまう">${POUCH_ART.timer}<span>タイマー</span><small class="pouch__badge" data-v="timer-badge" hidden></small></button>
     </div>
   </aside>
   <aside class="corner corner--seal is-tucked" data-corner="seal" aria-label="シール帳">
@@ -631,8 +664,10 @@ class Viewer {
   fitZoom() {
     const first = this.pages[0]?.page.getViewport({scale: CSS_UNITS});
     if (!first) return 1;
+    // ページの右の端からはみ出す付箋（インデックス）の分も、左右に空けておく（ページは真ん中に置く）
     const avail = this.pagesEl.clientWidth - 32;
-    return Math.min(2, Math.max(0.5, Math.floor((avail / first.width) * 100) / 100));
+    const tab = (INDEX_W - INDEX_OVER) * CSS_UNITS * 2;
+    return Math.min(2, Math.max(0.5, Math.floor((avail / (first.width + tab)) * 100) / 100));
   }
 
   layout(keepAnchor = true) {
@@ -650,6 +685,7 @@ class Viewer {
     }
     for (const a of this.annos.values()) this.place(a);
     if (this.sheet) this.syncCovers();
+    if (this.ruler) this.drawRuler();
     this.$('zoom-label').textContent = `${Math.round(this.zoom * 100)}%`;
     if (anchor && frac > 0) {
       const top = anchor.el.getBoundingClientRect().top + window.scrollY;
@@ -840,7 +876,9 @@ class Viewer {
       el.innerHTML =
         a.style.type === 'memo'
           ? '<div class="anno-stamp__memo"><div class="anno-stamp__text"></div></div><span class="anno-stamp__grip" aria-hidden="true"></span>'
-          : '<img class="anno-stamp__img" alt="" draggable="false" /><span class="anno-stamp__grip" aria-hidden="true"></span>';
+          : a.style.type === 'index'
+            ? '<span class="anno-stamp__tab"></span>'
+            : '<img class="anno-stamp__img" alt="" draggable="false" /><span class="anno-stamp__grip" aria-hidden="true"></span>';
     } else if (a.kind === 'mask') {
       el.className = 'anno-mask';
       el.title = '文字隠し';
@@ -920,6 +958,14 @@ class Viewer {
   /** 貼りものの中身：シールの画像（取り込んだ画像は届いてから）・図・ちぎった紙の文字と色 */
   applyStamp(a) {
     const {type, ref} = a.style;
+    if (type === 'index') {
+      a.el.style.setProperty('--index', a.style.color);
+      a.el.style.setProperty('--index-ink', inkOn(a.style.color));
+      a.el.querySelector('.anno-stamp__tab').textContent = a.body;
+      a.el.setAttribute('aria-label', `付箋：${a.body || '（言葉なし）'}`);
+      queueMicrotask(() => this.indexPad && this.renderIndexList()); // 位置（place）が決まってから並べる
+      return;
+    }
     if (type === 'memo') {
       a.el.style.setProperty('--memo', a.style.color ?? MEMO_COLOR);
       a.el.querySelector('.anno-stamp__text').textContent = a.body;
@@ -1016,6 +1062,10 @@ class Viewer {
       a.el.style.height = `${s.height}px`;
       if (a.kind === 'mask') this.syncCovers();
       if (a.kind === 'stamp' && a.style.type === 'memo') this.placeMemo(a, s.width, vp.scale);
+      if (a.kind === 'stamp' && a.style.type === 'index') {
+        a.el.style.setProperty('--index-over', `${INDEX_OVER * vp.scale}px`);
+        a.el.style.setProperty('--index-font', `${8 * vp.scale}px`);
+      }
     } else a.el.style.setProperty('--note-size', `${NOTE_SIZE * vp.scale}px`);
   }
 
@@ -1149,6 +1199,7 @@ class Viewer {
     this.annos.delete(a.key);
     if (this.selected === a) this.select(null);
     if (this.editing === a) this.editing = null;
+    if (a.kind === 'stamp' && a.style.type === 'index' && this.indexPad) this.renderIndexList();
     // 同じ注釈の保存と消去は 1 本の鎖で順に行う。保存中に消されたときは flush の末尾が先に消すので、removedOnServer で 2 回送らない
     if (a.id || a.chain)
       this.track(a, async () => {
@@ -1681,12 +1732,21 @@ class Viewer {
     if (!vp) return null;
     const sw = spec.w * vp.scale,
       sh = spec.h * vp.scale;
-    const left = Math.min(Math.max(x - sw / 2, 0), Math.max(0, vp.width - sw));
-    const top = Math.min(Math.max(y - sh / 2, 0), Math.max(0, vp.height - sh));
+    // 付箋（インデックス）はページの右の端に、外へはみ出して貼る（ページに重なるのは INDEX_OVER だけ）
+    const left =
+      spec.type === 'index'
+        ? vp.width - INDEX_OVER * vp.scale
+        : Math.min(Math.max(x - sw / 2, 0), Math.max(0, vp.width - sw));
+    const top = Math.min(
+      Math.max(spec.type === 'index' && !at ? this.indexSlot(p) : y - sh / 2, 0),
+      Math.max(0, vp.height - sh)
+    );
     const style =
       spec.type === 'memo'
         ? {type: 'memo', color: spec.color ?? MEMO_COLOR, size: spec.size ?? MEMO_SIZE}
-        : {type: spec.type, ref: spec.ref};
+        : spec.type === 'index'
+          ? {type: 'index', color: spec.color}
+          : {type: spec.type, ref: spec.ref};
     const a = this.addAnno({
       key: `k${this.seq++}`,
       id: null,
@@ -1869,6 +1929,312 @@ class Viewer {
     }
     this.$('memo').setAttribute('aria-pressed', String(!!this.memo));
   }
+  // ---- 定規：ページの上に置く透明な定規。ドラッグで動かし、右の端のつまみで回す（15° ごとに吸い付く）。ダブルクリックで水平に ----
+  toggleRuler(on = !this.ruler) {
+    if (!on) {
+      this.ruler?.el.remove();
+      this.ruler = null;
+    } else if (!this.ruler) {
+      const el = document.createElement('div');
+      el.className = 'ruler';
+      el.setAttribute('role', 'region');
+      el.setAttribute('aria-label', '定規');
+      el.innerHTML =
+        '<svg class="ruler__ticks" aria-hidden="true"></svg><span class="ruler__angle" aria-hidden="true"></span><button type="button" class="ruler__turn" title="回す（15° ごとに止まります。ダブルクリックで水平に）" aria-label="定規を回す">↻</button>';
+      this.root.append(el);
+      const w = document.documentElement.clientWidth;
+      this.ruler = {el, cx: w / 2, cy: window.innerHeight * 0.62, angle: 0, len: 0};
+      el.addEventListener('pointerdown', (e) => this.dragRuler(e));
+      el.addEventListener('dblclick', () => {
+        this.ruler.angle = 0;
+        this.drawRuler();
+      });
+      this.drawRuler();
+    }
+    this.$('ruler').setAttribute('aria-pressed', String(!!this.ruler));
+  }
+  /** 目盛りと位置・向きを描く（拡大率が変わったら描き直す。目盛りはページの実寸） */
+  drawRuler() {
+    const r = this.ruler;
+    const scale = this.pages[0]?.viewport?.scale ?? CSS_UNITS;
+    const mm = (72 / 25.4) * scale;
+    r.len = RULER_MM * mm + RULER_PAD * 2;
+    const ticks = [];
+    for (let i = 0; i <= RULER_MM; i++) {
+      const x = (RULER_PAD + i * mm).toFixed(2);
+      const h = i % 10 === 0 ? 14 : i % 5 === 0 ? 10 : 6;
+      ticks.push(`<path d="M${x} 0V${h}"/>`);
+      if (i % 10 === 0) ticks.push(`<text x="${x}" y="26">${i / 10}</text>`);
+    }
+    const svg = r.el.querySelector('.ruler__ticks');
+    svg.setAttribute('viewBox', `0 0 ${r.len.toFixed(2)} ${RULER_H}`);
+    svg.innerHTML = ticks.join('');
+    Object.assign(r.el.style, {
+      left: `${r.cx - r.len / 2}px`,
+      top: `${r.cy - RULER_H / 2}px`,
+      width: `${r.len}px`,
+      height: `${RULER_H}px`,
+      transform: `rotate(${r.angle}deg)`
+    });
+    r.el.querySelector('.ruler__angle').textContent = `${Math.round(((r.angle % 360) + 360) % 360)}°`;
+  }
+  dragRuler(e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const r = this.ruler;
+    const turn = !!e.target.closest('.ruler__turn');
+    r.el.setPointerCapture(e.pointerId);
+    r.el.classList.toggle('is-turning', turn);
+    const sx = e.clientX - r.cx,
+      sy = e.clientY - r.cy;
+    const move = (ev) => {
+      if (turn) {
+        let a = (Math.atan2(ev.clientY - r.cy, ev.clientX - r.cx) * 180) / Math.PI;
+        const near = Math.round(a / 15) * 15;
+        if (Math.abs(a - near) < 3) a = near; // 15° ごとに吸い付く
+        r.angle = a;
+      } else {
+        r.cx = ev.clientX - sx;
+        r.cy = ev.clientY - sy;
+      }
+      this.drawRuler();
+    };
+    const up = () => {
+      r.el.classList.remove('is-turning');
+      r.el.removeEventListener('pointermove', move);
+      r.el.removeEventListener('pointerup', up);
+      r.el.removeEventListener('pointercancel', up);
+    };
+    r.el.addEventListener('pointermove', move);
+    r.el.addEventListener('pointerup', up);
+    r.el.addEventListener('pointercancel', up);
+  }
+  /**
+   * 画面の点が定規のふちのすぐ外（RULER_SNAP 以内）なら、そのふちの線（点と向き）。なければ null。
+   * 定規の向き u、ふちの外向き n。ふちの長さの範囲（少しはみ出しても可）だけ
+   */
+  rulerEdgeAt(x, y) {
+    const r = this.ruler;
+    if (!r) return null;
+    const a = (r.angle * Math.PI) / 180;
+    const u = [Math.cos(a), Math.sin(a)],
+      n = [-Math.sin(a), Math.cos(a)];
+    const dx = x - r.cx,
+      dy = y - r.cy;
+    const t = dx * u[0] + dy * u[1],
+      s = dx * n[0] + dy * n[1];
+    if (Math.abs(t) > r.len / 2 + 8) return null;
+    const out = Math.abs(s) - RULER_H / 2;
+    if (out < -2 || out > RULER_SNAP) return null;
+    const side = Math.sign(s) || 1;
+    return {x: r.cx + n[0] * side * (RULER_H / 2), y: r.cy + n[1] * side * (RULER_H / 2), u};
+  }
+  /** 書いている線が定規に沿うとき、点をふちの線の上へ移す */
+  onRule(d, x, y) {
+    const e = d.rule;
+    if (!e) return [x, y];
+    const t = (x - e.x) * e.u[0] + (y - e.y) * e.u[1];
+    return [e.x + e.u[0] * t, e.y + e.u[1] * t];
+  }
+
+  // ---- 付箋（インデックス）：色を押すと、見ているページの右の端の空いている所に貼る。ドラッグすると離した高さに ----
+  toggleIndexPad(on = !this.indexPad) {
+    if (!on) {
+      this.indexPad?.remove();
+      this.indexPad = null;
+    } else if (!this.indexPad) {
+      this.indexColor ??= INDEX_COLORS[0];
+      const colors = INDEX_COLORS.map(
+        (c) =>
+          `<button type="button" class="index-pad__color" data-index-color="${c}" style="--index: ${c}" title="この色の付箋を貼る（ドラッグすると好きな高さに）" aria-label="付箋を貼る ${c}"></button>`
+      ).join('');
+      const el = this.floatTool(
+        'index-pad',
+        '付箋',
+        `<label class="index-pad__label">書く言葉（なくても可）<input type="text" maxlength="12" data-index-label placeholder="例：第3章・試験範囲" /></label>
+        <div class="index-pad__colors">${colors}</div>
+        <p class="index-pad__hint">色を押すと、見ているページの右の端に貼れます。貼った付箋は上下に動かせます</p>
+        <div class="index-pad__list" data-index-list></div>`,
+        {right: 24, bottom: 160},
+        () => this.toggleIndexPad(false)
+      );
+      el.addEventListener('pointerdown', (e) => {
+        const b = e.target.closest('[data-index-color]');
+        if (b)
+          this.startCarry(e, this.indexSpec(b.dataset.indexColor), {
+            ghost: () => this.indexGhost(b.dataset.indexColor)
+          });
+      });
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-index-color]');
+        if (b && e.detail === 0) this.placeStamp(this.indexSpec(b.dataset.indexColor)); // キーボード
+        const go = e.target.closest('[data-index-go]');
+        if (go) {
+          const a = this.annos.get(go.dataset.indexGo);
+          if (a) {
+            this.jumpTo({
+              page: a.page,
+              y: Math.max(0, parseFloat(a.el.style.top) / this.pages[a.page - 1].el.offsetHeight - 0.1)
+            });
+            this.select(a);
+          }
+        }
+      });
+      this.indexPad = el;
+      this.renderIndexList();
+    }
+    this.$('index').setAttribute('aria-pressed', String(!!this.indexPad));
+  }
+  indexSpec(color) {
+    const label = (this.indexPad?.querySelector('[data-index-label]').value ?? '').trim().slice(0, 12);
+    return {type: 'index', color, body: label, w: INDEX_W, h: INDEX_H};
+  }
+  indexGhost(color) {
+    const scale = this.pages[0]?.viewport?.scale ?? 1;
+    const g = document.createElement('div');
+    g.className = 'index-ghost';
+    g.style.setProperty('--index', color);
+    Object.assign(g.style, {width: `${INDEX_W * scale}px`, height: `${INDEX_H * scale}px`});
+    return g;
+  }
+  /** ページの右の端で、上から見て最初に空いている高さ（画面の px） */
+  indexSlot(p) {
+    const s = p.viewport.scale;
+    const h = INDEX_H * s,
+      step = (INDEX_H + INDEX_GAP) * s;
+    const taken = [...this.annos.values()]
+      .filter((a) => a.page === p.num && a.kind === 'stamp' && a.style.type === 'index' && !a.removed)
+      .map((a) => parseFloat(a.el.style.top));
+    for (let y = 36 * s; y + h <= p.viewport.height; y += step) if (!taken.some((t) => Math.abs(t - y) < h)) return y;
+    return 36 * s;
+  }
+  /** 貼った付箋の一覧（押すとその場所へ） */
+  renderIndexList() {
+    const list = [...this.annos.values()]
+      .filter((a) => a.kind === 'stamp' && a.style.type === 'index' && !a.removed)
+      .sort((a, b) => a.page - b.page || parseFloat(a.el.style.top) - parseFloat(b.el.style.top));
+    this.indexPad.querySelector('[data-index-list]').innerHTML = list.length
+      ? `<strong>貼った付箋</strong>${list
+          .map(
+            (a) =>
+              `<button type="button" class="index-pad__item" data-index-go="${a.key}"><span class="index-pad__chip" style="--index: ${a.style.color}"></span>${esc(a.body || '（言葉なし）')}<span class="muted">${a.page} ページ</span></button>`
+          )
+          .join('')}`
+      : '';
+  }
+
+  // ---- タイマー：時間を選んで「開始」。時間になると音を鳴らして知らせる。窓をしまっても動き続け、ポーチに残りを出す ----
+  toggleTimer(on = !this.timerEl, {stop = false} = {}) {
+    if (!on) {
+      this.timerEl?.remove();
+      this.timerEl = null;
+      if (stop) {
+        this.stopTick();
+        this.timer = null;
+      }
+    } else if (!this.timerEl) {
+      this.timer ??= newTimer(TIMER_PRESETS[2] * 60000);
+      const presets = TIMER_PRESETS.map(
+        (m) => `<button type="button" class="timer__preset" data-timer-min="${m}">${m} 分</button>`
+      ).join('');
+      const el = this.floatTool(
+        'timer',
+        'タイマー',
+        `<div class="timer__face"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" class="timer__track"/><circle cx="60" cy="60" r="52" class="timer__ring" data-timer-ring pathLength="1"/></svg><output class="timer__clock" data-timer-clock aria-live="off"></output></div>
+        <div class="timer__presets">${presets}<label class="timer__custom"><input type="number" min="1" max="180" data-timer-custom aria-label="分を入れる" placeholder="分" /></label></div>
+        <div class="timer__foot"><button type="button" class="btn btn--small" data-timer-reset>リセット</button><button type="button" class="btn btn--small btn--primary" data-timer-go></button></div>`,
+        {right: 300, bottom: 24},
+        () => this.toggleTimer(false)
+      );
+      el.addEventListener('click', (e) => {
+        const m = e.target.closest('[data-timer-min]')?.dataset.timerMin;
+        if (m) this.setTimer(Number(m));
+        else if (e.target.closest('[data-timer-go]'))
+          this.timer = isRunning(this.timer) ? pauseTimer(this.timer, Date.now()) : startTimer(this.timer, Date.now());
+        else if (e.target.closest('[data-timer-reset]')) this.timer = newTimer(this.timer.total);
+        else return;
+        this.tickTimer();
+      });
+      el.querySelector('[data-timer-custom]').addEventListener('change', (e) => {
+        const m = clampMinutes(e.target.value);
+        if (m) this.setTimer(m);
+        e.target.value = '';
+        this.tickTimer();
+      });
+      this.timerEl = el;
+      this.tickTimer();
+    }
+    this.$('timer').setAttribute('aria-pressed', String(!!this.timerEl));
+    if (stop || !this.timerEl) this.tickTimer();
+  }
+  setTimer(min) {
+    this.timer = newTimer(min * 60000);
+  }
+  stopTick() {
+    clearInterval(this.timerTick);
+    this.timerTick = 0;
+  }
+  /** 表示を今の残りに合わせる。時間になったら鳴らす */
+  tickTimer() {
+    const t = this.timer;
+    const badge = this.$('timer-badge');
+    if (!t) {
+      if (badge) badge.hidden = true;
+      return this.stopTick();
+    }
+    const now = Date.now();
+    if (isDone(t, now)) {
+      this.timer = newTimer(t.total);
+      this.timer.left = 0;
+      this.chime();
+      toast('タイマー：時間です');
+      this.timerEl?.classList.add('is-done');
+      setTimeout(() => this.timerEl?.classList.remove('is-done'), 2400);
+    }
+    const cur = this.timer;
+    const left = timerLeft(cur, now);
+    const running = isRunning(cur);
+    if (badge) {
+      badge.hidden = !running || !!this.timerEl;
+      badge.textContent = formatClock(left);
+    }
+    // 動いている間か窓を出している間だけ、0.25 秒ごとに描き直す
+    if (!running && !this.timerEl) return this.stopTick();
+    if (!this.timerTick) this.timerTick = setInterval(() => this.tickTimer(), 250);
+    const el = this.timerEl;
+    if (!el) return;
+    el.querySelector('[data-timer-clock]').textContent = formatClock(left);
+    el.querySelector('[data-timer-ring]').style.strokeDashoffset = String(1 - left / cur.total);
+    el.querySelector('[data-timer-go]').textContent = running
+      ? '一時停止'
+      : left < cur.total && left > 0
+        ? '再開'
+        : '開始';
+    for (const b of el.querySelectorAll('[data-timer-min]'))
+      b.setAttribute('aria-pressed', String(Number(b.dataset.timerMin) * 60000 === cur.total));
+    el.classList.toggle('is-running', running);
+  }
+  /** 時間になった音（短く 3 回） */
+  chime() {
+    try {
+      const ctx = new window.AudioContext();
+      for (let i = 0; i < 3; i++) {
+        const o = ctx.createOscillator(),
+          g = ctx.createGain();
+        o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.35);
+        g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + i * 0.35 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.35 + 0.25);
+        o.connect(g).connect(ctx.destination);
+        o.start(ctx.currentTime + i * 0.35);
+        o.stop(ctx.currentTime + i * 0.35 + 0.26);
+      }
+      setTimeout(() => ctx.close(), 1500);
+    } catch {
+      // 音を出せない環境では知らせだけ
+    }
+  }
+
   /** いまメモ帳に書いてある紙の中身（貼るもの） */
   memoSpec() {
     const body = (this.memo?.querySelector('textarea').value ?? '').replace(/\s+$/, '');
@@ -2050,9 +2416,15 @@ class Viewer {
       if (t.dataset.sealTab) return this.renderSeal(t.dataset.sealTab);
       if (t.dataset.sozaiTab) return this.renderSozai(t.dataset.sozaiTab);
       // ポーチから出したら、少し見せてからしまう（筆箱のペンと同じ）
-      if (t.dataset.v === 'calc' || t.dataset.v === 'memo') {
-        if (t.dataset.v === 'calc') this.toggleCalc();
-        else this.toggleMemo();
+      const POUCH = {
+        calc: () => this.toggleCalc(),
+        memo: () => this.toggleMemo(),
+        ruler: () => this.toggleRuler(),
+        index: () => this.toggleIndexPad(),
+        timer: () => this.toggleTimer()
+      };
+      if (POUCH[t.dataset.v]) {
+        POUCH[t.dataset.v]();
         return this.tuckSoon();
       }
       if (t.dataset.tool) this.setTool(t.dataset.tool);
@@ -2294,7 +2666,8 @@ class Viewer {
       item: this.penItem,
       sim: 0.5,
       last: null,
-      extra: []
+      extra: [],
+      rule: this.rulerEdgeAt(e.clientX, e.clientY) // 定規のふちのすぐ外から書き始めたら、ふちに沿わせる
     });
     this.addInkPoint(d, e);
     this.drawInk();
@@ -2302,7 +2675,8 @@ class Viewer {
 
   /** 画面の点 → PDF の点と筆圧。筆圧の取れない道具では動く速さから作る */
   inkPoint(d, ev) {
-    const [x, y] = d.p.viewport.convertToPdfPoint(ev.clientX - d.box.left, ev.clientY - d.box.top);
+    const [cx, cy] = this.onRule(d, ev.clientX, ev.clientY);
+    const [x, y] = d.p.viewport.convertToPdfPoint(cx - d.box.left, cy - d.box.top);
     let pr;
     if (d.pressure) pr = ev.pressure > 0 ? ev.pressure : 0.5;
     else {
@@ -2325,7 +2699,8 @@ class Viewer {
     }
     // この先に来そうな点（予測）。線の先が指・ペンに遅れて見えないように、下書きにだけ足す
     d.extra = (e.getPredictedEvents?.() ?? []).slice(0, 2).map((ev) => {
-      const [x, y] = d.p.viewport.convertToPdfPoint(ev.clientX - d.box.left, ev.clientY - d.box.top);
+      const [cx, cy] = this.onRule(d, ev.clientX, ev.clientY);
+      const [x, y] = d.p.viewport.convertToPdfPoint(cx - d.box.left, cy - d.box.top);
       return [x, y, d.cap.points.at(-1)?.[2] ?? 0.5];
     });
   }
@@ -2986,7 +3361,8 @@ class Viewer {
           box: this.toScreen(a.page, a.rect),
           scale: p.viewport.scale,
           style: {...a.style},
-          src: memo ? '' : (a.el.querySelector('img')?.src ?? ''),
+          src: a.el.querySelector('img')?.src ?? '',
+          label: a.body,
           shape: a.el.dataset.shape ?? 'cut'
         });
         continue;
@@ -3012,7 +3388,7 @@ class Viewer {
   }
 
   /** 貼りものを PNG にする（288dpi）。紙はちぎり口・罫線・文字を描き、シール・図は画像を描く。描けなければ null */
-  async stampToPng({box, scale, style, lines, src, shape}) {
+  async stampToPng({box, scale, style, lines, src, shape, label}) {
     const k = EXPORT_PX_PER_PT;
     const W = Math.max(1, Math.ceil((box.width / scale) * k));
     const H = Math.max(1, Math.ceil((box.height / scale) * k));
@@ -3020,7 +3396,24 @@ class Viewer {
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d');
-    if (style.type === 'memo') {
+    if (style.type === 'index') {
+      // 付箋：ページに重なる所は薄く、残りは濃い色に言葉
+      const over = INDEX_OVER * k;
+      ctx.fillStyle = style.color;
+      ctx.globalAlpha = 0.45;
+      ctx.fillRect(0, 0, over, H);
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.roundRect(over, 0, W - over, H, [0, 2 * k, 2 * k, 0]);
+      ctx.fill();
+      const font = `700 ${8 * k}px ${FONT}`;
+      await document.fonts.load(font).catch(() => {});
+      ctx.font = font;
+      ctx.fillStyle = inkOn(style.color);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label ?? '', over + (W - over) / 2, H / 2, W - over - 2 * k);
+    } else if (style.type === 'memo') {
       const edge = tearEdge(W, MEMO_DEPTH * k, MEMO_TOOTH * k);
       ctx.beginPath();
       edge.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
@@ -3167,7 +3560,8 @@ class Viewer {
       if (d.a.style.type === 'memo') this.placeMemo(d.a, w, this.pages[d.a.page - 1].viewport.scale);
       return;
     }
-    d.a.el.style.left = `${d.left + dx}px`;
+    // 付箋（インデックス）はページの端に沿って上下にだけ動かす
+    if (!(d.a.kind === 'stamp' && d.a.style.type === 'index')) d.a.el.style.left = `${d.left + dx}px`;
     d.a.el.style.top = `${d.top + dy}px`;
     if (d.a.kind === 'mask') this.syncCovers();
   }
@@ -3295,6 +3689,9 @@ class Viewer {
     this.toggleSheet(false);
     this.toggleCalc(false);
     this.toggleMemo(false);
+    this.toggleRuler(false);
+    this.toggleIndexPad(false);
+    this.toggleTimer(false, {stop: true});
     this.carry?.off();
     this.ring?.remove();
     cancelAnimationFrame(this.coverFrame);

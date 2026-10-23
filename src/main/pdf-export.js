@@ -35,6 +35,13 @@ export function uprightImage(rotation, {x, y, w, h}) {
   return {x, y, width: w, height: h};
 }
 
+/** 四角を箱（ページ）の中へ寄せる（大きさはそのまま） */
+export const insideBox = (r, box) => ({
+  ...r,
+  x: Math.min(Math.max(r.x, box.x), box.x + box.width - r.w),
+  y: Math.min(Math.max(r.y, box.y), box.y + box.height - r.h)
+});
+
 export const isPng = (b) =>
   b instanceof Uint8Array && b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
 
@@ -96,7 +103,9 @@ export async function exportAnnotatedPdf(
       const png = images.get(a.id);
       if (!png) continue;
       const img = await doc.embedPng(png);
-      page.drawImage(img, uprightImage(page.getRotation().angle, a.rect));
+      // 付箋（インデックス）は画面ではページの端からはみ出して貼るが、紙の外は描けないので、ページの中へ寄せる
+      const rect = a.style?.type === 'index' ? insideBox(a.rect, page.getMediaBox()) : a.rect;
+      page.drawImage(img, uprightImage(page.getRotation().angle, rect));
     } else if (a.kind === 'note' && notes) {
       const color = /^#[0-9a-f]{6}$/i.test(a.style?.color ?? '') ? hexToRgb(a.style.color) : [0.96, 0.77, 0.27];
       const annot = doc.context.obj({

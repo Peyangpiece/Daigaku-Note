@@ -235,3 +235,16 @@ test('貼りもの：シール・素材の図・ちぎった紙だけを通し�
   );
   assert.throws(() => normalizeAnnotation(stamp({type: 'memo'}, {body: 'あ'.repeat(2001)})), /長すぎ/);
 });
+
+test('貼りもの：付箋（インデックス）は色と短い言葉だけ', () => {
+  const idx = (style, body = '') => ({kind: 'stamp', page: 1, rect: {x: 580, y: 700, w: 54, h: 16}, body, style});
+  const a = normalizeAnnotation(idx({type: 'index', color: '#8AB4F8', ref: 'x'}, '第3章'));
+  assert.deepEqual(JSON.parse(a.style_json), {type: 'index', color: '#8ab4f8'});
+  assert.equal(a.body, '第3章');
+  assert.deepEqual(JSON.parse(normalizeAnnotation(idx({type: 'index', color: 'red'})).style_json), {
+    type: 'index',
+    color: '#f28b82'
+  });
+  assert.ok(normalizeAnnotation(idx({type: 'index'}, 'あ'.repeat(12))));
+  assert.throws(() => normalizeAnnotation(idx({type: 'index'}, 'あ'.repeat(13))), /長すぎ/);
+});

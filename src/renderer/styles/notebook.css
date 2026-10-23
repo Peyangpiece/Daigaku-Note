@@ -5660,3 +5660,279 @@ html.is-page-sliding #app {
     animation: none;
   }
 }
+
+/* 定規：ページの上に置く透明な定規。上のふちに mm の目盛り（ページの実寸） */
+.ruler {
+  position: fixed;
+  z-index: 16;
+  box-sizing: border-box;
+  border: 1px solid rgba(47, 111, 150, 0.55);
+  border-radius: 4px;
+  background: rgba(219, 238, 250, 0.62);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  backdrop-filter: blur(0.5px);
+}
+.ruler:active {
+  cursor: grabbing;
+}
+.ruler__ticks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  stroke: #2f4f66;
+  stroke-width: 1;
+  font:
+    10px ui-monospace,
+    Menlo,
+    monospace;
+  fill: #2f4f66;
+  text-anchor: middle;
+}
+.ruler__ticks text {
+  stroke: none;
+}
+.ruler__angle {
+  position: absolute;
+  right: 44px;
+  bottom: 6px;
+  color: #2f4f66;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.ruler.is-turning .ruler__angle,
+.ruler:hover .ruler__angle {
+  opacity: 0.85;
+}
+.ruler__turn {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(47, 111, 150, 0.5);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  color: #2f4f66;
+  font-size: 15px;
+  line-height: 1;
+  cursor: alias;
+}
+
+/* 付箋（インデックス）：ページの右の端から外へはみ出す。ページに重なる所は薄く、はみ出した所に言葉 */
+.anno-stamp--index {
+  overflow: visible;
+}
+.anno-stamp__tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding-left: var(--index-over, 21px);
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--index) 45%, transparent) var(--index-over, 21px),
+    var(--index) var(--index-over, 21px)
+  );
+  color: var(--index-ink, #2b2b2b);
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+  font-size: var(--index-font, 11px);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.18);
+}
+.viewer-pages[data-tool='select'] .anno-stamp--index {
+  cursor: ns-resize;
+}
+.index-ghost {
+  position: fixed;
+  border-radius: 0 3px 3px 0;
+  background: var(--index);
+}
+.index-pad {
+  width: 260px;
+}
+.index-pad__label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+.index-pad__label input {
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.index-pad__colors {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+.index-pad__color {
+  height: 26px;
+  border: 0;
+  border-radius: 2px 6px 6px 2px;
+  background: linear-gradient(to right, color-mix(in srgb, var(--index) 45%, #fff) 30%, var(--index) 30%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: grab;
+  touch-action: none;
+}
+.index-pad__color:hover {
+  transform: translateX(3px);
+}
+.index-pad__hint {
+  margin: 0 0 6px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.index-pad__list {
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.index-pad__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.index-pad__item:hover {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.index-pad__item .muted {
+  margin-left: auto;
+  font-size: 11px;
+}
+.index-pad__chip {
+  width: 14px;
+  height: 10px;
+  border-radius: 0 3px 3px 0;
+  background: var(--index);
+}
+
+/* タイマー */
+.timer {
+  width: 250px;
+}
+.timer__face {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  margin: 4px auto 10px;
+}
+.timer__face svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.timer__track,
+.timer__ring {
+  fill: none;
+  stroke-width: 8;
+}
+.timer__track {
+  stroke: color-mix(in srgb, var(--paper-ink) 12%, transparent);
+}
+.timer__ring {
+  stroke: #e5484d;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  transition: stroke-dashoffset 0.25s linear;
+}
+.timer__clock {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font:
+    600 32px/1 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+}
+.timer.is-done {
+  animation: timer-done 0.6s ease-in-out 4;
+}
+@keyframes timer-done {
+  50% {
+    box-shadow:
+      0 0 0 4px #e5484d,
+      0 10px 28px rgba(0, 0, 0, 0.28);
+  }
+}
+.timer__presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.timer__preset,
+.timer__custom input {
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 22%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.timer__preset[aria-pressed='true'] {
+  background: var(--paper-ink);
+  color: var(--card);
+}
+.timer__custom input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 6px;
+  text-align: center;
+  cursor: text;
+}
+.timer.is-running .timer__preset,
+.timer.is-running .timer__custom input {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.timer__foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.pouch__item {
+  position: relative;
+}
+.pouch__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
