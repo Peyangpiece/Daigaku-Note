@@ -107,9 +107,18 @@ async function loadNow(id) {
       o.material.envMapIntensity = 1;
     }
   });
+  obj.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
-  const c = box.getCenter(new THREE.Vector3());
+  // 回る軸：クリップを除いた本体（軸・ペン先・天冠）の外接箱の中心を結ぶ線。クリップを含めると中心がクリップ側へ
+  // ずれ、転がすときに揺れる。クリップは名前（Clip）で見分ける。見分けられなければ全体の中心
+  const parts = [];
+  obj.traverse((o) => o.isMesh && parts.push(o));
+  const isClip = (o) => /clip/i.test(o.name) || /clip/i.test(o.parent?.name ?? '');
+  const body = parts.filter((o) => !isClip(o));
+  const axisBox = new THREE.Box3();
+  for (const m of body.length ? body : parts) axisBox.expandByObject(m, true);
+  const c = axisBox.getCenter(new THREE.Vector3());
   // GLB の軸：ペン先が y=0、クリップが +z。→ Z で −90°（y→x）、X で −90°（z→y）の順に回す
   const inner = new THREE.Group();
   obj.position.set(-c.x, -c.y, -c.z);
