@@ -12,8 +12,12 @@ const DAY = 864e5;
 
 async function setup(t) {
   const dir = await mkdtemp(path.join(tmpdir(), 'dn-backup-'));
-  t.after(() => rm(dir, {recursive: true, force: true}));
   const {db} = await openDatabase(path.join(dir, 'daigaku-note.sqlite'));
+  // Windows は開いたままのファイルを消せない（EBUSY）ので、先に閉じる
+  t.after(() => {
+    db.close?.();
+    return rm(dir, {recursive: true, force: true});
+  });
   const repo = new Repo(db);
   return {dir, db, repo};
 }
