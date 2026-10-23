@@ -13,7 +13,9 @@ import {LMS_TERMS_VERSION} from '../shared/lms-terms.js';
 import {createRequire} from 'node:module';
 import {isOpenable, sha256} from './sync/files.js';
 import {renameCourse} from './folders.js';
-import {mergeAutoTerms, removeTerm, saveTerm} from './terms.js';
+import {mergeAutoTerms, recomputeRoundDates, removeTerm, saveTerm} from './terms.js';
+import {parseCalendar} from '../shared/calendar.js';
+import {extractPages} from './quiz/extract.js';
 import {exportAnnotatedPdf, isPng} from './pdf-export.js';
 import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
@@ -105,6 +107,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         lmsTerms: repo.getSetting('lms.terms', null), // 大学サービスとの連携の利用規約に同意した版と日時
         experiments: repo.getSetting('experiments.makerPens', false), // 実験：既製品の見た目のペンをショップに出す（個人の試作）
         notifications: repo.getSetting('ui.notifications', true) !== false, // OS の通知（新しい資料・ログインの必要・クイズの完成・同期の失敗）
+        calendarDismissed: repo.getSetting('calendar.dismissed', []), // ホームの「学年暦を入れる」案内を「この学期は入れない」にした学期の id
         openAtLogin: loginItem()
       },
       skin: {
@@ -296,10 +299,40 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   // 学期の保存（main/terms.js）。term.id があればその学期を直す（学期名・年度を変えても同じ学期のまま）
   handle('term.save', async ({term}) => {
     const input = {...(term ?? {}), id: typeof term?.id === 'string' && /^[\w-]{1,40}$/.test(term.id) ? term.id : null};
+    const before = input.id ? repo.get('term', input.id) : null;
     const row = await saveTerm({repo, rootDir: ctx.rootDir()}, input);
     // LMS をつなぐ前に作った仮の学期が同じ時期にあれば、授業・フォルダとパソコンのフォルダをこの学期へまとめる
     await mergeAutoTerms({repo, rootDir: ctx.rootDir()}, row);
-    return {ok: true, term: row};
+    // 学年暦・期間・回数が変わったら、この学期の授業の回の日付を計算し直す（LMS から来た日付はそのまま）
+    const redated = recomputeRoundDates(repo, before, row);
+    return {ok: true, term: row, redated};
+  });
+
+  // 学年暦のファイル（PDF・Word・テキスト）から休講日・振替授業日を読み取る（shared/calendar.js の決まり。AI には送らない）。
+  // 保存はしない：画面で確かめてから term.save で入れる
+  handle('term.readCalendar', async ({year}) => {
+    const win = getWindow();
+    const opts = {
+      title: '学年暦のファイルを選ぶ',
+      properties: ['openFile'],
+      filters: [{name: '学年暦（PDF・Word・テキスト）', extensions: ['pdf', 'docx', 'txt', 'md']}]
+    };
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    if (r.canceled || !r.filePaths?.[0]) return {ok: false};
+    const file = r.filePaths[0];
+    const stat = await fsp.stat(file);
+    if (stat.size > 50 * 1024 * 1024) bad('ファイルが大きすぎます（50MB まで）');
+    let pages;
+    try {
+      ({pages} = await extractPages(file));
+    } catch (e) {
+      bad(`ファイルから文字を取れませんでした：${String(e?.message ?? e).slice(0, 120)}`);
+    }
+    const text = pages.map((p) => p.text).join('\n');
+    if (!text.trim())
+      bad('文字のないファイルです（画像だけの PDF は読めません。文字の入った PDF か、テキストにしてください）');
+    const y = Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : null;
+    return {ok: true, file: path.basename(file), ...parseCalendar(text, {year: y ?? undefined})};
   });
 
   handle('term.remove', ({termId}) => {
@@ -874,6 +907,10 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
     if (typeof patch.experiments === 'boolean') repo.setSetting('experiments.makerPens', patch.experiments);
     if (typeof patch.notifications === 'boolean') repo.setSetting('ui.notifications', patch.notifications);
+    if (typeof patch.calendarDismiss === 'string' && /^[\w-]{1,40}$/.test(patch.calendarDismiss))
+      repo.setSetting('calendar.dismissed', [
+        ...new Set([...repo.getSetting('calendar.dismissed', []), patch.calendarDismiss])
+      ]);
     // 使う人・使い方・大学名（大学名はいまは記録するだけ）。人を変えたら、その人の使い方に合わないものは外す
     if (isRole(patch.role)) {
       repo.setSetting('profile.role', patch.role);

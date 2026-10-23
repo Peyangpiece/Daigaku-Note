@@ -28,6 +28,7 @@ const COLUMNS = {
     'end_date',
     'rounds',
     'holidays_json',
+    'swaps_json',
     'periods_json',
     'source'
   ],

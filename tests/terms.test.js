@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
-import {cleanLabel, newTermId, saveTerm} from '../src/main/terms.js';
+import {cleanLabel, newTermId, recomputeRoundDates, saveTerm} from '../src/main/terms.js';
 
 async function setup(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'dn-terms-'));
@@ -160,4 +160,33 @@ test('仮の学期をまとめるとき、授業とパソコンのフォルダ�
   assert.equal(repo.get('course', c.id).term_id, row.id);
   assert.equal(repo.get('material', m.id).path, path.join(root, '2026_後期', '会計', 'a.pdf'));
   assert.equal(await readFile(repo.get('material', m.id).path, 'utf8'), 'a');
+});
+
+test('学年暦を保存すると、その学期の授業の回の日付を計算し直す。LMS から来た日付はそのまま', async (t) => {
+  const {root, repo} = await setup(t);
+  const a = await saveTerm({repo, rootDir: root}, {...fall, start: '2026-09-21', end: '2027-01-31'});
+  assert.equal(a.swaps_json, '[]');
+  const course = repo.createCourse({
+    term_id: a.id,
+    name: '管理会計',
+    folder_name: '管理会計',
+    weekday: '月',
+    period: 2
+  });
+  // 回 1〜3 は前の設定での計算の日付、回 4 は LMS から来た日付（計算と違う）
+  const r1 = repo.createRound({course_id: course.id, number: 1, folder_name: '01', date: '2026-09-28'});
+  const r2 = repo.createRound({course_id: course.id, number: 2, folder_name: '02', date: '2026-10-05'});
+  const r3 = repo.createRound({course_id: course.id, number: 3, folder_name: '03', date: '2026-10-19'});
+  const r4 = repo.createRound({course_id: course.id, number: 4, folder_name: '04', date: '2026-10-31'});
+  const b = await saveTerm(
+    {repo, rootDir: root},
+    {...fall, id: a.id, start: '2026-09-21', end: '2027-01-31', swaps: [{date: '2026-10-12', weekday: '月'}]}
+  );
+  assert.deepEqual(JSON.parse(b.swaps_json), [{date: '2026-10-12', weekday: '月'}]);
+  const n = recomputeRoundDates(repo, a, b);
+  assert.equal(repo.get('round', r1.id).date, '2026-09-28');
+  assert.equal(repo.get('round', r2.id).date, '2026-10-05');
+  assert.equal(repo.get('round', r3.id).date, '2026-10-12', 'スポーツの日に授業を行うので第 3 回はその日');
+  assert.equal(repo.get('round', r4.id).date, '2026-10-31', 'LMS から来た日付は変えない');
+  assert.equal(n, 1);
 });

@@ -1,6 +1,7 @@
 // 学期の設定（SPEC §6.14）：学期名からの既定の期間・学期フォルダ名・回の日付。副作用なし。
 import {sanitizeSegment} from './naming.js';
-import {addDays, holidaysBetween, weekdayOf, ymd} from './holidays.js';
+import {addDays, holidaysBetween, ymd} from './holidays.js';
+import {classWeekday, termCalendar} from './calendar.js';
 
 export const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -56,22 +57,36 @@ export function termId(year, label) {
 }
 
 /**
- * 第 N 回の日付：開始日以降のその曜日の N 番目。祝日（includeNationalHolidays）と休講日（holidays）を飛ばす。
+ * 第 N 回の日付：開始日以降で、その曜日の授業を行う N 番目の日。祝日（includeNationalHolidays）と休講日（holidays）を飛ばし、
+ * 振替授業日（swaps：{date, weekday}。その日に別の曜日の授業を行う。祝日に授業を行う日も含む）を数える（shared/calendar.js の classWeekday）。
  * weekday は '月'〜'日'。戻りは rounds 個の 'YYYY-MM-DD'（期間を超えた分は含めない）
  */
-export function roundDates({start, end, weekday, rounds = 15, holidays = [], includeNationalHolidays = true}) {
-  const wd = WEEKDAYS.indexOf(weekday);
-  if (wd < 0 || !start || !end) return [];
-  const skip = new Set(holidays);
-  if (includeNationalHolidays) for (const d of holidaysBetween(start, end)) skip.add(d);
+export function roundDates({
+  start,
+  end,
+  weekday,
+  rounds = 15,
+  holidays = [],
+  swaps = [],
+  includeNationalHolidays = true
+}) {
+  if (!WEEKDAYS.includes(weekday) || !start || !end || start > end) return [];
+  const cal = {holidays, swaps, national: includeNationalHolidays ? holidaysBetween(start, end) : false};
   const out = [];
-  let d = start;
-  while (weekdayOf(d) !== wd) d = addDays(d, 1);
-  while (d <= end && out.length < rounds) {
-    if (!skip.has(d)) out.push(d);
-    d = addDays(d, 7);
-  }
+  for (let d = start; d <= end && out.length < rounds; d = addDays(d, 1))
+    if (classWeekday(cal, d) === weekday) out.push(d);
   return out;
+}
+
+/** 学期の行（DB）と曜日から回の日付（同期の回の突き合わせと、学期を保存したときの計算し直しで同じ計算を使う） */
+export function termRoundDates(term, weekday) {
+  return roundDates({
+    start: term.start_date,
+    end: term.end_date,
+    weekday,
+    rounds: term.rounds ?? 15,
+    ...termCalendar(term)
+  });
 }
 
 const startOf = (t) => t.start ?? t.start_date;

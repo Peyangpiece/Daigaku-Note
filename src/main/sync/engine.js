@@ -2,7 +2,7 @@
 import {courseFolderName, roundFolderName} from '../../shared/naming.js';
 import {preferLayout} from '../../shared/layout.js';
 import {parseRound, resolveRound, roundTitle} from '../../shared/rounds.js';
-import {roundDates} from '../../shared/term.js';
+import {termRoundDates} from '../../shared/term.js';
 import {addDays} from '../../shared/holidays.js';
 
 /** 全部の回を確かめるとき、ダウンロードに失敗した資料があれば次の同期でも全部を確かめ直す回数の上限 */
@@ -371,15 +371,7 @@ export class SyncEngine {
     const existing = this.repo.listRounds(course.id);
     const byNumber = new Map(existing.map((r) => [r.number, r]));
     const taken = new Set(existing.map((r) => r.folder_name));
-    const dates = course.weekday
-      ? roundDates({
-          start: term.start_date,
-          end: term.end_date,
-          weekday: course.weekday,
-          rounds: term.rounds,
-          holidays: JSON.parse(term.holidays_json ?? '[]')
-        })
-      : [];
+    const dates = course.weekday ? termRoundDates(term, course.weekday) : []; // 休講日・振替授業日（学年暦）を見る
     const ensure = async (number, title, lmsRef, date) => {
       const cleanTitle = title ? roundTitle(title) : ''; // 「第3回 原価企画」→「原価企画」、「Week 2」→「」
       let row = byNumber.get(number);
