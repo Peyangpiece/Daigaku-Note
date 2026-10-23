@@ -1,19 +1,18 @@
 // トラックパッドの 2 本指の横スワイプで、一つ前の画面へ戻る・戻る前の画面へ進む（ブラウザの戻る・進むと同じ）。
 // 画面の切り替えは #/… のアドレスなので、history.back()・history.forward() で app.js の hashchange が描き直す。
-// 見分けは shared/swipe.js。指を動かしている間は、ノートのページ（#app）が指について横へずれながら捲れ、下に机が見える。
-// 指を離したとき、十分に動かしていればそのまま捲り切って切り替え、新しいページは反対側から捲られて入ってくる。
-// 足りなければ元の位置へ戻る。
+// 見分けは shared/swipe.js。指を動かしている間は、ノートのページ（#app）が指と同じだけ横へスライドし、下に机が見える。
+// 指を離したとき、十分に動かしていればそのまま画面の外までスライドして切り替え、新しいページは反対側からスライドして入ってくる。
+// 足りなければ元の位置へ戻る（傾けたり捲ったりはしない。横に動くだけ）。
 // 次のときはスワイプにしない：ピンチ（ctrlKey 付きの wheel。PDF の拡大）、ほかの部品が受けた wheel（defaultPrevented）、
 // 指の下にまだ横に動かせる所があるとき（拡大した PDF・横に長い表など。端まで動かしきってからのスワイプは戻る・進む）、
 // 戻る先・進む先がないとき
 import {SWIPE_DISTANCE, SWIPE_IDLE, createSwipe} from '../shared/swipe.js';
 
 const swipe = createSwipe();
-const TURN = 28; // 動かしきったときのページの傾き（度）
-const OUT_MS = 200; // 捲り切る時間
-const IN_MS = 240; // 新しいページが入ってくる時間
+const OUT_MS = 180; // 画面の外までスライドする時間
+const IN_MS = 220; // 新しいページがスライドして入ってくる時間
 let endTimer = 0;
-let busy = false; // 捲り切って入ってくるまで（その間の wheel は無視）
+let busy = false; // スライドして切り替わるまで（その間の wheel は無視）
 
 const page = () => document.getElementById('app');
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -34,60 +33,50 @@ function canScrollX(target, dx) {
 const canGo = (dir) =>
   window.navigation ? (dir === 'back' ? window.navigation.canGoBack : window.navigation.canGoForward) : true;
 
-/**
- * ページの位置と捲れ具合。p は -1.2〜1.2（負は戻る向き＝ページは右へ）。
- * ページは指と同じだけ横へずれ、進む向きの端が持ち上がるように傾く。端の影（--shade）も濃くなる
- */
-function place(p, {ms = 0} = {}) {
+/** ページの横の位置（px。正は右へ）。ms を付けるとその時間で動かす */
+function slide(x, {ms = 0} = {}) {
   const el = page();
   if (!el) return;
-  const root = document.documentElement;
-  root.classList.add('is-page-turning');
-  el.style.transition = ms ? `transform ${ms}ms ease-out, opacity ${ms}ms ease-out` : 'none';
-  el.style.transformOrigin = p < 0 ? 'left center' : 'right center';
-  el.style.transform = `perspective(1600px) translateX(${-p * SWIPE_DISTANCE}px) rotateY(${p * TURN}deg)`;
-  el.style.setProperty('--shade', String(Math.min(1, Math.abs(p))));
-  el.dataset.turn = p < 0 ? 'back' : 'forward';
+  document.documentElement.classList.add('is-page-sliding');
+  el.style.transition = ms ? `transform ${ms}ms cubic-bezier(0.2, 0.7, 0.3, 1)` : 'none';
+  el.style.transform = `translateX(${x}px)`;
 }
-/** ページを元に戻して、捲りの目印を外す */
+/** 指の動き（progress。負は戻る向き）に合わせた位置：指と同じだけ動く */
+const follow = (p) => slide(-p * SWIPE_DISTANCE);
+/** ページを元に戻して、スライドの目印を外す */
 function clear() {
   const el = page();
-  document.documentElement.classList.remove('is-page-turning');
+  document.documentElement.classList.remove('is-page-sliding');
   if (!el) return;
-  for (const k of ['transition', 'transform', 'transformOrigin', 'opacity']) el.style[k] = '';
-  el.style.removeProperty('--shade');
-  delete el.dataset.turn;
+  el.style.transition = '';
+  el.style.transform = '';
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** 指を離して足りなかったとき：元の位置へ戻す */
 async function settle() {
   if (reduced()) return clear();
-  place(0, {ms: 180});
+  slide(0, {ms: 180});
   await wait(190);
   if (!busy) clear();
 }
 
-/** 捲り切って切り替え、新しいページを反対側から入れる */
+/** 画面の外までスライドして切り替え、新しいページを反対側からスライドして入れる（戻るは右へ、進むは左へ流れる） */
 async function turn(dir) {
   busy = true;
-  const sign = dir === 'back' ? -1 : 1;
+  const w = window.innerWidth;
+  const to = dir === 'back' ? w : -w; // いまのページが出ていく先
   if (!reduced()) {
-    const el = page();
-    place(sign * 2.6, {ms: OUT_MS});
-    if (el) el.style.opacity = '0';
+    slide(to, {ms: OUT_MS});
     await wait(OUT_MS);
   }
   if (dir === 'back') history.back();
   else history.forward();
   await wait(30); // hashchange で描き直すのを待つ
   if (!reduced()) {
-    place(-sign * 0.9);
-    const el = page();
-    if (el) el.style.opacity = '0';
-    void el?.offsetWidth;
-    place(0, {ms: IN_MS});
-    if (el) el.style.opacity = '1';
+    slide(-to); // 新しいページは反対側の画面の外から
+    void page()?.offsetWidth;
+    slide(0, {ms: IN_MS});
     await wait(IN_MS);
   }
   clear();
@@ -103,16 +92,16 @@ window.addEventListener(
     endTimer = setTimeout(() => {
       const go = swipe.end();
       if (go) turn(go);
-      else if (document.documentElement.classList.contains('is-page-turning')) settle();
+      else if (document.documentElement.classList.contains('is-page-sliding')) settle();
     }, SWIPE_IDLE);
     if (!r) return;
     const dir = r.progress < 0 ? 'back' : 'forward';
     if (r.progress !== 0 && (canScrollX(e.target, e.deltaX) || !canGo(dir))) {
       swipe.cancel(); // このスワイプは横のスクロールとして使う（途中から戻る・進むにしない）
-      if (document.documentElement.classList.contains('is-page-turning')) settle();
+      if (document.documentElement.classList.contains('is-page-sliding')) settle();
       return;
     }
-    place(r.progress);
+    follow(r.progress);
   },
   {passive: true}
 );

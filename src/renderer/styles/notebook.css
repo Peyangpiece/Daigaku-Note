@@ -5126,29 +5126,15 @@ button.fb-card {
   }
 }
 
-/* トラックパッドの 2 本指の横スワイプ（renderer/swipe.js）：ノートのページ（#app）が指について捲れる。
-   下には机（紙より暗い色）が見え、ページには影と、持ち上がった端の陰（--shade）が付く */
-html.is-page-turning,
-html.is-page-turning body {
+/* トラックパッドの 2 本指の横スワイプ（renderer/swipe.js）：ノートのページ（#app）が指と同じだけ横へスライドする。
+   スライドしている間は、ページの下に机（紙より暗い色）が見え、ページの縁に影が付く */
+html.is-page-sliding,
+html.is-page-sliding body {
   overflow-x: hidden;
   background: color-mix(in srgb, var(--paper) 78%, #000);
 }
-html.is-page-turning #app {
-  position: relative;
+html.is-page-sliding #app {
   min-height: 100vh;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0 32px rgba(0, 0, 0, 0.25);
   will-change: transform;
-  backface-visibility: hidden;
-}
-html.is-page-turning #app::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 100;
-  pointer-events: none;
-  opacity: var(--shade, 0);
-  background: linear-gradient(to left, rgba(0, 0, 0, 0.22), transparent 35%);
-}
-html.is-page-turning #app[data-turn='forward']::after {
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.22), transparent 35%);
 }
