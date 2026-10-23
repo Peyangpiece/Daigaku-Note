@@ -5138,3 +5138,19 @@ html.is-page-sliding #app {
   box-shadow: 0 0 32px rgba(0, 0, 0, 0.25);
   will-change: transform;
 }
+/* スワイプで並ぶ行き先のページの写し（前に開いていたときのもの）。いまのページと並んで横にスライドする */
+.swipe-under.paper {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-attachment: scroll;
+  will-change: transform;
+}
+.swipe-under.is-leaving {
+  opacity: 0;
+  transition: opacity 0.3s ease 0.25s;
+}
