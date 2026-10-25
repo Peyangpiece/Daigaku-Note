@@ -5171,7 +5171,8 @@ html.is-page-sliding #app {
 }
 .corner--pouch {
   right: 16px;
-  bottom: 16px;
+  top: 50vh; /* 画面を四つに分けた右下の四角の上から（つまみはその右上） */
+  max-height: calc(50vh - 16px);
   width: 260px;
   background: #8a5a44; /* 帆布のポーチ */
   color: #fff;
@@ -5183,9 +5184,9 @@ html.is-page-sliding #app {
 }
 .corner--sozai {
   left: 16px;
-  bottom: 16px;
+  top: 50vh; /* 画面を四つに分けた左下の四角の上から（つまみはその左上） */
   width: 340px;
-  max-height: calc(100vh - var(--corner-top, 120px) - 16px);
+  max-height: calc(50vh - 16px);
 }
 .corner--pouch.is-tucked {
   transform: translateX(calc(100% + 16px));
@@ -5215,7 +5216,7 @@ html.is-page-sliding #app {
 }
 .corner--pouch .corner__tab {
   left: -30px;
-  bottom: 24px;
+  top: 8px;
   border-radius: 10px 0 0 10px;
   box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.2);
 }
@@ -5227,7 +5228,7 @@ html.is-page-sliding #app {
 }
 .corner--sozai .corner__tab {
   right: -30px;
-  bottom: 24px;
+  top: 8px;
   border-radius: 0 10px 10px 0;
   box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
 }
@@ -6048,4 +6049,146 @@ html.is-page-sliding #app {
 /* 机の赤シートは下書きの層より上（文字隠しペンの下書きも黒く隠れる） */
 .desk .red-sheet {
   z-index: 19;
+}
+
+/* 素材の図：SVG の上に文字の層。文字の大きさは図の幅に合わせる（--fig-w は viewBox の幅） */
+.fig {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  container-type: inline-size;
+}
+.fig__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* グラフの曲線は図の枠で切る */
+}
+.fig__labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.fig__label {
+  position: absolute;
+  padding: 0 1px;
+  color: #2b2b2b;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+  font-size: calc(var(--s) * 100cqw / var(--fig-w));
+  line-height: 1.1;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  outline: none;
+}
+.fig__label.is-math {
+  font-family: 'Times New Roman', Times, serif;
+  font-style: italic;
+}
+.fig.is-editing {
+  outline: 2px dashed var(--c4);
+  outline-offset: 3px;
+  cursor: text;
+}
+.fig.is-editing .fig__labels {
+  pointer-events: auto;
+}
+.fig.is-editing .fig__label {
+  cursor: move;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c4) 60%, transparent);
+}
+.fig.is-editing .fig__label:focus {
+  cursor: text;
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--c4);
+}
+.anno-stamp__fig {
+  width: 100%;
+  height: 100%;
+}
+.viewer-pages[data-tool='select'] .anno-stamp--figure:hover .anno-stamp__grip,
+.viewer-pages[data-tool='select'] .anno-stamp--sticker:hover .anno-stamp__grip {
+  display: block;
+}
+.fig-ed {
+  z-index: 40;
+  width: 270px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+.fig-ed__fields {
+  display: grid;
+  gap: 8px;
+}
+.fig-ed__field {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+.fig-ed__field > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fig-ed__field--num {
+  grid-template-columns: 1fr 84px;
+  align-items: center;
+}
+.fig-ed__field select,
+.fig-ed__field input[type='number'] {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  border-radius: 7px;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.fig-ed__formula {
+  margin: 10px 0 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fff0f6;
+  color: #c2255c;
+  font:
+    italic 16px 'Times New Roman',
+    Times,
+    serif;
+  text-align: center;
+}
+.fig-ed__hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.75;
+}
+.fig-ed__foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+/* 机の下書きの貼りもの：右下のつまみで大きさを変える */
+.desk-stamp > .fig {
+  width: 100%;
+  height: 100%;
+}
+.desk-stamp__grip {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  background: var(--c4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.desk-stamp:hover .desk-stamp__grip {
+  opacity: 1;
 }

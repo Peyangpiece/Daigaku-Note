@@ -49,6 +49,7 @@ import {
 import {MEMO_COLOR, MEMO_SIZE, NOTE_INK_SCALE, hidesUnderRedSheet} from '../../shared/annotation.js';
 import {BUILTIN_STICKERS, isBuiltinSticker} from '../../shared/stickers.js';
 import {figureOf, figureUrl} from '../../shared/figures.js';
+import {openFigureEditor, renderFigure} from '../figure-view.js';
 import {
   CSS_UNITS,
   DeskTools,
@@ -797,7 +798,9 @@ class Viewer extends DeskTools {
           ? '<div class="anno-stamp__memo"><div class="anno-stamp__text"></div></div><span class="anno-stamp__grip" aria-hidden="true"></span>'
           : a.style.type === 'index'
             ? '<span class="anno-stamp__tab"></span>'
-            : '<img class="anno-stamp__img" alt="" draggable="false" /><span class="anno-stamp__grip" aria-hidden="true"></span>';
+            : a.style.type === 'figure'
+              ? '<div class="anno-stamp__fig"></div><span class="anno-stamp__grip" aria-hidden="true"></span>'
+              : '<img class="anno-stamp__img" alt="" draggable="false" /><span class="anno-stamp__grip" aria-hidden="true"></span>';
     } else if (a.kind === 'mask') {
       el.className = 'anno-mask';
       el.title = '文字隠し';
@@ -891,12 +894,13 @@ class Viewer extends DeskTools {
       a.el.setAttribute('aria-label', `メモ帳の紙：${a.body.slice(0, 40) || '（白紙）'}`);
       return;
     }
-    const img = a.el.querySelector('img');
     if (type === 'figure') {
-      img.src = figureUrl(ref);
-      a.el.setAttribute('aria-label', `素材：${figureOf(ref)?.name ?? '図'}`);
+      // 図：SVG の上に文字の層（書き換えられる）。決め事（水の量・グラフの式など）も style に持つ
+      if (!a.el.querySelector('.fig.is-editing')) renderFigure(a.el.querySelector('.anno-stamp__fig'), a.style);
+      a.el.setAttribute('aria-label', `素材：${figureOf(ref)?.name ?? '図'}（押すと書き換え）`);
       return;
     }
+    const img = a.el.querySelector('img');
     const shape = isBuiltinSticker(ref)
       ? 'cut'
       : ((state.data?.skin?.stickers ?? []).find((x) => x.id === ref)?.shape ?? 'cut');
@@ -1199,6 +1203,7 @@ class Viewer extends DeskTools {
 
   undo() {
     this.finishEdit();
+    this.figEditor?.close();
     const step = this.undoStack.pop();
     if (!step) return;
     for (const st of step.group ? [...step.group].reverse() : [step]) this.restore(st.key, st.before);
@@ -1208,6 +1213,7 @@ class Viewer extends DeskTools {
 
   redo() {
     this.finishEdit();
+    this.figEditor?.close();
     const step = this.redoStack.pop();
     if (!step) return;
     for (const st of step.group ?? [step]) this.restore(st.key, st.after);
@@ -1489,7 +1495,7 @@ class Viewer extends DeskTools {
         <div class="index-pad__colors">${colors}</div>
         <p class="index-pad__hint">色を押すと、見ているページの右の端に貼れます。貼った付箋は上下に動かせます</p>
         <div class="index-pad__list" data-index-list></div>`,
-        {right: 24, bottom: 160},
+        {right: 580, top: 72}, // 付箋：メモ帳の左
         () => this.toggleIndexPad(false)
       );
       el.addEventListener('pointerdown', (e) => {
@@ -1780,6 +1786,15 @@ class Viewer extends DeskTools {
     this.on(el, 'dblclick', (e) => {
       const a = this.annoOf(e.target);
       if (a?.kind === 'text') this.edit(a);
+      else if (a?.kind === 'stamp' && a.style.type === 'figure' && !this.figEditor) this.editFigure(a);
+    });
+    // 図を右クリック：書き換える（座標平面は、描く式の種類から選ぶ）
+    this.on(el, 'contextmenu', (e) => {
+      const a = this.annoOf(e.target);
+      if (a?.kind !== 'stamp' || a.style.type !== 'figure') return;
+      e.preventDefault();
+      this.select(a);
+      this.editFigure(a, 'formula');
     });
     this.on(el, 'click', (e) => {
       const btn = e.target.closest('[data-note]');
@@ -1837,9 +1852,12 @@ class Viewer extends DeskTools {
     if (a) {
       if (this.editing === a) return; // 編集中の文字はカーソル移動・範囲選択
       e.preventDefault();
+      const wasSelected = this.selected === a;
       this.select(a);
       this.drag = {
         a,
+        wasSelected, // 選んであった図をもう一度押したら、書き換える
+        curve: !!e.target.closest('[data-curve]'), // グラフの曲線を押したら、式を入れる
         before: this.snap(a),
         x: e.clientX,
         y: e.clientY,
@@ -2615,7 +2633,10 @@ class Viewer extends DeskTools {
           box: this.toScreen(a.page, a.rect),
           scale: p.viewport.scale,
           style: {...a.style},
-          src: a.el.querySelector('img')?.src ?? '',
+          src:
+            a.style.type === 'figure'
+              ? figureUrl(a.style.ref, a.style.params, a.style.labels ?? null)
+              : (a.el.querySelector('img')?.src ?? ''),
           label: a.body,
           shape: a.el.dataset.shape ?? 'cut'
         });
@@ -2865,6 +2886,31 @@ class Viewer extends DeskTools {
       this.scheduleSave(a, 0);
     } else if (a.kind === 'note') this.openNote(a, a.el.querySelector('.anno-note__pop').hidden);
     else if (a.kind === 'text' && this.tool === 'text') this.edit(a);
+    else if (a.kind === 'stamp' && a.style.type === 'figure' && (d.wasSelected || d.curve) && !d.resize)
+      this.editFigure(a, d.curve ? 'formula' : null);
+  }
+
+  /** 図を書き換える（決め事・文字）。閉じたときに、書き換え全体を取り消しの 1 手にする */
+  editFigure(a, focus = null) {
+    this.figEditor?.close();
+    const before = this.snap(a);
+    this.figEditor = openFigureEditor({
+      host: this.root,
+      el: a.el.querySelector('.anno-stamp__fig'),
+      style: a.style,
+      focus,
+      onChange: (st) => {
+        a.style = st;
+        this.scheduleSave(a);
+      },
+      onClose: (st) => {
+        this.figEditor = null;
+        if (a.removed) return;
+        a.style = st;
+        this.record(a.key, before, this.snap(a));
+        this.scheduleSave(a, 0);
+      }
+    });
   }
 
   /**
@@ -2942,6 +2988,7 @@ class Viewer extends DeskTools {
     clearTimeout(this.tuckTimer);
     this.toggleSheet(false);
     this.toggleIndexPad(false);
+    this.figEditor?.close();
     this.closeTools();
     this.ring?.remove();
     cancelAnimationFrame(this.coverFrame);

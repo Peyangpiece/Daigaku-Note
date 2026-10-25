@@ -248,3 +248,24 @@ test('貼りもの：付箋（インデックス）は色と短い言葉だけ',
   assert.ok(normalizeAnnotation(idx({type: 'index'}, 'あ'.repeat(12))));
   assert.throws(() => normalizeAnnotation(idx({type: 'index'}, 'あ'.repeat(13))), /長すぎ/);
 });
+
+test('貼りもの：図の決め事と書き換えた文字を整えて残す', () => {
+  const fig = (style) => ({kind: 'stamp', page: 1, rect: {x: 10, y: 20, w: 150, h: 150}, body: '', style});
+  const a = normalizeAnnotation(
+    fig({
+      type: 'figure',
+      ref: 'fig-coord',
+      params: {fn: 'linear', a: 2, b: 1, z: 9},
+      labels: [{x: 0.5, y: 0.5, t: '傾き 2'}]
+    })
+  );
+  const st = JSON.parse(a.style_json);
+  assert.equal(st.params.fn, 'linear');
+  assert.equal(st.params.a, 2);
+  assert.equal(st.params.z, undefined);
+  assert.deepEqual(st.labels, [{x: 0.5, y: 0.5, t: '傾き 2'}]);
+  assert.deepEqual(JSON.parse(normalizeAnnotation(fig({type: 'figure', ref: 'fig-cube'})).style_json), {
+    type: 'figure',
+    ref: 'fig-cube'
+  });
+});

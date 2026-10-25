@@ -10,7 +10,7 @@ import {isTyping, state} from './app.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, tearClip} from './desk-tools.js';
 import {TYPE_LABEL, heldPen, itemOf, stationeryState, toolArt} from '../shared/stationery.js';
 import {createCapture, strokePath, touchesStroke} from '../shared/ink.js';
-import {figureUrl} from '../shared/figures.js';
+import {openFigureEditor, renderFigure} from './figure-view.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ERASER_PX = 12;
@@ -158,6 +158,7 @@ class Desk extends DeskTools {
     this.scratch.style.height = `${el.scrollHeight}px`;
   }
   clearScratch() {
+    this.figEditor?.close();
     for (const s of this.strokes) s.el.remove();
     this.strokes = [];
     for (const el of this.scratch.querySelectorAll('.desk-stamp')) el.remove();
@@ -258,38 +259,84 @@ class Desk extends DeskTools {
       el.innerHTML = '<div class="desk-stamp__memo"></div>';
       el.firstElementChild.textContent = spec.body;
       el.firstElementChild.style.clipPath = tearClip(w, MEMO_DEPTH * CSS_UNITS, MEMO_TOOTH * CSS_UNITS);
+    } else if (spec.type === 'figure') {
+      // 図：押すと書き換え（決め事・文字）。右クリックでも（座標平面は描く式を選ぶ）
+      const fig = document.createElement('div');
+      el.append(fig);
+      el.figStyle = {type: 'figure', ref: spec.ref};
+      renderFigure(fig, el.figStyle);
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        this.editFigure(el, 'formula');
+      });
     } else {
       const img = document.createElement('img');
       img.alt = '';
       img.draggable = false;
-      if (spec.type === 'figure') img.src = figureUrl(spec.ref);
-      else this.stickerSrc(spec.ref).then((url) => (img.src = url));
+      this.stickerSrc(spec.ref).then((url) => (img.src = url));
       el.append(img);
     }
     el.insertAdjacentHTML(
       'beforeend',
-      '<button type="button" class="desk-stamp__remove" aria-label="外す" title="外す">×</button>'
+      '<button type="button" class="desk-stamp__remove" aria-label="外す" title="外す">×</button><span class="desk-stamp__grip" title="ドラッグで大きさを変える" aria-hidden="true"></span>'
     );
-    el.querySelector('.desk-stamp__remove').addEventListener('click', () => el.remove());
+    el.querySelector('.desk-stamp__remove').addEventListener('click', () => {
+      this.figEditor?.close();
+      el.remove();
+    });
+    // ドラッグで動かす。右下のつまみで大きさを変える（ちぎった紙のほかは縦横の比を保つ）。動かさずに離したら、図は書き換え
     el.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0 || e.target.closest('button')) return;
+      if (e.button !== 0 || e.target.closest('button') || el.querySelector('.fig.is-editing')) return;
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
-      const sx = e.clientX - parseFloat(el.style.left),
-        sy = e.clientY - parseFloat(el.style.top);
+      const resize = !!e.target.closest('.desk-stamp__grip');
+      const x0 = e.clientX,
+        y0 = e.clientY;
+      const l0 = parseFloat(el.style.left),
+        t0 = parseFloat(el.style.top),
+        w0 = el.offsetWidth,
+        h0 = el.offsetHeight;
+      let moved = false;
       const move = (ev) => {
-        el.style.left = `${ev.clientX - sx}px`;
-        el.style.top = `${ev.clientY - sy}px`;
+        const dx = ev.clientX - x0,
+          dy = ev.clientY - y0;
+        if (!moved && Math.hypot(dx, dy) < 4) return;
+        moved = true;
+        if (resize) {
+          const w = Math.max(24, w0 + dx);
+          el.style.width = `${w}px`;
+          el.style.height = `${spec.type === 'memo' ? Math.max(24, h0 + dy) : (w * h0) / w0}px`;
+        } else {
+          el.style.left = `${l0 + dx}px`;
+          el.style.top = `${t0 + dy}px`;
+        }
       };
       const up = () => {
         el.removeEventListener('pointermove', move);
         el.removeEventListener('pointerup', up);
+        if (!moved && !resize && el.figStyle) this.editFigure(el, e.target.closest('[data-curve]') ? 'formula' : null);
       };
       el.addEventListener('pointermove', move);
       el.addEventListener('pointerup', up);
     });
     this.scratch.append(el);
     return {el};
+  }
+
+  /** 下書きの図を書き換える（保存はしない） */
+  editFigure(el, focus = null) {
+    this.figEditor?.close();
+    this.figEditor = openFigureEditor({
+      host: this.root,
+      el: el.querySelector('.fig'),
+      style: el.figStyle,
+      focus,
+      onChange: (st) => (el.figStyle = st),
+      onClose: (st) => {
+        el.figStyle = st;
+        this.figEditor = null;
+      }
+    });
   }
 
   // ---- 赤シート：画面の上に赤を乗算で重ねる。ドラッグで動かし、右下で大きさを変える ----

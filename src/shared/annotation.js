@@ -7,10 +7,11 @@
 // 貼りもの（stamp）：シール帳のシール・素材の図・メモ帳からちぎった紙。style.type で分け、style.ref にシール・図の id。
 //   ちぎった紙（memo）は body に書いた文字、style に紙の色と文字の大きさ。rect は貼った四角（大きさを変えられる）
 //   付箋（index）はページの端から外へはみ出して貼る目印。body に短い言葉、style に色
+//   図（figure）は style.params に決め事（shared/figures.js の cleanParams）、style.labels に書き換えた文字（cleanLabels）
 import {WIDTH_MAX, WIDTH_MIN, boundsOf, decodePoints, encodePoints} from './ink.js';
 import {hiderColorOk} from './stationery.js';
 import {isBuiltinSticker} from './stickers.js';
-import {isFigure} from './figures.js';
+import {cleanLabels, cleanParams, isFigure} from './figures.js';
 
 export const KINDS = ['text', 'note', 'mask', 'ink', 'line', 'stamp'];
 export const STAMP_TYPES = ['sticker', 'figure', 'memo', 'index'];
@@ -145,8 +146,13 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
       if (typeof body === 'string' && [...body].length > INDEX_LABEL_MAX)
         throw new Error(`付箋の言葉が長すぎます（${INDEX_LABEL_MAX} 文字まで）`);
       cleanStyle = {type, color: isHex(s.color) ? s.color.toLowerCase() : INDEX_COLOR};
-    } else if (type === 'figure' && isFigure(s.ref)) cleanStyle = {type, ref: s.ref};
-    else if (type === 'sticker' && (isBuiltinSticker(s.ref) || /^[0-9a-f]{64}$/.test(s.ref ?? '')))
+    } else if (type === 'figure' && isFigure(s.ref)) {
+      // 図：決め事（水の量・グラフの式など）と、書き換えた文字（書き換えていなければ持たない）
+      cleanStyle = {type, ref: s.ref};
+      if (s.params && typeof s.params === 'object') cleanStyle.params = cleanParams(s.ref, s.params);
+      const labels = cleanLabels(s.labels);
+      if (labels) cleanStyle.labels = labels;
+    } else if (type === 'sticker' && (isBuiltinSticker(s.ref) || /^[0-9a-f]{64}$/.test(s.ref ?? '')))
       cleanStyle = {type, ref: s.ref};
     else throw new Error('貼りものが不正です');
     return {
