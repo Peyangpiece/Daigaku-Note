@@ -411,13 +411,13 @@ export class DeskTools {
 
   // ---- ポーチ：電卓・メモ帳（§9.9）。画面に浮かぶ小さな窓。上の帯をつかんで動かす ----
   /** 浮かぶ窓を作る。right・bottom は最初の位置（画面の右下から） */
-  floatTool(cls, label, inner, {right, bottom}, onClose) {
+  floatTool(cls, label, inner, {right, bottom, top}, onClose) {
     const el = document.createElement('div');
     el.className = `float-tool ${cls}`;
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-label', label);
     el.innerHTML = `<div class="float-tool__head"><strong>${label}</strong><button type="button" class="float-tool__close" data-float-close aria-label="${label}をしまう" title="しまう">×</button></div>${inner}`;
-    Object.assign(el.style, {right: `${right}px`, bottom: `${bottom}px`});
+    Object.assign(el.style, {right: `${right}px`, ...(top != null ? {top: `${top}px`} : {bottom: `${bottom}px`})});
     el.querySelector('[data-float-close]').addEventListener('click', onClose);
     el.querySelector('.float-tool__head').addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || e.target.closest('button')) return;
@@ -461,7 +461,7 @@ export class DeskTools {
         'calc',
         '電卓',
         `<div class="calc__screen"><div class="calc__prev" data-calc-prev aria-live="polite"></div><input class="calc__input" data-calc-input spellcheck="false" autocomplete="off" aria-label="式（キーボードでも打てます。Enter で計算）" /></div><div class="calc__keys">${keys}</div>`,
-        {right: 340, bottom: 24},
+        {right: 300, bottom: 16}, // 電卓：ポーチの左下
         () => this.toggleCalc(false)
       );
       const input = el.querySelector('[data-calc-input]');
@@ -529,7 +529,7 @@ export class DeskTools {
           </div>
         </div>
         <div class="memo-pad__foot"><span class="swatches">${colors}</span><button type="button" class="btn btn--small btn--primary" data-memo-tear title="いちばん上の紙をちぎって、見ているページに貼る">ちぎる</button></div>`,
-        {right: 24, bottom: 160},
+        {right: 300, top: 72}, // メモ帳：ポーチの左上
         () => this.toggleMemo(false)
       );
       const ta = el.querySelector('textarea');
@@ -700,7 +700,7 @@ export class DeskTools {
         `<div class="timer__face"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" class="timer__track"/><circle cx="60" cy="60" r="52" class="timer__ring" data-timer-ring pathLength="1"/></svg><output class="timer__clock" data-timer-clock aria-live="off"></output></div>
         <div class="timer__presets">${presets}<label class="timer__custom"><input type="number" min="1" max="180" data-timer-custom aria-label="分を入れる" placeholder="分" /></label></div>
         <div class="timer__foot"><button type="button" class="btn btn--small" data-timer-reset>リセット</button><button type="button" class="btn btn--small btn--primary" data-timer-go></button></div>`,
-        {right: 300, bottom: 24},
+        {right: 580, bottom: 16}, // タイマー：電卓の左
         () => this.toggleTimer(false)
       );
       el.addEventListener('click', (e) => {
