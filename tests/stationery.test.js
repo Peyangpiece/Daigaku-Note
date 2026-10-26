@@ -76,25 +76,26 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
     art.items.map((it) => it.id),
     ['pen-sakura-05', 'pen-mint-05', 'pen-wood-07', 'pen-navy-038']
   );
-  // 既製品の見た目の品（メーカーの許しなし）は、許しを得るまでショップに出さない
-  assert.equal(
-    series.find((s) => s.id === 'jetstream'),
-    undefined
+  // 既製品の見た目の品も、α 版のあいだはショップに出す
+  const js = series.find((s) => s.id === 'jetstream');
+  assert.deepEqual(
+    js.items.map((it) => it.id),
+    ['maker-jetstream-black', 'maker-jetstream-red']
   );
-  assert.equal(
-    series.find((s) => s.id === 'maker-craftlab-004'),
-    undefined
-  );
-  assert.ok(series.every((s) => s.items.every((it) => !it.experimental)));
-  const clear = series.find((s) => s.id === 'case-clear');
-  assert.equal(clear.items.length, 1, 'シリーズのない品は 1 品で 1 枚');
-  assert.equal(itemOf('maker-craftlab-004').featured, true, '許しを得て出すときは上の帯に出す');
+  assert.equal(js.price, 165);
+  assert.equal(js.from, false);
+  const craft = series.find((s) => s.id === 'maker-craftlab-004');
+  assert.equal(craft.items.length, 1, 'シリーズのない品は 1 品で 1 枚');
+  assert.ok(craft.items[0].featured, '新しく入った品は上の帯に出す');
   for (const s of series)
     assert.ok(
       s.items.every((it) => it.type === s.type),
       '札の中の種類はそろう'
     );
-  assert.deepEqual(siblingsOf(itemOf('maker-sarasa-black')), [], '出していない品に色ちがいはない');
+  assert.deepEqual(
+    siblingsOf(itemOf('maker-sarasa-black')).map((it) => it.id),
+    ['maker-sarasa-black', 'maker-sarasa-red']
+  );
   assert.deepEqual(
     siblingsOf(itemOf('case-clear')).map((it) => it.id),
     ['case-clear']
@@ -118,24 +119,37 @@ test('カートとレジ：合計は品の値段の和。無料だけなら支�
   assert.deepEqual(free.order.payment, {method: 'points'});
   assert.equal(free.order.id, 'o1');
   assert.equal(free.order.at, '2026-10-23T12:00:00.000Z');
-  // 出していない品（既製品の見た目）は買えない
-  assert.throws(() => purchase(null, ['maker-craftlab-004'], {method: 'demo'}), /ありません/);
-  // 円の品の支払い（α 版はデモだけ。カードの情報は受け取らない）：出している円の品がないので、品ぞろえに円の品を足して確かめる
-  const yenItem = {...itemOf('pen-green-05'), id: 'test-yen', price: 500, points: 0};
-  CATALOG.push(yenItem);
-  try {
-    const {itemOf: fresh} = {itemOf: (id) => (id === 'test-yen' ? yenItem : itemOf(id))};
-    assert.equal(fresh('test-yen').price, 500);
-    assert.throws(() => purchase(null, ['pen-wood-07', 'test-yen']), /支払い|ありません/);
-  } finally {
-    CATALOG.pop();
-  }
+  // 円の品は支払いの方法が要る（α 版はデモだけ。カードの情報は受け取らない・残さない）
+  assert.throws(() => purchase(null, ['maker-craftlab-004']), /支払い/);
+  assert.throws(() => purchase(null, ['maker-craftlab-004'], {method: 'card'}), /支払い/);
+  const paid = purchase(null, ['maker-craftlab-004', 'maker-sarasa-red'], {
+    method: 'demo',
+    last4: '4242 4242 4242 4242'
+  });
+  assert.equal(paid.order.total, 8910);
+  assert.equal(paid.order.points, 0);
+  assert.deepEqual(paid.order.payment, {method: 'demo'}, 'カードの番号は残さない');
+  assert.deepEqual(
+    paid.order.items.map((x) => [x.id, x.price]),
+    [
+      ['maker-craftlab-004', 8800],
+      ['maker-sarasa-red', 110]
+    ]
+  );
+  assert.ok(paid.stationery.owned.includes('maker-craftlab-004'));
   // 同じ品を 2 回は買えない。空のカート・ない品は断る
+  assert.throws(() => purchase(paid.stationery, ['maker-sarasa-red'], {method: 'demo'}), /持っています/);
   assert.throws(() => purchase(free.stationery, ['pen-wood-07']), /持っています/);
   assert.throws(() => purchase(null, []), /空/);
   assert.throws(() => purchase(null, ['gold-pen']), /ありません/);
-  // 近道（acquire）はポイントの品を断る（カートからレジへ）
+  // 近道（acquire）は円の品もポイントの品も断る（カートからレジへ）
+  assert.throws(() => acquire(null, 'maker-craftlab-004'), /カート/);
   assert.throws(() => acquire(null, 'pen-wood-07'), /カート/);
+  // 円とポイントの品をいっしょに買える
+  const both = purchase(null, ['maker-sarasa-red', 'pen-green-05'], {method: 'demo'});
+  assert.equal(both.order.total, 110);
+  assert.equal(both.order.points, itemOf('pen-green-05').points);
+  assert.equal(both.order.payment.method, 'demo');
   // ポイントの品をまとめて買える
   const mixed = purchase(null, ['pen-green-05', 'marker-blue'], null);
   assert.equal(mixed.order.total, 0);
@@ -185,20 +199,21 @@ test('絵：道具とペンケースの SVG に名前が入る（名前は文字
     assert.match(caseArt(itemOf(id)), /<svg/);
 });
 
-test('既製品の見た目のペン：メーカーの許しを得るまでショップに出さず買えない（目印 experimental）。持っている人の筆箱には残る', async () => {
+test('既製品の見た目のペン：α 版のあいだはショップに出て入手できる（正式な公開の前に見直す目印 experimental）。持っている人の筆箱には残る', async () => {
   const {MAKER_ITEMS_LISTED, listed} = await import('../src/shared/stationery.js');
   const js = itemOf('maker-jetstream-black');
   assert.equal(js.experimental, true);
-  assert.equal(MAKER_ITEMS_LISTED, false);
-  assert.equal(listed(js), false);
+  assert.equal(MAKER_ITEMS_LISTED, true);
+  assert.equal(listed(js), true);
   assert.equal(listed(itemOf('pen-black-05')), true);
-  assert.throws(() => purchase(null, ['maker-sarasa-red'], {method: 'demo'}), /ありません/);
+  assert.ok(purchase(null, ['maker-sarasa-red'], {method: 'demo'}).stationery.owned.includes('maker-sarasa-red'));
   assert.throws(() => acquire(null, 'gold-pen'), /ありません/);
   // 前の版で買った人の持ち物と筆箱の場所はそのまま
   const st = stationeryState({owned: ['maker-sarasa-red'], slots: ['maker-sarasa-red', null, null, null, null, null]});
   assert.ok(st.owned.includes('maker-sarasa-red'));
   assert.equal(st.slots[0], 'maker-sarasa-red');
   assert.match(toolArt(js), /JETSTREAM/);
+  assert.match(toolArt(itemOf('maker-sarasa-red')), /SARASA/);
 });
 
 test('多機能ペン（サクラクラフトラボ 004）：3 本の芯を回して使い、選んだ芯は設定に残る', async () => {
@@ -206,7 +221,7 @@ test('多機能ペン（サクラクラフトラボ 004）：3 本の芯を回�
   const it = itemOf('maker-craftlab-004');
   assert.equal(it.type, 'pen');
   assert.equal(it.experimental, true, '既製品（正式な公開の前に見直す）');
-  assert.equal(listed(it), false, 'メーカーの許しを得るまで出さない');
+  assert.equal(listed(it), true, 'α 版のあいだはショップに出す');
   assert.equal(it.art, 'model');
   assert.equal(it.model, 'craftlab-004');
   assert.equal(it.refill, '4C');

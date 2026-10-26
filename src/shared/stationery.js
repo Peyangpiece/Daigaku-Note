@@ -396,10 +396,11 @@ export function arrange(raw, {slots, caseId, refills} = {}) {
   });
 }
 
-// 既製品の見た目の品（experimental）：メーカー（三菱鉛筆・ゼブラ・サクラクレパス）の許しを得ていない個人の試作なので、
-// 公開する配布物では出さない（false。SPEC §9.8）。許しを得たら true にし、electron-builder.yml の GLB の除外も外す。
-// すでに持っている人の筆箱には残る（stationeryState は品ぞろえにある品を外さない）
-export const MAKER_ITEMS_LISTED = false;
+// 既製品の見た目の品（experimental）：メーカー（三菱鉛筆・ゼブラ・サクラクレパス）の許しを得ていない個人の試作。
+// α 版（正式な公開の前）のあいだは、ふつうの品と同じようにショップに出し、3D モデルも配布物に入れる（SPEC §9.8）。
+// 正式に公開する前に見直す：許しを得られなければ false にし、electron-builder.yml で GLB を除く。
+// false にしても、すでに持っている人の筆箱には残る（stationeryState は品ぞろえにある品を外さない）
+export const MAKER_ITEMS_LISTED = true;
 /** ショップに出す品か */
 export const listed = (item) => !item.experimental || MAKER_ITEMS_LISTED;
 
