@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 // レンダラの import の決まり（v0.10.4）：画面（views・desk・viewer）は app.js を読まず、ui-kit.js（DOM の部品）と store.js（状態・経路）を読む。
 // 静的な import に循環がない。shared は shared の中だけを読む（Node のテストからも読めるように）
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // Windows でも動く（pathname は /C:/… になる）
 const walk = (dir) =>
   readdirSync(dir).flatMap((f) => {
     const p = path.join(dir, f);
