@@ -1,6 +1,7 @@
 // ジョブの待ち行列（SPEC §13.6、DESIGN-M0 §4）。1 件ずつ順に実行する。同じ種類・同じ対象は 1 つにまとめる。
 import {autoTerm, currentTerm} from '../shared/term.js';
 import {LMS_TERMS_VERSION} from '../shared/lms-terms.js';
+import {todayJst} from '../shared/schedule.js';
 
 const RETRY_DELAYS = [15 * 60e3];
 const TERMS_MESSAGE =
@@ -113,7 +114,7 @@ export class JobRunner {
       case 'sync': {
         if (!termsAccepted(repo))
           return {status: 'terms-required', message: TERMS_MESSAGE, courses: 0, materials: 0, failures: 0};
-        const today = new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'});
+        const today = todayJst();
         // 社会人は学期を設定しないので、学期がなければ今日の日付から仮の学期を作る（画面には出さない）
         if (!repo.listTerms().length && repo.getSetting('profile.role', null) === 'worker')
           repo.upsertTerm(autoTerm(today));

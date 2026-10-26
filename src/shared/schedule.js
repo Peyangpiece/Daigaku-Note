@@ -13,6 +13,9 @@ export const PERIOD_PRESETS = {
 
 const minutes = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
 
+/** 日本時間での今日 'YYYY-MM-DD'（main・レンダラともこれを使う。端末の時間帯が違っても同じ日付になる） */
+export const todayJst = (now = new Date()) => jstNow(now).date;
+
 /** 日本時間での 'YYYY-MM-DD' と 'HH:MM' */
 export function jstNow(now = new Date()) {
   const date = now.toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'});

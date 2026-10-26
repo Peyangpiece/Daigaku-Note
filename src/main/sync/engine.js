@@ -1,4 +1,5 @@
 // 同期エンジン（DESIGN-M0 §8.1）。コネクタの種類を問わず同じ手順で動く。
+import {todayJst} from '../../shared/schedule.js';
 import {courseFolderName, roundFolderName} from '../../shared/naming.js';
 import {preferLayout} from '../../shared/layout.js';
 import {parseRound, resolveRound, roundTitle} from '../../shared/rounds.js';
@@ -70,7 +71,7 @@ export class SyncEngine {
     this.files = files;
     this.log = log;
     this.onProgress = onProgress;
-    this.today = today ?? (() => new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'}));
+    this.today = today ?? (() => todayJst());
     this.courseTimeoutMs = courseTimeoutMs;
   }
 

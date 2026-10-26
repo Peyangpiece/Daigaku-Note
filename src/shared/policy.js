@@ -23,6 +23,17 @@ export const PRIVACY = [
   '問い合わせ：GitHub の Peyangpiece/Daigaku-Note の Issues で受け付けます。'
 ];
 
+/** AI（クイズ）に送るもの・送らないもの（設定 → クイズ に出す。変えたら版を上げ、同意を取り直す） */
+export const AI_CONSENT_VERSION = '2026-10-26';
+export const AI_SENDS = [
+  'その回の資料の本文（学籍番号などの ID・メール・電話番号は消してから）',
+  '授業名、回のタイトル、その回のメモ、資料のファイル名'
+];
+export const AI_NOT_SENDS = [
+  '大学のアカウント・パスワード・Cookie',
+  '資料のファイルそのもの、ほかの回の資料、成績、LMS の URL'
+];
+
 /** 窓やページにそのまま出せる文章 */
 export function policyText() {
   const num = (list) => list.map((t, i) => `${i + 1}. ${t}`).join('\n\n');

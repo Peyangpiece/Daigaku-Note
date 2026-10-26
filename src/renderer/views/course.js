@@ -1,6 +1,7 @@
 // 授業画面（SPEC §8.2）：回ごとの付箋に、資料がイラスト付きの紙で貼ってある。
 // 自分のファイルは「振り分け前」の付箋に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
 // 「振り分け前」の呼び名は main/ipc.js（取り込みの知らせ）と合わせる
+import {todayJst} from '../../shared/schedule.js';
 import {canRename, esc, jaWrap, progressText, state} from '../app.js';
 import {extOf, fileArt, kindOf} from './file-art.js';
 import {bookmarkLook, fixedSticker, skinOf, stickerLayer} from '../skin.js';
@@ -240,7 +241,7 @@ export function renderCourse({data, progress}, courseId) {
     .sort((a, b) => (a.number === 0 ? 1 : b.number === 0 ? -1 : a.number - b.number));
   const materials = (data.materials[courseId] ?? []).filter((m) => m.status !== 'trashed');
   const byRound = new Map(rounds.map((r) => [r.id, materials.filter((m) => m.round_id === r.id)]));
-  const today = new Date().toLocaleDateString('sv-SE');
+  const today = data.today ?? todayJst(); // 日本時間の今日（main と同じ）
   const slot = course.weekday ? `（${course.weekday}曜${course.period ? ` ${course.period}限` : ''}）` : '';
   // 「その他」は資料があるときだけ出す。回は資料の有無にかかわらず全部出す（空の付箋も並ぶ）
   const shown = rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length);

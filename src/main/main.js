@@ -23,7 +23,7 @@ import {createUpdater} from './updater.js';
 import {createFolders} from './folders.js';
 import {createQuizService} from './quiz/service.js';
 import {runSelfTest, selfTestPath} from './self-check.js';
-import {runBackup} from './backup.js';
+import {applyStagedRestore, runBackup} from './backup.js';
 import {createNotifier} from './notify.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -271,7 +271,12 @@ app.whenReady().then(async () => {
   });
   process.on('unhandledRejection', (e) => log.error(`処理の失敗を受け取っていません: ${e?.stack || e}`));
   try {
-    const {db} = await openDatabase(path.join(userData, 'daigaku-note.sqlite'));
+    const dbFile = path.join(userData, 'daigaku-note.sqlite');
+    // 設定 → データ の「読み込む」で選んだバックアップがあれば、ここで入れ替える（いまのものは before-restore として残す）
+    if (applyStagedRestore({userData, dbFile}))
+      log.info('バックアップを読み込みました（前のデータベースは before-restore として残しています）');
+    const {db} = await openDatabase(dbFile);
+    ctx.db = db;
     const repo = new Repo(db);
     ctx.repo = repo;
     ctx.secrets = createSecrets(path.join(userData, 'secrets.json'), log);
@@ -292,7 +297,8 @@ app.whenReady().then(async () => {
     ctx.registry = createRegistry({
       secrets: ctx.secrets,
       log: (m) => log.info(m),
-      recipes: loadRecipes([path.join(here, '..', '..', 'recipes'), path.join(userData, 'recipes')]),
+      // レシピは同梱のものだけ読む。userData/recipes の更新は、署名の検証（SPEC §6.15）ができるまで読まない
+      recipes: loadRecipes([path.join(here, '..', '..', 'recipes')]),
       recipeExecutorFactory: (recipe) =>
         createRecipeExecutor(recipe, {
           session: ctx.session,
@@ -301,6 +307,12 @@ app.whenReady().then(async () => {
           debug: {dir: path.join(userData, 'debug')}
         })
     });
+    try {
+      if (readdirSync(path.join(userData, 'recipes')).some((f) => f.endsWith('.json')))
+        log.warn('userData/recipes のレシピは、署名の検証ができるまで読みません（同梱のレシピだけを使います）');
+    } catch {
+      /* フォルダがなければ何もしない */
+    }
     ctx.folders = createFolders({repo, rootDir: () => ctx.rootDir(), log: (m) => log.info(m)});
     ctx.engine = new SyncEngine({
       repo,
@@ -319,6 +331,7 @@ app.whenReady().then(async () => {
       .catch((e) => log.error(`接続をまとめられませんでした: ${e.message}`));
     // レンダラへの知らせ。窓が前面になくても分かるよう、新しい資料・ログインの必要・クイズの完成・同期の失敗は OS の通知にも出す（notify.js）
     const notifier = createNotifier({repo, Notification, openWindow, log: (m) => log.warn(m)});
+    ctx.notifier = notifier; // スケジューラの「今日の復習」の知らせ（§12.1）
     const notify = (ch, payload) => {
       win?.webContents.send(ch, payload);
       notifier.onEvent(ch, payload);

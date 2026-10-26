@@ -21,4 +21,4 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run lint
       - run: npm run format:check
-      - run: npm test
+      - run: xvfb-run -a npm test # 画面の通しテスト（tests/e2e/app.test.js）は Electron を起動するので仮想の画面で

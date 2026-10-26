@@ -2,6 +2,8 @@
 // 窓が前面になくても分かるように OS の通知を出す。設定 ui.notifications（既定オン）で止められる。
 // 同じ失敗は 1 日 1 回だけ（同期は 1 時間ごとにも走るので、毎回は出さない）。押すとその画面を開く。
 
+import {todayJst} from '../shared/schedule.js';
+
 /**
  * @param {object} deps
  * @param {{getSetting: Function, get: Function}} deps.repo
@@ -12,7 +14,7 @@
  */
 export function createNotifier({repo, Notification, openWindow, log = () => {}, now = () => new Date()}) {
   const shown = new Map(); // 1 日 1 回にする鍵 -> 日付
-  const today = () => now().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'});
+  const today = () => todayJst(now());
   const enabled = () => repo.getSetting('ui.notifications', true) !== false;
 
   const show = ({title, body, route = null, oncePerDay = null}) => {

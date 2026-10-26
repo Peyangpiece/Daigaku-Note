@@ -10,6 +10,7 @@ import {layoutOf} from '../shared/layout.js';
 import {courseFolderName, sanitizeSegment, uniqueName} from '../shared/naming.js';
 import {inside} from '../shared/paths.js';
 import {autoTerm, currentTerm} from '../shared/term.js';
+import {todayJst} from '../shared/schedule.js';
 
 export const MY_FOLDER = 'マイフォルダ'; // ルート/マイフォルダ/<名前>
 export const TERM_FOLDERS = '自分のフォルダ'; // ルート/<学期>/自分のフォルダ/<名前>（授業フォルダと名前がぶつからないよう 1 段下げる）
@@ -95,12 +96,7 @@ export async function listFiles(dir, {max = MAX_FILES} = {}) {
   return {files: out, truncated};
 }
 
-export function createFolders({
-  repo,
-  rootDir,
-  today = () => new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'}),
-  log = () => {}
-}) {
+export function createFolders({repo, rootDir, today = () => todayJst(), log = () => {}}) {
   // LMS をつながずに使い始めたときは学期がまだないので、今日の日付から仮の学期を作る（設定 → 学期 で直せる）
   const termNow = () => {
     const terms = repo.listTerms();
