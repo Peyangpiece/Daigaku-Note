@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {classWeekday, cleanCalendar, parseCalendar, termCalendar} from '../src/shared/calendar.js';
-import {roundDates} from '../src/shared/term.js';
+import {checkRounds, roundDates} from '../src/shared/term.js';
 
 const SAMPLE = `2026年度 秋学期 学年暦
 9月21日(月) 秋学期 授業開始
@@ -85,4 +85,74 @@ test('入力の整理と DB の行からの取り出し', () => {
     swaps: []
   });
   assert.deepEqual(termCalendar({holidays_json: 'oops'}), {holidays: [], swaps: []});
+});
+
+test('学年暦の授業回：日付の後ろ・前の印、曜日の行、振替の回', () => {
+  const r = parseCalendar(
+    `月曜日 ①4/13 ②4/20 ③4/27 ④5/7(木) ⑤5/11
+4/15(水) 第1回
+4/29(水) 第2回（祝日授業）
+5/13(水) 水曜日の授業 3回目
+5/14(木) 月曜の授業 第6回
+5/20(水) 第1回 定期試験
+`,
+    {year: 2026}
+  );
+  const by = (w) => r.rounds.filter((x) => x.weekday === w).map((x) => [x.n, x.date]);
+  assert.deepEqual(by('月'), [
+    [1, '2026-04-13'],
+    [2, '2026-04-20'],
+    [3, '2026-04-27'],
+    [4, '2026-05-07'],
+    [5, '2026-05-11'],
+    [6, '2026-05-14']
+  ]);
+  assert.deepEqual(
+    by('水'),
+    [
+      [1, '2026-04-15'],
+      [2, '2026-04-29'],
+      [3, '2026-05-13']
+    ],
+    '定期試験の日の「第1回」は授業回にしない'
+  );
+  const sw = Object.fromEntries(r.swaps.map((s) => [s.date, s.weekday]));
+  assert.equal(sw['2026-05-07'], '月', '月曜の行の木曜は、月曜日の授業の振替');
+  assert.equal(sw['2026-05-14'], '月');
+  assert.equal(sw['2026-04-29'], '水', '祝日（昭和の日）の回は、その日に授業を行う');
+  assert.ok(!sw['2026-04-15'], 'ふだんの日の回は振替授業日にしない');
+  assert.equal(r.unknown, 0, '回の印のある日付は分かった日付');
+});
+
+test('授業回の確かめ：計算と比べ、合わせるための休講日・振替授業日を出す', () => {
+  const listed = [
+    {date: '2026-04-15', weekday: '水', n: 1},
+    {date: '2026-04-29', weekday: '水', n: 2},
+    {date: '2026-05-13', weekday: '水', n: 3}
+  ];
+  const base = {start: '2026-04-08', end: '2026-07-31', rounds: 15};
+  const [w] = checkRounds({...base, listed});
+  assert.equal(w.weekday, '水');
+  assert.equal(w.complete, true);
+  assert.equal(w.last, 3);
+  assert.deepEqual(w.mismatches[0], {n: 1, listed: '2026-04-15', computed: '2026-04-08'});
+  assert.deepEqual(
+    w.fix.swaps.map((s) => [s.date, s.weekday]),
+    [['2026-04-29', '水']],
+    '祝日の回は振替授業日に'
+  );
+  assert.deepEqual(
+    w.fix.holidays.map((h) => h.date),
+    ['2026-04-08', '2026-04-22'],
+    '学年暦の回にない水曜は休講日に（5/6 は振替休日でもともと休みなので足さない）'
+  );
+  // 足すと計算が学年暦に合う
+  const holidays = w.fix.holidays.map((h) => h.date);
+  const swaps = w.fix.swaps.map(({date, weekday}) => ({date, weekday}));
+  const again = checkRounds({...base, holidays, swaps, listed});
+  assert.deepEqual(again[0].mismatches, []);
+  // 抜けのある曜日は合わせない
+  const [g] = checkRounds({...base, listed: [listed[0], listed[2]]});
+  assert.equal(g.complete, false);
+  assert.deepEqual(g.fix, {holidays: [], swaps: []});
 });

@@ -137,3 +137,40 @@ export function autoTerm(today) {
     source: 'auto'
   };
 }
+
+/**
+ * 学年暦の授業回（listed：[{date, weekday, n}]。shared/calendar.js の parseCalendar が読む）と、学期の設定から計算した回の日付を比べる。
+ * 戻り：曜日ごとに {weekday, listed: 学年暦の回の数, last: 学年暦のいちばん大きい回, complete: 第 1 回から抜けなくそろっているか,
+ *   mismatches: [{n, listed: 学年暦の日付, computed: 計算した日付（なければ null）}],
+ *   fix: {holidays: [{date, label}], swaps: [{date, weekday, label}]}（足すと計算が学年暦に合う日。そろっている曜日だけ）}
+ * fix は、学年暦の回の日なのに計算ではその曜日の授業がない日を振替授業日に、学期の開始日から学年暦の最後の回までで
+ * 計算ではその曜日の授業があるのに学年暦の回にない日を休講日にする（ほかの曜日の振替授業日になっている日は動かさない）
+ */
+export function checkRounds({start, end, rounds = 15, holidays = [], swaps = [], listed = []}) {
+  const out = [];
+  for (const weekday of WEEKDAYS) {
+    const mine = listed.filter((x) => x.weekday === weekday).sort((a, b) => a.n - b.n);
+    if (!mine.length) continue;
+    const last = mine.at(-1).n;
+    const complete = mine.length === last; // 1..last が 1 つずつ（parseCalendar が同じ回を 1 つにしている）
+    const computed = roundDates({start, end, weekday, rounds: Math.max(rounds, last), holidays, swaps});
+    const mismatches = mine
+      .filter((x) => computed[x.n - 1] !== x.date)
+      .map((x) => ({n: x.n, listed: x.date, computed: computed[x.n - 1] ?? null}));
+    const fix = {holidays: [], swaps: []};
+    if (complete && mismatches.length && start && end) {
+      const national = holidaysBetween(start, end);
+      const cal = {holidays, swaps, national};
+      const dates = new Set(mine.map((x) => x.date));
+      for (const x of mine)
+        if (x.date >= start && x.date <= end && classWeekday(cal, x.date) !== weekday)
+          fix.swaps.push({date: x.date, weekday, label: `${weekday}曜日の第${x.n}回`});
+      const swapDates = new Set(swaps.map((s) => s.date));
+      for (let d = start; d <= mine.at(-1).date && d <= end; d = addDays(d, 1))
+        if (!dates.has(d) && !swapDates.has(d) && classWeekday(cal, d) === weekday)
+          fix.holidays.push({date: d, label: `学年暦の${weekday}曜日の回にない日`});
+    }
+    out.push({weekday, listed: mine.length, last, complete, mismatches, fix});
+  }
+  return out;
+}

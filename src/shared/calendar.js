@@ -1,4 +1,4 @@
-// 学年暦（SPEC §6.14）：大学の学年暦の文字から休講日・振替授業日を読み取る。副作用なし。
+// 学年暦（SPEC §6.14）：大学の学年暦の文字から休講日・振替授業日・授業回（第 N 回の日付）を読み取る。副作用なし。
 // 読み取りはアプリの中の決まりで行う（AI には送らない）。日付と、その近くの言葉（休講・休業・試験・○曜日の授業…）の組で判断し、
 // 本人が画面で確かめて保存したときだけ使う。
 // classWeekday：その日に行う授業の曜日（休講日・祝日なら null、振替授業日ならその曜日）。回の日付・今日の授業・授業開始の同期で使う
@@ -63,6 +63,18 @@ const CLASS_RE =
 const HOLIDAY_RE =
   /全学休講|休講|休業|閉講|休校|創立記念|学園祭|大学祭|文化祭|入学試験|入試|一斉休|臨時休|年末年始|定期試験|期末試験|試験期間|補講|休日|休み/;
 
+// 授業回の印：「第5回」「5回目」「⑤」。前に曜日（「月⑤」「月曜 第5回」）があれば、その曜日の授業の回
+const ROUND = String.raw`(?:([月火水木金土])\s?(?:曜日?)?\s?(?:の)?\s?)?(?:第\s?(\d{1,2})\s?回(?!数)|(\d{1,2})\s?回目|([\u2460-\u2473]))`;
+const ROUND_RE = new RegExp(ROUND);
+const ROUND_END_RE = new RegExp(`${ROUND}\\s?$`);
+// 行の頭の曜日（「月曜日 ①4/13 ②4/20 …」のように曜日ごとに回を並べた行）
+const LINE_WD_RE = /^\s?[[(【]?\s?([月火水木金土])\s?(?:曜日?|(?=[\s:：)\]】]))/;
+function roundOf(m) {
+  if (!m) return null;
+  const n = m[4] ? m[4].charCodeAt(0) - 0x2460 + 1 : Number(m[2] ?? m[3]);
+  return n >= 1 && n <= 30 ? {n, weekday: m[1] ?? null} : null;
+}
+
 function classify(before, after) {
   for (const s of [after, before]) {
     const sw = s.match(SWAP_RE);
@@ -95,9 +107,12 @@ const validDate = (s) => {
 };
 
 /**
- * 学年暦の文字から休講日・振替授業日を読み取る。year は年度（2026 年度なら 2026）。
- * 戻り：{holidays: [{date, label}], swaps: [{date, weekday, label}], dates: 見つけた日付の数, unknown: 言葉の分からなかった日付の数}
- * 同じ日が両方にあれば振替授業日を優先。日付の順に並べる
+ * 学年暦の文字から休講日・振替授業日・授業回を読み取る。year は年度（2026 年度なら 2026）。
+ * 戻り：{holidays: [{date, label}], swaps: [{date, weekday, label}], rounds: [{date, weekday, n}], dates: 見つけた日付の数, unknown: 言葉の分からなかった日付の数}
+ * 同じ日が両方にあれば振替授業日を優先。日付の順に並べる。
+ * 授業回：日付の後ろ（行の頭の日付の前に印があれば、その行は前）の「第5回」「⑤」などを、その曜日の第 N 回として読む。
+ * 曜日は、印の前の曜日（「月⑤」）＞ 振替の言葉（「月曜日の授業」）＞ 行の頭の曜日 ＞ その日の曜日。
+ * ふだんと違う曜日の回・祝日の回は、振替授業日にも入れる（休講の言葉のある日の印は読まない）
  */
 export function parseCalendar(text, {year} = {}) {
   const t = normalizeText(text);
@@ -139,6 +154,17 @@ export function parseCalendar(text, {year} = {}) {
     }
   }
   const byDate = new Map();
+  const rounds = [];
+  const lineOf = new Map(); // 行の頭 → {before: 印が日付の前か, weekday: 行の頭の曜日}
+  const lineInfo = (tk) => {
+    const ls = t.lastIndexOf('\n', tk.start - 1) + 1;
+    if (!lineOf.has(ls)) {
+      const first = tokens.find((x) => x.start >= ls);
+      const head = t.slice(ls, first.start);
+      lineOf.set(ls, {before: ROUND_END_RE.test(head), weekday: head.match(LINE_WD_RE)?.[1] ?? null});
+    }
+    return lineOf.get(ls);
+  };
   let unknown = 0;
   let last = null;
   for (let i = 0; i < tokens.length; i++) {
@@ -151,6 +177,20 @@ export function parseCalendar(text, {year} = {}) {
     const beforeStart = Math.max(prev ? prev.end : 0, tk.start - 40);
     const before = t.slice(beforeStart, tk.start).split('\n').at(-1);
     let c = classify(before, after);
+    // 授業回の印（範囲の日付には付けない）
+    const line = lineInfo(tk);
+    const r = tk.until ? null : roundOf(line.before ? before.match(ROUND_END_RE) : after.match(ROUND_RE));
+    if (r && c?.kind !== 'holiday') {
+      const natural = WD[weekdayOf(tk.date)];
+      const weekday = r.weekday ?? (c?.kind === 'swap' ? c.weekday : null) ?? line.weekday ?? natural;
+      rounds.push({date: tk.date, weekday, n: r.n});
+      if (weekday !== natural) c = {kind: 'swap', weekday};
+      else if (!c && holidaysBetween(tk.date, tk.date).size) c = {kind: 'class'};
+      if (!c) {
+        last = null;
+        continue;
+      }
+    }
     // 「休講日：5/1、5/2」のように同じ行に並んだ日付は、前の日付の判断を引き継ぐ（行が変わったら引き継がない）
     const sameLine = prev && !t.slice(prev.end, tk.start).includes('\n');
     if (!c && last && sameLine && /^[\s、,・/]*$/.test(before) && !/\S{3,}/.test(after)) c = last;
@@ -176,9 +216,21 @@ export function parseCalendar(text, {year} = {}) {
     }
   }
   const all = [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+  // 同じ曜日の同じ回・同じ日は、先に書いてあるほう
+  const seen = new Set();
+  const outRounds = rounds
+    .filter((x) => {
+      const k1 = `${x.weekday}${x.n}`,
+        k2 = `${x.weekday}${x.date}`;
+      if (seen.has(k1) || seen.has(k2)) return false;
+      seen.add(k1).add(k2);
+      return true;
+    })
+    .sort((a, b) => WD.indexOf(a.weekday) - WD.indexOf(b.weekday) || a.n - b.n);
   return {
     holidays: all.filter((e) => e.kind === 'holiday').map(({date, label}) => ({date, label})),
     swaps: all.filter((e) => e.kind === 'swap').map(({date, weekday, label}) => ({date, weekday, label})),
+    rounds: outRounds,
     dates: tokens.filter((x) => !x.rangeEnd).length,
     unknown
   };
