@@ -264,7 +264,7 @@ p.muted {
 .folder__today {
   display: inline-block;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--paper-ink);
   color: var(--card);
   font-weight: 700;
@@ -420,7 +420,7 @@ p.muted {
 }
 .sticker--framed {
   border: 3px solid #fff;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
 }
 
@@ -432,10 +432,10 @@ p.muted {
   min-width: 22px;
   height: 22px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--badge-color, var(--c2));
   color: #2b2b2b;
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -549,10 +549,10 @@ p.muted {
   white-space: nowrap;
 }
 .round-note__today {
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 700;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--paper-ink);
   color: var(--paper);
 }
@@ -602,7 +602,7 @@ p.muted {
   gap: 6px;
   padding: 8px 4px 6px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: transparent;
   color: var(--paper-ink);
   font: inherit;
@@ -640,7 +640,7 @@ p.muted {
   right: calc(50% - 32px);
   width: 12px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--dot-color, var(--c2));
   box-shadow: 0 0 0 2px var(--note-bg, var(--card));
 }
@@ -648,7 +648,7 @@ p.muted {
   font-size: var(--fs-small);
   line-height: 1.4;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   color: var(--paper-ink);
 }
@@ -676,7 +676,7 @@ p.muted {
 .file__move {
   padding: 5px 10px; /* 押し目標はおよそ 32px（文字 13px ＋ 上下 5px ずつ ＋ 行間） */
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   color: var(--paper-ink);
   box-shadow: var(--card-shadow);
@@ -768,7 +768,7 @@ p.muted {
   align-items: center;
   gap: 6px;
   padding: 8px 18px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1.5px solid var(--paper-ink);
   background: var(--paper);
   color: var(--paper-ink);
@@ -825,7 +825,7 @@ p.muted {
 /* 紙片（資料の行・カード） */
 .slip {
   background: var(--card);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   box-shadow: var(--card-shadow);
   padding: 12px 16px;
   display: flex;
@@ -864,7 +864,7 @@ p.muted {
 .toast {
   background: var(--card);
   box-shadow: var(--card-shadow-hover);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   padding: 10px 16px;
   cursor: pointer;
   animation: paste var(--motion) ease-out;
@@ -1063,7 +1063,7 @@ p.muted {
   margin: var(--space-2) 0;
   padding: var(--space-2);
   border: 1px solid color-mix(in srgb, var(--paper-ink) 20%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: var(--card);
   font-size: var(--fs-small);
 }
@@ -1159,10 +1159,10 @@ p.muted {
 .spinner {
   width: 14px;
   height: 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 2px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
   border-top-color: var(--paper-ink);
-  animation: spin 900ms linear infinite;
+  animation: spin calc(var(--motion) * 4.5) linear infinite;
 }
 @keyframes spin {
   to {
@@ -1205,7 +1205,7 @@ p.muted {
 .quiz-progress {
   height: 6px;
   max-width: 720px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--paper-ink) 12%, transparent);
   overflow: hidden;
   margin-bottom: var(--space-2);
@@ -1238,7 +1238,7 @@ p.muted {
   top: 22px;
   width: 16px;
   height: 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--paper);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
 }
@@ -1251,15 +1251,15 @@ p.muted {
 }
 .qcard__type {
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
 }
 .qcard__flag {
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--paper-ink);
   color: var(--paper);
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 700;
 }
 .qcard__q {
@@ -1289,7 +1289,7 @@ p.muted {
   text-align: left;
   padding: 12px 14px;
   border: 1.5px solid color-mix(in srgb, var(--paper-ink) 35%, transparent);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--paper);
   color: var(--paper-ink);
   font: inherit;
@@ -1305,7 +1305,7 @@ p.muted {
   flex: none;
   width: 26px;
   height: 26px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
@@ -1327,7 +1327,7 @@ p.muted {
 }
 .qcard__answer {
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--c1) 22%, var(--card));
 }
 .qcard__answer p {
@@ -1344,7 +1344,7 @@ p.muted {
   display: inline-block;
   margin-left: 10px;
   padding: 1px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: #fff1c2;
   color: #7a5600;
   font-size: var(--fs-small);
@@ -1392,7 +1392,7 @@ p.muted {
   flex: none;
   width: 108px;
   height: 108px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: grid;
   place-items: center;
   background: conic-gradient(
@@ -1403,7 +1403,7 @@ p.muted {
 .ring span {
   width: 84px;
   height: 84px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: grid;
   place-items: center;
   background: var(--card);
@@ -1469,7 +1469,7 @@ textarea.input {
   height: 32px;
   padding: 0 8px;
   border: 1.5px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: transparent;
   color: var(--paper-ink);
   font: inherit;
@@ -1499,7 +1499,7 @@ textarea.input {
   display: inline-flex;
   gap: 2px;
   padding: 2px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--paper-ink) 5%, transparent);
 }
 .viewer-bar__group {
@@ -1525,7 +1525,7 @@ textarea.input {
   width: 56px;
   padding: 3px 4px;
   border: 1.5px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: var(--paper);
   color: inherit;
   font: inherit;
@@ -1602,9 +1602,9 @@ textarea.input {
   top: 100%;
   margin-top: 4px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card);
-  font-size: 12px;
+  font-size: var(--fs-small);
   line-height: 20px;
   pointer-events: none;
 }
@@ -1660,6 +1660,61 @@ textarea.input {
 .pdf-page__layer {
   position: absolute;
   inset: 0;
+}
+/* 文字の層（pdf.js の TextLayer）：絵と同じ位置に透明な文字。pdf.js の pdf_viewer.css の .textLayer と同じ決まり
+   （--scale-factor・--total-scale-factor はページの要素に viewer.js が入れる。--min-font-size は TextLayer が入れる） */
+.pdf-page {
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+.pdf-page__text {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-align: initial;
+  transform-origin: 0 0;
+  forced-color-adjust: none;
+  pointer-events: none; /* 選択の道具のときだけ受ける（下） */
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.pdf-page__text :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+.pdf-page__text > :not(.markedContent),
+.pdf-page__text .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.pdf-page__text .markedContent {
+  display: contents;
+}
+.pdf-page__text ::selection {
+  background: rgba(0, 0, 255, 0.25);
+  color: transparent;
+}
+/* 選択の道具：文字の層にマウスが届くように、注釈の層そのものとペンの線（選べない）は素通しにし、注釈の部品だけ受ける */
+.viewer-pages[data-tool='select'] .pdf-page__text {
+  pointer-events: auto;
+}
+.viewer-pages[data-tool='select'] .pdf-page__layer,
+.viewer-pages[data-tool='select'] .pdf-page__ink {
+  pointer-events: none;
+}
+.viewer-pages[data-tool='select'] .pdf-page__layer > :not(.pdf-page__ink) {
+  pointer-events: auto;
 }
 .pdf-page__num {
   position: absolute;
@@ -1845,7 +1900,7 @@ textarea.input {
   position: absolute;
   background: var(--line, #ffe14d);
   mix-blend-mode: multiply;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: move;
 }
 .anno-line--draft {
@@ -1891,7 +1946,7 @@ textarea.input {
   top: var(--corner-top, 120px);
   z-index: 20;
   width: 320px;
-  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform calc(var(--motion) * 1.4) cubic-bezier(0.2, 0.8, 0.2, 1);
   max-height: calc(100vh - 140px);
   overflow: visible;
   padding: 10px 10px 12px;
@@ -1922,7 +1977,7 @@ textarea.input {
   background: var(--case-base, #2e3f66);
   color: #fff;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 700;
   writing-mode: vertical-rl;
   letter-spacing: 0.2em;
@@ -1932,7 +1987,7 @@ textarea.input {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s;
+  transition: opacity var(--motion);
 }
 .fude-side.is-tucked .fude-side__tab {
   opacity: 0.92;
@@ -1950,7 +2005,7 @@ textarea.input {
 .fude-side__head .muted {
   overflow: hidden;
   color: rgba(255, 255, 255, 0.8);
-  font-size: 11px;
+  font-size: var(--fs-small);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -1973,14 +2028,14 @@ textarea.input {
   height: 46px;
   padding: 0 2px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: transparent;
   cursor: pointer;
 }
 .fude-side__pen .st-art {
   width: 268px;
   height: 38px;
-  transition: transform 0.15s ease;
+  transition: transform calc(var(--motion) * 0.75) ease;
 }
 .fude-side__pen:hover .st-art {
   transform: translateX(-4px);
@@ -2001,13 +2056,13 @@ textarea.input {
   flex: 1;
   height: 12px;
   border: 1.5px dashed rgba(0, 0, 0, 0.18);
-  border-radius: 6px;
+  border-radius: var(--radius-s);
 }
 .fude-side__num {
   flex: none;
   width: 14px;
   color: rgba(0, 0, 0, 0.45);
-  font-size: 11px;
+  font-size: var(--fs-small);
   font-weight: 700;
 }
 .fude-side__pen:focus-visible,
@@ -2023,7 +2078,7 @@ textarea.input {
   margin-top: 8px;
   padding: 4px 8px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.85);
   color: #333;
   font: inherit;
@@ -2079,7 +2134,7 @@ textarea.input {
 }
 .case-panel button.case-panel__item {
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -2118,7 +2173,7 @@ textarea.input {
   min-height: 60px;
   background: #e60000; /* 青の成分も 0 にして、マーカーの下を真っ黒にする */
   mix-blend-mode: multiply;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   cursor: grab;
   resize: both;
@@ -2173,7 +2228,7 @@ textarea.input {
   margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--rule);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
 }
 .export-dialog__foot {
   display: flex;
@@ -2270,7 +2325,7 @@ textarea.input {
   height: 28px;
   padding: 0 4px;
   border: 1.5px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: var(--card);
   color: var(--paper-ink);
   font: inherit;
@@ -2346,7 +2401,7 @@ textarea.input {
   border: 0;
   background: none;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
 }
 .viewer-bar .bookmark-panel__name:hover {
   background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
@@ -2356,7 +2411,7 @@ textarea.input {
   min-width: 0;
 }
 .bookmark-panel__page {
-  font-size: 0.8rem;
+  font-size: var(--fs-small);
 }
 .viewer-bar .bookmark-panel__tool {
   border: 0;
@@ -2364,7 +2419,7 @@ textarea.input {
   padding: 2px 6px;
 }
 .bookmark-panel__empty {
-  font-size: 0.85rem;
+  font-size: var(--fs-small);
   padding: 4px 0;
 }
 .bookmark-ribbon {
@@ -2375,7 +2430,7 @@ textarea.input {
   max-width: 120px;
   padding: 2px 8px 2px 10px;
   border: 0;
-  font-size: 11px;
+  font-size: var(--fs-small);
   line-height: 1.5;
   transform: translateY(-50%);
   filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.25));
@@ -2410,7 +2465,7 @@ textarea.input {
   clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 8px 50%);
 }
 .bm--round {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 .bm .sticker-layer--fixed {
   z-index: 1;
@@ -2436,7 +2491,7 @@ textarea.input {
 .card-menu button {
   padding: 8px 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: transparent;
   color: var(--paper-ink);
   font: inherit;
@@ -2449,15 +2504,15 @@ textarea.input {
   outline: none;
 }
 .card-menu__danger {
-  color: #c5221f !important;
+  color: var(--danger-ink) !important;
 }
 :root[data-theme='dark'] .card-menu__danger,
 :root[data-surface='dark'] .card-menu__danger {
-  color: #ff8a80 !important;
+  color: var(--danger-ink-on-dark) !important;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .card-menu__danger {
-    color: #ff8a80 !important;
+    color: var(--danger-ink-on-dark) !important;
   }
 }
 
@@ -2470,7 +2525,7 @@ textarea.input {
   display: flex;
   gap: 4px;
   padding: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card); /* 下にスクロールして本文に重なっても読めるように不透明。まわりに紙色のふちを敷く */
   box-shadow:
     0 0 0 6px color-mix(in srgb, var(--paper) 85%, transparent),
@@ -2479,7 +2534,7 @@ textarea.input {
 .topnav__btn {
   padding: 7px 14px; /* 高さおよそ 32px */
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--paper-ink);
   font: inherit;
@@ -2500,10 +2555,10 @@ textarea.input {
   min-width: 18px;
   margin-left: 6px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--c2);
   color: #2b2b2b;
-  font-size: 11px;
+  font-size: var(--fs-small);
   font-weight: 700;
   line-height: 18px;
   text-align: center;
@@ -2514,15 +2569,15 @@ textarea.input {
   outline-offset: 1px;
 }
 .btn--danger {
-  color: #c5221f;
+  color: var(--danger-ink);
 }
 :root[data-theme='dark'] .btn--danger,
 :root[data-surface='dark'] .btn--danger {
-  color: #ff8a80;
+  color: var(--danger-ink-on-dark);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .btn--danger {
-    color: #ff8a80;
+    color: var(--danger-ink-on-dark);
   }
 }
 .toast {
@@ -2553,10 +2608,10 @@ textarea.input {
   flex-basis: 100%;
   margin: 4px 0 0;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: color-mix(in srgb, var(--paper-ink) 6%, transparent);
   font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 11px;
+  font-size: var(--fs-small);
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
@@ -2568,7 +2623,7 @@ textarea.input {
   margin-left: 0;
   padding: 2px 10px;
   border: 1.5px solid currentColor;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -2626,7 +2681,7 @@ textarea.input {
   position: relative;
   height: 120px;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background-position:
     0 0,
     0 0,
@@ -2716,7 +2771,7 @@ textarea.input {
 .ks-choice {
   padding: 6px 12px;
   border: 1.5px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: var(--card);
   box-shadow: var(--card-shadow);
   color: var(--paper-ink);
@@ -2760,13 +2815,13 @@ textarea.input {
   background: var(--sw, var(--card));
   color: var(--paper-ink);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
 }
 .ks-sw--text {
   width: auto;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 .ks-sw--pick {
   display: inline-grid;
@@ -2827,7 +2882,7 @@ textarea.input {
   height: 56px;
   padding: 4px;
   border: 1.5px dashed color-mix(in srgb, var(--paper-ink) 25%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: var(--card);
   cursor: grab;
 }
@@ -2846,7 +2901,7 @@ textarea.input {
   border-radius: 50%;
   background: var(--paper-ink);
   color: var(--card);
-  font-size: 12px;
+  font-size: var(--fs-small);
   line-height: 20px;
   cursor: pointer;
 }
@@ -2907,7 +2962,7 @@ textarea.input {
   gap: 10px;
   padding: 6px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: transparent;
   color: var(--paper-ink);
   font: inherit;
@@ -2967,7 +3022,7 @@ textarea.input {
   gap: var(--space-2);
   min-height: 64px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   outline: 1px dashed color-mix(in srgb, var(--paper-ink) 25%, transparent);
 }
 .ks-place--heading > :not(.sticker) {
@@ -3024,7 +3079,7 @@ textarea.input {
   background: var(--card);
   box-shadow: var(--card-shadow);
   color: var(--paper-ink);
-  font-size: 12px;
+  font-size: var(--fs-small);
   line-height: 20px;
   cursor: pointer;
 }
@@ -3078,11 +3133,11 @@ textarea.input {
   gap: 2px;
   padding: 4px 6px;
   border: 1.5px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: color-mix(in srgb, var(--card) 75%, transparent);
   color: var(--paper-ink);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-small);
   cursor: pointer;
 }
 .ks-kind .file-art {
@@ -3100,7 +3155,7 @@ textarea.input {
   justify-content: space-between;
   gap: 6px;
   padding: 4px 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
 }
 .ks-artrow.is-on {
   background: color-mix(in srgb, var(--c4) 16%, transparent);
@@ -3149,7 +3204,7 @@ textarea.input {
   right: -12px;
   min-width: 20px;
   padding: 0 5px 0 8px;
-  font-size: 10px;
+  font-size: var(--fs-small);
   font-weight: 700;
   line-height: 16px;
 }
@@ -3163,7 +3218,7 @@ textarea.input {
   justify-items: center;
   gap: 4px;
   padding: 8px 4px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
 }
 .ks-file.is-current {
   background: color-mix(in srgb, var(--paper-ink) 7%, transparent);
@@ -3265,7 +3320,7 @@ textarea.input {
 .ks-chipbtn {
   padding: 4px 12px;
   border: 1.5px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   box-shadow: var(--card-shadow);
   color: var(--paper-ink);
@@ -3334,7 +3389,7 @@ textarea.input {
   display: flex;
   gap: 6px;
   padding: 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
 }
 /* 押せる部分：乗せると点線で囲み、選んでいる部分は実線で囲む */
 .ks-stage [data-edit] {
@@ -3382,7 +3437,7 @@ textarea.input {
   gap: var(--space-2);
   min-height: 64px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
 }
 .ks-place--heading > :not(.ks-st) {
   pointer-events: none;
@@ -3408,7 +3463,7 @@ textarea.input {
   display: grid;
   justify-items: center;
   gap: 2px;
-  font-size: 11px;
+  font-size: var(--fs-small);
 }
 .ks-note__files {
   display: flex;
@@ -3421,12 +3476,12 @@ textarea.input {
   justify-items: center;
   gap: 2px;
   padding: 4px;
-  border-radius: 8px;
-  font-size: 11px;
+  border-radius: var(--radius-m);
+  font-size: var(--fs-small);
 }
 .ks-file .muted {
   color: #5c6068;
-  font-size: 11px;
+  font-size: var(--fs-small);
 }
 .ks-fixed {
   position: absolute;
@@ -3544,7 +3599,7 @@ textarea.input {
   background: none;
   color: var(--paper-ink-weak);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-small);
   cursor: pointer;
 }
 .ks-tray__tab:hover {
@@ -3634,7 +3689,7 @@ textarea.input {
 .rename-btn {
   padding: 0 4px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: none;
   color: var(--paper-ink-weak);
   font-size: 0.85em;
@@ -3656,7 +3711,7 @@ textarea.input {
   transform: translateY(-50%);
   padding: 2px 6px;
   border: 2px solid var(--paper-ink);
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: var(--card);
   color: var(--paper-ink);
   box-shadow: var(--card-shadow-hover);
@@ -3683,10 +3738,10 @@ textarea.input {
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1.5px solid #e2b93b;
-  background: #fff8e1;
-  color: #5c4300;
+  background: var(--gold-paper);
+  color: var(--gold-ink);
   font: inherit;
   font-size: 14px;
   cursor: pointer;
@@ -3702,9 +3757,9 @@ textarea.input {
 .shop-pay__points {
   margin: 12px 0;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: #fff8e1;
-  color: #5c4300; /* 明るい紙の色なので、ノートが暗くても文字は濃いまま */
+  border-radius: var(--radius);
+  background: var(--gold-paper);
+  color: var(--gold-ink); /* 明るい紙の色なので、ノートが暗くても文字は濃いまま */
 }
 .shop-pay__points .muted {
   color: #6b5a2e;
@@ -3724,7 +3779,7 @@ textarea.input {
 }
 .shop-side__short {
   margin: 0;
-  color: var(--danger, #c0392b);
+  color: var(--danger-ink);
   font-size: var(--fs-small);
 }
 /* ポイントのページ：残高・もらい方・履歴 */
@@ -3738,7 +3793,7 @@ textarea.input {
   border-radius: var(--radius);
   background: linear-gradient(135deg, #fff6d5, #ffe9a8);
   box-shadow: var(--card-shadow);
-  color: #5c4300;
+  color: var(--gold-ink);
 }
 .pts-balance b {
   display: flex;
@@ -3784,7 +3839,7 @@ textarea.input {
 }
 .pts-way__amount {
   font-weight: 700;
-  color: #9a6b00;
+  color: var(--gold-ink-weak);
   text-align: right;
 }
 .pts-way__note {
@@ -3793,7 +3848,7 @@ textarea.input {
 .pts-way__soon {
   justify-self: end;
   padding: 1px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
   font-size: var(--fs-small);
 }
@@ -3811,7 +3866,7 @@ textarea.input {
   font-size: 14px;
 }
 .pts-history .is-plus {
-  color: #9a6b00;
+  color: var(--gold-ink-weak);
 }
 .pts-history .is-minus {
   color: var(--paper-ink);
@@ -3842,7 +3897,7 @@ textarea.input {
   font: inherit;
   cursor: pointer;
 }
-.fb-tab[aria-selected='true'] {
+.fb-tab[aria-current='page'] {
   background: var(--card);
   box-shadow: var(--card-shadow);
   font-weight: 700;
@@ -3879,7 +3934,7 @@ textarea.input {
   min-height: 40px;
   padding: 4px 10px;
   border: 2px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--card);
   color: var(--paper-ink);
   font: inherit;
@@ -3970,7 +4025,7 @@ button.fb-card {
 .fb-sample {
   width: 100%;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: #fff;
 }
 /* 文房具の 3D モデル（renderer/model3d.js）。札の中でドラッグして回せる */
@@ -3980,7 +4035,7 @@ button.fb-card {
 }
 .model-view {
   position: relative;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: radial-gradient(ellipse at 50% 62%, rgba(0, 0, 0, 0.07), transparent 68%);
   cursor: grab;
   touch-action: none;
@@ -4133,7 +4188,7 @@ button.fb-card {
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1.5px solid var(--paper-ink);
   background: var(--card);
   color: var(--paper-ink);
@@ -4154,10 +4209,10 @@ button.fb-card {
   display: inline-block;
   min-width: 20px;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--c2);
   color: #2b2b2b;
-  font-size: 12px;
+  font-size: var(--fs-small);
   line-height: 20px;
   text-align: center;
 }
@@ -4180,7 +4235,7 @@ button.fb-card {
 }
 .shop-hero--premium {
   background: linear-gradient(135deg, #2b2f3a, #4a4f5e);
-  color: #f4ecd8;
+  color: var(--cream);
 }
 .shop-hero--premium .muted {
   color: #cfc6ad;
@@ -4194,10 +4249,10 @@ button.fb-card {
   display: inline-block;
   margin-bottom: 6px;
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--c1);
   color: #2b2b2b;
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 700;
 }
 .shop-hero__text h3 {
@@ -4216,12 +4271,12 @@ button.fb-card {
 }
 .shop-hero--premium .shop-hero__act .btn:not(.btn--primary) {
   background: transparent;
-  border-color: #e9c66b;
-  color: #f4ecd8;
+  border-color: var(--gold);
+  color: var(--cream);
 }
 .shop-hero--premium .shop-hero__act .btn--primary {
-  background: #e9c66b;
-  border-color: #e9c66b;
+  background: var(--gold);
+  border-color: var(--gold);
   color: #2b2b2b;
 }
 .shop-hero__art .model-view {
@@ -4262,7 +4317,7 @@ button.fb-card {
   gap: 10px;
   height: 44px;
   padding: 0 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1.5px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
   background: var(--card);
   box-shadow: var(--card-shadow);
@@ -4300,7 +4355,7 @@ button.fb-card {
 }
 .shop-chip {
   padding: 5px 13px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1.5px solid color-mix(in srgb, var(--paper-ink) 22%, transparent);
   background: var(--card);
   color: var(--paper-ink);
@@ -4325,7 +4380,7 @@ button.fb-card {
 }
 .shop-sort select {
   padding: 5px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   border: 1.5px solid color-mix(in srgb, var(--paper-ink) 22%, transparent);
   background: var(--card);
   color: var(--paper-ink);
@@ -4357,7 +4412,7 @@ button.fb-card {
   flex-direction: column;
   gap: 5px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-l);
   border: 2px solid #cfcfcf;
   background: var(--card);
   box-shadow: var(--card-shadow);
@@ -4379,7 +4434,7 @@ button.fb-card {
 .shop-card--premium {
   border-color: #c9a24d;
   background: linear-gradient(135deg, #2b2f3a, #4a4f5e);
-  color: #f4ecd8;
+  color: var(--cream);
   --stage-bg: radial-gradient(ellipse at 50% 60%, #6a7080, #3b404b);
 }
 .shop-card--daily .muted,
@@ -4391,12 +4446,12 @@ button.fb-card {
 }
 .shop-card--premium .btn:not(.btn--primary) {
   background: transparent;
-  border-color: #e9c66b;
-  color: #f4ecd8;
+  border-color: var(--gold);
+  color: var(--cream);
 }
 .shop-card--premium .btn--primary {
-  background: #e9c66b;
-  border-color: #e9c66b;
+  background: var(--gold);
+  border-color: var(--gold);
   color: #2b2b2b;
 }
 .shop-ribbons {
@@ -4412,7 +4467,7 @@ button.fb-card {
   border-radius: 0 999px 999px 0;
   background: var(--c1);
   color: #2b2b2b;
-  font-size: 11px;
+  font-size: var(--fs-small);
   font-weight: 700;
 }
 .shop-ribbon--new {
@@ -4429,7 +4484,7 @@ button.fb-card {
   height: 96px;
   padding: 0 8px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--stage-bg);
   cursor: pointer;
 }
@@ -4453,7 +4508,7 @@ button.fb-card {
   cursor: pointer;
 }
 .shop-card__spec {
-  font-size: 12.5px;
+  font-size: var(--fs-small);
 }
 .shop-card__foot {
   display: flex;
@@ -4477,8 +4532,8 @@ button.fb-card {
 .shop-tag {
   display: inline-block;
   padding: 1px 10px;
-  border-radius: 999px;
-  font-size: 12.5px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-small);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -4487,7 +4542,7 @@ button.fb-card {
   color: #55595f;
 }
 .shop-tag--daily {
-  background: #fff1cc;
+  background: var(--gold-paper-strong);
   color: #8a5f00;
 }
 .shop-tag--fine {
@@ -4495,7 +4550,7 @@ button.fb-card {
   color: #6b4a00;
 }
 .shop-tag--premium {
-  background: #e9c66b;
+  background: var(--gold);
   color: #2b2b2b;
 }
 .shop-tag--own {
@@ -4506,7 +4561,7 @@ button.fb-card {
 .shop-dots {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 8px; /* 当たり判定（24px）が隣と重ならない間隔 */
 }
 .shop-dot {
   position: relative;
@@ -4518,6 +4573,13 @@ button.fb-card {
   background: var(--body);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
   cursor: pointer;
+}
+/* 見た目は 16px のまま、押せる範囲は 24px（WCAG 2.5.8） */
+.shop-dot::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
 }
 .shop-dot::after {
   content: '';
@@ -4588,7 +4650,7 @@ button.fb-card {
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1.5px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
   background: var(--card);
   color: var(--paper-ink);
@@ -4611,7 +4673,7 @@ button.fb-card {
   margin-bottom: 6px;
 }
 .fb-detail__info .shop-ribbon {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 /* カート・レジ・注文完了 */
 .shop-h {
@@ -4651,7 +4713,7 @@ button.fb-card {
 .shop-row__art {
   padding: 4px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: var(--stage-bg, #f4f1ea);
   cursor: pointer;
 }
@@ -4680,7 +4742,7 @@ button.fb-card {
   flex-direction: column;
   gap: 10px;
   padding: 16px 18px;
-  border-radius: 14px;
+  border-radius: var(--radius-l);
   background: var(--card);
   box-shadow: var(--card-shadow);
 }
@@ -4718,8 +4780,8 @@ button.fb-card {
   gap: 2px;
   margin-bottom: 12px;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: #fff1cc;
+  border-radius: var(--radius);
+  background: var(--gold-paper-strong);
   color: #2b2b2b;
   font-size: var(--fs-small);
 }
@@ -4744,7 +4806,7 @@ button.fb-card {
   font-weight: 600;
 }
 .shop-pay .field small {
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .shop-pay__row {
   display: grid;
@@ -4804,7 +4866,7 @@ button.fb-card {
   min-width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--paper-ink-weak);
   font: inherit;
@@ -4845,7 +4907,7 @@ a,
 .text-dialog {
   width: min(720px, calc(100vw - 48px));
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-l);
   padding: var(--space-3);
   background: var(--card);
   color: var(--paper-ink);
@@ -4862,7 +4924,7 @@ a,
   overflow: auto;
   margin: 0 0 var(--space-2);
   padding: var(--space-2);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: var(--paper);
   font: inherit;
   font-size: var(--fs-small);
@@ -4873,10 +4935,10 @@ a,
   display: inline-block;
   margin-left: 8px;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--c1);
   color: #2b2b2b;
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 700;
 }
 .about__row {
@@ -4906,6 +4968,21 @@ a,
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+/* 文字を入れる窓（promptDialog） */
+.confirm-dialog label {
+  display: block;
+  margin: 0 0 var(--space-2);
+  line-height: 1.6;
+}
+.confirm-dialog label .input {
+  width: 100%;
+  margin-top: var(--space-1);
+}
+/* セットアップで 2 つの手順を 1 つの画面にまとめたときの小見出し */
+.su-sub {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--fs-h3);
 }
 /* 編集画面のツールバー：ページ送りと拡大率はひとまとまりで折り返す */
 .viewer-bar__nav {
@@ -5052,11 +5129,11 @@ a,
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--curl)), calc(100% - var(--curl)) 100%, 0 100%);
   transform-origin: 0 0;
   transition:
-    transform 0.45s cubic-bezier(0.5, 0, 0.9, 0.6),
-    opacity 0.45s ease-in;
+    transform calc(var(--motion) * 2.25) cubic-bezier(0.5, 0, 0.9, 0.6),
+    opacity calc(var(--motion) * 2.25) ease-in;
 }
 .ts-pad {
-  transition: --curl 0.2s ease;
+  transition: --curl var(--motion) ease;
 }
 .ts-pad.is-pulling,
 .ts-pad.is-fresh,
@@ -5145,7 +5222,7 @@ a,
   left: calc(var(--tray-w) + 28px);
   width: 150px;
   height: 210px;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: #e60000;
   mix-blend-mode: multiply;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
@@ -5211,7 +5288,7 @@ html.is-page-sliding #app {
 }
 .swipe-under.is-leaving {
   opacity: 0;
-  transition: opacity 0.3s ease 0.25s;
+  transition: opacity calc(var(--motion) * 1.5) ease calc(var(--motion) * 1.25);
 }
 
 /* 画面の四隅（§9.9）：右下にポーチ、左上にシール帳、左下に素材（右上の筆箱は .fude-side）。
@@ -5229,7 +5306,7 @@ html.is-page-sliding #app {
   box-shadow:
     0 6px 18px rgba(0, 0, 0, 0.22),
     0 0 0 1px color-mix(in srgb, var(--paper-ink) 12%, transparent);
-  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform calc(var(--motion) * 1.4) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .corner--pouch {
   right: 16px;
@@ -5267,14 +5344,14 @@ html.is-page-sliding #app {
   background: inherit;
   color: inherit;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 700;
   writing-mode: vertical-rl;
   letter-spacing: 0.2em;
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s;
+  transition: opacity var(--motion);
 }
 .corner--pouch .corner__tab {
   left: -30px;
@@ -5318,7 +5395,7 @@ html.is-page-sliding #app {
   margin: 0 2px 8px;
 }
 .corner__head .muted {
-  font-size: 11px;
+  font-size: var(--fs-small);
 }
 .corner__tabs {
   display: flex;
@@ -5329,11 +5406,11 @@ html.is-page-sliding #app {
 .corner__tabs button {
   padding: 2px 10px;
   border: 1px solid color-mix(in srgb, var(--paper-ink) 22%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
 }
 .corner__tabs button[aria-selected='true'] {
@@ -5360,11 +5437,11 @@ html.is-page-sliding #app {
   gap: 2px;
   padding: 6px 4px;
   border: 1px solid color-mix(in srgb, var(--paper-ink) 12%, transparent);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--card) 70%, #fff);
   color: inherit;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-small);
   cursor: grab;
   touch-action: none;
 }
@@ -5386,7 +5463,7 @@ html.is-page-sliding #app {
 }
 .corner__hint {
   margin: 8px 2px 0;
-  font-size: 11px;
+  font-size: var(--fs-small);
   line-height: 1.5;
   opacity: 0.75;
 }
@@ -5406,17 +5483,17 @@ html.is-page-sliding #app {
   gap: 2px;
   padding: 6px 2px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: transparent;
   color: #3b3a36;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
 }
 .pouch__item svg {
   width: 56px;
   height: 40px;
-  transition: transform 0.15s ease;
+  transition: transform calc(var(--motion) * 0.75) ease;
 }
 .pouch__item:hover svg {
   transform: translateY(-3px);
@@ -5528,7 +5605,7 @@ html.is-page-sliding #app {
   position: fixed;
   z-index: 25;
   padding: 0 10px 10px;
-  border-radius: 14px;
+  border-radius: var(--radius-l);
   background: var(--card);
   color: var(--paper-ink);
   box-shadow:
@@ -5574,7 +5651,7 @@ html.is-page-sliding #app {
 .calc__screen {
   margin-bottom: 8px;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: #cfe3d2;
   color: #1f2a22;
   text-align: right;
@@ -5582,7 +5659,7 @@ html.is-page-sliding #app {
 .calc__prev {
   min-height: 1.4em;
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--fs-small);
   white-space: nowrap;
   text-overflow: ellipsis;
   opacity: 0.7;
@@ -5613,7 +5690,7 @@ html.is-page-sliding #app {
 .calc__key {
   height: 36px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: #4c566a;
   color: #eceff4;
   font: inherit;
@@ -5666,7 +5743,7 @@ html.is-page-sliding #app {
   background: var(--memo, #fffdf6);
 }
 .memo-pad__sheet.is-fresh {
-  animation: memo-fresh 0.25s ease-out;
+  animation: memo-fresh calc(var(--motion) * 1.25) ease-out;
 }
 @keyframes memo-fresh {
   from {
@@ -5765,9 +5842,9 @@ html.is-page-sliding #app {
   right: 44px;
   bottom: 6px;
   color: #2f4f66;
-  font-size: 11px;
+  font-size: var(--fs-small);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity var(--motion);
   pointer-events: none;
 }
 .ruler.is-turning .ruler__angle,
@@ -5830,12 +5907,12 @@ html.is-page-sliding #app {
 .index-pad__label {
   display: grid;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .index-pad__label input {
   padding: 5px 8px;
   border: 1px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -5861,7 +5938,7 @@ html.is-page-sliding #app {
 }
 .index-pad__hint {
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: var(--fs-small);
   opacity: 0.7;
 }
 .index-pad__list {
@@ -5869,7 +5946,7 @@ html.is-page-sliding #app {
   gap: 2px;
   max-height: 180px;
   overflow-y: auto;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .index-pad__item {
   display: flex;
@@ -5877,7 +5954,7 @@ html.is-page-sliding #app {
   gap: 6px;
   padding: 4px 6px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-s);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -5889,7 +5966,7 @@ html.is-page-sliding #app {
 }
 .index-pad__item .muted {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-small);
 }
 .index-pad__chip {
   width: 14px;
@@ -5922,10 +5999,10 @@ html.is-page-sliding #app {
   stroke: color-mix(in srgb, var(--paper-ink) 12%, transparent);
 }
 .timer__ring {
-  stroke: #e5484d;
+  stroke: var(--danger);
   stroke-linecap: round;
   stroke-dasharray: 1;
-  transition: stroke-dashoffset 0.25s linear;
+  transition: stroke-dashoffset calc(var(--motion) * 1.25) linear;
 }
 .timer__clock {
   position: absolute;
@@ -5939,12 +6016,12 @@ html.is-page-sliding #app {
     monospace;
 }
 .timer.is-done {
-  animation: timer-done 0.6s ease-in-out 4;
+  animation: timer-done calc(var(--motion) * 3) ease-in-out 4;
 }
 @keyframes timer-done {
   50% {
     box-shadow:
-      0 0 0 4px #e5484d,
+      0 0 0 4px var(--danger),
       0 10px 28px rgba(0, 0, 0, 0.28);
   }
 }
@@ -5957,11 +6034,11 @@ html.is-page-sliding #app {
 .timer__custom input {
   height: 28px;
   border: 1px solid color-mix(in srgb, var(--paper-ink) 22%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
 }
 .timer__preset[aria-pressed='true'] {
@@ -5993,10 +6070,10 @@ html.is-page-sliding #app {
   top: 2px;
   right: 2px;
   padding: 0 5px;
-  border-radius: 999px;
-  background: #e5484d;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
   color: #fff;
-  font-size: 10px;
+  font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
 }
 
@@ -6046,7 +6123,7 @@ html.is-page-sliding #app {
   align-items: center;
   gap: 10px;
   padding: 6px 8px 6px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   color: var(--paper-ink);
   font-size: 13px;
@@ -6102,7 +6179,7 @@ html.is-page-sliding #app {
   line-height: 1;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity calc(var(--motion) * 0.75);
 }
 .desk-stamp:hover .desk-stamp__remove,
 .desk-stamp:focus-within .desk-stamp__remove {
@@ -6186,7 +6263,7 @@ html.is-page-sliding #app {
 .fig-ed__field {
   display: grid;
   gap: 3px;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 .fig-ed__field > span {
   display: flex;
@@ -6212,7 +6289,7 @@ html.is-page-sliding #app {
 .fig-ed__formula {
   margin: 10px 0 0;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-m);
   background: #fff0f6;
   color: #c2255c;
   font:
@@ -6223,7 +6300,7 @@ html.is-page-sliding #app {
 }
 .fig-ed__hint {
   margin: 10px 0 0;
-  font-size: 11px;
+  font-size: var(--fs-small);
   line-height: 1.5;
   opacity: 0.75;
 }
@@ -6249,7 +6326,7 @@ html.is-page-sliding #app {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   cursor: nwse-resize;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity calc(var(--motion) * 0.75);
 }
 .desk-stamp:hover .desk-stamp__grip {
   opacity: 1;

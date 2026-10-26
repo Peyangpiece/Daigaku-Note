@@ -158,6 +158,7 @@ const swatches = (colors, name) =>
     .join('');
 
 const BAR = `
+  <h2 class="sr-only" data-v="title">PDF</h2>
   <div class="viewer-bar" role="toolbar" aria-label="PDF の編集">
     <button type="button" class="btn btn--small" data-v="back">← 授業へ</button>
     <span class="viewer-bar__name" data-v="name"></span>
@@ -356,6 +357,7 @@ class Viewer extends DeskTools {
     if (r?.error) return this.fail(r.error);
     this.$('name').textContent = r.material.name;
     this.$('name').title = r.material.name;
+    this.$('title').textContent = `PDF：${r.material.name}`;
     // 文字入れの書式：この PDF で最後に使ったもの（なければ同じ授業で最後に使ったもの）を引き継ぐ
     if (r.textStyle && typeof r.textStyle === 'object')
       this.textStyle = {
@@ -392,13 +394,16 @@ class Viewer extends DeskTools {
       const el = document.createElement('div');
       el.className = 'pdf-page';
       el.dataset.page = String(i);
-      el.innerHTML = `<canvas class="pdf-page__canvas"></canvas><div class="pdf-page__layer"><svg class="pdf-page__ink" aria-hidden="true"><g></g></svg></div><span class="pdf-page__num muted">${i} / ${this.doc.numPages}</span>`;
+      // 絵（canvas）の上に、見えない文字の層（pdf.js の TextLayer。選択・コピー・読み上げ）、その上に注釈の層
+      el.innerHTML = `<canvas class="pdf-page__canvas" role="presentation"></canvas><div class="pdf-page__text"></div><div class="pdf-page__layer"><svg class="pdf-page__ink" aria-hidden="true"><g></g></svg></div><span class="pdf-page__num muted">${i} / ${this.doc.numPages}</span>`;
       this.pagesEl.append(el);
       this.pages.push({
         num: i,
         page,
         el,
         canvas: el.querySelector('canvas'),
+        text: el.querySelector('.pdf-page__text'),
+        textContent: null, // 文字の層のもと（1 回だけ読む）
         layer: el.querySelector('.pdf-page__layer'),
         ink: el.querySelector('.pdf-page__ink g'), // ペンの線（PDF の座標のまま描き、拡大は g の変換で合わせる）
         viewport: null,
@@ -599,6 +604,8 @@ class Viewer extends DeskTools {
       p.viewport = p.page.getViewport({scale: this.zoom * CSS_UNITS});
       p.el.style.width = `${Math.floor(p.viewport.width)}px`;
       p.el.style.height = `${Math.floor(p.viewport.height)}px`;
+      p.el.style.setProperty('--scale-factor', String(p.viewport.scale)); // pdf.js の文字の層が字の大きさに使う
+      p.el.style.setProperty('--total-scale-factor', String(p.viewport.scale));
       p.ink.setAttribute('transform', `matrix(${p.viewport.transform.join(',')})`);
       p.rendered = false;
       if (p.visible) this.renderPage(p);
@@ -755,6 +762,7 @@ class Viewer extends DeskTools {
     const dpr = canvasScale(vp, window.devicePixelRatio || 1);
     const canvas = document.createElement('canvas');
     canvas.className = 'pdf-page__canvas';
+    canvas.setAttribute('role', 'presentation'); // 内容は文字の層が読み上げる
     canvas.width = Math.floor(vp.width * dpr);
     canvas.height = Math.floor(vp.height * dpr);
     const task = p.page.render({canvas, viewport: vp, transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0]});
@@ -764,9 +772,27 @@ class Viewer extends DeskTools {
       if (p.renderTask !== task || this.destroyed) return;
       p.canvas.replaceWith(canvas); // 描き終わってから差し替える（ちらつかない）
       p.canvas = canvas;
+      this.renderText(p, vp).catch((e) => console.warn('文字の層を作れませんでした', e));
     } catch (e) {
       if (e?.name !== 'RenderingCancelledException' && p.renderTask === task) p.rendered = false;
     }
+  }
+
+  /**
+   * 文字の層（pdf.js の TextLayer）：絵の上に透明な文字を同じ位置に重ねる。選択の道具のときだけマウスが届き、
+   * ドラッグで選んでコピーできる。読み上げは常に文字を読める。拡大率が変わるたびに作り直す（絵と同じ）
+   */
+  async renderText(p, vp) {
+    if (!pdfjs.TextLayer) return;
+    p.textContent ??= await p.page.getTextContent();
+    if (this.destroyed || p.viewport !== vp) return;
+    const div = document.createElement('div');
+    div.className = 'pdf-page__text';
+    const layer = new pdfjs.TextLayer({textContentSource: p.textContent, container: div, viewport: vp});
+    await layer.render();
+    if (this.destroyed || p.viewport !== vp) return;
+    p.text.replaceWith(div);
+    p.text = div;
   }
 
   // ---- 注釈 ----

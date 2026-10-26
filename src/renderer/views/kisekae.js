@@ -1,7 +1,7 @@
 // 着せ替えページ（SPEC-KISEKAE.md §3.2）と、フォルダの右クリックから出す選択パネル（§3.3）。
 // 着せ替えページ（#/kisekae）「おすすめから選ぶ」：押すとすぐ当たる。
 // 細かい編集のページ（#/kisekae/edit）：見本を見ながら直し、自作のテンプレートとして保存する
-import {confirmDialog, esc, navigate, refresh, reload, state, toast} from '../app.js';
+import {confirmDialog, esc, navigate, promptDialog, refresh, reload, state, toast} from '../app.js';
 import {folderCard, folderLookOf} from './home.js';
 import {
   LICENSES,
@@ -544,7 +544,7 @@ function tray(data) {
       ${tabs
         .map(([v, label, sid]) => {
           const url = sid ? stickerUrl(sid) : '';
-          return `<button type="button" class="ks-tray__tab" role="tab" data-ks="book" data-value="${esc(v)}" aria-selected="${ui.book === v}" title="${esc(label)}">
+          return `<button type="button" class="ks-tray__tab" role="tab" data-ks="book" data-value="${esc(v)}" aria-selected="${ui.book === v}" tabindex="${ui.book === v ? 0 : -1}" title="${esc(label)}">
             <span class="ks-tray__icon">${url ? `<img src="${url}" alt="" draggable="false" />` : v === 'fav' ? '★' : '🖼'}</span><span class="ks-tray__label">${esc(label)}</span></button>`;
         })
         .join('')}
@@ -581,7 +581,7 @@ function inspector(data) {
           `<button type="button" class="ks-chipbtn" data-ks="part" data-part="${k}" aria-pressed="${ui.selected == null && ui.part === k}">${l}</button>`
       )
       .join('')}</div>
-    <h4 class="ks-inspector__title">${esc(title)}</h4>
+    <h3 class="ks-inspector__title">${esc(title)}</h3>
     ${controls}
   </aside>`;
 }
@@ -942,7 +942,10 @@ document.addEventListener('click', async (e) => {
       let patch;
       if (ks === 'sticker-fav') patch = {favorite: !b.favorite};
       else {
-        const name = window.prompt('シール帳のフォルダの名前（空にすると分けない）', b.folder ?? '');
+        const name = await promptDialog('シール帳のフォルダの名前（空にすると分けない）', {
+          value: b.folder ?? '',
+          maxlength: 30
+        });
         if (name === null) return;
         patch = {folder: name};
       }
@@ -1439,12 +1442,17 @@ window.addEventListener('hashchange', (e) => {
     !ui.history.length
   )
     return;
-  if (window.confirm('変更が保存されていません。保存せずに移動しますか？')) {
-    ui.draft = null;
-    return;
-  }
+  // 描き直しを止めて元のアドレスに戻してから、アプリの窓で聞く。進むなら改めて行き先へ
   e.stopImmediatePropagation();
   history.replaceState(null, '', e.oldURL);
+  const to = new URL(e.newURL).hash || '#/';
+  confirmDialog('変更が保存されていません。保存せずに移動しますか？', {ok: '保存せずに移動', danger: true}).then(
+    (ok) => {
+      if (!ok) return;
+      ui.draft = null;
+      location.hash = to;
+    }
+  );
 });
 window.addEventListener('beforeunload', (e) => {
   if (location.hash.startsWith('#/kisekae/edit') && ui.draft && ui.history.length) e.preventDefault();

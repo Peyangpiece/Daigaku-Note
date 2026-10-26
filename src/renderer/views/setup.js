@@ -1,8 +1,8 @@
-// セットアップ（SPEC §6.3）。1 ページ 1 手順、付箋が順に貼られる表現。
-// 初回（#/setup）は あなた・使い方・授業の資料・（利用規約）・学期・保存先、大学の LMS とつなぐ人はそのまま URL・ログイン・授業の確認・最初の同期（1 本の連番）。
+// セットアップ（SPEC §6.3）。1 ページ 1 手順、付箋が順に貼られる表現。手順は多くても 6（SPEC §6.3）。
+// 初回（#/setup）は あなたと使い方・授業の資料・（利用規約）・学期と保存先、大学の LMS とつなぐ人はそのまま LMS とつなぐ（URL とログイン）・授業の確認と同期（1 本の連番）。
 // あとから LMS とつなぐ手順（#/settings/lms）は 設定 → 大学の LMS から入る
 // （利用規約に同意していなければ最初に同意。Moodle の ID・パスワードと画面操作型のブラウザ窓。学期がまだなければ学期の設定も挟む）
-import {esc, reload, toast} from '../app.js';
+import {esc, navigate, reload, toast} from '../app.js';
 import {termForm, readTermForm} from './term.js';
 import {ROLES, USES, features} from '../../shared/profile.js';
 import {LMS_FEATURE, LMS_NOTICE, LMS_TERMS, LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
@@ -11,26 +11,20 @@ const api = window.daigaku;
 const FLOWS = {
   // 初回は 1 本の連番。大学の LMS とつなぐ人は、保存先のあとも同じ番号の続きで LMS の手順へ（番号が 1 に戻らない）
   first: [
-    ['あなた', stepRole],
-    ['使い方', stepUses],
+    ['あなたと使い方', stepProfile],
     ['授業の資料', stepMaterials],
     ['利用規約', stepLmsTerms],
-    ['学期の設定', stepTerm],
-    ['保存先', stepRoot],
-    ['LMS の URL', stepUrl],
-    ['ログイン', stepLogin],
-    ['授業の確認', stepCourses],
-    ['最初の同期', stepSync]
+    ['学期と保存先', stepTermRoot], // 学期を使わない人（社会人）には「保存先」と出す
+    ['LMS とつなぐ', stepLms],
+    ['授業の確認と同期', stepCoursesSync]
   ],
   // 規約の版が上がったとき、今ある接続のために同意し直すだけの手順
   terms: [['利用規約', stepLmsTerms]],
   lms: [
     ['利用規約', stepLmsTerms],
-    ['LMS の URL', stepUrl],
-    ['ログイン', stepLogin],
-    ['授業の確認', stepCourses],
+    ['LMS とつなぐ', stepLms],
     ['学期の設定', stepTerm],
-    ['最初の同期', stepSync]
+    ['授業の確認と同期', stepCoursesSync]
   ]
 };
 let flow = FLOWS.first;
@@ -51,6 +45,7 @@ const blank = () => ({
   imported: null, // 取り込んだ授業フォルダの結果
   detected: false, // 「種類を判定」を押した（候補がなければ、まだ対応していないと知らせる）
   label: null, // 学習支援サービスの名前（自分で付ける。空なら判定した種類の名前）
+  term: null, // 「学期と保存先」で入れかけの学期（保存先を選んで描き直しても消えないように）
   agreed: false // この回のセットアップで利用規約に同意した（同意したあとも手順の番号がずれないよう、規約の手順は残す）
 });
 let step = 0;
@@ -71,7 +66,7 @@ export function resetSetup(kind = 'first', data = null) {
         : FLOWS.first;
 }
 const termsAccepted = (data) => data.settings.lmsTerms?.version === LMS_TERMS_VERSION;
-const LMS_STEPS = new Set(['LMS の URL', 'ログイン', '授業の確認', '最初の同期']);
+const LMS_STEPS = new Set(['LMS とつなぐ', '授業の確認と同期']);
 /** 初回の流れで、大学の LMS とつなぐ手順まで進む人か：大学生は「授業の資料」で LMS を選んだとき、社会人は講座で LMS を使うとき */
 function wantsLms(data) {
   const role = draft.role ?? data.settings.role;
@@ -83,15 +78,16 @@ function stepsOf(data) {
   const role = draft.role ?? data.settings.role;
   const uses = draft.uses ?? data.settings.uses ?? [];
   const needTerms = !termsAccepted(data) || draft.agreed;
-  return flow.filter(([name]) => {
-    // flow は FLOWS.lms を filter した別の配列なので、=== FLOWS.lms では比べない
-    if (name === '利用規約') return needTerms && (flow !== FLOWS.first || wantsLms(data));
-    if (flow !== FLOWS.first) return true;
-    if (LMS_STEPS.has(name)) return wantsLms(data);
-    if (name === '授業の資料') return role === 'student' && uses.includes('lms');
-    if (name === '学期の設定') return features({role, uses: []}).terms;
-    return true;
-  });
+  return flow
+    .filter(([name]) => {
+      // flow は FLOWS.lms を filter した別の配列なので、=== FLOWS.lms では比べない
+      if (name === '利用規約') return needTerms && (flow !== FLOWS.first || wantsLms(data));
+      if (flow !== FLOWS.first) return true;
+      if (LMS_STEPS.has(name)) return wantsLms(data);
+      if (name === '授業の資料') return role === 'student' && uses.includes('lms');
+      return true;
+    })
+    .map(([name, fn]) => [name === '学期と保存先' && !features({role, uses: []}).terms ? '保存先' : name, fn]);
 }
 const next = () => ((step = Math.min(step + 1, steps.length - 1)), reload());
 
@@ -112,17 +108,21 @@ export function renderSetup({data}) {
   return `<div style="max-width: 720px"><p class="muted" style="margin: 0 0 var(--space-1)">${title}</p><ol class="steps" aria-label="${title}の手順">${list}</ol><section class="card">${body}</section></div>`;
 }
 
-function stepUrl(data, n) {
-  return `<h2>${n}. 大学の LMS の URL を入れる</h2>
+// 大学の LMS とつなぐ：URL を入れて種類を判定し、接続ができたら同じ画面でログイン（2 つの画面を 1 つに。SPEC §6.3 の手順 1・2）
+function stepLms(data, n) {
+  const back =
+    n > 1
+      ? '<button class="btn" data-setup-back>戻る</button>'
+      : '<button class="btn" data-action="nav" data-route="/settings">やめる</button>';
+  if (!draft.connectionId)
+    return `<h2>${n}. 大学の LMS とつなぐ</h2>
     <p class="muted">大学の LMS（manaba・Moodle などの学習支援サービス）のトップページの URL を入れて「種類を判定」を押します。いま使えるのは Moodle と manabo（試験中）です。つなぐと、授業の資料を自動で集めます。</p>
     <label class="sr-only" for="su-url">LMS の URL</label>
     <input class="input" id="su-url" type="url" placeholder="https://lms.example-u.ac.jp/" value="${esc(draft.url)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)}${c.kind === 'manual' ? ` <span class="muted">${esc(KIND_LABEL.manual)}</span>` : ''}</label>`).join('')}</div>
     ${draft.connectorId ? `<label class="su-label">LMS の名前（ホームや設定に出ます）<input class="input" id="su-label" maxlength="60" placeholder="例：manaba・〇〇大学 LMS" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
-    <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : '<button class="btn" data-action="nav" data-route="/settings">やめる</button>'}<button class="btn btn--primary" id="su-next1">次へ</button></div>
+    <div class="actions">${back}<button class="btn btn--primary" id="su-next1">次へ</button></div>
     ${draft.connectorId ? '' : draft.detected ? '<p role="status">この LMS には、まだ対応していません（いま使えるのは Moodle と manabo（試験中）です）。URL がトップページかどうかも確かめてください。</p>' : '<p class="muted">「次へ」を押すと、URL から LMS の種類を調べます。</p>'}`;
-}
-function stepLogin(data, n) {
   const body =
     draft.kind === 'api'
       ? `<p class="muted">Moodle の ID とパスワードを入れます。このパソコンの中だけに暗号化して保存し、トークンを取得します。</p>
@@ -138,25 +138,31 @@ function stepLogin(data, n) {
            </div>`
         : `<p class="muted">この接続では、ここでのログインはありません。次へ進んでください。</p>`;
   const main = draft.kind === 'api' ? 'ログインして次へ' : draft.kind === 'recipe' ? 'ログイン窓を開く' : '次へ';
-  return `<h2>${n}. ログイン</h2>
+  const name = draft.label || draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name || 'LMS';
+  return `<h2>${n}. 大学の LMS とつなぐ</h2>
+    <p class="muted">${esc(name)}：<code>${esc(draft.base || draft.url)}</code> <button type="button" class="link" id="su-url-edit">URL を変える</button></p>
+    <h3 class="su-sub">ログイン</h3>
     ${body}
     <p id="su-login-msg" class="muted" role="status"></p>
-    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-login">${main}</button>${draft.kind === 'recipe' ? '<button class="btn" id="su-skip">あとでログインする</button>' : ''}</div>`;
+    <div class="actions">${back}<button class="btn btn--primary" id="su-login">${main}</button>${draft.kind === 'recipe' ? '<button class="btn" id="su-skip">あとでログインする</button>' : ''}</div>`;
 }
-function stepCourses(data, n) {
+// 授業の確認と最初の同期（SPEC §6.3 の手順 3・6 を 1 つに）：同期する授業を選んで、そのまま同期を始める
+function stepCoursesSync(data, n) {
   const list = draft.courses.length
     ? `<p class="muted">同期する授業を選びます（既定は全部）。外した授業は同期せず、ホームでは「非表示」にまとめます（設定 → 授業 で戻せます）。</p>
        <div id="su-courses">${draft.courses.map((c, i) => `<label style="display:block"><input type="checkbox" id="su-c${i}" checked data-lms="${esc(c.lmsId)}"> ${esc(c.name)}${c.weekday ? ` <span class="muted">${esc(c.weekday)}曜${c.period ? ` ${c.period}限` : ''}</span>` : ''}</label>`).join('')}</div>`
     : `<p class="muted">${draft.coursesLoaded ? '授業が取れませんでした。ログインできているか、学期が始まっているかを確かめてください。' : 'まだ授業の一覧を読んでいません（ログインがまだのため）。'}最初の同期で、全部の授業を取り込みます。</p>`;
-  return `<h2>${n}. 授業の確認</h2>
+  return `<h2>${n}. 授業の確認と最初の同期</h2>
     ${list}
-    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-next3">次へ</button></div>`;
+    <p class="muted">「同期を始める」で全授業・全回の資料を取り込みます。数分かかることがあります。進み具合はホームの下に出ます。</p>
+    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-sync">同期を始めてホームへ</button></div>`;
 }
-// 使う人を選ぶ。大学生のときだけ大学名を入れる（いまは記録するだけ）
-function stepRole(data, n) {
+// 使う人と使い方を 1 つの画面で選ぶ（大学生のときだけ大学名を入れる。いまは記録するだけ）。使い方はいくつでも。ホームの並びと設定の項目がこれに合わせて変わる
+function stepProfile(data, n) {
   const role = draft.role ?? data.settings.role;
   const university = draft.university ?? data.settings.university ?? '';
-  return `<h2>${n}. あなたについて</h2>
+  const uses = draft.uses ?? data.settings.uses ?? [];
+  return `<h2>${n}. あなたと使い方</h2>
     <p class="muted">大学ノートは α 版（試験中）です。続けると <button type="button" class="link" data-action="policy">利用規約とプライバシーポリシー</button> に同意したことになります。データはこのパソコンの中だけに保存します。</p>
     <div class="role-pick" role="radiogroup" aria-label="使う人">${Object.entries(ROLES)
       .map(
@@ -165,21 +171,19 @@ function stepRole(data, n) {
       )
       .join('')}</div>
     ${role === 'student' ? `<label class="role-pick__univ">大学名<input class="input" id="su-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(university)}"></label>` : ''}
-    <div class="actions"><button class="btn btn--primary" id="su-role" ${role ? '' : 'disabled'}>次へ</button></div>`;
-}
-// 使い方を選ぶ（いくつでも）。ホームの並びと設定の項目がこれに合わせて変わる
-function stepUses(data, n) {
-  const role = draft.role ?? data.settings.role ?? 'student';
-  const uses = draft.uses ?? data.settings.uses ?? [];
-  return `<h2>${n}. 何に使いますか</h2>
+    ${
+      role
+        ? `<h3 class="su-sub">何に使いますか</h3>
     <p class="muted">いくつでも選べます（あとから 設定 → 使い方 で変えられます）。</p>
     <div class="use-pick" role="group" aria-label="使い方">${USES[role]
       .map(
         ([k, l, d]) =>
           `<button type="button" class="use-pick__item" data-use="${k}" aria-pressed="${uses.includes(k)}"><strong>${l}</strong><span class="muted">${d}</span></button>`
       )
-      .join('')}</div>
-    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-uses" ${uses.length ? '' : 'disabled'}>次へ</button></div>`;
+      .join('')}</div>`
+        : ''
+    }
+    <div class="actions"><button class="btn btn--primary" id="su-profile" ${role && uses.length ? '' : 'disabled'}>次へ</button></div>`;
 }
 // 授業の資料の集め方を選ぶ。PC の授業フォルダはその場で取り込む。大学サービスとの連携は、次の手順で利用規約に同意してから
 const MATERIALS = [
@@ -228,20 +232,29 @@ function stepTerm(data, n) {
     ${termForm(data, null, {compact: true})}
     <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : ''}<button class="btn btn--primary" id="su-next4">保存して次へ</button></div>`;
 }
-function stepRoot(data, n) {
-  const f = features(data.settings);
+// 学期と保存先を 1 つの画面で（学期を使わない人は保存先だけ）。学期は「次へ」「始める」で保存する。
+// 保存先を選ぶと描き直すので、入れかけの学期は draft.term に取っておく
+function stepTermRoot(data, n) {
+  const role = draft.role ?? data.settings.role;
+  const uses = draft.uses ?? data.settings.uses ?? [];
+  const terms = features({role, uses}).terms;
   // 大学の LMS とつなぐ人は、同じ番号の続きで LMS の手順へ（「次へ」）。そうでなければここで終わり（「始める」）
   const toLms = flow === FLOWS.first && wantsLms(data);
-  return `<h2>${n}. 保存先</h2>
-    <p>${f.terms ? '資料はここに「学期 → 授業 → 回」のフォルダで保存します。' : '資料はここに保存します。'}</p>
+  const t = draft.term;
+  const kept = t ? {year: t.year, label: t.label, start_date: t.start, end_date: t.end, rounds: t.rounds} : null;
+  return `<h2>${n}. ${terms ? '学期と保存先' : '保存先'}</h2>
+    ${
+      terms
+        ? `<h3 class="su-sub">学期</h3>
+    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 学期 で直せます）。</p>
+    ${termForm(data, kept, {compact: true})}
+    <h3 class="su-sub">保存先</h3>`
+        : ''
+    }
+    <p>${terms ? '資料はここに「学期 → 授業 → 回」のフォルダで保存します。' : '資料はここに保存します。'}</p>
     <p><code>${esc(data.settings.root)}</code></p>
     ${toLms ? `<p>次は、大学の LMS とつなぎます（あと ${steps.length - n} 手順）。</p>` : ''}
-    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn" data-action="pick-dir">フォルダを選択…</button>${toLms ? '<button class="btn btn--primary" id="su-root-next">次へ</button>' : '<button class="btn btn--primary" data-action="finish-setup">始める</button>'}</div>`;
-}
-function stepSync(data, n) {
-  return `<h2>${n}. 最初の同期</h2>
-    <p class="muted">全授業・全回の資料を取り込みます。数分かかることがあります。進み具合はホームの下に出ます。</p>
-    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-sync">同期を始めてホームへ</button></div>`;
+    <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn" id="su-pick">フォルダを選択…</button>${toLms ? '<button class="btn btn--primary" id="su-root-next">次へ</button>' : '<button class="btn btn--primary" id="su-finish">始める</button>'}</div>`;
 }
 
 async function loadCourses() {
@@ -277,13 +290,15 @@ function bind() {
         reload();
       })
   );
-  if ($('su-role'))
-    $('su-role').onclick = async () => {
+  if ($('su-profile'))
+    $('su-profile').onclick = async () => {
       const role = draft.role ?? document.querySelector('[data-role][aria-checked=true]')?.dataset.role;
       const university = $('su-univ')?.value.trim() ?? '';
-      const r = await api['settings.update']({patch: {role, ...(role === 'student' ? {university} : {})}});
+      const uses = [...document.querySelectorAll('[data-use][aria-pressed=true]')].map((x) => x.dataset.use);
+      const r = await api['settings.update']({patch: {role, uses, ...(role === 'student' ? {university} : {})}});
       if (r?.error) return toast(r.error, {error: true});
       draft.role = role;
+      draft.uses = uses;
       next();
     };
   document.querySelectorAll('[data-use]').forEach(
@@ -294,13 +309,6 @@ function bind() {
         reload();
       })
   );
-  if ($('su-uses'))
-    $('su-uses').onclick = async () => {
-      const uses = [...document.querySelectorAll('[data-use][aria-pressed=true]')].map((x) => x.dataset.use);
-      const r = await api['settings.update']({patch: {uses}});
-      if (r?.error) return toast(r.error, {error: true});
-      next();
-    };
   document.querySelectorAll('[data-materials]').forEach(
     (b) =>
       (b.onclick = () => {
@@ -317,12 +325,41 @@ function bind() {
       reload();
     };
   if ($('su-materials')) $('su-materials').onclick = next;
-  // 保存先の「次へ」：初回のセットアップは済んだことにして（次の起動で出さない）、同じ流れのまま LMS の手順へ
+  // 学期と保存先：学期の欄があれば保存してから進む。「次へ」は初回のセットアップを済んだことにして（次の起動で出さない）、
+  // 同じ流れのまま LMS の手順へ。「始める」はホームへ
+  const saveTerm = async () => {
+    if (!$('tm-year')) return true;
+    const r = await api['term.save']({term: readTermForm(null)});
+    if (r.error) return (toast(r.error, {error: true}), false);
+    draft.term = null;
+    return true;
+  };
+  if ($('su-pick'))
+    $('su-pick').onclick = async () => {
+      if ($('tm-year')) draft.term = readTermForm(null); // 描き直しても入れかけの学期が残るように
+      const r = await api['settings.pickDownloadDir']();
+      if (r?.error) toast(r.error, {error: true});
+      else if (r.dir) reload();
+    };
   if ($('su-root-next'))
     $('su-root-next').onclick = async () => {
+      if (!(await saveTerm())) return;
       const r = await api['settings.update']({patch: {skipSetup: true}});
       if (r?.error) return toast(r.error, {error: true});
       next();
+    };
+  if ($('su-finish'))
+    $('su-finish').onclick = async () => {
+      if (!(await saveTerm())) return;
+      const r = await api['settings.update']({patch: {skipSetup: true}});
+      if (r?.error) return toast(r.error, {error: true});
+      await reload();
+      navigate('/');
+    };
+  if ($('su-url-edit'))
+    $('su-url-edit').onclick = () => {
+      draft.connectionId = null; // 同じ LMS なら、次の「次へ」で同じ接続を使う（新しく作らない）
+      reload();
     };
   if ($('su-agree')) $('su-agree').onchange = (e) => ($('su-terms').disabled = !e.target.checked);
   if ($('su-terms'))
@@ -370,7 +407,7 @@ function bind() {
       });
       if (r.error) return toast(r.error, {error: true});
       draft.connectionId = r.connectionId;
-      next();
+      reload(); // 同じ手順のまま、ログインの欄を出す
     };
   if ($('su-login'))
     $('su-login').onclick = async () => {
@@ -415,17 +452,6 @@ function bind() {
     $('su-auto').onchange = sync;
     sync();
   }
-  if ($('su-next3'))
-    $('su-next3').onclick = async () => {
-      const off = [...document.querySelectorAll('#su-courses input[data-lms]')]
-        .filter((c) => !c.checked)
-        .map((c) => c.dataset.lms);
-      if (draft.connectionId && draft.courses.length) {
-        const r = await api['setup.excludeCourses']({connectionId: draft.connectionId, lmsIds: off});
-        if (r?.error) return toast(r.error, {error: true});
-      }
-      next();
-    };
   if ($('su-next4'))
     $('su-next4').onclick = async () => {
       const r = await api['term.save']({term: readTermForm(null)});
@@ -434,6 +460,14 @@ function bind() {
     };
   if ($('su-sync'))
     $('su-sync').onclick = async () => {
+      // 外した授業を覚えてから同期を始める
+      const off = [...document.querySelectorAll('#su-courses input[data-lms]')]
+        .filter((c) => !c.checked)
+        .map((c) => c.dataset.lms);
+      if (draft.connectionId && draft.courses.length) {
+        const r0 = await api['setup.excludeCourses']({connectionId: draft.connectionId, lmsIds: off});
+        if (r0?.error) return toast(r0.error, {error: true});
+      }
       const r = await api['sync.run']({full: true});
       if (r?.error) return toast(r.error, {error: true});
       resetSetup();

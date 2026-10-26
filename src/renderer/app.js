@@ -116,6 +116,41 @@ export function confirmDialog(message, {ok = 'OK', cancel = 'やめる', danger 
   });
 }
 
+/**
+ * 文字を 1 行入れる窓（OS の prompt の代わり。アプリの見た目にそろえる）。戻りは入れた文字。Esc・「やめる」なら null。
+ * 入力欄で Enter を押したら「OK」（form の既定のボタンは「やめる」なので、自分で閉じる）
+ */
+export function promptDialog(
+  message,
+  {value = '', ok = 'OK', cancel = 'やめる', placeholder = '', maxlength = 60} = {}
+) {
+  return new Promise((resolve) => {
+    const d = document.createElement('dialog');
+    d.className = 'confirm-dialog';
+    d.innerHTML = `<form method="dialog"><label><span></span><input class="input" type="text" autofocus></label><div class="confirm-dialog__foot"><button type="submit" class="btn" value="cancel"></button><button type="submit" class="btn btn--primary" value="ok"></button></div></form>`;
+    d.querySelector('span').textContent = message;
+    const input = d.querySelector('input');
+    input.value = value;
+    input.placeholder = placeholder;
+    input.maxLength = maxlength;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) {
+        e.preventDefault();
+        d.close('ok');
+      }
+    });
+    d.querySelector('[value="cancel"]').textContent = cancel;
+    d.querySelector('[value="ok"]').textContent = ok;
+    d.addEventListener('close', () => {
+      resolve(d.returnValue === 'ok' ? input.value : null);
+      d.remove();
+    });
+    document.body.append(d);
+    d.showModal();
+    input.select();
+  });
+}
+
 /** 長い文章を読む窓（ライセンス・規約）。Esc か「閉じる」で閉じる */
 export function textDialog(title, text) {
   const d = document.createElement('dialog');
@@ -327,6 +362,7 @@ function render() {
   else if (/^\/kisekae(\/edit)?(\?|$)/.test(route)) view.innerHTML = renderKisekae(state, route);
   else if (/^\/fudebako(\/|\?|$)/.test(route)) view.innerHTML = renderFudebako(state, route);
   else view.innerHTML = renderHome(state);
+  if (!same && lastRoute === '/' && route !== '/') swipeHint();
   lastRoute = route;
   if (snap) restore(view, snap);
   else {
@@ -338,6 +374,46 @@ function render() {
   }
   view.dispatchEvent(new CustomEvent('rendered', {bubbles: true, detail: {route, fresh: !same}}));
 }
+
+/** 初めてホームから別の画面へ行ったとき 1 回だけ、2 本指のスワイプで戻れることを知らせる（手がかりが画面にないため） */
+function swipeHint() {
+  const KEY = 'hint.swipe';
+  try {
+    if (window.localStorage.getItem(KEY)) return;
+    window.localStorage.setItem(KEY, '1');
+  } catch {
+    return; // 記録できない環境では毎回出さず、何もしない
+  }
+  toast('前の画面へは「←」のボタンのほか、トラックパッドなら 2 本指で横になでても戻れます');
+}
+
+// role=tab の並び（シール帳のジャンル・机の道具の種類）：左右の矢印キーと Home・End で隣のタブへ移って選ぶ（WAI-ARIA の tab の決まり）。
+// 選び直しで描き直す画面では、描き直したあとに選ばれているタブへフォーカスを戻す
+document.addEventListener('keydown', (e) => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const tab = e.target?.closest?.('[role="tab"]');
+  const list = tab?.closest('[role="tablist"]');
+  if (!list) return;
+  const tabs = [...list.querySelectorAll('[role="tab"]')];
+  const i = tabs.indexOf(tab);
+  const to =
+    e.key === 'Home'
+      ? 0
+      : e.key === 'End'
+        ? tabs.length - 1
+        : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  e.preventDefault();
+  const label = list.getAttribute('aria-label');
+  tabs[to].focus();
+  tabs[to].click();
+  requestAnimationFrame(() => {
+    if (document.activeElement?.getAttribute('role') === 'tab') return;
+    const again = [...document.querySelectorAll('[role="tablist"]')].find(
+      (l) => l.getAttribute('aria-label') === label
+    );
+    again?.querySelector('[role="tab"][aria-selected="true"]')?.focus({preventScroll: true});
+  });
+});
 
 window.addEventListener('hashchange', render);
 setTimeout(() => loadViewer().catch(() => {}), 1500); // 最初の画面を出したあと、PDF の画面を裏で読んでおく

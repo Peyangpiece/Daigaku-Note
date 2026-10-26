@@ -101,10 +101,11 @@ const detailRoute = (item) => `/fudebako/item/${encodeURIComponent(item.id)}`;
 const SHOP = '/fudebako?tab=shop';
 
 function tabs(shop) {
-  return `<div class="fb-tabs" role="tablist">
-    <button type="button" role="tab" class="fb-tab" aria-selected="${!shop}" data-action="nav" data-route="/fudebako">わたしの筆箱</button>
-    <button type="button" role="tab" class="fb-tab" aria-selected="${shop}" data-action="nav" data-route="${SHOP}">ショップ</button>
-  </div>`;
+  // 画面の切り替え（アドレスが変わる）なので tab ではなく、いまいる画面を aria-current で示す
+  return `<nav class="fb-tabs" aria-label="筆箱の画面">
+    <button type="button" class="fb-tab" aria-current="${shop ? 'false' : 'page'}" data-action="nav" data-route="/fudebako">わたしの筆箱</button>
+    <button type="button" class="fb-tab" aria-current="${shop ? 'page' : 'false'}" data-action="nav" data-route="${SHOP}">ショップ</button>
+  </nav>`;
 }
 /** いまのポイントの残高 */
 const balance = () => state.data?.points?.balance ?? 0;

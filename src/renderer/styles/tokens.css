@@ -31,7 +31,23 @@
   --pop7: #c2f06a;
   --pop8: #ff8a7a;
   --focus: #2b2b2b;
+  /* 角丸：小（入力・チップ）・中（ボタン）・既定（カード）・大（大きな札）・丸（バッジ・タブ） */
+  --radius-s: 6px;
+  --radius-m: 8px;
   --radius: 10px;
+  --radius-l: 14px;
+  --radius-pill: 999px;
+  /* 危険（削除・失敗）：ボタンの地と、文字だけのとき（紙の上で 4.5:1 以上） */
+  --danger: #e5484d;
+  --danger-ink: #c5221f;
+  --danger-ink-on-dark: #ff8a80; /* 暗いノート（data-surface）の上でも使うので、暗い表示の値とは別に持つ */
+  /* ショップの値段帯（上質・高級）と金色の札。紙の色（--gold-paper）の上の文字は --gold-ink */
+  --gold: #e9c66b;
+  --gold-ink: #5c4300;
+  --gold-ink-weak: #9a6b00;
+  --gold-paper: #fff8e1;
+  --gold-paper-strong: #fff1cc;
+  --cream: #f4ecd8;
   --space-1: 8px;
   --space-2: 16px;
   --space-3: 24px;
@@ -60,6 +76,7 @@
   --note-mix: #a9a59b;
   --note-ink-weak: #33363b;
   --focus: #eceff4;
+  --danger-ink: #ff8a80;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -76,6 +93,7 @@
     --note-mix: #a9a59b;
     --note-ink-weak: #33363b;
     --focus: #eceff4;
+    --danger-ink: #ff8a80;
   }
 }
 :root[data-rules='light'] {
