@@ -482,7 +482,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
      *   入力するのは、LMS のホストと、見えるログイン窓で一度ログインしたときに通ったホスト（allowedHosts）だけ。
      *   認証コードなど ID・パスワード以外の入力が求められたら login-needs-user、パスワードが通らなければ login-bad-credentials
      *   （呼ぶ側は自動ログインを止める。何度も送ってアカウントをロックさせない）。
-     * visible：見えるログイン窓。ID・パスワードを保存していれば欄に入れておく（送信は本人が押す）
+     * visible：見えるログイン窓。ID・パスワードを保存していれば欄に入れ、「ログイン」「次へ」も押す（ID・パスワードとも 1 回だけ。通らなければ本人が直す）
      */
     async login(ctx, mode = 'headless', {credentials} = {}) {
       const saved = async () =>
@@ -523,7 +523,10 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const cred = credentials ?? (await saved());
       const r = await session.loginVisible(ctx.connection, {
         url: ctx.base + '/',
-        autofill: cred?.user ? {...cred, base: ctx.base, hosts: ctx.recipe.allowedHosts ?? []} : null,
+        // パスワードを保存していれば、窓の中でも「ログイン」まで押す（ID・パスワードとも 1 回だけ）
+        autofill: cred?.user
+          ? {...cred, base: ctx.base, hosts: ctx.recipe.allowedHosts ?? [], autoSubmit: !!cred.password}
+          : null,
         sso: ctx.recipe.login?.sso ?? null,
         isLoggedIn: async (page) => {
           try {

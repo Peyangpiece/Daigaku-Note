@@ -600,23 +600,18 @@ test(
     const done = connector.login(ctx, 'visible');
     for (let i = 0; i < 50 && !headed?.contexts()[0]?.pages()[0]; i++) await new Promise((r) => setTimeout(r, 100));
     const page = headed.contexts()[0].pages()[0];
-    // 押さなくても、統合認証の ID の欄まで進んでいて、保存した ID が入っている
-    await page.waitForFunction(() => document.querySelector('[name=j_username]')?.value === 'stu', null, {
-      timeout: 15000
-    });
-    await page.click('button[type=submit]');
-    await page.waitForFunction(() => document.querySelector('[name=j_password]')?.value === 'pw', null, {
-      timeout: 10000
-    });
-    await page.click('button[type=submit]');
+    assert.ok(page);
+    // 本人が押さなくても、全学 ID のリンク → ID → 次へ → パスワード → ログイン と進んで終わる
     assert.equal((await done).ok, true);
+    assert.deepEqual(sso.seen.users, ['stu'], '統合認証の ID の欄に入れて送った');
+    assert.equal(sso.seen.passwords, 1, 'パスワードは 1 回だけ送った');
     assert.equal(sso.seen.local, 0, 'LMS 自身のログインの欄には送らない');
     await connector.releaseContext(ctx);
   }
 );
 
 test(
-  '見えるログイン窓：保存した ID とパスワードを欄に入れておく（送信は本人）',
+  '見えるログイン窓：保存した ID とパスワードを入れ、「次へ」「ログイン」も押す。パスワードが違えば 1 回だけで本人に任せる',
   {
     skip:
       (!playwright && 'Playwright が入っていません') ||
@@ -653,19 +648,34 @@ test(
       for (let i = 0; i < 50 && !headed?.contexts()[0]?.pages()[0]; i++) await new Promise((r) => setTimeout(r, 100));
       return headed.contexts()[0].pages()[0];
     };
-    const page = await pageOf();
-    await page.waitForFunction(() => document.querySelector('[name=j_username]')?.value === 'stu', null, {
-      timeout: 10000
-    });
-    assert.deepEqual(sso.seen.users, [], '送信はしない');
-    await page.click('button[type=submit]'); // 本人が「次へ」を押す
-    await page.waitForFunction(() => document.querySelector('[name=j_password]')?.value === 'pw', null, {
-      timeout: 10000
-    });
-    await page.click('button[type=submit]'); // 本人が「ログイン」を押す
+    assert.ok(await pageOf());
+    // 本人が押さなくても、ID → 次へ → パスワード → ログイン と進んで終わる
     const r = await done;
     assert.equal(r.ok, true);
+    assert.deepEqual(sso.seen.users, ['stu']);
+    assert.equal(sso.seen.passwords, 1);
     assert.ok(r.visitedHosts.includes('localhost'), 'IdP のホストを覚える（次から自動ログインに使う）');
     await connector.releaseContext(ctx);
+
+    // パスワードが違うときは 1 回だけ送り、あとは本人に任せる（何度も送ってロックさせない）
+    headed = null;
+    await secrets.set('conn:v3:password', {user: 'stu', password: 'nope'});
+    const bad = await connector.createContext({
+      id: 'v3',
+      base_url: sso.base,
+      university_host: '127.0.0.1',
+      save_password: 1
+    });
+    const badDone = connector.login(bad, 'visible').then(
+      () => 'ok',
+      (e) => e.code
+    );
+    const badPage = await pageOf();
+    for (let i = 0; i < 100 && sso.seen.passwords < 2; i++) await new Promise((res) => setTimeout(res, 100));
+    await new Promise((res) => setTimeout(res, 3000));
+    assert.equal(sso.seen.passwords, 2, '違うパスワードは 1 回だけ送る');
+    await badPage.close(); // 本人が窓を閉じる
+    assert.notEqual(await badDone, 'ok', '本人が閉じたらログインできていない');
+    await connector.releaseContext(bad);
   }
 );
