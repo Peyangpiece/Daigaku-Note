@@ -113,32 +113,44 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     page.on('framenavigated', (f) => {
       if (f === page.mainFrame()) visited.add(safeHost(f.url()));
     });
-    if (autofill?.user) page.on('load', () => fillSaved(page, autofill).catch(() => {}));
+    // LMS 自身のログイン画面（大学のアカウントでは入れない ID・パスワード欄）に、統合認証へのリンク（レシピの login.sso）があれば押す。
+    // 開いた直後だけでなく、ログインの途中やあとでこの画面に戻されたときも押す（同じ画面で押し続けないよう 5 秒あけ、5 回まで）
+    const ssoOn = async () =>
+      !!sso &&
+      safeHost(page.url()) === safeHost(url) &&
+      (await page
+        .locator(sso)
+        .count()
+        .catch(() => 0)) > 0;
+    let ssoClicks = 0;
+    let ssoAt = 0;
+    const pressSso = async () => {
+      if (ssoClicks >= 5 || Date.now() - ssoAt < 5000 || !(await ssoOn())) return;
+      ssoClicks++;
+      ssoAt = Date.now();
+      await page
+        .locator(sso)
+        .first()
+        .click({timeout: 5000})
+        .catch(() => {});
+    };
+    // 保存した ID・パスワードは、統合認証のページの欄にだけ入れる（LMS 自身のログインの欄には入れない）
+    if (autofill?.user)
+      page.on('load', async () => {
+        if (await ssoOn()) return;
+        await fillSaved(page, autofill).catch(() => {});
+      });
     const started = Date.now();
     try {
       await page.goto(url, {waitUntil: 'domcontentloaded'}).catch(() => {});
-      // LMS 自身のログイン画面なら、統合認証へのリンク（レシピの login.sso）を 1 回だけ押して大学のログインへ進める
-      if (
-        sso &&
-        (await page
-          .locator(sso)
-          .count()
-          .catch(() => 0)) > 0
-      )
-        await Promise.all([
-          page.waitForLoadState('domcontentloaded').catch(() => {}),
-          page
-            .locator(sso)
-            .first()
-            .click({timeout: 5000})
-            .catch(() => {})
-        ]);
+      await pressSso();
       onStatus('ログインできたら自動で閉じます');
       while (Date.now() - started < timeoutMs) {
         if (page.isClosed() || !b.isConnected())
           throw Object.assign(new Error('ログイン窓が閉じられました'), {code: 'login-cancelled'});
         if (captured) break;
         if (await Promise.resolve(isLoggedIn?.(page)).catch(() => false)) break;
+        await pressSso();
         await page.waitForTimeout(1000);
       }
       if (!captured && Date.now() - started >= timeoutMs)

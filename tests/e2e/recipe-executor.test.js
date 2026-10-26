@@ -568,6 +568,54 @@ test(
 );
 
 test(
+  '見えるログイン窓：LMS 自身のログイン画面なら、統合認証のリンク（login.sso）を押してから見せ、LMS の欄には入れない',
+  {
+    skip:
+      (!playwright && 'Playwright が入っていません') ||
+      (process.platform === 'linux' && !process.env.DISPLAY && '画面がありません（xvfb-run で動かす）')
+  },
+  async (t) => {
+    const sso = await mockSso({localLogin: true});
+    t.after(sso.close);
+    let headed = null;
+    const wrapped = {
+      ...playwright,
+      chromium: {
+        ...playwright.chromium,
+        launch: async (o) =>
+          o.headless === false ? (headed = await playwright.chromium.launch(o)) : playwright.chromium.launch(o)
+      }
+    };
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright: wrapped, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor({...recipeBase, allowedHosts: ['localhost']}, {session, secrets});
+    await secrets.set('conn:v2:password', {user: 'stu', password: 'pw'});
+    const ctx = await connector.createContext({
+      id: 'v2',
+      base_url: sso.base,
+      university_host: '127.0.0.1',
+      save_password: 1
+    });
+    const done = connector.login(ctx, 'visible');
+    for (let i = 0; i < 50 && !headed?.contexts()[0]?.pages()[0]; i++) await new Promise((r) => setTimeout(r, 100));
+    const page = headed.contexts()[0].pages()[0];
+    // 押さなくても、統合認証の ID の欄まで進んでいて、保存した ID が入っている
+    await page.waitForFunction(() => document.querySelector('[name=j_username]')?.value === 'stu', null, {
+      timeout: 15000
+    });
+    await page.click('button[type=submit]');
+    await page.waitForFunction(() => document.querySelector('[name=j_password]')?.value === 'pw', null, {
+      timeout: 10000
+    });
+    await page.click('button[type=submit]');
+    assert.equal((await done).ok, true);
+    assert.equal(sso.seen.local, 0, 'LMS 自身のログインの欄には送らない');
+    await connector.releaseContext(ctx);
+  }
+);
+
+test(
   '見えるログイン窓：保存した ID とパスワードを欄に入れておく（送信は本人）',
   {
     skip:
