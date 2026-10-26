@@ -94,8 +94,9 @@ export function credentialUrlAllowed(url, {base, hosts = []} = {}) {
 
 /**
  * ページの中で欄を探して印を付ける（Playwright の page.evaluate に渡すので、外の変数を使わない）。
- * 返り値：{user, password, submit, extra, filledUser, filledPassword}
- *   user / password / submit：見つけたか。extra：ID・パスワード以外に入力が要りそうな欄（認証コードなど）があるか
+ * 返り値：{user, password, submit, extra, code, filledUser, filledPassword}
+ *   user / password / submit：見つけたか。extra：ID・パスワード以外に入力が要りそうな欄（認証コード・検索欄など）があるか。
+ *   code：空の認証コード・ワンタイムパスワードの欄があるか
  */
 export function markLoginForm() {
   const visible = (el) => {
@@ -141,6 +142,7 @@ export function markLoginForm() {
   const extra = inputs.some(
     (el) => el !== user && el !== password && (textLike(el) || el.type === 'number') && !el.value
   );
+  const code = inputs.some((el) => el !== user && el !== password && !el.value && codeHint(el));
   if (user) user.setAttribute('data-dn-login', 'user');
   if (password) password.setAttribute('data-dn-login', 'password');
   if (submit) submit.setAttribute('data-dn-login', 'submit');
@@ -149,6 +151,7 @@ export function markLoginForm() {
     password: !!password,
     submit: !!submit,
     extra,
+    code,
     filledUser: !!user?.value,
     filledPassword: !!password?.value
   };

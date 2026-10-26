@@ -134,11 +134,28 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
         .click({timeout: 5000})
         .catch(() => {});
     };
-    // 保存した ID・パスワードは、統合認証のページの欄にだけ入れる（LMS 自身のログインの欄には入れない）
+    // 保存した ID・パスワードは、統合認証のページの欄にだけ入れる（LMS 自身のログインの欄には入れない）。
+    // パスワードを保存していれば、入れたあと「ログイン」「次へ」も押す（ID → パスワードの 2 段階も）。
+    // 押すのは ID・パスワードとも 1 回だけ（通らなければ本人に任せる。何度も送ってアカウントをロックさせない）。
+    // 認証コード・ワンタイムパスワードの欄がある画面では押さない（本人が入れる）
+    const sent = {user: false, password: false};
     if (autofill?.user)
       page.on('load', async () => {
         if (await ssoOn()) return;
-        await fillSaved(page, autofill).catch(() => {});
+        const f = await fillSaved(page, autofill).catch(() => null);
+        if (!f || !autofill.password || !autofill.autoSubmit || f.code || !f.submit) return;
+        if (f.password) {
+          if (sent.password) return;
+          sent.password = sent.user = true;
+        } else if (f.user) {
+          if (sent.user || sent.password) return;
+          sent.user = true;
+        } else return;
+        await page
+          .locator('[data-dn-login="submit"]')
+          .first()
+          .click({timeout: 5000})
+          .catch(() => {});
       });
     const started = Date.now();
     try {
@@ -163,14 +180,16 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     }
   }
 
-  /** 見えるログイン窓の欄に、保存した ID・パスワードを入れる（空の欄だけ。送信しない） */
+  /** 見えるログイン窓の欄に、保存した ID・パスワードを入れる（空の欄だけ。押すかどうかは呼ぶ側） */
   // 入れるのは LMS と同じ組織のドメインか、レシピに書いたホストのページだけ（credentialUrlAllowed）
+  // 戻りは欄の様子（markLoginForm）。入れない画面なら null
   async function fillSaved(page, {user, password, base, hosts = []}) {
-    if (!credentialUrlAllowed(page.url(), {base, hosts})) return;
+    if (!credentialUrlAllowed(page.url(), {base, hosts})) return null;
     const f = await page.evaluate(markLoginForm);
     if (f.user && !f.filledUser) await page.locator('[data-dn-login="user"]').first().fill(user);
     if (f.password && !f.filledPassword && password)
       await page.locator('[data-dn-login="password"]').first().fill(password);
+    return f;
   }
 
   async function shutdown() {
