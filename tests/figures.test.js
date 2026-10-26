@@ -257,3 +257,14 @@ test('伸びる図（高校の教科）：波・v-t グラフ・グラフ類・�
   assert.equal(growLabel('fig-tree-diagram', {n: 3}), '3 段（8 通り）');
   assert.equal(drawToPlace('fig-tategaki'), '行の数と長さ');
 });
+
+test('素材：人体の骨格（前から見た全身。骨の名前は書き換えられる）', () => {
+  const f = figureOf('fig-skeleton');
+  assert.equal(f.subject, '生物');
+  const svg = figureSvg('fig-skeleton');
+  assert.doesNotMatch(svg, /NaN|undefined/);
+  assert.match(svg, /scale\(-1 1\)/, '左右を写して全身にする');
+  const names = defaultLabels('fig-skeleton').map((l) => l.t);
+  for (const n of ['頭蓋骨', '鎖骨', '胸骨', '肋骨', '上腕骨', '尺骨', '橈骨', '大腿骨', '膝蓋骨', '脛骨', '腓骨'])
+    assert.ok(names.includes(n), n);
+});
