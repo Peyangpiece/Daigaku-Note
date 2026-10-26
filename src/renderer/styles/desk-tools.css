@@ -1,0 +1,786 @@
+/* 大学ノートの画面：四隅の道具：シール帳・ポーチ・素材・貼りもの・電卓・メモ帳・定規・付箋インデックス・タイマー。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* 画面の四隅（§9.9）：右下にポーチ、左上にシール帳、左下に素材（右上の筆箱は .fude-side）。
+   しまっているときは画面の外へずらし、つまみだけを端に見せる。1 つ出すとほかはしまう */
+.corner {
+  position: fixed;
+  z-index: 20;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px 12px;
+  border-radius: 18px;
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.22),
+    0 0 0 1px color-mix(in srgb, var(--paper-ink) 12%, transparent);
+  transition: transform calc(var(--motion) * 1.4) cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.corner--pouch {
+  right: 16px;
+  top: 50vh; /* 画面を四つに分けた右下の四角の上から（つまみはその右上） */
+  max-height: calc(50vh - 16px);
+  width: 260px;
+  background: #8a5a44; /* 帆布のポーチ */
+  color: #fff;
+}
+.corner--seal {
+  left: 16px;
+  top: var(--corner-top, 120px);
+  max-height: calc(100vh - var(--corner-top, 120px) - 16px);
+}
+.corner--sozai {
+  left: 16px;
+  top: 50vh; /* 画面を四つに分けた左下の四角の上から（つまみはその左上） */
+  width: 340px;
+  max-height: calc(50vh - 16px);
+}
+.corner--pouch.is-tucked {
+  transform: translateX(calc(100% + 16px));
+  box-shadow: none;
+}
+.corner--seal.is-tucked,
+.corner--sozai.is-tucked {
+  transform: translateX(calc(-100% - 16px));
+  box-shadow: none;
+}
+.corner__tab {
+  position: absolute;
+  width: 30px;
+  padding: 10px 0;
+  border: 0;
+  background: inherit;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  writing-mode: vertical-rl;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion);
+}
+.corner--pouch .corner__tab {
+  left: -30px;
+  top: 8px;
+  border-radius: 10px 0 0 10px;
+  box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.2);
+}
+.corner--seal .corner__tab {
+  right: -30px;
+  top: 24px;
+  border-radius: 0 10px 10px 0;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+}
+.corner--sozai .corner__tab {
+  right: -30px;
+  top: 8px;
+  border-radius: 0 10px 10px 0;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+}
+.corner.is-tucked .corner__tab {
+  opacity: 0.92;
+  pointer-events: auto;
+}
+/* 四隅のどれかを出している間は、ほかのつまみを隠す */
+[data-corner-open] .corner.is-tucked .corner__tab,
+[data-corner-open] .fude-side.is-tucked .fude-side__tab {
+  opacity: 0;
+  pointer-events: none;
+}
+.corner__tab:focus-visible,
+.corner__item:focus-visible,
+.pouch__item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.corner__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 2px 8px;
+}
+.corner__head .muted {
+  font-size: var(--fs-small);
+}
+.corner__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.corner__tabs button {
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 22%, transparent);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.corner__tabs button[aria-selected='true'] {
+  background: var(--paper-ink);
+  border-color: var(--paper-ink);
+  color: var(--card);
+}
+.corner__grid {
+  display: grid;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px;
+}
+.corner__grid--seal {
+  grid-template-columns: repeat(4, 1fr);
+}
+.corner__grid--sozai {
+  grid-template-columns: repeat(3, 1fr);
+}
+.corner__item {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 12%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--card) 70%, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: grab;
+  touch-action: none;
+}
+.corner__item:hover {
+  border-color: color-mix(in srgb, var(--paper-ink) 40%, transparent);
+}
+.corner__item img {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  pointer-events: none;
+}
+.corner__grid--sozai .corner__item img {
+  width: 76px;
+  height: 60px;
+  padding: 2px;
+  border-radius: 4px;
+  background: #fff; /* 図はページ（白い紙）に貼るので、見本も白の上に */
+}
+.corner__hint {
+  margin: 8px 2px 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  opacity: 0.75;
+}
+.pouch__items {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 8px 6px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.55); /* 縫い目 */
+  border-radius: 12px;
+  background: #f4ede4;
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.18);
+}
+.pouch__item {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: #3b3a36;
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.pouch__item svg {
+  width: 56px;
+  height: 40px;
+  transition: transform calc(var(--motion) * 0.75) ease;
+}
+.pouch__item:hover svg {
+  transform: translateY(-3px);
+}
+.pouch__item[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 0 2px #3b3a36;
+}
+
+/* 貼りもの（注釈の stamp）：シール・素材の図・ちぎった紙。ペンの線の下に重なる */
+.anno-stamp {
+  position: absolute;
+  cursor: move;
+  outline: none;
+}
+.viewer-pages:not([data-tool='select']) .anno-stamp {
+  cursor: inherit;
+}
+.anno-stamp__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+.anno-stamp__img.sticker--circle {
+  aspect-ratio: auto;
+}
+.anno-stamp__memo {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: var(--memo-top, 16px) var(--memo-pad, 10px) 0;
+  box-sizing: border-box;
+  background-color: var(--memo, #fffdf6);
+  /* 罫線：行の高さごと。1 行目の上から */
+  background-image: linear-gradient(
+    to bottom,
+    transparent calc(var(--memo-lh) - 1px),
+    #bcd3ea calc(var(--memo-lh) - 1px)
+  );
+  background-size: 100% var(--memo-lh, 21px);
+  background-position: 0 var(--memo-top, 16px);
+  background-repeat: repeat-y;
+  background-origin: border-box;
+}
+.anno-stamp--memo {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.22));
+}
+.anno-stamp__text {
+  color: #2b2b2b;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+  font-size: var(--memo-font, 13px);
+  line-height: var(--memo-lh, 21px);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.anno-stamp.is-selected {
+  box-shadow: 0 0 0 1px var(--c4);
+}
+.anno-stamp:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.anno-stamp.is-dragging {
+  opacity: 0.8;
+}
+.anno-stamp__grip {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  background: var(--c4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: nwse-resize;
+  display: none;
+}
+.viewer-pages[data-tool='select'] .anno-stamp.is-selected .anno-stamp__grip {
+  display: block;
+}
+/* 運んでいる間の影（シール・図・ちぎった紙） */
+.carry-ghost {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.88;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.28));
+  transform-origin: 0 0;
+}
+.memo-ghost {
+  position: fixed;
+  box-sizing: border-box;
+  padding: 18px 12px 0;
+  overflow: hidden;
+  background: var(--memo, #fffdf6);
+  color: #2b2b2b;
+  font-size: 14px;
+  line-height: 24px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ポーチの電卓・メモ帳：画面に浮かぶ小さな窓。上の帯で動かす */
+.float-tool {
+  position: fixed;
+  z-index: 25;
+  padding: 0 10px 10px;
+  border-radius: var(--radius-l);
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.28),
+    0 0 0 1px color-mix(in srgb, var(--paper-ink) 12%, transparent);
+}
+.float-tool__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 2px 6px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.float-tool__head:active {
+  cursor: grabbing;
+}
+.float-tool__close {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.float-tool__close:hover {
+  background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
+}
+.calc {
+  width: 260px;
+  background: #3b4252;
+  color: #eceff4;
+}
+.calc .float-tool__close:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.calc__screen {
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-m);
+  background: #cfe3d2;
+  color: #1f2a22;
+  text-align: right;
+}
+.calc__prev {
+  min-height: 1.4em;
+  overflow: hidden;
+  font-size: var(--fs-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.7;
+}
+.calc__prev.is-error {
+  color: #b42318;
+  opacity: 1;
+}
+.calc__input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font:
+    600 24px/1.3 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+  text-align: right;
+  outline: none;
+}
+.calc__keys {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.calc__key {
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: #4c566a;
+  color: #eceff4;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.calc__key:hover {
+  filter: brightness(1.15);
+}
+.calc__key:active {
+  transform: translateY(1px);
+}
+.calc__key.is-num {
+  background: #d8dee9;
+  color: #2e3440;
+}
+.calc__key.is-clear {
+  background: #bf616a;
+}
+.calc__key.is-eq {
+  grid-column: span 2;
+  background: #ebcb8b;
+  color: #2e3440;
+  font-weight: 700;
+}
+.memo-pad {
+  width: 240px;
+}
+.memo-pad__block {
+  position: relative;
+  /* 下に重なっている紙の束 */
+  box-shadow:
+    0 2px 0 -1px #f2efe6,
+    0 3px 0 -1px #d9d4c7,
+    0 5px 0 -2px #f2efe6,
+    0 6px 0 -2px #d9d4c7,
+    0 3px 10px rgba(0, 0, 0, 0.18);
+  border-radius: 2px;
+}
+.memo-pad__glue {
+  height: 10px;
+  border-radius: 2px 2px 0 0;
+  background: #8b6f47; /* のりの付いた背 */
+  cursor: grab;
+  touch-action: none;
+}
+.memo-pad__sheet {
+  position: relative;
+  height: 210px;
+  background: var(--memo, #fffdf6);
+}
+.memo-pad__sheet.is-fresh {
+  animation: memo-fresh calc(var(--motion) * 1.25) ease-out;
+}
+@keyframes memo-fresh {
+  from {
+    filter: brightness(0.94);
+  }
+}
+.memo-pad__perf {
+  height: 10px;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.28) 1px, transparent 1.5px) 0 50% / 6px 6px repeat-x;
+  cursor: grab;
+  touch-action: none;
+}
+.memo-pad__sheet textarea {
+  display: block;
+  width: 100%;
+  height: 200px;
+  box-sizing: border-box;
+  padding: 8px 12px 0;
+  border: 0;
+  resize: none;
+  background: linear-gradient(to bottom, transparent 23px, #bcd3ea 23px) 0 8px / 100% 24px repeat-y;
+  color: #2b2b2b;
+  font:
+    14px/24px 'Hiragino Kaku Gothic ProN',
+    'Hiragino Sans',
+    sans-serif;
+  outline: none;
+}
+.memo-pad__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+.memo-pad .swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 30%, transparent);
+  background: var(--swatch);
+  cursor: pointer;
+}
+.memo-pad .swatch[aria-pressed='true'] {
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 4px var(--paper-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .corner,
+  .memo-pad__sheet.is-fresh {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* 定規：ページの上に置く透明な定規。上のふちに mm の目盛り（ページの実寸） */
+.ruler {
+  position: fixed;
+  z-index: 16;
+  box-sizing: border-box;
+  border: 1px solid rgba(47, 111, 150, 0.55);
+  border-radius: 4px;
+  background: rgba(219, 238, 250, 0.62);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  backdrop-filter: blur(0.5px);
+}
+.ruler:active {
+  cursor: grabbing;
+}
+.ruler__ticks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  stroke: #2f4f66;
+  stroke-width: 1;
+  font:
+    10px ui-monospace,
+    Menlo,
+    monospace;
+  fill: #2f4f66;
+  text-anchor: middle;
+}
+.ruler__ticks text {
+  stroke: none;
+}
+.ruler__angle {
+  position: absolute;
+  right: 44px;
+  bottom: 6px;
+  color: #2f4f66;
+  font-size: var(--fs-small);
+  opacity: 0;
+  transition: opacity var(--motion);
+  pointer-events: none;
+}
+.ruler.is-turning .ruler__angle,
+.ruler:hover .ruler__angle {
+  opacity: 0.85;
+}
+.ruler__turn {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(47, 111, 150, 0.5);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  color: #2f4f66;
+  font-size: 15px;
+  line-height: 1;
+  cursor: alias;
+}
+
+/* 付箋（インデックス）：ページの右の端から外へはみ出す。ページに重なる所は薄く、はみ出した所に言葉 */
+.anno-stamp--index {
+  overflow: visible;
+}
+.anno-stamp__tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding-left: var(--index-over, 21px);
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--index) 45%, transparent) var(--index-over, 21px),
+    var(--index) var(--index-over, 21px)
+  );
+  color: var(--index-ink, #2b2b2b);
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+  font-size: var(--index-font, 11px);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.18);
+}
+.viewer-pages[data-tool='select'] .anno-stamp--index {
+  cursor: ns-resize;
+}
+.index-ghost {
+  position: fixed;
+  border-radius: 0 3px 3px 0;
+  background: var(--index);
+}
+.index-pad {
+  width: 260px;
+}
+.index-pad__label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--fs-small);
+}
+.index-pad__label input {
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.index-pad__colors {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+.index-pad__color {
+  height: 26px;
+  border: 0;
+  border-radius: 2px 6px 6px 2px;
+  background: linear-gradient(to right, color-mix(in srgb, var(--index) 45%, #fff) 30%, var(--index) 30%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: grab;
+  touch-action: none;
+}
+.index-pad__color:hover {
+  transform: translateX(3px);
+}
+.index-pad__hint {
+  margin: 0 0 6px;
+  font-size: var(--fs-small);
+  opacity: 0.7;
+}
+.index-pad__list {
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  font-size: var(--fs-small);
+}
+.index-pad__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.index-pad__item:hover {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.index-pad__item .muted {
+  margin-left: auto;
+  font-size: var(--fs-small);
+}
+.index-pad__chip {
+  width: 14px;
+  height: 10px;
+  border-radius: 0 3px 3px 0;
+  background: var(--index);
+}
+
+/* タイマー */
+.timer {
+  width: 250px;
+}
+.timer__face {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  margin: 4px auto 10px;
+}
+.timer__face svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.timer__track,
+.timer__ring {
+  fill: none;
+  stroke-width: 8;
+}
+.timer__track {
+  stroke: color-mix(in srgb, var(--paper-ink) 12%, transparent);
+}
+.timer__ring {
+  stroke: var(--danger);
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  transition: stroke-dashoffset calc(var(--motion) * 1.25) linear;
+}
+.timer__clock {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font:
+    600 32px/1 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+}
+.timer.is-done {
+  animation: timer-done calc(var(--motion) * 3) ease-in-out 4;
+}
+@keyframes timer-done {
+  50% {
+    box-shadow:
+      0 0 0 4px var(--danger),
+      0 10px 28px rgba(0, 0, 0, 0.28);
+  }
+}
+.timer__presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.timer__preset,
+.timer__custom input {
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 22%, transparent);
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.timer__preset[aria-pressed='true'] {
+  background: var(--paper-ink);
+  color: var(--card);
+}
+.timer__custom input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 6px;
+  text-align: center;
+  cursor: text;
+}
+.timer.is-running .timer__preset,
+.timer.is-running .timer__custom input {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.timer__foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.pouch__item {
+  position: relative;
+}
+.pouch__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,994 @@
+/* 大学ノートの画面：PDF の編集画面：ツールバー・注釈・筆箱・しおり・文字の層・赤シート。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* ---- PDF ビューア（SPEC §8.4・§9）：ノートは薄く、PDF が主役。ツールバーは上部の白い帯 ---- */
+/* 編集画面のツールバー：窓に固定（拡大してページを横にスクロールしても動かない。sticky だと横には一緒に流れていた） */
+.viewer-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px var(--space-6);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  font-size: var(--fs-small);
+}
+.viewer-bar button:not(.btn) {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.viewer-bar button:not(.btn):hover {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.viewer-bar button[aria-pressed='true']:not(.swatch) {
+  border-color: var(--paper-ink);
+  background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
+}
+.viewer-bar button:focus-visible,
+.viewer-bar input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.viewer-bar__name {
+  max-width: 150px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.viewer-bar .seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--paper-ink) 5%, transparent);
+}
+.viewer-bar__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--rule);
+}
+.viewer-bar__group[hidden] {
+  display: none;
+}
+.viewer-bar__font {
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+  color: var(--paper-ink-weak);
+}
+.viewer-bar__size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.viewer-bar__size input {
+  width: 56px;
+  padding: 3px 4px;
+  border: 1.5px solid var(--rule);
+  border-radius: var(--radius-s);
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+}
+.viewer-bar__bold {
+  font-weight: 800 !important;
+}
+/* 多機能ペンの芯の切り替え（持っているときだけ出る） */
+.viewer-bar__refills {
+  gap: 4px;
+}
+.viewer-bar__refills-name {
+  margin-right: 2px;
+  font-size: var(--fs-small);
+  color: var(--paper-ink-weak);
+}
+.viewer-bar button.viewer-bar__refill::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  background: var(--swatch);
+  vertical-align: -1px;
+}
+.swatches {
+  display: inline-flex;
+  gap: 4px;
+}
+.viewer-bar button.swatch {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 30%, transparent);
+  background: var(--swatch);
+}
+.viewer-bar button.swatch:hover {
+  background: var(--swatch);
+  transform: scale(1.1);
+}
+.viewer-bar button.swatch[aria-pressed='true'] {
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 4px var(--paper-ink);
+}
+.viewer-bar input[type='color'] {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.viewer-bar__spacer {
+  flex: 1;
+}
+.viewer-bar__zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.viewer-bar__zoom span {
+  min-width: 44px;
+  text-align: center;
+}
+.viewer-bar__status {
+  /* 保存の状態は並びの外（ツールバーの右下に小さく）。並びの幅を取らず、文字が変わってもボタンが動かない */
+  position: absolute;
+  right: var(--space-6);
+  top: 100%;
+  margin-top: 4px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  font-size: var(--fs-small);
+  line-height: 20px;
+  pointer-events: none;
+}
+.viewer-bar__status:empty {
+  display: none;
+}
+.viewer-bar__status.is-error {
+  color: #d93025;
+}
+
+.viewer-pages {
+  display: flex;
+  flex-direction: column;
+  /* 画面に収まるときは真ん中、はみ出すときは左から（center だと左右に同じだけはみ出し、左側へスクロールで戻れない。
+     拡大するといつも真ん中に寄ってしまい、指の下の場所を保てない） */
+  align-items: safe center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-6);
+  /* タッチ画面：1 本指のスクロールはブラウザに任せ、2 本指のピンチは viewer.js で受ける */
+  touch-action: pan-x pan-y;
+}
+/* 文字隠しの道具では 1 本指でなぞる。注釈は指で動かせるように（どちらもスクロールにしない。スクロールは 2 本指で） */
+.viewer-pages[data-tool='mask'] .pdf-page,
+.viewer-pages[data-tool='ink'] .pdf-page,
+.viewer-pages[data-tool='line'] .pdf-page,
+.viewer-pages[data-tool='eraser'] .pdf-page,
+.anno-line,
+.anno-text,
+.anno-note,
+.anno-mask,
+.anno-stamp {
+  touch-action: none;
+}
+.viewer-pages[data-tool='text'] .pdf-page {
+  cursor: text;
+}
+.viewer-pages[data-tool='note'] .pdf-page {
+  cursor: copy;
+}
+.pdf-page {
+  position: relative;
+  flex: none;
+  background: #fff; /* ダークモードでもページは反転しない（§8.0） */
+  box-shadow: var(--card-shadow-hover);
+  user-select: none;
+}
+.pdf-page__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.pdf-page__layer {
+  position: absolute;
+  inset: 0;
+}
+/* 文字の層（pdf.js の TextLayer）：絵と同じ位置に透明な文字。pdf.js の pdf_viewer.css の .textLayer と同じ決まり
+   （--scale-factor・--total-scale-factor はページの要素に viewer.js が入れる。--min-font-size は TextLayer が入れる） */
+.pdf-page {
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+.pdf-page__text {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-align: initial;
+  transform-origin: 0 0;
+  forced-color-adjust: none;
+  pointer-events: none; /* 選択の道具のときだけ受ける（下） */
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.pdf-page__text :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+.pdf-page__text > :not(.markedContent),
+.pdf-page__text .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.pdf-page__text .markedContent {
+  display: contents;
+}
+.pdf-page__text ::selection {
+  background: rgba(0, 0, 255, 0.25);
+  color: transparent;
+}
+/* 選択の道具：文字の層にマウスが届くように、注釈の層そのものとペンの線（選べない）は素通しにし、注釈の部品だけ受ける */
+.viewer-pages[data-tool='select'] .pdf-page__text {
+  pointer-events: auto;
+}
+.viewer-pages[data-tool='select'] .pdf-page__layer,
+.viewer-pages[data-tool='select'] .pdf-page__ink {
+  pointer-events: none;
+}
+.viewer-pages[data-tool='select'] .pdf-page__layer > :not(.pdf-page__ink) {
+  pointer-events: auto;
+}
+.pdf-page__num {
+  position: absolute;
+  right: 0;
+  bottom: -22px;
+}
+
+/* 文字入れ：フォントはヒラギノ角ゴのみ（太字は W6）。ヒラギノのない OS では OS のゴシックで代わりに出る */
+.anno-text {
+  position: absolute;
+  min-width: 1em;
+  padding: 0 1px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  width: max-content;
+  cursor: move;
+  outline: none;
+  user-select: none;
+}
+.viewer-pages[data-tool='text'] .anno-text {
+  cursor: text;
+}
+.anno-text.is-selected {
+  box-shadow: 0 0 0 1px var(--c4);
+}
+/* キーボードで注釈に来たとき（Tab）。押して選んだときの印に加えて、フォーカスの輪を出す */
+.anno-text:focus-visible,
+.anno-mask:focus-visible,
+.anno-line:focus-visible,
+.anno-note__icon:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.anno-text.is-editing {
+  cursor: text;
+  user-select: text;
+  box-shadow: 0 0 0 1.5px var(--c4);
+  background: rgba(255, 255, 255, 0.55);
+}
+.anno-text.is-dragging,
+.anno-note.is-dragging {
+  opacity: 0.75;
+}
+
+/* 付箋：ページの上の小さな紙。押すと吹き出しで本文 */
+.anno-note {
+  position: absolute;
+  z-index: 1;
+}
+.anno-note.is-open {
+  z-index: 5;
+}
+.anno-note__icon {
+  display: block;
+  width: var(--note-size, 26px);
+  height: var(--note-size, 26px);
+  padding: 0;
+  border: 0;
+  border-radius: 2px 2px 2px 30%;
+  background: linear-gradient(225deg, color-mix(in srgb, var(--note) 60%, #000 0%) 0 22%, var(--note) 22%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transform: rotate(-3deg);
+  cursor: move;
+}
+.anno-note__icon::before {
+  content: '';
+  display: block;
+  margin: 28% 20% 0;
+  height: 40%;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0 1.5px, transparent 1.5px 30%);
+}
+.anno-note.is-selected .anno-note__icon {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 2px;
+}
+.anno-note__pop {
+  position: absolute;
+  top: 0;
+  left: calc(var(--note-size, 26px) + 8px);
+  width: 240px;
+  min-width: 160px;
+  min-height: 160px;
+  max-width: 900px;
+  max-height: 900px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  resize: both; /* 右下の角で大きさを変えられる（覚えて次に開いたときも同じ大きさ） */
+  overflow: auto;
+  padding: 10px;
+  border-top: 6px solid var(--note);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--note) 22%, #fff);
+  box-shadow: var(--card-shadow-hover);
+  color: #2b2b2b;
+  cursor: auto;
+}
+.anno-note__pop[hidden] {
+  display: none;
+}
+.anno-note__pop textarea {
+  width: 100%;
+  min-height: 70px;
+  flex: 0 0 auto;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-small);
+  line-height: 1.6;
+  outline: none;
+}
+.anno-note__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+/* メモの中の手書き：本文の下の罫線入りの欄。筆箱のボールペンで書く（指・マウスでも）。吹き出しを広げると欄も広がる */
+.anno-note__draw {
+  flex: 1 1 80px;
+  min-height: 80px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.3);
+  padding-top: 4px;
+}
+.anno-note__ink {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 76px;
+  touch-action: none;
+  cursor: crosshair;
+  background: repeating-linear-gradient(to bottom, transparent 0 23px, rgba(0, 0, 0, 0.12) 23px 24px);
+  border-radius: 3px;
+}
+.anno-note__foot .btn {
+  border-color: #2b2b2b;
+  background: transparent;
+  color: #2b2b2b;
+}
+
+/* 文字隠し：水色のマーカー。赤の成分が 0 の色を乗算で重ねるので、下の文字は読め、赤シートの下では黒くなる */
+.anno-mask {
+  position: absolute;
+  background: var(
+    --mask,
+    #00d2ff
+  ); /* 既定は main/pdf-export.js の MARKER_HEX と同じ。文字隠しペンの色（赤の成分が 0） */
+  mix-blend-mode: multiply;
+  border-radius: 2px;
+  cursor: move;
+}
+.anno-mask--draft {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.anno-mask.is-selected {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 1px;
+}
+.viewer-pages[data-tool='mask'] .pdf-page {
+  cursor: crosshair;
+}
+
+/* ボールペンの線（§9.8）：ページの上の SVG。PDF の座標のまま描き、g の変換で拡大に合わせる。押しても選ばない */
+.pdf-page__ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.viewer-pages[data-tool='ink'] .pdf-page {
+  cursor: crosshair;
+}
+/* マーカー（アンダーライン）：文字の下の線。乗算で重ねるので下の文字は読める */
+.anno-line {
+  position: absolute;
+  background: var(--line, #ffe14d);
+  mix-blend-mode: multiply;
+  border-radius: var(--radius-pill);
+  cursor: move;
+}
+.anno-line--draft {
+  opacity: 0.75;
+  pointer-events: none;
+}
+.anno-line.is-selected {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 1px;
+}
+.viewer-pages[data-tool='line'] .pdf-page {
+  cursor: text;
+}
+.viewer-pages[data-tool='ink'] .anno-line,
+.viewer-pages[data-tool='line'] .anno-line,
+.viewer-pages[data-tool='eraser'] .anno-line,
+.viewer-pages[data-tool='ink'] .anno-mask,
+.viewer-pages[data-tool='line'] .anno-mask,
+.viewer-pages[data-tool='eraser'] .anno-mask {
+  cursor: inherit;
+}
+/* 消しゴム：指・ペンの下の丸 */
+.viewer-pages[data-tool='eraser'] .pdf-page {
+  cursor: none;
+}
+.eraser-ring {
+  position: fixed;
+  z-index: 40;
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 70%, transparent);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* 筆箱（§9.8）：画面の右。開くと 6 本のペンが寝ていて、押すとそのペンを持つ（少し引き出される）。
+   ペンを持ったら画面の右の外へしまい、つまみ（「筆箱」）だけ端に残す */
+.fude-side {
+  position: fixed;
+  right: 16px;
+  top: var(--corner-top, 120px);
+  z-index: 20;
+  width: 320px;
+  transition: transform calc(var(--motion) * 1.4) cubic-bezier(0.2, 0.8, 0.2, 1);
+  max-height: calc(100vh - 140px);
+  overflow: visible;
+  padding: 10px 10px 12px;
+  border-radius: 18px;
+  background: var(--case-base, #2e3f66);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.22),
+    inset 0 2px 0 rgba(255, 255, 255, 0.18);
+}
+.fude-side.is-tucked {
+  transform: translateX(calc(100% + 16px));
+  box-shadow: none;
+}
+/* しまっている間は、つまみ以外を見えない扱いにする（Tab で画面の外にフォーカスが行かないように） */
+.fude-side.is-tucked > :not(.fude-side__tab),
+.corner.is-tucked > :not(.corner__tab) {
+  visibility: hidden;
+}
+/* つまみ：しまっているときだけ、画面の右端に見せる */
+.fude-side__tab {
+  position: absolute;
+  top: 24px;
+  left: -30px;
+  width: 30px;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 10px 0 0 10px;
+  background: var(--case-base, #2e3f66);
+  color: #fff;
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  writing-mode: vertical-rl;
+  letter-spacing: 0.2em;
+  box-shadow:
+    inset 4px 0 0 var(--current, transparent),
+    -2px 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion);
+}
+.fude-side.is-tucked .fude-side__tab {
+  opacity: 0.92;
+  pointer-events: auto;
+}
+.fude-side__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0 4px 8px;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+.fude-side__head .muted {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* ペンケースの内側（明るい裏地）。ふちは縫い目 */
+.fude-side__case {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 1.5px dashed var(--case-trim, #d9d2c3);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--case-trim, #d9d2c3) 55%, #fff);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.18);
+}
+.fude-side__pen {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: transparent;
+  cursor: pointer;
+}
+.fude-side__pen .st-art {
+  width: 268px;
+  height: 38px;
+  transition: transform calc(var(--motion) * 0.75) ease;
+}
+.fude-side__pen:hover .st-art {
+  transform: translateX(-4px);
+}
+.fude-side__pen[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+.fude-side__pen[aria-pressed='true'] .st-art {
+  transform: translateX(-10px) rotate(-3deg);
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.25));
+}
+.fude-side__pen.is-empty {
+  cursor: default;
+}
+.fude-side__pen.is-empty::after {
+  content: '';
+  flex: 1;
+  height: 12px;
+  border: 1.5px dashed rgba(0, 0, 0, 0.18);
+  border-radius: var(--radius-s);
+}
+.fude-side__num {
+  flex: none;
+  width: 14px;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: var(--fs-small);
+  font-weight: 700;
+}
+.fude-side__pen:focus-visible,
+.fude-side__eraser:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.fude-side__eraser {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.85);
+  color: #333;
+  font: inherit;
+  cursor: pointer;
+}
+.fude-side__eraser svg {
+  width: 52px;
+  height: 22px;
+}
+.fude-side__eraser[aria-pressed='true'] {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px #2f6fb5;
+}
+.fude-side__swap {
+  position: relative;
+  margin-top: 8px;
+  text-align: center;
+}
+@media (max-width: 700px) {
+  .fude-side {
+    width: 250px;
+  }
+  .fude-side__pen .st-art {
+    width: 200px;
+  }
+}
+.case-panel {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 12px);
+  text-align: left;
+  z-index: 30;
+  width: 340px;
+  max-height: 65vh;
+  overflow: auto;
+  padding: 10px 12px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow-hover);
+}
+.case-panel__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.case-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.case-panel button.case-panel__item {
+  border: 0;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: auto;
+  padding: 4px 6px;
+  text-align: left;
+}
+.case-panel button.case-panel__item:hover {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.case-panel__item .st-art {
+  flex: none;
+  width: 96px;
+  height: 15px;
+}
+.case-panel__item.is-in span::after {
+  content: '（筆箱の中）';
+  color: var(--paper-ink-weak);
+  font-size: 0.85em;
+}
+.case-panel__foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 赤シート：赤を乗算で重ねる（白い紙 → 赤、黒い文字 → 黒、水色のマーカー → 黒）。ツールバーより下 */
+.red-sheet {
+  position: fixed;
+  z-index: 15;
+  min-width: 120px;
+  min-height: 60px;
+  background: #e60000; /* 青の成分も 0 にして、マーカーの下を真っ黒にする */
+  mix-blend-mode: multiply;
+  border-radius: var(--radius-s);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+  resize: both;
+  overflow: hidden;
+  touch-action: none;
+}
+.red-sheet:active {
+  cursor: grabbing;
+}
+.red-sheet__label {
+  position: absolute;
+  top: 4px;
+  left: 10px;
+  color: #fff;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+}
+.viewer-bar__history {
+  display: inline-flex;
+  gap: 2px;
+}
+.viewer-bar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 書き出しの確認 */
+.export-dialog {
+  max-width: 440px;
+  border: 0;
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow-hover);
+}
+.export-dialog::backdrop {
+  background: rgba(43, 43, 43, 0.35);
+}
+.export-dialog form {
+  display: grid;
+  gap: 12px;
+}
+.export-dialog p {
+  margin: 0;
+}
+.export-dialog fieldset {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-m);
+}
+.export-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 赤シートとの重なりだけに見せる黒い覆い（viewer.js の syncCovers が clip-path で切り抜く） */
+.anno-mask__cover {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background: #000;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* しおり：ツールバーの一覧と、ページの右端のリボン */
+.viewer-bar__bookmarks {
+  position: relative;
+}
+/* しおり・赤シート：押すと出る・しまうもの。道具（選択・文字・付箋・文字隠し）とは区切って並べる */
+.viewer-bar__toggles {
+  display: inline-flex;
+  gap: 2px;
+  padding-left: var(--space-1);
+  border-left: 1px solid color-mix(in srgb, var(--paper-ink) 18%, transparent);
+}
+.viewer-bar__history button {
+  font-size: 18px;
+}
+/* ページ番号（入れて Enter で移る） */
+.viewer-bar__page {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-small);
+}
+.viewer-bar__page input {
+  width: 3.4em;
+  height: 28px;
+  padding: 0 4px;
+  border: 1.5px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  border-radius: var(--radius-s);
+  background: var(--card);
+  color: var(--paper-ink);
+  font: inherit;
+  text-align: right;
+}
+/* キーボードの操作の一覧 */
+.viewer-bar__help {
+  position: relative;
+}
+.help-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 300px;
+  padding: 10px 14px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow-hover);
+  font-size: var(--fs-small);
+}
+.help-panel dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+}
+.help-panel dt {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.help-panel dd {
+  margin: 0;
+}
+.bookmark-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 300px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 10px 12px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow-hover);
+}
+.bookmark-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.bookmark-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bookmark-panel__item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+.viewer-bar .bookmark-panel__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 4px 6px;
+  border-radius: var(--radius-s);
+}
+.viewer-bar .bookmark-panel__name:hover {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.bookmark-panel__input {
+  flex: 1;
+  min-width: 0;
+}
+.bookmark-panel__page {
+  font-size: var(--fs-small);
+}
+.viewer-bar .bookmark-panel__tool {
+  border: 0;
+  background: none;
+  padding: 2px 6px;
+}
+.bookmark-panel__empty {
+  font-size: var(--fs-small);
+  padding: 4px 0;
+}
+.bookmark-ribbon {
+  position: absolute;
+  right: -6px;
+  z-index: 4;
+  display: flex;
+  max-width: 120px;
+  padding: 2px 8px 2px 10px;
+  border: 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  transform: translateY(-50%);
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.25));
+  cursor: pointer;
+}
+.bookmark-ribbon__text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* しおりのリボン（着せ替え：色は --bm-color、形は bm--tag・bm--ribbon・bm--round）。
+   形は ::before の地で作る（切り抜きで、先に貼ったシールまで切れないように） */
+.bm {
+  isolation: isolate;
+  border-radius: 4px 0 0 4px;
+  background: transparent;
+  color: var(--bm-ink, #fff);
+}
+.bm::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--bm-color, #e8505b);
+}
+.bm--ribbon {
+  border-radius: 0;
+  padding-left: 14px;
+}
+.bm--ribbon::before {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 8px 50%);
+}
+.bm--round {
+  border-radius: var(--radius-pill);
+}
+.bm .sticker-layer--fixed {
+  z-index: 1;
+}
+/* 編集画面のツールバー：ページ送りと拡大率はひとまとまりで折り返す */
+.viewer-bar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.viewer-bar__status {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: default;
+}
+.viewer-bar__status.is-error {
+  cursor: pointer;
+}
+.help-panel__note {
+  margin: 8px 0 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}

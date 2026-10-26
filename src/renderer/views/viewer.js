@@ -22,7 +22,8 @@
 // pdf.js は互換版（legacy）を使う。通常版は Map.prototype.getOrInsertComputed などの新しい機能を前提にしており、
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
-import {esc, isTyping, navigate, state, toast} from '../app.js';
+import {esc, isTyping, toast} from '../ui-kit.js';
+import {navigate, state} from '../store.js';
 import {bookmarkLook, fixedSticker, skinOf} from '../skin.js';
 import {ROUND_DEFAULTS, inkOn} from '../../shared/skin.js';
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from './text-snap.js';
@@ -46,7 +47,17 @@ import {
   stationeryState,
   toolArt
 } from '../../shared/stationery.js';
-import {MEMO_COLOR, MEMO_SIZE, NOTE_INK_SCALE, hidesUnderRedSheet} from '../../shared/annotation.js';
+import {
+  DEFAULT_SIZE,
+  MASK_COLOR,
+  MEMO_COLOR,
+  MEMO_SIZE,
+  NOTE_INK_SCALE,
+  NOTE_SIZE,
+  SIZE_MAX,
+  SIZE_MIN,
+  hidesUnderRedSheet
+} from '../../shared/annotation.js';
 import {BUILTIN_STICKERS, isBuiltinSticker} from '../../shared/stickers.js';
 import {figureOf, figureUrl} from '../../shared/figures.js';
 import {openFigureEditor, renderFigure} from '../figure-view.js';
@@ -83,12 +94,7 @@ const FILE_SAVE_DELAY = 1500; // 注釈を保存してからファイルを上�
 const PINCH_IDLE = 180; // ピンチの指が止まってから描き直すまで（ms）
 const NOTE_DEFAULT_PEN = {type: 'pen', color: '#2b2b2b', width: 1.1}; // 筆箱のボールペンを持っていないときのメモの手書き（黒の 0.5 相当）
 const PINCH_SPEED = 0.01; // wheel の deltaY 1 あたりの拡大率の変化（指数）
-// shared/annotation.js と同じ値（レンダラは shared を読まないので写す）
-const SIZE_MIN = 6,
-  SIZE_MAX = 72,
-  DEFAULT_SIZE = 12,
-  NOTE_SIZE = 20;
-const FONT = "'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif"; // notebook.css の .anno-text と同じ
+const FONT = "'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif"; // styles/viewer.css の .anno-text と同じ
 // OS に合わせた表記（SPEC §9）：Mac では ⌘、Windows・Linux では Ctrl。フォント名も Mac 以外ではヒラギノは入っていないので「標準のゴシック」
 const IS_MAC = /Mac/i.test(navigator.platform);
 const MOD = IS_MAC ? '⌘' : 'Ctrl';
@@ -104,10 +110,10 @@ const lineOf = (items) => ({
 });
 /** 文字隠しを横になぞっているか：上下の動きが小さいか、指が行の字の高さの中にとどまっている（行の字の縦幅を超えなければ、行のマーカーのまま） */
 const isFlat = (d, line) => Math.abs(d.y1 - d.y0) < 12 || (!!line && d.y1 >= line.hitTop && d.y1 <= line.hitBottom);
-const LINE_HEIGHT = 1.4; // notebook.css の .anno-text と同じ
+const LINE_HEIGHT = 1.4; // styles/viewer.css の .anno-text と同じ
 const EXPORT_PX_PER_PT = 4; // 書き出す文字入れの画像の細かさ（1pt = 4px、288dpi）
 const HISTORY_MAX = 200;
-const MASK_HEX = '#00d2ff'; // 文字隠しの既定の色（shared/annotation.js の MASK_COLOR）
+const MASK_HEX = MASK_COLOR; // 文字隠しの既定の色（shared/annotation.js）
 // 付箋（インデックス）：pt。ページに重なる所（OVER）は薄く、はみ出す所は濃い色に言葉
 const INDEX_W = 44;
 const INDEX_H = 16;
@@ -483,8 +489,6 @@ class Viewer extends DeskTools {
     this.$('bookmarks').setAttribute('aria-expanded', String(open));
   }
   renderBookmarks() {
-    const esc = (t) =>
-      String(t).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
     const list = [...this.bookmarks].sort((a, b) => a.page - b.page || a.y - b.y);
     this.$('bookmark-list').innerHTML = list.length
       ? list

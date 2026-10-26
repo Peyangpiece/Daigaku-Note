@@ -1,0 +1,354 @@
+/* 大学ノートの画面：授業画面：回ごとの付箋と資料の紙。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* 授業画面：回ごとの付箋（SPEC §8.2）。授業の色の付箋に資料の紙が貼ってある */
+.round-notes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4) var(--space-3);
+  padding-top: 12px; /* 上のテープのぶん */
+  align-items: start;
+}
+.round-note {
+  /* ポップな付箋の色を白と半々ほどに混ぜた、薄いパステル。紙なので暗い表示でも紙の色のまま、文字は黒
+     （暗い表示では白の代わりに灰色と混ぜ、まぶしくないようにする：tokens.css の --note-mix） */
+  --note-bg: color-mix(in srgb, var(--note-color, var(--pop1)) 55%, var(--note-mix, #fff));
+  --paper-ink: #2b2b2b;
+  --paper-ink-weak: var(
+    --note-ink-weak,
+    #5c6068
+  ); /* 付箋は紙の色なので、暗い表示でも薄い文字は濃いまま（暗い表示の付箋はさらに濃く） */
+  --paper: #fffdf6;
+  --card: #ffffff;
+  --note-weak: 80%;
+  position: relative;
+  min-height: 200px;
+  padding: 22px 16px 22px;
+  /* 右下の角を切り落とす（めくれた裏側は ::after）。影は切り口に沿うよう drop-shadow で付ける */
+  background: linear-gradient(315deg, transparent 0 14px, var(--note-bg) 14px);
+  color: var(--paper-ink);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
+  transform: rotate(var(--tilt, 0deg));
+  transition:
+    transform var(--motion),
+    filter var(--motion);
+}
+.round-note:hover {
+  transform: rotate(0deg) translateY(-2px);
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.16));
+}
+/* めくれた角の裏側：少し濃い三角 */
+.round-note::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(to top left, transparent 50%, color-mix(in srgb, var(--note-bg) 78%, #000) 50%);
+  pointer-events: none;
+}
+/* 上の中央に半透明のテープ */
+.round-note::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: calc(50% - 30px);
+  width: 60px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  transform: rotate(calc(var(--tilt, 0deg) * -2));
+  pointer-events: none;
+}
+.round-note--today {
+  outline: 2px dashed var(--rule-margin);
+  outline-offset: 4px;
+}
+.round-note__head {
+  --note-ink-weak: color-mix(in srgb, var(--paper-ink) var(--note-weak), var(--note-bg));
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper-ink) 15%, transparent);
+}
+.round-note__round {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: var(--fs-h3);
+}
+.round-note__title {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.round-note__today {
+  font-size: var(--fs-small);
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-ink);
+  color: var(--paper);
+}
+.round-note__date {
+  font-size: var(--fs-small);
+  color: var(--note-ink-weak);
+}
+.round-note__files {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 14px 8px;
+}
+.round-note__none {
+  margin: 36px 0 0;
+  text-align: center;
+  color: color-mix(in srgb, var(--paper-ink) var(--note-weak), var(--note-bg));
+  font-size: var(--fs-small);
+}
+.round-note--empty {
+  min-height: 0;
+}
+.round-note--empty .round-note__none {
+  margin-top: 12px;
+}
+/* これからの回（資料なし）：見出しだけの小さな付箋 */
+.round-note--upcoming {
+  min-height: 0;
+  padding: 16px 16px 14px;
+}
+.round-note--upcoming .round-note__head {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.round-note--upcoming .round-note__round {
+  font-size: var(--fs-body);
+}
+
+/* 資料の紙：イラスト＋名前。押すと開く。角に小さなフォルダのボタン */
+.file {
+  position: relative;
+}
+.file__open {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 8px 4px 6px;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  cursor: pointer;
+  transition: transform var(--motion);
+}
+.file__open:hover:not(:disabled),
+.file__open:focus-visible {
+  transform: translateY(-3px) rotate(-1deg);
+  background: rgba(255, 255, 255, 0.25);
+}
+.file__open:focus-visible {
+  outline: 2px solid var(--focus);
+}
+.file__open:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.file-art {
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.18));
+}
+.file__name {
+  font-size: var(--fs-small);
+  line-height: 1.3;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.file__dot {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 32px);
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--dot-color, var(--c2));
+  box-shadow: 0 0 0 2px var(--note-bg, var(--card));
+}
+.file__tag {
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--paper-ink);
+}
+/* 資料の道具（フォルダで表示・移す・外す）：ホバーかキーボードで資料を選んだときに出る。文字ラベル付き */
+.file__tools {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  margin-top: 4px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion);
+  z-index: 2;
+}
+.file:hover .file__tools,
+.file:focus-within .file__tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+.file__tool,
+.file__move {
+  padding: 5px 10px; /* 押し目標はおよそ 32px（文字 13px ＋ 上下 5px ずつ ＋ 行間） */
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow);
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.file__move {
+  max-width: 7.5em;
+}
+.file__tool:focus-visible,
+.file__move:focus-visible {
+  outline: 2px solid var(--focus);
+}
+.file[draggable='true'] {
+  cursor: grab;
+}
+.file[draggable='true']:active {
+  cursor: grabbing;
+}
+
+/* 「これまでの回」の見出し：行の幅いっぱい */
+.round-notes__divider {
+  grid-column: 1 / -1;
+  margin: var(--space-2) 0 0;
+  font-size: 0.95rem;
+  color: var(--paper-ink-weak);
+}
+
+/* 付箋を追加：自分で入れたファイルが最初に置かれる。回の付箋と同じ大きさ。罫線入りの白い付箋に黄色のテープ */
+.round-note--own {
+  --note-bg: color-mix(in srgb, var(--c1) 14%, var(--note-mix, var(--card)));
+  transform: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 27px,
+      color-mix(in srgb, var(--paper-ink) 8%, transparent) 27px 28px
+    ),
+    linear-gradient(315deg, transparent 0 14px, var(--note-bg) 14px);
+}
+.round-note--own:hover {
+  transform: translateY(-1px);
+}
+.round-note--own::before {
+  background: color-mix(in srgb, var(--c1) 70%, transparent);
+  transform: rotate(-2deg);
+}
+.round-note--own .round-note__head {
+  align-items: center;
+}
+.round-note--own .round-note__round {
+  flex: 1;
+  white-space: nowrap;
+}
+/* 色を選んだときは回の付箋と同じ色の混ぜ方にする（罫線は残す） */
+.round-note--own-colored {
+  --note-bg: color-mix(in srgb, var(--note-color) 55%, var(--note-mix, #fff));
+}
+/* 色の選択は付箋の下に小さく */
+.own-colors {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+.own-color {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 30%, transparent);
+  border-radius: 50%;
+  background: var(--sw);
+  cursor: pointer;
+}
+.own-color[aria-pressed='true'] {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 1px;
+}
+/* ドラッグで上に来た付箋 */
+.round-note--drop {
+  outline: 3px dashed var(--paper-ink);
+  outline-offset: 4px;
+  transform: rotate(0deg) scale(1.01);
+}
+
+/* 自分のフォルダ（ホームの下の段・作る画面・中身の画面） */
+.my-folders {
+  margin-top: var(--space-4);
+}
+.my-folders__title {
+  margin: 0 0 var(--space-1);
+  font-size: 1rem;
+  color: var(--paper-ink-weak);
+}
+.my-folders .actions {
+  margin-top: var(--space-2);
+}
+.my-folders__past {
+  margin-top: var(--space-2);
+}
+.my-folders__past summary {
+  cursor: pointer;
+  color: var(--paper-ink-weak);
+}
+.folder-new {
+  max-width: 640px;
+  display: grid;
+  gap: var(--space-1);
+}
+.folder-new__scope {
+  border: 0;
+  padding: 0;
+  margin: var(--space-1) 0;
+  display: grid;
+  gap: 6px;
+}
+.folder-new__scope legend {
+  margin-bottom: 4px;
+}
+/* 自分のフォルダ：直下と下のフォルダごとの付箋を、横に 5 枚まで（狭い窓では少なく） */
+.round-notes--folder {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: var(--space-2);
+}
+@media (max-width: 1100px) {
+  .round-notes--folder {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .round-notes--folder {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.round-note--folder .round-note__files {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}

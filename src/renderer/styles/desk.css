@@ -1,0 +1,255 @@
+/* 大学ノートの画面：クイズ・ホームの机：つまみ・赤シート・素材の図・下書きの貼りもの。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* クイズ・ホームの机（renderer/desk.js）：四隅の道具と、画面の上の下書きの層（保存しない） */
+.desk[hidden] {
+  display: none;
+}
+.desk-scratch {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 18;
+  pointer-events: none;
+}
+.desk.is-holding .desk-scratch {
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+}
+.desk-scratch__ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.desk-scratch__ink .is-marker {
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+}
+/* ホーム：つまみは出さない（画面の端へマウスを動かす・端からなでると出る） */
+.desk[data-mode='home'] .corner__tab,
+.desk[data-mode='home'] .fude-side__tab {
+  display: none;
+}
+.desk__clear {
+  margin-top: 8px;
+  text-align: center;
+}
+.desk-holding {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--paper-ink);
+  font-size: 13px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  transform: translateX(-50%);
+}
+.desk-holding[hidden] {
+  display: none;
+}
+.desk-stamp {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+  touch-action: none;
+}
+.desk-stamp img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.desk-stamp--memo {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.22));
+}
+.desk-stamp__memo {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 20px 11px 0;
+  overflow: hidden;
+  background: var(--memo, #fffdf6) linear-gradient(to bottom, transparent 20px, #bcd3ea 20px) 0 20px / 100% 21px
+    repeat-y;
+  color: #2b2b2b;
+  font:
+    13px/21px 'Hiragino Kaku Gothic ProN',
+    'Hiragino Sans',
+    sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.desk-stamp__remove {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #3b3a36;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity calc(var(--motion) * 0.75);
+}
+.desk-stamp:hover .desk-stamp__remove,
+.desk-stamp:focus-within .desk-stamp__remove {
+  opacity: 1;
+}
+/* 机の赤シートは下書きの層より上（文字隠しペンの下書きも黒く隠れる） */
+.desk .red-sheet {
+  z-index: 19;
+}
+
+/* 素材の図：SVG の上に文字の層。文字の大きさは図の幅に合わせる（--fig-w は viewBox の幅） */
+.fig {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  container-type: inline-size;
+}
+.fig__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* グラフの曲線は図の枠で切る */
+}
+.fig__labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.fig__label {
+  position: absolute;
+  padding: 0 1px;
+  color: #2b2b2b;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
+  font-size: calc(var(--s) * 100cqw / var(--fig-w));
+  line-height: 1.1;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  outline: none;
+}
+.fig__label.is-math {
+  font-family: 'Times New Roman', Times, serif;
+  font-style: italic;
+}
+.fig.is-editing {
+  outline: 2px dashed var(--c4);
+  outline-offset: 3px;
+  cursor: text;
+}
+.fig.is-editing .fig__labels {
+  pointer-events: auto;
+}
+.fig.is-editing .fig__label {
+  cursor: move;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c4) 60%, transparent);
+}
+.fig.is-editing .fig__label:focus {
+  cursor: text;
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--c4);
+}
+.anno-stamp__fig {
+  width: 100%;
+  height: 100%;
+}
+.viewer-pages[data-tool='select'] .anno-stamp--figure:hover .anno-stamp__grip,
+.viewer-pages[data-tool='select'] .anno-stamp--sticker:hover .anno-stamp__grip {
+  display: block;
+}
+.fig-ed {
+  z-index: 40;
+  width: 270px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+.fig-ed__fields {
+  display: grid;
+  gap: 8px;
+}
+.fig-ed__field {
+  display: grid;
+  gap: 3px;
+  font-size: var(--fs-small);
+}
+.fig-ed__field > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fig-ed__field--num {
+  grid-template-columns: 1fr 84px;
+  align-items: center;
+}
+.fig-ed__field select,
+.fig-ed__field input[type='number'] {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  border-radius: 7px;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.fig-ed__formula {
+  margin: 10px 0 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-m);
+  background: #fff0f6;
+  color: #c2255c;
+  font:
+    italic 16px 'Times New Roman',
+    Times,
+    serif;
+  text-align: center;
+}
+.fig-ed__hint {
+  margin: 10px 0 0;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  opacity: 0.75;
+}
+.fig-ed__foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+/* 机の下書きの貼りもの：右下のつまみで大きさを変える */
+.desk-stamp > .fig {
+  width: 100%;
+  height: 100%;
+}
+.desk-stamp__grip {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  background: var(--c4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity calc(var(--motion) * 0.75);
+}
+.desk-stamp:hover .desk-stamp__grip {
+  opacity: 1;
+}

@@ -1,6 +1,6 @@
 // 自分のフォルダ：作る・パソコンのフォルダを登録する画面と、フォルダの中身の画面。
 // 中身はパソコンのフォルダをそのまま見せる（登録したフォルダはコピーしない）。開くたびにメインが読み直す
-import {esc, jaWrap} from '../app.js';
+import {esc, jaWrap} from '../ui-kit.js';
 import {fileCard, quizLine} from './course.js';
 import {skinOf, stickerLayer} from '../skin.js';
 import {roundColorIndex} from '../../shared/skin.js';

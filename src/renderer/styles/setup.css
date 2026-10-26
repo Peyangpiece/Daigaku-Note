@@ -1,0 +1,138 @@
+/* 大学ノートの画面：セットアップ：手順の付箋・使う人と使い方・LMS の規約・小見出し。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* セットアップの手順：付箋が順に貼られる。まだの手順は点線の枠だけ */
+/* 使う人：大きなボタンから 1 つ選ぶ。使い方：いくつでも選べるカード */
+.role-pick {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+.use-pick {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
+}
+.use-pick__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2);
+  border: 2px solid color-mix(in srgb, var(--paper-ink) 20%, transparent);
+  border-radius: 12px;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.use-pick__item strong::before {
+  content: '□ ';
+}
+.use-pick__item[aria-pressed='true'] {
+  border-color: currentColor;
+  background: color-mix(in srgb, var(--c1) 30%, var(--card));
+}
+.use-pick__item[aria-pressed='true'] strong::before {
+  content: '☑ ';
+}
+.use-pick--one .use-pick__item strong::before {
+  content: '○ ';
+}
+.use-pick--one .use-pick__item[aria-checked='true'] {
+  border-color: currentColor;
+  background: color-mix(in srgb, var(--c1) 30%, var(--card));
+}
+.use-pick--one .use-pick__item[aria-checked='true'] strong::before {
+  content: '● ';
+}
+.su-label {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+/* 大学サービスとの連携の注意書きと利用規約（規約は枠の中で読む） */
+.lms-notice {
+  max-width: none;
+  --sticky-angle: -0.5deg;
+}
+.lms-notice ul {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+}
+.lms-terms {
+  max-height: 280px;
+  overflow: auto;
+  margin: var(--space-2) 0;
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 20%, transparent);
+  border-radius: var(--radius-m);
+  background: var(--card);
+  font-size: var(--fs-small);
+}
+.lms-terms h3 {
+  margin-top: 0;
+}
+.lms-terms li p {
+  margin: 2px 0 8px;
+}
+.lms-terms__agree {
+  display: block;
+  margin: var(--space-2) 0;
+  font-weight: 700;
+}
+.role-pick__item {
+  padding: var(--space-3) var(--space-2);
+  border: 2px solid color-mix(in srgb, var(--paper-ink) 20%, transparent);
+  border-radius: 12px;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-h3);
+  font-weight: 700;
+  cursor: pointer;
+}
+.role-pick__item[aria-checked='true'] {
+  border-color: currentColor;
+  background: color-mix(in srgb, var(--c1) 30%, var(--card));
+}
+.role-pick__univ {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+.steps {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+.steps__item {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1.5px dashed var(--paper-ink-weak);
+  color: var(--paper-ink-weak);
+  background: var(--card);
+  font-size: var(--fs-small);
+}
+.steps__item--done,
+.steps__item--current {
+  border: 0;
+  color: var(--paper-ink);
+  background: color-mix(in srgb, var(--sticky-color, var(--c1)) 35%, var(--card));
+  box-shadow: var(--card-shadow);
+  transform: rotate(var(--sticky-angle, -1.5deg));
+}
+.steps__item--done::after {
+  content: ' ✓';
+}
+.steps__item--current {
+  font-weight: 700;
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 2px;
+}
+
+/* セットアップで 2 つの手順を 1 つの画面にまとめたときの小見出し */
+.su-sub {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--fs-h3);
+}

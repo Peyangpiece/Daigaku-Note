@@ -56,8 +56,10 @@ Daigaku-Note/
 │   └── renderer/
 │       ├── index.html            1 ページ。画面はスクリプトで切り替える
 │       ├── styles/tokens.css     デザイントークン（SPEC §8.0.2）
-│       ├── styles/notebook.css   罫線ノート・テープ・付箋・タブの部品
+│       ├── styles/*.css          画面の CSS（関心ごとに分けて index.html が順に読む。base・home・course・components・layout・setup・quiz・viewer・nav・kisekae・fudebako・dialogs・tryout・swipe・desk-tools・desk）
 │       ├── app.js                画面の土台・経路（ホーム／授業／設定／セットアップ）
+│       ├── ui-kit.js             DOM の部品（エスケープ・窓・トースト・入力中の判定）。画面はこれと store.js を読む（app.js は読まない）
+│       ├── store.js              状態（state）・経路（navigate）・読み直し（reload）
 │       └── views/*.js            画面ごと
 ├── recipes/                      画面操作型レシピ（JSON）。同梱分
 │   ├── schema.json               レシピの JSON Schema
@@ -365,7 +367,7 @@ login(visible): §8.5
 ## 10. 画面の土台（M0 の範囲）
 
 - `tokens.css`：SPEC §8.0.2 の CSS 変数をそのまま。`data-theme` で明暗
-- `notebook.css`：`.paper`（罫線の背景。`repeating-linear-gradient` で 32px ごとの 1px 線、左 72px に赤線）、`.folder`（タブ付きカード）、`.tape`（`clip-path: polygon(...)` の鋸歯。角度は `--tape-angle` 変数）、`.sticky`（付箋）、`.index-tab`、`.badge`
+- `styles/base.css`・`home.css` など（v0.10.3 までは 1 つの `notebook.css`）：`.paper`（罫線の背景。`repeating-linear-gradient` で 32px ごとの 1px 線、左 72px に赤線）、`.folder`（タブ付きカード）、`.tape`（`clip-path: polygon(...)` の鋸歯。角度は `--tape-angle` 変数）、`.sticky`（付箋）、`.index-tab`、`.badge`
 - M0 で作る画面：セットアップ（6 手順）・ホーム（フォルダのグリッド。バッジは「新着」だけ）・授業（資料一覧。回のインデックスタブ）・設定（接続・学期・保存先・同期）。ビューアとクイズは M2・M3
 - テープの角度：`hash(course.id) % 13 - 6` 度。`shared/ids.js` の `hash32`
 

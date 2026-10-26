@@ -19,7 +19,6 @@ export const EARN = {
   plan: {label: '有料版に加入', amount: 1000, note: '加入した月ごと', available: false}
 };
 /** 使ったときの履歴の種類 */
-export const SPEND = {shop: 'ショップで買い物'};
 
 /** このパソコンの時計での日付（YYYY-MM-DD） */
 export function dayOf(now = new Date()) {

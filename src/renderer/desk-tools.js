@@ -1,7 +1,8 @@
 // 筆箱・ポーチ・シール帳・素材（画面の四隅の道具。SPEC §9.9）。PDF の編集画面（views/viewer.js）と、
 // クイズ・ホームの机（desk.js）が同じものを使う。四隅の出し入れ、シール帳・素材の並び、運んで貼る動き、
 // ポーチの電卓・メモ帳・定規・タイマーをここに置く。貼る先（ページか画面か）と赤シートは、使う側が決める（下の「使う側が決めること」）
-import {esc, state, toast} from './app.js';
+import {esc, toast} from './ui-kit.js';
+import {state} from './store.js';
 import {MEMO_COLOR, MEMO_SIZE} from '../shared/annotation.js';
 import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, builtinStickerUrl, isBuiltinSticker} from '../shared/stickers.js';
 import {FIGURES, FIGURE_PT_PER_UNIT, FIGURE_SUBJECTS, figureOf, figureUrl} from '../shared/figures.js';
@@ -23,9 +24,9 @@ export const CSS_UNITS = 96 / 72; // 拡大率 100% で紙の実寸（1pt = 4/3 
 const IS_MAC = /Mac/i.test(navigator.platform);
 const MOD = IS_MAC ? '⌘' : 'Ctrl';
 const key = (...parts) => (IS_MAC ? parts.join('') : parts.join('+'));
-export const STICKER_PT = 72; // シール帳のシールを貼るときの幅（pt）
-export const MEMO_PT = 150; // メモ帳からちぎった紙の一辺（pt。100% 表示でメモ帳の紙と同じくらい）
-export const MEMO_COLORS = [MEMO_COLOR, '#fff3bf', '#ffe3ec', '#e3f2ff', '#e6f6e6'];
+const STICKER_PT = 72; // シール帳のシールを貼るときの幅（pt）
+const MEMO_PT = 150; // メモ帳からちぎった紙の一辺（pt。100% 表示でメモ帳の紙と同じくらい）
+const MEMO_COLORS = [MEMO_COLOR, '#fff3bf', '#ffe3ec', '#e3f2ff', '#e6f6e6'];
 // ちぎった紙の寸法（pt。文字の大きさに掛けるものは倍率）。画面と書き出しで同じ値を使う
 export const MEMO_PAD = 8; // 左右の余白
 export const MEMO_TOP = 12; // 上の余白（ちぎり口の下から）
@@ -77,7 +78,7 @@ export const tearClip = (w, d, tooth) =>
     )
     .join(', ')})`;
 
-export const POUCH_ART = {
+const POUCH_ART = {
   sheet:
     '<svg viewBox="0 0 56 40" aria-hidden="true"><rect x="8" y="5" width="40" height="30" rx="3" fill="#e60000" opacity="0.88"/><rect x="13" y="10" width="14" height="3" rx="1.5" fill="#fff" opacity="0.8"/></svg>',
   calc:

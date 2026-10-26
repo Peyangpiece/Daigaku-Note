@@ -13,11 +13,10 @@ import {
   labelSize
 } from '../shared/figures.js';
 
-const esc = (s) =>
-  String(s).replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
+import {esc} from '../shared/html.js';
 
 /** 図の文字（書き換えていなければ、決め事に合わせた既定の文字） */
-export const figureLabels = (style) => style.labels ?? defaultLabels(style.ref, style.params);
+const figureLabels = (style) => style.labels ?? defaultLabels(style.ref, style.params);
 
 /** el の中に図を描く。style は {ref, params?, labels?} */
 export function renderFigure(el, style) {

@@ -1,6 +1,11 @@
 // 画面の土台（DESIGN-M0 §10）。経路：#/setup（初回）・#/（ホーム）・#/course/<id>・#/viewer/<資料 id>・#/settings・#/settings/term・#/settings/lms（LMS とつなぐ）
 // ホーム（フォルダのグリッド）・授業（資料一覧）・PDF ビューア（文字入れ・付箋・文字隠し）・クイズ・設定・セットアップ。
 import {features} from '../shared/profile.js';
+import {confirmDialog, dismissNavigateToasts, esc, isTyping, progressText, textDialog, toast} from './ui-kit.js';
+import {canRename, navigate, reload, setHooks, state} from './store.js';
+// 以前は app.js が持っていたもの。画面（views）は ui-kit.js と store.js を直接読む
+export {esc, jaWrap, isTyping, confirmDialog, promptDialog, textDialog, toast, progressText} from './ui-kit.js';
+export {state, navigate, reload, refresh, canRename} from './store.js';
 import {renderHome} from './views/home.js';
 import {closeSkinPicker, openSkinPicker, renderKisekae} from './views/kisekae.js';
 import {renderFudebako} from './views/fudebako.js';
@@ -30,16 +35,7 @@ import './swipe.js'; // トラックパッドの 2 本指の横スワイプで�
 import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具（筆箱・ポーチ・シール帳・素材）
 
 const api = window.daigaku;
-export const state = {data: null, progress: null};
 let viewer = null; // 開いている PDF ビューア。状態が変わっても描き直さない
-
-export {jaWrap} from './ja-wrap.js';
-
-export const esc = (s) =>
-  String(s ?? '').replace(
-    /[&<>"']/g,
-    (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]
-  );
 
 // ログインボーナス（その日に初めて開いたとき 1 回。shared/points.js）。起動のあと 1 回だけ main に頼む。初回のセットアップの上には出さない
 let loginClaimed = false;
@@ -55,22 +51,24 @@ async function claimLoginBonus() {
     });
 }
 
-export async function reload() {
-  state.data = await api['state.get']();
-  if (state.data?.error) throw new Error(state.data.error);
-  applyTheme();
-  render();
-  await claimLoginBonus();
-  // 着せ替えを入れた版に更新したあと 1 回だけ知らせる（SPEC-KISEKAE §4.4）
-  if (state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
-    state.data.skin.introduced = true;
-    api['skin.introduced']();
-    toast('着せ替えができるようになりました。ホーム下の「着せ替え」か、フォルダの右クリックから選べます', {
-      action: {label: '見てみる', run: () => navigate('/kisekae')},
-      untilNavigate: true
-    });
+// 状態を読み直したあと（store.js の reload）：テーマ → 描き直し → ログインボーナス → 着せ替えの知らせ
+setHooks({
+  render,
+  afterLoad: async () => {
+    applyTheme();
+    render();
+    await claimLoginBonus();
+    // 着せ替えを入れた版に更新したあと 1 回だけ知らせる（SPEC-KISEKAE §4.4）
+    if (state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
+      state.data.skin.introduced = true;
+      api['skin.introduced']();
+      toast('着せ替えができるようになりました。ホーム下の「着せ替え」か、フォルダの右クリックから選べます', {
+        action: {label: '見てみる', run: () => navigate('/kisekae')},
+        untilNavigate: true
+      });
+    }
   }
-}
+});
 
 function applyTheme() {
   const s = state.data?.settings ?? {};
@@ -84,146 +82,6 @@ watchTheme(
 );
 setStickerReload(() => render()); // シールの画像が届いたら描き直す
 watchModels(); // 文房具の 3D モデル（画面に出たときに描く）
-
-/**
- * 文字を打っている最中か（入力欄・テキストエリア・選択肢・編集中の要素、日本語入力の変換中）。
- * 1 文字のショートカットは一切使わず、ショートカットは ⌘（Windows は Ctrl）＋キーだけにする。それでも打っている間は何も起こさない
- */
-export const isTyping = (e) =>
-  e.isComposing ||
-  e.key === 'Process' ||
-  !!e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
-
-/**
- * 確認の窓（OS の confirm の代わり。アプリの見た目にそろえる）。戻りは「進む」を押したら true。
- * danger を付けると「進む」のボタンを危険の色にする。Esc・「やめる」で false
- */
-export function confirmDialog(message, {ok = 'OK', cancel = 'やめる', danger = false} = {}) {
-  return new Promise((resolve) => {
-    const d = document.createElement('dialog');
-    d.className = 'confirm-dialog';
-    // 危ない操作（danger）は「やめる」に最初のフォーカス（Enter を続けて押しても消えないように）
-    d.innerHTML = `<form method="dialog"><p></p><div class="confirm-dialog__foot"><button type="submit" class="btn" value="cancel"${danger ? ' autofocus' : ''}></button><button type="submit" class="btn ${danger ? 'btn--danger' : 'btn--primary'}" value="ok"${danger ? '' : ' autofocus'}></button></div></form>`;
-    d.querySelector('p').textContent = message;
-    d.querySelector('[value="cancel"]').textContent = cancel;
-    d.querySelector('[value="ok"]').textContent = ok;
-    d.addEventListener('close', () => {
-      resolve(d.returnValue === 'ok');
-      d.remove();
-    });
-    document.body.append(d);
-    d.showModal();
-  });
-}
-
-/**
- * 文字を 1 行入れる窓（OS の prompt の代わり。アプリの見た目にそろえる）。戻りは入れた文字。Esc・「やめる」なら null。
- * 入力欄で Enter を押したら「OK」（form の既定のボタンは「やめる」なので、自分で閉じる）
- */
-export function promptDialog(
-  message,
-  {value = '', ok = 'OK', cancel = 'やめる', placeholder = '', maxlength = 60} = {}
-) {
-  return new Promise((resolve) => {
-    const d = document.createElement('dialog');
-    d.className = 'confirm-dialog';
-    d.innerHTML = `<form method="dialog"><label><span></span><input class="input" type="text" autofocus></label><div class="confirm-dialog__foot"><button type="submit" class="btn" value="cancel"></button><button type="submit" class="btn btn--primary" value="ok"></button></div></form>`;
-    d.querySelector('span').textContent = message;
-    const input = d.querySelector('input');
-    input.value = value;
-    input.placeholder = placeholder;
-    input.maxLength = maxlength;
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.isComposing) {
-        e.preventDefault();
-        d.close('ok');
-      }
-    });
-    d.querySelector('[value="cancel"]').textContent = cancel;
-    d.querySelector('[value="ok"]').textContent = ok;
-    d.addEventListener('close', () => {
-      resolve(d.returnValue === 'ok' ? input.value : null);
-      d.remove();
-    });
-    document.body.append(d);
-    d.showModal();
-    input.select();
-  });
-}
-
-/** 長い文章を読む窓（ライセンス・規約）。Esc か「閉じる」で閉じる */
-export function textDialog(title, text) {
-  const d = document.createElement('dialog');
-  d.className = 'text-dialog';
-  d.innerHTML = `<form method="dialog"><h3></h3><pre class="text-dialog__body"></pre><div class="confirm-dialog__foot"><button type="submit" class="btn btn--primary" autofocus>閉じる</button></div></form>`;
-  d.querySelector('h3').textContent = title;
-  d.querySelector('pre').textContent = text;
-  d.addEventListener('close', () => d.remove());
-  document.body.append(d);
-  d.showModal();
-}
-
-export function navigate(route) {
-  location.hash = route.startsWith('#') ? route : '#' + route;
-}
-
-// トースト：画面下に積む（重ねない）。失敗の知らせは長めに残し、押すか × で消える。読み上げは #toasts の role=status で
-// action：{label, run}。知らせの中にボタンを出す（「元に戻す」など。押すと run して消える。知らせは長めに残す）
-// detail：元の例外文など。ふだんは隠し、「くわしく」を押したときだけ下に出す（英語の例外をそのまま見せない。DESIGN-M0 §11）
-// untilNavigate：画面を移ったら消す（更新の知らせなど、今の画面にいる間だけ見せたいもの）
-export function toast(message, {error = false, action = null, detail = '', untilNavigate = false} = {}) {
-  const box = document.getElementById('toasts');
-  const el = document.createElement('div');
-  el.className = `toast${error ? ' toast--error' : ''}`;
-  if (untilNavigate) el.dataset.untilNavigate = '1';
-  const text = document.createElement('span');
-  text.className = 'toast__text';
-  text.textContent = message;
-  el.append(text);
-  el.title = '押すと消えます';
-  el.onclick = () => el.remove();
-  const button = (label, run, cls = 'toast__action') => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = cls;
-    b.textContent = label;
-    b.onclick = (e) => {
-      e.stopPropagation();
-      run();
-    };
-    el.append(b);
-    return b;
-  };
-  if (action)
-    button(action.label, () => {
-      el.remove();
-      action.run();
-    });
-  if (detail) {
-    const pre = document.createElement('pre');
-    pre.className = 'toast__detail';
-    pre.textContent = detail;
-    pre.hidden = true;
-    el.append(pre);
-    const b = button('くわしく', () => {
-      pre.hidden = !pre.hidden;
-      b.textContent = pre.hidden ? 'くわしく' : 'たたむ';
-      b.setAttribute('aria-expanded', String(!pre.hidden));
-      clearTimeout(timer); // 読んでいる間は消さない
-    });
-    b.setAttribute('aria-expanded', 'false');
-  }
-  const close = button('×', () => el.remove(), 'toast__close');
-  close.setAttribute('aria-label', '閉じる');
-  if (detail) el.append(el.querySelector('.toast__detail')); // 本文は × より後ろ（2 段目いっぱい）に置く
-  box.append(el);
-  while (box.children.length > 3) box.firstElementChild.remove();
-  const timer = setTimeout(() => el.remove(), error || action || detail ? 8000 : 4000);
-}
-/** 画面を移ったときに、untilNavigate の知らせを消す */
-function dismissNavigateToasts() {
-  for (const el of document.querySelectorAll('#toasts [data-until-navigate]')) el.remove();
-}
 
 function head() {
   const d = new Date();
@@ -274,8 +132,6 @@ function restore(view, snap) {
 }
 
 let lastRoute = null;
-/** 状態を読み直さずに描き直す（クイズの画面の中の動きなど） */
-export const refresh = () => render();
 function render() {
   if (!state.data) return;
   head();
@@ -418,7 +274,6 @@ document.addEventListener('keydown', (e) => {
 window.addEventListener('hashchange', render);
 setTimeout(() => loadViewer().catch(() => {}), 1500); // 最初の画面を出したあと、PDF の画面を裏で読んでおく
 api.on('state.changed', () => reload().catch(console.error));
-export const progressText = (p) => (p ? `同期中 ${p.current}/${p.total}（${p.courseName}）` : '');
 api.on('sync.progress', (p) => {
   state.progress = p;
   const el = document.getElementById('sync-status');
@@ -610,6 +465,23 @@ document.addEventListener('click', async (e) => {
             : 'クイズを作っています（1〜2 分）'
         );
       reload();
+    } else if (action === 'quiz-cloze') {
+      // 文字隠しマーカーからの穴埋め（§11.3）。AI を使わないのですぐできる。同じ回のクイズがあれば置き換える（前の版の記録は残る）
+      if (
+        el.dataset.hasQuiz &&
+        !(await confirmDialog(
+          'この回にはクイズがあります。隠した箇所からの穴埋めに作り直しますか？（前の版の記録は残ります）',
+          {
+            ok: '作り直す'
+          }
+        ))
+      )
+        return;
+      el.disabled = true;
+      const r = await api['quiz.fromMasks']({roundId: el.dataset.round}).finally(() => (el.disabled = false));
+      if (r?.error) return toast(r.error, {error: true});
+      toast(`隠した箇所から穴埋めを ${r.count} 問作りました`);
+      reload();
     } else if (action === 'open-external') await api['shell.openExternal']({url: el.dataset.url});
     else if (action === 'open-data-dir') await api['app.openDataDir']();
     else if (action === 'open-logs') await api['app.openLogs']();
@@ -639,7 +511,7 @@ document.addEventListener('click', async (e) => {
 
 // ---- ホームの授業・フォルダのカード：右クリック（トラックパッドの 2 本指タップ・タッチの長押し）で「開く」「ホームから外す」など ----
 // ---- 名前を変える：名前の上に入力欄を重ねる。Enter・外を押すと決める、Esc でやめる ----
-export function renameAt(target, value, save) {
+function renameAt(target, value, save) {
   document.querySelector('.rename-pop')?.remove();
   const r = target.getBoundingClientRect();
   const cs = window.getComputedStyle(target);
@@ -676,9 +548,6 @@ export function renameAt(target, value, save) {
   });
   input.addEventListener('blur', () => finish(true));
 }
-/** 名前を変えられる授業か：自分のフォルダと、LMS を使わない授業（LMS の授業名は LMS に合わせる） */
-export const canRename = (course) =>
-  course.kind === 'folder' || state.data?.connections.find((c) => c.id === course.connection_id)?.kind === 'manual';
 /** 名前を変える：自分のフォルダ・LMS を使わない授業・回の付箋・自分のフォルダの中のフォルダ */
 function renameCourse(course, target) {
   if (!canRename(course)) return;

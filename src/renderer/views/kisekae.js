@@ -1,7 +1,8 @@
 // 着せ替えページ（SPEC-KISEKAE.md §3.2）と、フォルダの右クリックから出す選択パネル（§3.3）。
 // 着せ替えページ（#/kisekae）「おすすめから選ぶ」：押すとすぐ当たる。
 // 細かい編集のページ（#/kisekae/edit）：見本を見ながら直し、自作のテンプレートとして保存する
-import {confirmDialog, esc, navigate, promptDialog, refresh, reload, state, toast} from '../app.js';
+import {confirmDialog, esc, promptDialog, toast} from '../ui-kit.js';
+import {navigate, refresh, reload, state} from '../store.js';
 import {folderCard, folderLookOf} from './home.js';
 import {
   LICENSES,

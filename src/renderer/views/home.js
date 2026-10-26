@@ -1,6 +1,7 @@
 // ホーム（SPEC §8.1）：罫線ノートの上に、マスキングテープで貼った授業フォルダ。
 import {todayJst} from '../../shared/schedule.js';
-import {esc, jaWrap, progressText} from '../app.js';
+import {esc, jaWrap, progressText} from '../ui-kit.js';
+import {tapeAngle} from '../../shared/hash.js';
 import {browserState} from './settings.js';
 import {folderShown, scopeLabel} from './folder.js';
 import {features} from '../../shared/profile.js';
@@ -9,22 +10,11 @@ import {folderLook, shapesOf, skinOf, stickerImg, stickerLayer} from '../skin.js
 import {classWeekday, termCalendar} from '../../shared/calendar.js';
 import {addDays, weekdayOf} from '../../shared/holidays.js';
 
-// shared/ids.js の tapeAngle と同じ計算（レンダラは main のモジュールを読まないので写す）
-function hash32(str) {
-  let h = 0x811c9dc5;
-  for (const b of new TextEncoder().encode(str)) {
-    h ^= b;
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
-}
-const tapeAngle = (id) => (hash32(id) % 13) - 6;
-
 const DAYS = '日月火水木金土';
 const slotOf = (c) => `${c.weekday}曜${c.period ? ` ${c.period}限` : ''}`;
 const byPeriod = (a, b) => (a.period ?? 99) - (b.period ?? 99);
 /** 授業の並び：月曜の 1 限から週の順（月→日、同じ曜日は時限の若い順）。曜日の分からない授業は最後（もとの並びのまま） */
-export function weekOrder(courses) {
+function weekOrder(courses) {
   const day = (c) => (c.weekday && '月火水木金土日'.includes(c.weekday) ? '月火水木金土日'.indexOf(c.weekday) : 7);
   return courses
     .map((c, i) => [c, i])
@@ -36,7 +26,7 @@ export function weekOrder(courses) {
  * 今日の授業（時限の順）と、今日がなければ次に授業のある日の授業。曜日の分からない授業は数えない。
  * cal（学期の学年暦：休講日・振替授業日）があれば、その日に行う授業の曜日で数える（休講日・祝日は授業なし、振替授業日はその曜日の授業）
  */
-export function classDays(courses, now = new Date(), cal = null) {
+function classDays(courses, now = new Date(), cal = null) {
   const today0 = todayJst(now); // 日本時間の今日（YYYY-MM-DD。main と同じ）
   const wdOn = (i) => {
     const d = addDays(today0, i);
@@ -64,12 +54,12 @@ const longestRun = (html) => Math.max(...html.split('<wbr>').map((s) => [...s.re
  * edit.still は動かない見本（テンプレートの一覧）
  */
 // 新着のバッジの色：授業の色（曜日ごとの色はやめた。色の体系を授業の色に寄せ、ホームと授業画面で同じ色が同じ授業を指すように）
-export const badgeColor = (course) => `var(--c${course.color ?? 1})`;
+const badgeColor = (course) => `var(--c${course.color ?? 1})`;
 
 /** フォルダごとに選んだ色（右クリック →「着せ替え…」）。タブ・フォルダ・マスキングテープ・新着の知らせ。選んでいなければ空 */
 export const folderLookOf = (data, course) => data?.settings?.folderLooks?.[course.id] ?? {};
 /** テンプレートの見た目に、フォルダごとに選んだ色を重ねる */
-export function withFolderLook(sk, over) {
+function withFolderLook(sk, over) {
   if (!over.card && !over.tab && !over.tape) return sk;
   return {
     ...sk,

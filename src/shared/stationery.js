@@ -1,3 +1,4 @@
+import {esc} from './html.js';
 // 文房具（SPEC §9.8・§15）：ボールペン・マーカー（アンダーライン用）・文字隠しペン・ペンケース。副作用なし。
 // 品ぞろえはアプリに入っている（公式の品はアプリ内のポイントで買う〔POINTS。はじめから持っている品は 0〕。既製品の見た目の品は定価）。
 // 持ち物と筆箱の中身は設定（stationery）に保存する。ポイントの残高は shared/points.js。
@@ -464,7 +465,6 @@ export function shopSeries(items = CATALOG) {
 export const siblingsOf = (item) => CATALOG.filter((it) => listed(it) && seriesIdOf(it) === seriesIdOf(item));
 
 // ---- 見た目（SVG。画像ファイルを持たない）----
-const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
 
 /** 色を白（amt > 0）か黒（amt < 0）へ寄せる。立体の陰影に使う */
 export function shade(hex, amt) {
@@ -625,4 +625,3 @@ export function caseArt(item) {
 }
 
 /** 品の絵（種類で分ける） */
-export const itemArt = (item, opts) => (item.type === 'case' ? caseArt(item) : toolArt(item, opts));

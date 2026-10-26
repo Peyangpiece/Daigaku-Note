@@ -1,0 +1,91 @@
+/* 大学ノートの画面：リンク・文章の窓・情報・確認と入力の窓。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* ---- 確認の窓（app.js の confirmDialog。書き出しの窓と同じ見た目） ---- */
+/* 文章のリンク（既定の青だと暗い表示で読めない）。button.link は押すと窓やブラウザが開く文字 */
+a,
+.link {
+  color: var(--paper-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.text-dialog {
+  width: min(720px, calc(100vw - 48px));
+  border: 0;
+  border-radius: var(--radius-l);
+  padding: var(--space-3);
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow-hover);
+}
+.text-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+.text-dialog h3 {
+  margin: 0 0 var(--space-2);
+}
+.text-dialog__body {
+  max-height: 60vh;
+  overflow: auto;
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-m);
+  background: var(--paper);
+  font: inherit;
+  font-size: var(--fs-small);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.about__alpha {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--c1);
+  color: #2b2b2b;
+  font-size: var(--fs-small);
+  font-weight: 700;
+}
+.about__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: var(--space-1) 0;
+}
+.confirm-dialog {
+  max-width: 440px;
+  border: 0;
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: var(--card-shadow-hover);
+}
+.confirm-dialog::backdrop {
+  background: rgba(43, 43, 43, 0.35);
+}
+.confirm-dialog p {
+  margin: 0 0 var(--space-2);
+  white-space: pre-line;
+  line-height: 1.6;
+}
+.confirm-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* 文字を入れる窓（promptDialog） */
+.confirm-dialog label {
+  display: block;
+  margin: 0 0 var(--space-2);
+  line-height: 1.6;
+}
+.confirm-dialog label .input {
+  width: 100%;
+  margin-top: var(--space-1);
+}

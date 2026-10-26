@@ -22,10 +22,11 @@ import {annoKey, overwritePdf, readBase} from './pdf-save.js';
 import {checkQuestion} from '../shared/quiz.js';
 import {annotationToClient, normalizeAnnotation, clampSize} from '../shared/annotation.js';
 import {normalizeBookmark} from '../shared/bookmark.js';
-import {CATALOG, acquire, arrange, purchase, stationeryState} from '../shared/stationery.js';
+import {CATALOG, arrange, purchase, stationeryState} from '../shared/stationery.js';
 import {AI_CONSENT_VERSION} from '../shared/policy.js';
 import {exportBackup, stageRestore} from './backup.js';
 import {claimLogin, claimQuiz, pointsState, spend} from '../shared/points.js';
+import {clozeQuizFromMasks} from './quiz/cloze-local.js';
 
 const str = (v, max = 500) => (typeof v === 'string' && v.length <= max ? v : null);
 const id = (v) => (isUlid(v) ? v : null);
@@ -59,7 +60,7 @@ function reviewSummary(quiz) {
   return {reviewDue: r.questions.length, reviewNext: r.next};
 }
 
-export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
+export function registerIpc(ctx, {getWindow = () => null} = {}) {
   const {repo, registry, jobs, files, secrets, log, folders} = ctx;
   const handle = (channel, fn) =>
     ipcMain.handle(channel, async (_e, arg) => {
@@ -90,14 +91,17 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     // 自分のフォルダの資料は、フォルダの中のどの下のフォルダにあるか（sub）も渡す。パスそのものは渡さない
     const sub = (c, m) =>
       c.kind === 'folder' && c.dir ? path.relative(c.dir, path.dirname(m.path)).split(path.sep).join('/') : '';
+    // しおりと文字隠しマーカーは注釈の鍵（上書き保存した PDF は元の中身の base_sha256）で数える
     const marks = repo.bookmarkCounts();
+    const maskCounts = repo.maskCounts();
     const materials = Object.fromEntries(
       courses.map((c) => [
         c.id,
         (materialsAll[c.id] ?? []).map(({path: p, ...m}) => ({
           ...m,
           sub: sub(c, {path: p}),
-          bookmarks: marks[m.sha256] ?? 0
+          bookmarks: marks[annoKey(m)] ?? 0,
+          masks: maskCounts[annoKey(m)] ?? 0
         }))
       ])
     );
@@ -450,11 +454,6 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
 
   // ---- 文房具（SPEC §15）：ショップで入手する（いまは無料の品だけ）・筆箱の中身とペンケースを変える ----
-  handle('stationery.acquire', ({itemId}) => {
-    const st = acquire(repo.getSetting('stationery', null), String(itemId ?? ''));
-    repo.setSetting('stationery', st);
-    return {stationery: st};
-  });
   // レジ：カートの品をまとめて買う（α 版はデモ決済。実際の請求はなく、注文の記録を設定に残す）
   handle('stationery.purchase', ({itemIds, payment}) => {
     const {stationery: st, order} = purchase(
@@ -1045,10 +1044,6 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return {ok: true};
   });
   handle('shell.openRoot', () => shell.openPath(ctx.rootDir()).then((e) => (e ? {error: e} : {ok: true})));
-  handle('app.version', () => ({
-    version: app.getVersion(),
-    recipes: registry.recipes.map((r) => ({id: r.id, version: r.version, verified: r.verified === true}))
-  }));
   // ---- クイズ（SPEC §11） ----
   const quiz = ctx.quiz;
   const ids = (list, max = 50) =>
@@ -1062,7 +1057,6 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       tags: JSON.parse(tags_json ?? '[]')
     };
   };
-  handle('quiz.status', async () => ({...quiz.status(), key: await quiz.keyInfo()}));
   // API キーの保存には、AI に送るものへの同意（shared/policy.js の版）が要る。同意は版と日時で記録し、設定で見返せる・取り消せる
   handle('quiz.setKey', async ({apiKey, consent}) => {
     if (consent !== true) bad('AI に送る内容への同意が要ります');
@@ -1096,10 +1090,9 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       bad('AI に送る内容の説明が変わりました。設定 → クイズ で内容を確かめて同意し直してください');
     return {queued: quiz.generate(ids(roundIds))};
   });
-  handle('quiz.list', ({courseId}) =>
-    repo
-      .listQuizzes(id(courseId) ?? bad('この授業は見つかりませんでした'))
-      .map((z) => ({...z, source: JSON.parse(z.source_json ?? '{}'), source_json: undefined}))
+  // 文字隠しマーカーからの穴埋め（§11.3）：AI も API キーも使わない。同じ回のクイズがあれば版を上げる
+  handle('quiz.fromMasks', ({roundId}) =>
+    clozeQuizFromMasks({repo, roundId: id(roundId) ?? bad('この回は見つかりませんでした'), log: log.info})
   );
   handle('quiz.questions', ({quizIds, courseId}) =>
     repo
@@ -1155,7 +1148,6 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     return parseQ(repo.updateQuestion(qid, allowed));
   });
 
-  handle('app.openWindow', ({route}) => (openWindow(str(route, 100)), {ok: true}));
   // 設定の「情報」：第三者のライセンスの一覧（配布物の THIRD-PARTY-NOTICES.md）、データとログの場所を開く
   handle('app.notices', async () => ({
     text: await fsp.readFile(path.join(app.getAppPath(), 'THIRD-PARTY-NOTICES.md'), 'utf8')

@@ -340,7 +340,7 @@ app.whenReady().then(async () => {
     ctx.jobs = new JobRunner(ctx, {notify});
     ctx.scheduler = new Scheduler(ctx);
     ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify});
-    registerIpc(ctx, {openWindow, getWindow: () => win});
+    registerIpc(ctx, {getWindow: () => win});
     buildAppMenu();
     buildTray();
     // アプリの自動更新（SPEC §14.5）。更新のために終了するときは「処理中ですが終了しますか」を出さない

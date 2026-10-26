@@ -9,7 +9,8 @@
 // 筆箱がいっぱいのときは、詳細ページ・注文完了で「何本目と入れ替えるか」を選んで入れる（swapButtons）。
 //   α 版の円の決済はデモ（実際の請求はない。カードの番号は下 4 桁だけ注文の記録に残す）。ポイントの品だけならカードの入力はない。
 // 持ち物・筆箱の中身はメインの設定（stationery）に保存する（ipc.js の stationery.purchase・stationery.arrange）
-import {esc, navigate, refresh, state, toast} from '../app.js';
+import {esc, toast} from '../ui-kit.js';
+import {navigate, refresh, state} from '../store.js';
 import {cart} from '../cart.js';
 import {strokePath} from '../../shared/ink.js';
 import {tryout} from './tryout.js';
