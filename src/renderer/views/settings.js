@@ -36,7 +36,7 @@ function quizSection(q, focus = false) {
   if (!q) return '';
   const key = q.key?.set
     ? `<p>API キー：<code>••••${esc(q.key.last4)}</code> <button class="btn btn--small" data-quiz-removekey>削除</button></p>`
-    : `<p class="muted">クイズを作るには、自分の Claude API キーが要ります（<a href="#" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">Anthropic Console</a> で作れます）。費用は使った分だけで、1 回の作成はおよそ十数円（資料の量で前後します）。月の上限は下で決められます。</p>
+    : `<p class="muted">クイズを作るには、自分の Claude API キーが要ります（<button type="button" class="link" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">Anthropic Console</button> で作れます）。費用は使った分だけで、1 回の作成はおよそ十数円（資料の量で前後します）。月の上限は下で決められます。</p>
        <details class="consent"><summary>AI に送るもの・送らないもの</summary>
          <p><strong>送る</strong>：その回の資料の本文（学籍番号などの ID・メール・電話番号は消してから）、授業名、回のタイトル、その回のメモ。</p>
          <p><strong>送らない</strong>：大学のアカウント・パスワード・Cookie、資料のファイルそのもの、ほかの回の資料、成績、名前、LMS の URL。</p>
@@ -184,7 +184,14 @@ export function renderSettings({data}, route = '/settings') {
       </div>
       </div>
       ${showQuiz && showLms ? '' : '<p class="muted">使わない機能の設定は出していません。出すには、上の「使い方」で選んでください。</p>'}
-      <section class="card"><h3>情報</h3><p class="muted">大学ノート ${esc(data.version)}</p></section>
+      <section class="card" id="st-about"><h3>情報</h3>
+        <p>大学ノート ${esc(data.version)}<span class="about__alpha">α 版</span></p>
+        <p class="muted">試験中の版です。動かないことやデータが消えることがあります。大切な資料は元の場所にも残してください。</p>
+        <div class="about__row"><button type="button" class="btn btn--small" data-action="policy">利用規約とプライバシーポリシー</button><button type="button" class="btn btn--small" data-action="notices">第三者のソフトウェアのライセンス</button></div>
+        <p class="muted">データの場所：<code>${esc(data.dataDir ?? '')}</code></p>
+        <div class="about__row"><button type="button" class="btn btn--small" data-action="open-data-dir">データの場所を開く</button><button type="button" class="btn btn--small" data-action="open-logs">ログを開く</button></div>
+        <p class="muted">不具合は GitHub の Peyangpiece/Daigaku-Note の Issues へ。ログは 7 日分残り、パスワードや Cookie は含みません。</p>
+      </section>
     </div>`;
 }
 

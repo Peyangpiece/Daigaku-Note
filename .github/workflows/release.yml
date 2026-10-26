@@ -177,6 +177,15 @@ jobs:
           v="${TAG#v}"
           newest=$(gh api "repos/$REPO/releases" --paginate --jq '.[] | select(.draft|not) | .tag_name' | sed 's/^v//' | sort -V | tail -1)
           if [ -z "$newest" ] || [ "$(printf '%s\n%s\n' "$newest" "$v" | sort -V | tail -1)" = "$v" ]; then latest=--latest; else latest=--latest=false; fi
+          # 本文：CHANGELOG.md のこの版の節（「## 0.10.1」から次の「## 」まで）＋入れ方。節がなければ入れ方だけ
+          notes="$(awk -v v="${TAG#v}" '$0 ~ "^## "v"( |$)" {on=1; next} /^## / {on=0} on' CHANGELOG.md)"
+          {
+            echo "**α 版（試験中）** です。動かないことやデータが消えることがあります。大切な資料は元の場所にも残してください。"
+            echo
+            if [ -n "$notes" ]; then echo "## 変更"; echo "$notes"; echo; fi
+            echo "## 入れ方"
+            echo "Mac は .dmg（Apple シリコンは arm64、Intel は x64）、Windows は .exe を入れてください。Apple・Windows の署名がないため、Mac は初回に止められたら「システム設定 → プライバシーとセキュリティ」の「このまま開く」、Windows は SmartScreen の「詳細情報 → 実行」を押してください。2 回目からはアプリが自動で更新します。"
+          } > release-notes.md
           gh release create "$TAG" --repo "$REPO" --target "$SHA" $latest --title "大学ノート $TAG" \
-            --notes "Mac は .dmg（Apple シリコンは arm64、Intel は x64）、Windows は .exe を入れてください。Apple・Windows の署名がないため、Mac は初回に止められたら「システム設定 → プライバシーとセキュリティ」の「このまま開く」、Windows は SmartScreen の「詳細情報 → 実行」を押してください。2 回目からはアプリが自動で更新します。" \
+            --notes-file release-notes.md \
             release/*.dmg release/*.zip release/*.exe release/*.blockmap release/latest*.yml

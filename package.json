@@ -1,7 +1,7 @@
 {
   "name": "daigaku-note",
   "productName": "大学ノート",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "大学の LMS の授業資料を授業ごと・回ごとのフォルダにそろえ、PDF に書き込み、資料からクイズを作って復習する電子ノート",
   "private": true,
   "type": "module",
@@ -29,7 +29,7 @@
     "three": "0.170.0"
   },
   "devDependencies": {
-    "electron": "44.8.0",
+    "electron": "44.9.3",
     "electron-builder": "26.15.3",
     "eslint": "9.39.1",
     "prettier": "3.6.2"

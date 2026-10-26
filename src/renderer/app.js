@@ -4,6 +4,7 @@ import {features} from '../shared/profile.js';
 import {renderHome} from './views/home.js';
 import {closeSkinPicker, openSkinPicker, renderKisekae} from './views/kisekae.js';
 import {renderFudebako} from './views/fudebako.js';
+import {policyText} from '../shared/policy.js';
 import {applySkin, setStickerReload, skinOf, stickerLayer, watchTheme} from './skin.js';
 import {renderCourse} from './views/course.js';
 import {renderFolder, renderFolderNew} from './views/folder.js';
@@ -20,7 +21,10 @@ import {
   renderQuiz,
   renderQuizEdit
 } from './views/quiz.js';
-import {mountViewer} from './views/viewer.js';
+// PDF の編集画面（pdf.js 本体 0.5 MB を含む）は、開くときに読む（起動を軽くする）。最初の描画のあとに裏で読み始める
+let viewerMod = null;
+const loadViewer = () =>
+  viewerMod ? Promise.resolve(viewerMod) : import('./views/viewer.js').then((m) => (viewerMod = m));
 import {watchModels} from './model3d.js';
 import './swipe.js'; // トラックパッドの 2 本指の横スワイプで戻る・進む
 import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具（筆箱・ポーチ・シール帳・素材）
@@ -42,8 +46,8 @@ export async function reload() {
   if (state.data?.error) throw new Error(state.data.error);
   applyTheme();
   render();
-  // ログインボーナス（その日に初めて開いたとき。main の state.get が付ける。shared/points.js）
-  if (state.data.pointsGained > 0)
+  // ログインボーナス（その日に初めて開いたとき。main の state.get が付ける。shared/points.js）。初回のセットアップの上には出さない
+  if (state.data.pointsGained > 0 && !location.hash.startsWith('#/setup'))
     toast(
       `ログインボーナス +${state.data.pointsGained} pt（いま ${state.data.points.balance.toLocaleString('ja-JP')} pt）`,
       {
@@ -91,7 +95,8 @@ export function confirmDialog(message, {ok = 'OK', cancel = 'やめる', danger 
   return new Promise((resolve) => {
     const d = document.createElement('dialog');
     d.className = 'confirm-dialog';
-    d.innerHTML = `<form method="dialog"><p></p><div class="confirm-dialog__foot"><button type="submit" class="btn" value="cancel"></button><button type="submit" class="btn ${danger ? 'btn--danger' : 'btn--primary'}" value="ok" autofocus></button></div></form>`;
+    // 危ない操作（danger）は「やめる」に最初のフォーカス（Enter を続けて押しても消えないように）
+    d.innerHTML = `<form method="dialog"><p></p><div class="confirm-dialog__foot"><button type="submit" class="btn" value="cancel"${danger ? ' autofocus' : ''}></button><button type="submit" class="btn ${danger ? 'btn--danger' : 'btn--primary'}" value="ok"${danger ? '' : ' autofocus'}></button></div></form>`;
     d.querySelector('p').textContent = message;
     d.querySelector('[value="cancel"]').textContent = cancel;
     d.querySelector('[value="ok"]').textContent = ok;
@@ -102,6 +107,18 @@ export function confirmDialog(message, {ok = 'OK', cancel = 'やめる', danger 
     document.body.append(d);
     d.showModal();
   });
+}
+
+/** 長い文章を読む窓（ライセンス・規約）。Esc か「閉じる」で閉じる */
+export function textDialog(title, text) {
+  const d = document.createElement('dialog');
+  d.className = 'text-dialog';
+  d.innerHTML = `<form method="dialog"><h3></h3><pre class="text-dialog__body"></pre><div class="confirm-dialog__foot"><button type="submit" class="btn btn--primary" autofocus>閉じる</button></div></form>`;
+  d.querySelector('h3').textContent = title;
+  d.querySelector('pre').textContent = text;
+  d.addEventListener('close', () => d.remove());
+  document.body.append(d);
+  d.showModal();
 }
 
 export function navigate(route) {
@@ -251,11 +268,20 @@ function render() {
       .flat()
       .find((m) => m.id === materialId);
     const course = state.data.courses.find((c) => c.id === material?.course_id);
+    if (!viewerMod) {
+      view.innerHTML = '<p class="muted" style="padding: var(--space-4)">PDF の画面を用意しています…</p>';
+      loadViewer().then(render, (e) => toast('PDF の画面を読めませんでした', {error: true, detail: e.message}));
+      return;
+    }
     if (viewer?.materialId !== materialId) {
       viewer?.unmount();
       leaveQuiz();
       leaveQuizEdit();
-      viewer = mountViewer(view, {materialId, course, onBack: () => navigate(course ? `/course/${course.id}` : '/')});
+      viewer = viewerMod.mountViewer(view, {
+        materialId,
+        course,
+        onBack: () => navigate(course ? `/course/${course.id}` : '/')
+      });
     }
     // PDF のまわりの紙に貼るシール（窓に固定。PDF の下に置く）。着せ替えやシールの画像が変わったら貼り直す
     document.getElementById('viewer-stickers')?.remove();
@@ -307,6 +333,7 @@ function render() {
 }
 
 window.addEventListener('hashchange', render);
+setTimeout(() => loadViewer().catch(() => {}), 1500); // 最初の画面を出したあと、PDF の画面を裏で読んでおく
 api.on('state.changed', () => reload().catch(console.error));
 export const progressText = (p) => (p ? `同期中 ${p.current}/${p.total}（${p.courseName}）` : '');
 api.on('sync.progress', (p) => {
@@ -501,6 +528,13 @@ document.addEventListener('click', async (e) => {
         );
       reload();
     } else if (action === 'open-external') await api['shell.openExternal']({url: el.dataset.url});
+    else if (action === 'open-data-dir') await api['app.openDataDir']();
+    else if (action === 'open-logs') await api['app.openLogs']();
+    else if (action === 'notices') {
+      const r = await api['app.notices']();
+      if (r?.error) toast(r.error, {error: true});
+      else textDialog('第三者のソフトウェアのライセンス', r.text);
+    } else if (action === 'policy') textDialog('利用規約とプライバシーポリシー', policyText());
     else if (action === 'open-root') await api['shell.openRoot']();
     else if (action === 'pick-dir') {
       const r = await api['settings.pickDownloadDir']();
@@ -758,4 +792,14 @@ document.addEventListener('drop', async (e) => {
 reload().catch((e) => {
   document.getElementById('view').innerHTML =
     `<div class="card"><h2>起動できませんでした</h2><p>${esc(e.message)}</p></div>`;
+});
+
+// 画面側で捕まえ損ねた例外・Promise の失敗：黙って止まらず、知らせてログに残す（main の process.on と対）
+window.addEventListener('error', (e) => {
+  console.error(e.error ?? e.message);
+  toast('画面で問題が起きました', {error: true, detail: String(e.error?.stack ?? e.message ?? e)});
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error(e.reason);
+  toast('処理に失敗しました', {error: true, detail: String(e.reason?.stack ?? e.reason?.message ?? e.reason)});
 });

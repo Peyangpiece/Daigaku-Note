@@ -35,6 +35,38 @@ function pageLoginHints(re) {
 }
 
 /** ページの要約（レシピを直すための手がかり）。Playwright に渡すので、外の変数を使わない */
+/**
+ * debug 用の骨組み（page.evaluate で動かす固定の関数）：script・style・画像・ヘッダー・ナビ・利用者情報らしい要素を外し、
+ * 文字はリンク・ボタン・見出し・ラベル・選択肢だけ残して、ほかは伏せる（氏名・学籍番号・成績を残さない。SPEC §14.4）
+ */
+function pageSkeleton() {
+  const doc = document.documentElement.cloneNode(true);
+  for (const el of doc.querySelectorAll(
+    'script, style, noscript, svg, img, video, iframe, header, nav, footer, [class*="user" i], [id*="user" i], [class*="profile" i], [id*="profile" i], [class*="account" i], [id*="account" i], [class*="avatar" i]'
+  ))
+    el.remove();
+  const keep = (el) => !!el?.closest('a, button, label, h1, h2, h3, option, th, summary, legend');
+  const walker = document.createTreeWalker(doc, NodeFilter.SHOW_TEXT);
+  const texts = [];
+  while (walker.nextNode()) texts.push(walker.currentNode);
+  for (const t of texts) if (t.nodeValue.trim() && !keep(t.parentElement)) t.nodeValue = '…';
+  for (const el of doc.querySelectorAll('input, textarea')) {
+    el.removeAttribute('value');
+    el.textContent = '';
+  }
+  return doc.outerHTML;
+}
+
+/** ログに書く URL：クエリは落とす（セッション ID を載せる LMS がある） */
+const safeUrl = (u) => {
+  try {
+    const x = new URL(u);
+    return `${x.origin}${x.pathname}`;
+  } catch {
+    return String(u);
+  }
+};
+
 function pageSummary() {
   const paths = new Map();
   for (const a of document.querySelectorAll('a[href]')) {
@@ -301,7 +333,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       return ok;
     },
 
-    /** レシピが合わなかった画面を debug フォルダに保存し、要約をログに出す（レシピを直すための手がかり） */
+    /** レシピが合わなかった画面の骨組みを debug フォルダに保存し、要約をログに出す（レシピを直すための手がかり。文字の多くは伏せる） */
     async _dump(page, label) {
       if (!debug?.dir) return null;
       try {
@@ -310,9 +342,10 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           debug.dir,
           `${recipeIn.id}_${label}_${new Date().toISOString().replace(/[:.]/g, '-')}.html`
         );
-        await writeFile(file, `<!-- ${page.url()} -->\n${await page.content()}`);
+        const skeleton = await page.evaluate(pageSkeleton).catch(() => '<!-- 骨組みを取れませんでした -->');
+        await writeFile(file, `<!-- ${safeUrl(page.url())} -->\n${skeleton}`);
         log(
-          `[recipe] ${recipeIn.id} ${label}: ${page.url()} 「${summary.title}」 リンク ${summary.anchors} 本（${summary.links.join(' ')}） id: ${summary.ids.join(' ')} → 画面を保存 ${file}`
+          `[recipe] ${recipeIn.id} ${label}: ${safeUrl(page.url())} 「${summary.title}」 リンク ${summary.anchors} 本（${summary.links.join(' ')}） id: ${summary.ids.join(' ')} → 画面を保存 ${file}`
         );
         const old = (await readdir(debug.dir)).filter((f) => f.endsWith('.html')).sort();
         for (const f of old.slice(0, Math.max(0, old.length - DEBUG_KEEP)))

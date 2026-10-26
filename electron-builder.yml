@@ -9,7 +9,9 @@ files:
   - src/**
   - recipes/**
   - package.json
-  - '!src/**/*.test.js'
+  - THIRD-PARTY-NOTICES.md
+  # 既製品の 3D モデルはメーカーの許しを得るまで配らない（src/renderer/assets/stationery/README.md、stationery.js の MAKER_ITEMS_LISTED）
+  - '!src/renderer/assets/stationery/*.glb'
   # three.js（文房具の 3D モデル）は本体の ESM だけ（addons は src/renderer/vendor/three-addons に写してある。
   # node_modules の examples は electron-builder が自動で外すため）
   - '!node_modules/three/src/**'

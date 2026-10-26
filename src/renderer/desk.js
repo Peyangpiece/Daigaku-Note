@@ -153,8 +153,9 @@ class Desk extends DeskTools {
   // ---- 下書き ----
   /** 下書きの層を文書の大きさに合わせる（スクロールしても線がずれない） */
   sizeScratch() {
+    // 幅は窓の幅（scrollWidth にすると、画面の外にしまってある筆箱・ポーチの分まで広がり、紙が横に動いてしまう）
     const el = document.scrollingElement;
-    this.scratch.style.width = `${el.scrollWidth}px`;
+    this.scratch.style.width = `${document.documentElement.clientWidth}px`;
     this.scratch.style.height = `${el.scrollHeight}px`;
   }
   clearScratch() {

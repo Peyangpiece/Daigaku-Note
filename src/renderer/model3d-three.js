@@ -220,6 +220,9 @@ export function mount(el, id, {zoom = false} = {}) {
   let visible = true;
   let raf = 0;
   let last = 0;
+  // 「動きを減らす」設定では、勝手に回さず、利用者が回したときだけ描く
+  const reduceMotion = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  controls.addEventListener('change', () => reduceMotion && visible && model && tick());
   const size = () => {
     const r = el.getBoundingClientRect();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -244,8 +247,8 @@ export function mount(el, id, {zoom = false} = {}) {
     cancelAnimationFrame(raf);
     if (!canvas.isConnected) return stop();
     if (!visible || !model) return;
-    // ペンを軸のまわりにゆっくり転がす（ドラッグ中は止める）
-    if (!dragging) model.group.rotation.x += Math.min(0.05, (t - last) / 1000) * 0.6;
+    // ペンを軸のまわりにゆっくり転がす（ドラッグ中・動きを減らす設定では止める）
+    if (!dragging && !reduceMotion) model.group.rotation.x += Math.min(0.05, (t - last) / 1000) * 0.6;
     last = t;
     if (!moved) cam.position.copy(home); // 動かすまでは、いつも収まる位置
     controls.update();
@@ -255,7 +258,7 @@ export function mount(el, id, {zoom = false} = {}) {
     g.render(model.scene, cam);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(g.domElement, 0, 0);
-    raf = requestAnimationFrame(tick);
+    if (!reduceMotion || dragging) raf = requestAnimationFrame(tick);
   };
   size();
   io.observe(el);
