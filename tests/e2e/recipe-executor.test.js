@@ -304,7 +304,7 @@ test(
  * 模擬の統合認証：LMS（127.0.0.1）に未ログインで来ると IdP（localhost。別のホスト）へ転送。
  * IdP は ID のページ → パスワードのページ →（code: true なら）認証コードのページ → LMS の /sso?ticket=… に戻して Cookie を付ける
  */
-async function mockSso({code = false} = {}) {
+async function mockSso({code = false, localLogin = false} = {}) {
   const page = (body) => `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
   const send = (res, b, status = 200, headers = {}) => {
     res.writeHead(status, {'Content-Type': 'text/html; charset=utf-8', ...headers});
@@ -316,7 +316,7 @@ async function mockSso({code = false} = {}) {
       req.on('data', (c) => (body += c));
       req.on('end', () => resolve(new URLSearchParams(body)));
     });
-  const seen = {users: [], passwords: 0, codes: []};
+  const seen = {users: [], passwords: 0, codes: [], local: 0};
   let lmsBase = '';
   const idp = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -370,7 +370,21 @@ async function mockSso({code = false} = {}) {
       res.writeHead(302, {'Set-Cookie': 'sid=ok; Path=/', Location: '/'});
       return res.end();
     }
+    // localLogin：manabo のように、LMS 自身のログイン画面（ID・パスワード）と「全学ID」のリンクを出す
+    if (localLogin && url.pathname === '/login' && req.method === 'POST') {
+      seen.local++;
+      return send(res, '<p>ログイン ID かパスワードが違います</p>');
+    }
+    if (url.pathname === '/auth/shibboleth/') {
+      res.writeHead(302, {Location: `${idpBase}/idp/login`});
+      return res.end();
+    }
     if (!/sid=ok/.test(req.headers.cookie ?? '')) {
+      if (localLogin)
+        return send(
+          res,
+          '<form method="post" action="/login"><input type="text" name="login_id"><input type="password" name="password"><button type="submit">ログイン</button></form><a href="/auth/shibboleth/">中京大学 全学IDをお持ちの方</a>'
+        );
       res.writeHead(302, {Location: `${idpBase}/idp/login`});
       return res.end();
     }
@@ -432,6 +446,31 @@ test(
       assert.deepEqual(await connector.login(on, 'headless'), {ok: true});
     } finally {
       await connector.releaseContext(on);
+    }
+  }
+);
+
+test(
+  '自動ログイン：LMS 自身のログイン画面が出たら、ID・パスワードを入れずに統合認証のリンク（login.sso）へ進む',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const sso = await mockSso({localLogin: true});
+    t.after(sso.close);
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor(recipeBase, {session, secrets}); // 同梱の manabo レシピ（login.sso あり）
+    const conn = {id: 'l1', base_url: sso.base, university_host: '127.0.0.1', allowed_hosts_json: '["localhost"]'};
+    const ctx = await connector.createContext(conn);
+    try {
+      assert.deepEqual(await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}}), {
+        ok: true
+      });
+      assert.equal(sso.seen.local, 0, 'LMS 自身のログインのフォームには送らない');
+      assert.deepEqual(sso.seen.users, ['stu'], '統合認証の ID の欄に入れた');
+      assert.equal(await connector.ensureSession(ctx), 'ok');
+    } finally {
+      await connector.releaseContext(ctx);
     }
   }
 );

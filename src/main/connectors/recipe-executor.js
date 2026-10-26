@@ -365,9 +365,11 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const form = ctx.recipe.login?.form;
       const baseHost = safeHost(ctx.base);
       const allowed = (h) => h === baseHost || ctx.allowedHosts.some((a) => h === a || h.endsWith('.' + a));
+      const sso = ctx.recipe.login?.sso;
       let sentUser = false;
       let sentPassword = false;
-      for (let step = 0; step < 6; step++) {
+      let ssoClicks = 0;
+      for (let step = 0; step < 8; step++) {
         const host = safeHost(page.url());
         if (host === baseHost && (await this._isLoggedIn(page, ctx))) return;
         if (!host || !allowed(host))
@@ -386,6 +388,26 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
             'login-required',
             'このログインのページには ID・パスワードを自動では入れません。ブラウザ窓でログインしてください'
           );
+        // LMS 自身のログイン画面（manabo の「ログイン ID・パスワード」など。大学のアカウントでは入れない）に、
+        // 統合認証へのリンク（「中京大学 全学IDをお持ちの方」）があれば、ID・パスワードを入れずにそちらへ進む
+        if (
+          sso &&
+          host === baseHost &&
+          ssoClicks < 2 &&
+          (await page
+            .locator(sso)
+            .count()
+            .catch(() => 0)) > 0
+        ) {
+          ssoClicks++;
+          const before = page.url();
+          await Promise.all([
+            page.waitForLoadState(ctx.waits.pageLoad).catch(() => {}),
+            page.locator(sso).first().click()
+          ]);
+          await this._settle(page, ctx, baseHost, before);
+          continue;
+        }
         const f = form
           ? {
               user: (await page.locator(form.user).count()) > 0,
@@ -502,6 +524,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       const r = await session.loginVisible(ctx.connection, {
         url: ctx.base + '/',
         autofill: cred?.user ? {...cred, base: ctx.base, hosts: ctx.recipe.allowedHosts ?? []} : null,
+        sso: ctx.recipe.login?.sso ?? null,
         isLoggedIn: async (page) => {
           try {
             return new URL(page.url()).hostname === safeHost(ctx.base) && (await this._isLoggedIn(page, ctx));
