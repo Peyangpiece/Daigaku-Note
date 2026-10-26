@@ -252,6 +252,15 @@ test('資料のイラストの中身：印とラベルのずれは ±40 に収�
   assert.deepEqual(resolveSkin([t], t.id).fileArt.pdf.mark.on, false, 'テンプレートの中身が当たる');
 });
 
+test('資料のイラストの紙の色：種類ごと。はじめは default（白）、色の形でないものは default', () => {
+  const t = normalizeTemplate({parts: {fileBody: {pdf: '#1E1E1E', doc: 'red', nope: '#000000'}}});
+  assert.equal(t.parts.fileBody.pdf, '#1e1e1e');
+  assert.equal(t.parts.fileBody.doc, 'default');
+  assert.equal('nope' in t.parts.fileBody, false);
+  assert.equal(normalizeTemplate({}).parts.fileBody.slide, 'default', '前の版のテンプレートは白のまま');
+  assert.equal(resolveSkin([t], t.id).fileBody.pdf, '#1e1e1e', 'テンプレートの紙の色が当たる');
+});
+
 test('1 か所に 1 枚のシール：動かしたもの（moved）だけ位置を持つ。ほかの場所には付けない', () => {
   const t = normalizeTemplate({
     stickers: [

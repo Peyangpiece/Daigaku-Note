@@ -350,7 +350,9 @@ function fileControls(data) {
   ) => `<div class="ks-artrow${ui.art === i ? ' is-on' : ''}"><span>${ART_LABEL[i]}${art[i].on ? '' : '<span class="muted">（非表示）</span>'}</span>
       <span class="actions">${art[i].on ? `<button type="button" class="btn btn--small" data-ks="art-hide" data-art-item="${i}">消す</button>` : `<button type="button" class="btn btn--small" data-ks="art-show" data-art-item="${i}">出す</button>`}
       ${art[i].dx || art[i].dy ? `<button type="button" class="btn btn--small" data-ks="art-reset" data-art-item="${i}">位置を戻す</button>` : ''}</span></div>`;
+  const body = ui.draft.parts.fileBody[ui.fileKind];
   return `${colorField(`file.${ui.fileKind}`, `${FILE_KIND_LABEL[ui.fileKind]}の色`, f[ui.fileKind], {recent: data.skin?.recent ?? []})}
+    ${colorField(`fileBody.${ui.fileKind}`, '紙の色（標準は白）', body, {recent: data.skin?.recent ?? []})}
     <fieldset class="ks-field"><legend>イラストの中身</legend>
       ${FILE_ART_ITEMS.map(row).join('')}
     </fieldset>`;
@@ -469,7 +471,7 @@ function courseScene(data, {first, note, skin1}) {
   const file = (name) => {
     const kind = kindOf(name);
     return `<span class="ks-file" ${editAttr('file', `${FILE_KIND_LABEL[kind]}のイラスト`)} data-kind="${kind}" data-drop-place="file">
-      <span class="file__art">${fileArt(name, {colors: sk.file, art: sk.fileArt})}${fixedOne(data, find('file', kind))}</span>
+      <span class="file__art">${fileArt(name, {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}${fixedOne(data, find('file', kind))}</span>
       <span class="muted">${FILE_KIND_LABEL[kind]}</span></span>`;
   };
   // 回の付箋：5 色が全部見えるように 5 枚。資料は 2 つずつ
@@ -491,7 +493,7 @@ function fileScene(data, {note, skin1}) {
   const sk = skin1;
   const k = ui.fileKind;
   const st = sk.stickers.find((x) => x.place === 'file' && x.kind === k);
-  let art = fileArt(KIND_FILE[k], {colors: sk.file, art: sk.fileArt, editable: true});
+  let art = fileArt(KIND_FILE[k], {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt, editable: true});
   if (ui.art) art = art.replace(`data-art="${ui.art}"`, `data-art="${ui.art}" class="is-sel"`);
   return noteSwatch(
     note,
@@ -502,7 +504,7 @@ function fileScene(data, {note, skin1}) {
     </div>
     <div class="ks-kinds" role="group" aria-label="資料の種類">${FILE_KINDS.map(
       (x) =>
-        `<button type="button" class="ks-kind" data-ks="set" data-key="fileKind" data-value="${x}" aria-pressed="${x === k}">${fileArt(KIND_FILE[x], {colors: sk.file, art: sk.fileArt})}<span>${FILE_KIND_LABEL[x]}</span></button>`
+        `<button type="button" class="ks-kind" data-ks="set" data-key="fileKind" data-value="${x}" aria-pressed="${x === k}">${fileArt(KIND_FILE[x], {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}<span>${FILE_KIND_LABEL[x]}</span></button>`
     ).join('')}</div>`
   );
 }
