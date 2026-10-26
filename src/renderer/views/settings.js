@@ -1,4 +1,5 @@
 // 設定（SPEC §12.2）。学期・授業・保存先・クイズ・見た目、下に LMS との連携（任意）と同期。変更はすぐ保存する。
+import {AI_CONSENT_VERSION, AI_NOT_SENDS, AI_SENDS} from '../../shared/policy.js';
 import {confirmDialog, esc, reload, toast} from '../app.js';
 import {ROLES, USES, features} from '../../shared/profile.js';
 
@@ -35,11 +36,12 @@ const TYPE_NAMES = {choice: '選択', tf: '正誤', cloze: '穴埋め', num: '�
 function quizSection(q, focus = false) {
   if (!q) return '';
   const key = q.key?.set
-    ? `<p>API キー：<code>••••${esc(q.key.last4)}</code> <button class="btn btn--small" data-quiz-removekey>削除</button></p>`
+    ? `<p>API キー：<code>••••${esc(q.key.last4)}</code> <button class="btn btn--small" data-quiz-removekey>削除（同意も取り消す）</button></p>
+       <p class="muted">${consentLine(q.consent)}</p>`
     : `<p class="muted">クイズを作るには、自分の Claude API キーが要ります（<button type="button" class="link" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">Anthropic Console</button> で作れます）。費用は使った分だけで、1 回の作成はおよそ十数円（資料の量で前後します）。月の上限は下で決められます。</p>
-       <details class="consent"><summary>AI に送るもの・送らないもの</summary>
-         <p><strong>送る</strong>：その回の資料の本文（学籍番号などの ID・メール・電話番号は消してから）、授業名、回のタイトル、その回のメモ。</p>
-         <p><strong>送らない</strong>：大学のアカウント・パスワード・Cookie、資料のファイルそのもの、ほかの回の資料、成績、名前、LMS の URL。</p>
+       <details class="consent"><summary>AI に送るもの・送らないもの（${esc(AI_CONSENT_VERSION)} 版）</summary>
+         <p><strong>送る</strong>：${AI_SENDS.map(esc).join('。')}。</p>
+         <p><strong>送らない</strong>：${AI_NOT_SENDS.map(esc).join('。')}。</p>
        </details>
        <label style="display:block; margin: var(--space-1) 0"><input type="checkbox" id="qz-consent"> 上の内容で、資料の本文を Claude API に送ることに同意します</label>
        <div style="display:flex; gap: var(--space-1); align-items:end"><label style="flex:1">API キー<input class="input" id="qz-key" type="password" placeholder="キーを貼り付け（sk-ant- で始まります）" autocomplete="off" data-keep="off"></label><button class="btn btn--primary" data-quiz-setkey>確かめて保存</button></div>`;
@@ -114,6 +116,11 @@ export function renderSettings({data}, route = '/settings') {
       </section>`
           : ''
       }
+      <section class="card" id="st-data"><h3>データ</h3>
+        <p class="muted">授業・回・資料の記録、書き込み、クイズ、設定をまとめた 1 つのファイル（.sqlite）です。大学のアカウントの情報と資料のファイルは含みません。毎日の写しは 7 日分、自動で取っています。</p>
+        <div class="about__row"><button type="button" class="btn btn--small" data-backup="export">バックアップを書き出す</button><button type="button" class="btn btn--small" data-backup="import">バックアップを読み込む…</button><button type="button" class="btn btn--small btn--quiet" data-backup="dir">自動バックアップのフォルダを開く</button></div>
+        <p class="muted">読み込むと、いまのデータはそのファイルの中身に置き換わります（いまのものは before-restore という名前で残します）。別のパソコンへ移すときは、資料のフォルダをコピーし、同じ保存先にしてから読み込み、LMS にログインし直してください。</p>
+      </section>
       <section class="card"><h3>保存先</h3>
         <p><code>${esc(s.root)}</code>${s.root === s.defaultRoot ? ' <span class="muted">（既定）</span>' : ''}</p>
         <div style="display:flex; gap: var(--space-1)"><button class="btn" data-action="pick-dir">フォルダを選択…</button>${s.root !== s.defaultRoot ? '<button class="btn" data-action="reset-dir">既定に戻す</button>' : ''}<button class="btn" data-action="open-root">開く</button></div>
@@ -143,7 +150,7 @@ export function renderSettings({data}, route = '/settings') {
         showQuiz
           ? `<h3 class="settings__group">復習</h3>
       <div class="settings__grid">
-      ${quizSection(data.quiz, focus === 'quiz')}
+      ${quizSection(data.quiz && {...data.quiz, consent: data.settings.aiConsent}, focus === 'quiz')}
       </div>`
           : ''
       }
@@ -195,15 +202,52 @@ export function renderSettings({data}, route = '/settings') {
     </div>`;
 }
 
+/** AI への同意の記録の 1 行 */
+function consentLine(c) {
+  if (!c?.at) return 'AI に送る内容への同意の記録がありません。';
+  const at = new Date(c.at).toLocaleString('ja-JP', {dateStyle: 'medium', timeStyle: 'short'});
+  return c.version === AI_CONSENT_VERSION
+    ? `AI に送る内容に同意：${esc(at)}（${esc(c.version)} 版）`
+    : `送る内容の説明が ${esc(c.version)} 版から変わりました。キーを削除して、同意し直してください。`;
+}
+
 function bind() {
   const $ = (id) => document.getElementById(id);
+  for (const b of document.querySelectorAll('[data-backup]'))
+    b.onclick = async () => {
+      const what = b.dataset.backup;
+      if (what === 'export') {
+        const r = await api['backup.export']();
+        if (r?.error) return toast(r.error, {error: true});
+        if (r?.ok) toast('バックアップを書き出しました');
+      } else if (what === 'dir') await api['backup.openDir']();
+      else if (what === 'import') {
+        if (
+          !(await confirmDialog(
+            'バックアップを読み込むと、いまのデータはそのファイルの中身に置き換わります（いまのものは before-restore として残します）。続けますか？',
+            {ok: 'ファイルを選ぶ', danger: true}
+          ))
+        )
+          return;
+        const r = await api['backup.import']();
+        if (r?.error) return toast(r.error, {error: true});
+        if (!r?.ok) return;
+        if (
+          await confirmDialog('読み込む準備ができました。アプリを開き直すと入れ替わります。いま開き直しますか？', {
+            ok: '開き直す'
+          })
+        )
+          await api['app.relaunch']();
+        else toast('次にアプリを開いたときに入れ替わります', {untilNavigate: true});
+      }
+    };
   const qset = document.querySelector('[data-quiz-setkey]');
   if (qset)
     qset.onclick = async () => {
       if (!$('qz-consent').checked) return toast('送る内容への同意にチェックを入れてください', {error: true});
       qset.disabled = true;
       qset.textContent = '確かめています…';
-      const r = await api['quiz.setKey']({apiKey: $('qz-key').value});
+      const r = await api['quiz.setKey']({apiKey: $('qz-key').value, consent: true});
       qset.disabled = false;
       qset.textContent = '確かめて保存';
       if (r?.error) return toast(r.error, {error: true});

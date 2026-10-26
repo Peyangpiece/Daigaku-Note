@@ -41,19 +41,26 @@ export const esc = (s) =>
     (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]
   );
 
+// ログインボーナス（その日に初めて開いたとき 1 回。shared/points.js）。起動のあと 1 回だけ main に頼む。初回のセットアップの上には出さない
+let loginClaimed = false;
+async function claimLoginBonus() {
+  if (loginClaimed || location.hash.startsWith('#/setup')) return;
+  loginClaimed = true;
+  const r = await api['points.claimLogin']().catch(() => null);
+  if (!r || r.error) return;
+  state.data.points = r.points;
+  if (r.gained > 0)
+    toast(`ログインボーナス +${r.gained} pt（いま ${r.points.balance.toLocaleString('ja-JP')} pt）`, {
+      action: {label: 'ポイントを見る', run: () => navigate('/fudebako/points')}
+    });
+}
+
 export async function reload() {
   state.data = await api['state.get']();
   if (state.data?.error) throw new Error(state.data.error);
   applyTheme();
   render();
-  // ログインボーナス（その日に初めて開いたとき。main の state.get が付ける。shared/points.js）。初回のセットアップの上には出さない
-  if (state.data.pointsGained > 0 && !location.hash.startsWith('#/setup'))
-    toast(
-      `ログインボーナス +${state.data.pointsGained} pt（いま ${state.data.points.balance.toLocaleString('ja-JP')} pt）`,
-      {
-        action: {label: 'ポイントを見る', run: () => navigate('/fudebako/points')}
-      }
-    );
+  await claimLoginBonus();
   // 着せ替えを入れた版に更新したあと 1 回だけ知らせる（SPEC-KISEKAE §4.4）
   if (state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
     state.data.skin.introduced = true;

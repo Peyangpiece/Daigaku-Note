@@ -1,4 +1,5 @@
 // ホーム（SPEC §8.1）：罫線ノートの上に、マスキングテープで貼った授業フォルダ。
+import {todayJst} from '../../shared/schedule.js';
 import {esc, jaWrap, progressText} from '../app.js';
 import {browserState} from './settings.js';
 import {folderShown, scopeLabel} from './folder.js';
@@ -36,7 +37,7 @@ export function weekOrder(courses) {
  * cal（学期の学年暦：休講日・振替授業日）があれば、その日に行う授業の曜日で数える（休講日・祝日は授業なし、振替授業日はその曜日の授業）
  */
 export function classDays(courses, now = new Date(), cal = null) {
-  const today0 = now.toLocaleDateString('sv-SE'); // その場所の今日（YYYY-MM-DD）
+  const today0 = todayJst(now); // 日本時間の今日（YYYY-MM-DD。main と同じ）
   const wdOn = (i) => {
     const d = addDays(today0, i);
     return cal ? classWeekday(cal, d) : DAYS[weekdayOf(d)];

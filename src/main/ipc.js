@@ -7,7 +7,7 @@ import {CLASSIC_ID, FORMAT, SHAPES, STICKER_MODES, isBuiltin, isHex, normalizeTe
 import {checkDownloadDir, defaultRoot} from '../shared/paths.js';
 import {courseFolderName} from '../shared/naming.js';
 import {currentTerm} from '../shared/term.js';
-import {PERIOD_PRESETS} from '../shared/schedule.js';
+import {PERIOD_PRESETS, todayJst} from '../shared/schedule.js';
 import {cleanUses, isRole} from '../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../shared/lms-terms.js';
 import {createRequire} from 'node:module';
@@ -23,6 +23,8 @@ import {checkQuestion} from '../shared/quiz.js';
 import {annotationToClient, normalizeAnnotation, clampSize} from '../shared/annotation.js';
 import {normalizeBookmark} from '../shared/bookmark.js';
 import {CATALOG, acquire, arrange, purchase, stationeryState} from '../shared/stationery.js';
+import {AI_CONSENT_VERSION} from '../shared/policy.js';
+import {exportBackup, stageRestore} from './backup.js';
 import {claimLogin, claimQuiz, pointsState, spend} from '../shared/points.js';
 
 const str = (v, max = 500) => (typeof v === 'string' && v.length <= max ? v : null);
@@ -69,14 +71,22 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       }
     });
 
-  handle('state.get', async () => {
-    // ログインボーナス：その日に初めて状態を読んだとき（アプリを開いた日）に 1 回だけ（shared/points.js）
+  // ログインボーナス：その日に初めて開いたときに 1 回だけ（shared/points.js）。画面が起動のあとに 1 回呼ぶ（state.get は読むだけ）
+  handle('points.claimLogin', () => {
     const login = claimLogin(repo.getSetting('points', null));
     if (login.gained) repo.setSetting('points', login.points);
+    return {gained: login.gained, points: pointsState(login.points)};
+  });
+  handle('state.get', async () => {
     const terms = repo.listTerms();
     const connections = repo.listConnections().map(({session_json: _session, ...c}) => c); // ログインの記録は渡さない
-    const courses = repo.listCourses().map((c) => ({...c, unread: repo.countUnread(c.id)}));
-    const rounds = Object.fromEntries(courses.map((c) => [c.id, repo.listRounds(c.id)]));
+    // 授業ごとに引かず、全授業ぶんをまとめて引いて配る（授業が増えても問い合わせの数が増えない）
+    const unread = repo.countUnreadAll();
+    const courses = repo.listCourses().map((c) => ({...c, unread: unread[c.id] ?? 0}));
+    const roundsAll = repo.listRoundsAll();
+    const materialsAll = repo.listMaterialsAll();
+    const quizzesAll = repo.listQuizzesAll();
+    const rounds = Object.fromEntries(courses.map((c) => [c.id, roundsAll[c.id] ?? []]));
     // 自分のフォルダの資料は、フォルダの中のどの下のフォルダにあるか（sub）も渡す。パスそのものは渡さない
     const sub = (c, m) =>
       c.kind === 'folder' && c.dir ? path.relative(c.dir, path.dirname(m.path)).split(path.sep).join('/') : '';
@@ -84,13 +94,16 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     const materials = Object.fromEntries(
       courses.map((c) => [
         c.id,
-        repo
-          .listMaterials(c.id)
-          .map(({path: p, ...m}) => ({...m, sub: sub(c, {path: p}), bookmarks: marks[m.sha256] ?? 0}))
+        (materialsAll[c.id] ?? []).map(({path: p, ...m}) => ({
+          ...m,
+          sub: sub(c, {path: p}),
+          bookmarks: marks[m.sha256] ?? 0
+        }))
       ])
     );
-    const today = new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Tokyo'});
+    const today = todayJst();
     return {
+      today, // 日本時間の今日（画面もこれを使う）
       connections,
       terms,
       currentTermId: currentTerm(terms, today)?.id ?? terms.at(-1)?.id ?? null,
@@ -111,6 +124,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
         uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）
         university: repo.getSetting('profile.university', ''),
         lmsTerms: repo.getSetting('lms.terms', null), // 大学サービスとの連携の利用規約に同意した版と日時
+        aiConsent: repo.getSetting('quiz.consent', null), // AI に送るものへの同意（版と日時。shared/policy.js）
         experiments: repo.getSetting('experiments.makerPens', false), // 実験：既製品の見た目のペンをショップに出す（個人の試作）
         notifications: repo.getSetting('ui.notifications', true) !== false, // OS の通知（新しい資料・ログインの必要・クイズの完成・同期の失敗）
         calendarDismissed: repo.getSetting('calendar.dismissed', []), // ホームの「学年暦を入れる」案内を「この学期は入れない」にした学期の id
@@ -125,8 +139,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       },
       stationery: stationeryState(repo.getSetting('stationery', null)), // 文房具：持ち物・筆箱の中身・ペンケース（shared/stationery.js）
       orders: repo.getSetting('stationery.orders', []), // ショップの注文の記録（新しい順。α 版はデモ決済）
-      points: pointsState(login.points), // アプリ内のポイント：残高・履歴（shared/points.js）
-      pointsGained: login.gained, // いまの読み込みでもらったログインボーナス（画面が知らせる。0 なら知らせない）
+      points: pointsState(repo.getSetting('points', null)), // アプリ内のポイント：残高・履歴（shared/points.js）
       lastSync: repo.lastSyncRun(),
       browser: ctx.browser ?? {state: 'pending', message: ''},
       status: ctx.status ?? '',
@@ -135,9 +148,10 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       quizzes: Object.fromEntries(
         courses.map((c) => [
           c.id,
-          repo
-            .listQuizzes(c.id)
-            .map(({source_json, ...z}) => ({...z, notes: JSON.parse(source_json ?? '{}').notes ?? []}))
+          (quizzesAll[c.id] ?? []).map(({source_json, course_id: _c, ...z}) => ({
+            ...z,
+            notes: JSON.parse(source_json ?? '{}').notes ?? []
+          }))
         ])
       ),
       quiz: ctx.quiz ? {...ctx.quiz.status(), key: await ctx.quiz.keyInfo(), ...reviewSummary(ctx.quiz)} : null,
@@ -1045,8 +1059,18 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     };
   };
   handle('quiz.status', async () => ({...quiz.status(), key: await quiz.keyInfo()}));
-  handle('quiz.setKey', async ({apiKey}) => quiz.setKey(str(apiKey, 300) ?? bad('API キーを入れてください')));
-  handle('quiz.removeKey', async () => (await quiz.removeKey(), {ok: true}));
+  // API キーの保存には、AI に送るものへの同意（shared/policy.js の版）が要る。同意は版と日時で記録し、設定で見返せる・取り消せる
+  handle('quiz.setKey', async ({apiKey, consent}) => {
+    if (consent !== true) bad('AI に送る内容への同意が要ります');
+    const r = await quiz.setKey(str(apiKey, 300) ?? bad('API キーを入れてください'));
+    repo.setSetting('quiz.consent', {version: AI_CONSENT_VERSION, at: new Date().toISOString()});
+    return r;
+  });
+  handle('quiz.removeKey', async () => {
+    await quiz.removeKey();
+    repo.setSetting('quiz.consent', null); // 取り消し：キーといっしょに同意も消す
+    return {ok: true};
+  });
   handle('quiz.settings', ({patch}) => {
     if (patch.model !== undefined) repo.setSetting('quiz.model', str(patch.model, 40) ?? bad('モデルが不正です'));
     if (patch.mix && typeof patch.mix === 'object') {
@@ -1063,7 +1087,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       repo.setSetting('quiz.perMonthUsd', Math.max(0.5, Math.min(500, Number(patch.perMonthUsd) || 5)));
     return {ok: true};
   });
-  handle('quiz.generate', ({roundIds}) => ({queued: quiz.generate(ids(roundIds))}));
+  handle('quiz.generate', ({roundIds}) => {
+    if (repo.getSetting('quiz.consent', null)?.version !== AI_CONSENT_VERSION)
+      bad('AI に送る内容の説明が変わりました。設定 → クイズ で内容を確かめて同意し直してください');
+    return {queued: quiz.generate(ids(roundIds))};
+  });
   handle('quiz.list', ({courseId}) =>
     repo
       .listQuizzes(id(courseId) ?? bad('授業が不正です'))
@@ -1127,6 +1155,42 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     text: await fsp.readFile(path.join(app.getAppPath(), 'THIRD-PARTY-NOTICES.md'), 'utf8')
   }));
   handle('app.openDataDir', async () => ({ok: !(await shell.openPath(app.getPath('userData')))}));
+  handle('app.relaunch', () => {
+    app.relaunch();
+    app.exit(0);
+    return {ok: true};
+  });
+  // 設定 → データ：バックアップの書き出し・読み込み（SPEC §12.3）。読み込みは次の起動で入れ替える（main.js の applyStagedRestore）
+  handle('backup.export', async () => {
+    const r = await dialog.showSaveDialog({
+      title: 'バックアップを書き出す',
+      defaultPath: path.join(app.getPath('documents'), `daigaku-note-${todayJst()}.sqlite`),
+      filters: [{name: '大学ノートのバックアップ', extensions: ['sqlite']}]
+    });
+    if (r.canceled || !r.filePath) return {ok: false};
+    const out = exportBackup(ctx.db, r.filePath);
+    log.info(`バックアップを書き出しました: ${out.file}（${out.size} バイト）`);
+    return {ok: true, file: out.file, size: out.size};
+  });
+  handle('backup.import', async () => {
+    const r = await dialog.showOpenDialog({
+      title: 'バックアップを読み込む',
+      properties: ['openFile'],
+      filters: [{name: '大学ノートのバックアップ', extensions: ['sqlite']}]
+    });
+    if (r.canceled || !r.filePaths?.[0]) return {ok: false};
+    const {DatabaseSync} = await import('node:sqlite');
+    const staged = stageRestore({
+      userData: app.getPath('userData'),
+      src: r.filePaths[0],
+      open: (f) => new DatabaseSync(f, {readOnly: true})
+    });
+    log.info(`バックアップの読み込みを予約しました: ${r.filePaths[0]}（版 ${staged.version}）。次の起動で入れ替えます`);
+    return {ok: true, version: staged.version};
+  });
+  handle('backup.openDir', async () => ({
+    ok: !(await shell.openPath(path.join(app.getPath('userData'), 'backups')))
+  }));
   handle('app.openLogs', async () => ({ok: !(await shell.openPath(path.join(app.getPath('userData'), 'logs')))}));
   void courseFolderName;
 }

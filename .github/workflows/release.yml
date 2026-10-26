@@ -151,7 +151,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: package.json
+          # 版（package.json）と Release の本文に入れる変更の記録（CHANGELOG.md）だけ取り出す
+          sparse-checkout: |
+            package.json
+            CHANGELOG.md
           sparse-checkout-cone-mode: false
       - id: version
         run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
@@ -178,7 +181,8 @@ jobs:
           newest=$(gh api "repos/$REPO/releases" --paginate --jq '.[] | select(.draft|not) | .tag_name' | sed 's/^v//' | sort -V | tail -1)
           if [ -z "$newest" ] || [ "$(printf '%s\n%s\n' "$newest" "$v" | sort -V | tail -1)" = "$v" ]; then latest=--latest; else latest=--latest=false; fi
           # 本文：CHANGELOG.md のこの版の節（「## 0.10.1」から次の「## 」まで）＋入れ方。節がなければ入れ方だけ
-          notes="$(awk -v v="${TAG#v}" '$0 ~ "^## "v"( |$)" {on=1; next} /^## / {on=0} on' CHANGELOG.md)"
+          notes=""
+          [ -f CHANGELOG.md ] && notes="$(awk -v v="${TAG#v}" '$0 ~ "^## "v"( |$)" {on=1; next} /^## / {on=0} on' CHANGELOG.md)"
           {
             echo "**α 版（試験中）** です。動かないことやデータが消えることがあります。大切な資料は元の場所にも残してください。"
             echo

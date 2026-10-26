@@ -2,7 +2,14 @@
 import {ulid} from '../../shared/ids.js';
 import {normalizeTemplate, rotationFor} from '../../shared/skin.js';
 
-const COLUMNS = {
+/** 行を列の値ごとにまとめる（{値: [行…]}） */
+function groupBy(rows, key) {
+  const out = {};
+  for (const r of rows) (out[r[key]] ??= []).push(r);
+  return out;
+}
+
+export const COLUMNS = {
   connection: [
     'id',
     'kind',
@@ -240,6 +247,21 @@ export class Repo {
     return this.get('question', id);
   }
   /** 授業のクイズの一覧（回ごとの最新版）。問題数・要確認・正答率つき */
+  /** 全授業のクイズ（state.get 用。授業ごとに 1 本ずつ引かない）。戻りは {授業の id: [quiz…]} */
+  listQuizzesAll() {
+    const rows = this.db
+      .prepare(
+        `SELECT z.*, r.course_id AS course_id, r.number AS round_number, r.title AS round_title, r.title_user AS round_title_user,
+           (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0) AS count,
+           (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0 AND q.review IS NOT NULL) AS flagged,
+           (SELECT COUNT(*) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS tries,
+           (SELECT SUM(a.ok) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS correct
+         FROM quiz z JOIN round r ON r.id = z.round_id
+         WHERE z.status != 'replaced' ORDER BY r.course_id, r.number`
+      )
+      .all();
+    return groupBy(rows, 'course_id');
+  }
   listQuizzes(courseId) {
     return this.db
       .prepare(
@@ -466,6 +488,10 @@ export class Repo {
   listRounds(courseId) {
     return this.db.prepare('SELECT * FROM round WHERE course_id = ? ORDER BY number').all(courseId);
   }
+  /** 全授業の回（state.get 用）。戻りは {授業の id: [round…]} */
+  listRoundsAll() {
+    return groupBy(this.db.prepare('SELECT * FROM round ORDER BY course_id, number').all(), 'course_id');
+  }
   findRound(courseId, number) {
     return this.db.prepare('SELECT * FROM round WHERE course_id = ? AND number = ?').get(courseId, number) ?? null;
   }
@@ -480,6 +506,10 @@ export class Repo {
   // ---- material ----
   listMaterials(courseId) {
     return this.db.prepare('SELECT * FROM material WHERE course_id = ? ORDER BY downloaded_at').all(courseId);
+  }
+  /** 全授業の資料（state.get 用）。戻りは {授業の id: [material…]} */
+  listMaterialsAll() {
+    return groupBy(this.db.prepare('SELECT * FROM material ORDER BY course_id, downloaded_at').all(), 'course_id');
   }
   listMaterialsByRound(roundId) {
     return this.db.prepare('SELECT * FROM material WHERE round_id = ? ORDER BY name').all(roundId);
@@ -506,6 +536,15 @@ export class Repo {
   updateMaterial(id, patch) {
     this.update('material', id, patch);
     return this.get('material', id);
+  }
+  /** 授業ごとの未読の数（state.get 用）。戻りは {授業の id: 数} */
+  countUnreadAll() {
+    const out = {};
+    for (const r of this.db
+      .prepare("SELECT course_id, COUNT(*) c FROM material WHERE read_at IS NULL AND status = 'ok' GROUP BY course_id")
+      .all())
+      out[r.course_id] = r.c;
+    return out;
   }
   countUnread(courseId) {
     return this.db

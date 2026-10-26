@@ -36,6 +36,14 @@ export class Scheduler {
       // レシピの更新（SPEC §6.15）はまだない。仕組みができるまでジョブは積まない（積んでも処理がなく、失敗の記録だけが残るため）
     }
 
+    // 今日の復習の知らせ（9:00 を過ぎたら 1 日 1 回。SPEC §12.1）。復習がなければ出さない
+    const {hm} = jstNow(now);
+    if (hm >= '09:00' && repo.getSetting('notify.reviewDay') !== date) {
+      repo.setSetting('notify.reviewDay', date);
+      const due = this.ctx.quiz?.review?.().questions?.length ?? 0;
+      if (due > 0) this.ctx.notifier?.show({title: '今日の復習', body: `今日の復習 ${due} 問`, route: '/review'});
+    }
+
     // LMS をつないでいなければ同期しない（自分のフォルダだけで使っているとき、空の同期の知らせを出さない）
     if (!repo.listConnections().some((c) => c.kind !== 'manual' && c.status !== 'disabled')) return;
 
