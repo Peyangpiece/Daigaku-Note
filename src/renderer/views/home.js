@@ -107,16 +107,6 @@ export function folderCard(course, {today = false, data = null, skin = null, edi
 }
 
 /** 復習の入口（常設）。今日の問題があれば強調、なければ次の予定を添える（間隔反復の仕組みが見える） */
-function reviewButton(quiz) {
-  if (!quiz) return '';
-  if (quiz.reviewDue)
-    return `<button class="btn btn--primary" data-action="nav" data-route="/review">今日の復習 ${quiz.reviewDue} 問</button>`;
-  const next = quiz.reviewNext;
-  const when = next
-    ? `次は ${new Date(next.due).toLocaleDateString('ja-JP', {month: 'numeric', day: 'numeric'})} に ${next.count} 問`
-    : '今日はありません';
-  return `<button class="btn" data-action="nav" data-route="/review" title="復習は、解いた問題を忘れかけたころにもう一度出します">復習 <span class="muted">${when}</span></button>`;
-}
 
 export function renderHome({data, progress}) {
   const all = data.courses.filter((c) => !c.hidden && c.kind !== 'folder');
@@ -204,7 +194,6 @@ export function renderHome({data, progress}) {
       </div>
     </div>
     <footer class="home-foot">
-      ${reviewButton(data.quiz)}
       ${
         hasLms
           ? `<button class="btn" data-action="sync" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : '同期'}</button>
@@ -215,6 +204,5 @@ export function renderHome({data, progress}) {
       <button class="btn btn--quiet" data-action="nav" data-route="/kisekae">✿ 着せ替え</button>
       <button class="btn btn--quiet" data-action="nav" data-route="/fudebako">✎ 筆箱</button>
       <button class="btn" data-action="open-root">資料のフォルダ</button>
-      <button class="btn" data-action="nav" data-route="/settings">⚙ 設定</button>
     </footer>`;
 }

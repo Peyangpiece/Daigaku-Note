@@ -336,10 +336,10 @@ export function cartPoints(ids) {
 export const PAYMENT_METHODS = {demo: 'デモ決済（実際の請求はありません）'};
 
 /**
- * レジ：カートの品をまとめて買う。円の品があれば payment が必要（α 版は {method: 'demo', last4?} だけ受け付ける）。
+ * レジ：カートの品をまとめて買う。円の品があれば payment が必要（α 版は {method: 'demo'} だけ受け付ける。カードの情報は扱わない）。
  * ポイントの品の分（order.points）は、呼ぶ側が shared/points.js の spend で残高から引く（足りなければそこで止める）。
  * 持っている品・ない品・出していない品があれば Error。
- * 戻り値：{stationery: 新しい状態, order: {id, at, items: [{id, name, price, points}], total（円）, points, payment: {method, last4}}}
+ * 戻り値：{stationery: 新しい状態, order: {id, at, items: [{id, name, price, points}], total（円）, points, payment: {method}}}
  */
 export function purchase(raw, ids, payment = null, {now = new Date(), orderId = null} = {}) {
   const st = stationeryState(raw);
@@ -356,10 +356,7 @@ export function purchase(raw, ids, payment = null, {now = new Date(), orderId = 
   let pay = {method: points > 0 ? 'points' : 'free'}; // 円の支払いがない注文：ポイントだけ・無料だけ
   if (total > 0) {
     if (!payment || !PAYMENT_METHODS[payment.method]) throw new Error('支払いの方法を選んでください');
-    const last4 = String(payment.last4 ?? '')
-      .replace(/\D/g, '')
-      .slice(-4);
-    pay = {method: payment.method, ...(last4 ? {last4} : {})};
+    pay = {method: payment.method}; // デモ決済：カードの情報は受け取らない・残さない
   }
   const order = {
     id: orderId ?? `order-${now.getTime().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -398,9 +395,10 @@ export function arrange(raw, {slots, caseId, refills} = {}) {
   });
 }
 
-// 既製品の見た目の品（experimental）：α 版（正式な公開の前）のあいだは、ふつうの品と同じようにショップに出す。
-// 正式に公開するときに、メーカーの許しがなければ false にして隠す（SPEC §9.8）
-export const MAKER_ITEMS_LISTED = true;
+// 既製品の見た目の品（experimental）：メーカー（三菱鉛筆・ゼブラ・サクラクレパス）の許しを得ていない個人の試作なので、
+// 公開する配布物では出さない（false。SPEC §9.8）。許しを得たら true にし、electron-builder.yml の GLB の除外も外す。
+// すでに持っている人の筆箱には残る（stationeryState は品ぞろえにある品を外さない）
+export const MAKER_ITEMS_LISTED = false;
 /** ショップに出す品か */
 export const listed = (item) => !item.experimental || MAKER_ITEMS_LISTED;
 

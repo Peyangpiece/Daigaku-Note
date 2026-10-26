@@ -157,6 +157,7 @@ function stepRole(data, n) {
   const role = draft.role ?? data.settings.role;
   const university = draft.university ?? data.settings.university ?? '';
   return `<h2>${n}. あなたについて</h2>
+    <p class="muted">大学ノートは α 版（試験中）です。続けると <button type="button" class="link" data-action="policy">利用規約とプライバシーポリシー</button> に同意したことになります。データはこのパソコンの中だけに保存します。</p>
     <div class="role-pick" role="radiogroup" aria-label="使う人">${Object.entries(ROLES)
       .map(
         ([k, l]) =>

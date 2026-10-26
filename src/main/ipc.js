@@ -142,7 +142,8 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       ),
       quiz: ctx.quiz ? {...ctx.quiz.status(), key: await ctx.quiz.keyInfo(), ...reviewSummary(ctx.quiz)} : null,
       dev: !app.isPackaged, // 開発中の起動（npm start）か。実験の区画など、配る版には出さないものの出し分けに使う
-      version: app.getVersion()
+      version: app.getVersion(),
+      dataDir: app.getPath('userData') // 設定の「情報」に出す（データの場所）
     };
   });
 
@@ -190,6 +191,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
       university_host: base ? new URL(base).hostname : null,
       recipe_version: recipe?.version ?? null
     });
+    if (ctx.browser?.state === 'none') {
+      // 初めて LMS をつないだので、画面を読むための Chromium を取り込み始める（main.js）
+      ctx.browser = {state: 'pending', message: ''};
+      ctx.installBrowser?.();
+    }
     return {connectionId: conn.id};
   });
 
@@ -1116,5 +1122,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
 
   handle('app.openWindow', ({route}) => (openWindow(str(route, 100)), {ok: true}));
+  // 設定の「情報」：第三者のライセンスの一覧（配布物の THIRD-PARTY-NOTICES.md）、データとログの場所を開く
+  handle('app.notices', async () => ({
+    text: await fsp.readFile(path.join(app.getAppPath(), 'THIRD-PARTY-NOTICES.md'), 'utf8')
+  }));
+  handle('app.openDataDir', async () => ({ok: !(await shell.openPath(app.getPath('userData')))}));
+  handle('app.openLogs', async () => ({ok: !(await shell.openPath(path.join(app.getPath('userData'), 'logs')))}));
   void courseFolderName;
 }

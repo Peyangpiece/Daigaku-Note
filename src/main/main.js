@@ -118,6 +118,11 @@ function openWindow(route = null) {
     const menu = editContextMenu(params);
     if (menu) menu.popup({window: win});
   });
+  // 画面のプロセスが落ちたら、記録して開き直す（白い窓のまま止まらないように）
+  win.webContents.on('render-process-gone', (_e, d) => {
+    ctx.log?.error(`画面が落ちました: ${d.reason}（${d.exitCode}）`);
+    if (d.reason !== 'clean-exit' && d.reason !== 'killed' && win && !win.isDestroyed()) win.reload();
+  });
   win.on('closed', () => (win = null));
 }
 
@@ -252,6 +257,19 @@ app.whenReady().then(async () => {
   ensureDirs(userData);
   const log = createLogger(path.join(userData, 'logs'));
   ctx.log = log;
+  // 捕まえ損ねた例外・Promise の失敗は、黙って止まらず記録する（知らせは 1 回だけ。続けて出して邪魔しない）
+  let told = false;
+  process.on('uncaughtException', (e) => {
+    log.error(`捕まえていない例外: ${e?.stack || e}`);
+    if (!told) {
+      told = true;
+      dialog.showErrorBox(
+        '大学ノート',
+        `内部で問題が起きました。続けて使えますが、おかしければ開き直してください。\n${e?.message ?? e}`
+      );
+    }
+  });
+  process.on('unhandledRejection', (e) => log.error(`処理の失敗を受け取っていません: ${e?.stack || e}`));
   try {
     const {db} = await openDatabase(path.join(userData, 'daigaku-note.sqlite'));
     const repo = new Repo(db);
@@ -326,7 +344,7 @@ app.whenReady().then(async () => {
     // LMS の登録は任意。つないでいなくても、セットアップを一度飛ばしたか自分のフォルダがあればホームを開く
     openWindow(connections.length || repo.getSetting('setup.skipped') || repo.listCourses().length ? null : '/setup');
     ctx.scheduler.start();
-    // Chromium の取り込みが終わるまでジョブは待つ（画面操作型の接続がなくても、あとで追加できるよう先に用意する）
+    // Chromium の取り込みが終わるまでジョブは待つ
     ctx.browser = {state: 'pending', message: ''};
     ctx.installBrowser = () =>
       ensureChromium(path.join(userData, 'pw-browsers'), {
@@ -351,7 +369,12 @@ app.whenReady().then(async () => {
           ctx.jobs.start();
           win?.webContents.send('state.changed', {browser: ctx.browser});
         });
-    ctx.installBrowser();
+    // Chromium（約 150 MB）は LMS をつないでいるときだけ取り込む。つないでいなければ、つないだとき（ipc.js の setup.createConnection）に取り込む
+    if (connections.length) ctx.installBrowser();
+    else {
+      ctx.browser = {state: 'none', message: ''};
+      ctx.jobs.start();
+    }
     log.info(`起動 ${app.getVersion()}（データ: ${userData}）`);
   } catch (e) {
     log.error(`起動に失敗: ${e.stack || e.message}`);

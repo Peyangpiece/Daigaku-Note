@@ -204,6 +204,10 @@ export function createMoodleConnector({
     },
 
     async fetchFile(ctx, ref) {
+      // トークンは LMS のサイトにだけ付けて送る（API の応答に外のサイトの URL が混ざっていても漏らさない）
+      const site = new URL(ctx.base).origin;
+      const target = new URL(ref.url);
+      if (target.origin !== site) throw new Error(`資料の URL が LMS の外（${target.host}）を指しているので読みません`);
       const url = ref.url + (ref.url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(ctx.token);
       const res = await fetchImpl(url);
       const body = Buffer.from(await res.arrayBuffer());

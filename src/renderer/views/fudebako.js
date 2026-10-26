@@ -490,8 +490,6 @@ function cartPage(s) {
       </aside>
     </div>`;
 }
-const field = (id, label, {placeholder = '', inputmode = '', maxlength = '', hint = ''} = {}) =>
-  `<div class="field"><label for="${id}">${label}</label><input id="${id}" class="input" type="text" placeholder="${placeholder}"${inputmode ? ` inputmode="${inputmode}"` : ''}${maxlength ? ` maxlength="${maxlength}"` : ''} autocomplete="off" />${hint ? `<small class="muted">${hint}</small>` : ''}<small class="field__error" data-error-for="${id}" role="alert"></small></div>`;
 /** レジ：注文内容と支払い（円の品があればデモのカードの入力。ポイントの品は残高から引く） */
 function checkout(s) {
   const items = cartItems(s);
@@ -503,20 +501,12 @@ function checkout(s) {
     ? `<div class="shop-pay__points"><b>${ICON.coin} ポイントで払う</b>${pointsNote(items)}</div>`
     : '';
   const label = [points ? pt(points) : '', total ? yen(total) : ''].filter(Boolean).join(' ＋ ');
-  const pay = total
-    ? `<form id="checkout" class="shop-pay" data-form="checkout" novalidate>
-        <h4>支払い</h4>
-        <div class="shop-pay__demo"><b>デモ決済</b><span>α 版の試しの支払いです。実際の請求はなく、カードの番号は保存しません（注文の記録に下 4 桁だけ残します）。</span></div>
-        <fieldset class="shop-pay__method"><legend class="sr-only">支払い方法</legend>
-          <label class="shop-pay__radio"><input type="radio" name="method" value="demo" checked /> クレジットカード（デモ）</label>
-        </fieldset>
-        ${field('co-number', 'カード番号', {placeholder: '4242 4242 4242 4242', inputmode: 'numeric', maxlength: '19', hint: '試しの番号：4242 4242 4242 4242'})}
-        ${field('co-name', 'カードの名義', {placeholder: 'TARO DAIGAKU'})}
-        <div class="shop-pay__row">${field('co-exp', '有効期限', {placeholder: 'MM/YY', inputmode: 'numeric', maxlength: '5'})}${field('co-cvc', 'セキュリティコード', {placeholder: '123', inputmode: 'numeric', maxlength: '4'})}</div>
-        ${pointsPart}
-        <button type="submit" class="btn btn--primary shop-side__go" data-shop="buy"${short ? ' disabled' : ''}>${label} を支払う${total ? '（円はデモ）' : ''}</button>
-      </form>`
-    : `<div class="shop-pay"><h4>支払い</h4>${pointsPart || '<p class="muted">支払いのない品だけです。</p>'}<button type="button" class="btn btn--primary shop-side__go" data-shop="buy"${short ? ' disabled' : ''}>${points ? `${pt(points)} で買う` : '受け取る'}</button></div>`;
+  // デモ決済：カードの情報は入れない・受け取らない（実際の請求はない）。押すとそのまま注文になる
+  const pay = `<div class="shop-pay"><h4>支払い</h4>
+      ${total ? '<div class="shop-pay__demo"><b>デモ決済</b><span>α 版の試しの支払いです。カードの番号などは入れません。実際の請求はなく、注文の記録に「デモ」と残るだけです。</span></div>' : ''}
+      ${pointsPart || (total ? '' : '<p class="muted">支払いのない品だけです。</p>')}
+      <button type="button" class="btn btn--primary shop-side__go" data-shop="buy"${short ? ' disabled' : ''}>${total ? `${label} をデモで支払う` : points ? `${pt(points)} で買う` : '受け取る'}</button>
+    </div>`;
   return `<h3 class="shop-h">レジ</h3>
     <div class="shop-checkout">
       <div>
@@ -536,11 +526,7 @@ function orderPage(s, id) {
   const at = new Date(o.at).toLocaleString('ja-JP', {dateStyle: 'medium', timeStyle: 'short'});
   const payLabel = [
     o.points ? `ポイント ${pt(o.points)}` : '',
-    o.payment.method === 'demo'
-      ? `${PAYMENT_METHODS.demo}${o.payment.last4 ? `・カード下 4 桁 ${o.payment.last4}` : ''}`
-      : o.payment.method === 'free'
-        ? '支払いなし'
-        : ''
+    o.payment.method === 'demo' ? PAYMENT_METHODS.demo : o.payment.method === 'free' ? '支払いなし' : ''
   ]
     .filter(Boolean)
     .join('・');
@@ -659,55 +645,12 @@ async function save(channel, arg, done) {
   return r;
 }
 
-// ---- デモのカードの確かめ ----
-const luhn = (digits) => {
-  let sum = 0;
-  for (let i = 0; i < digits.length; i++) {
-    let d = Number(digits[digits.length - 1 - i]);
-    if (i % 2 === 1) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-  }
-  return sum % 10 === 0;
-};
-/** 入力を確かめて {payment} か {errors} を返す */
-function checkCard(form) {
-  const v = (id) => form.querySelector(`#${id}`)?.value.trim() ?? '';
-  const errors = {};
-  const number = v('co-number').replace(/[\s-]/g, '');
-  if (!/^\d{14,16}$/.test(number)) errors['co-number'] = '14〜16 桁の数字で入れてください';
-  else if (!luhn(number)) errors['co-number'] = 'カード番号が正しくありません（試しの番号は 4242 4242 4242 4242）';
-  if (!v('co-name')) errors['co-name'] = '名義を入れてください';
-  const m = v('co-exp').match(/^(\d{2})\s*\/\s*(\d{2})$/);
-  if (!m) errors['co-exp'] = 'MM/YY の形で入れてください';
-  else {
-    const mm = Number(m[1]);
-    const yy = 2000 + Number(m[2]);
-    const now = new Date();
-    if (mm < 1 || mm > 12) errors['co-exp'] = '月は 01〜12 です';
-    else if (yy < now.getFullYear() || (yy === now.getFullYear() && mm < now.getMonth() + 1))
-      errors['co-exp'] = '有効期限が切れています';
-  }
-  if (!/^\d{3,4}$/.test(v('co-cvc'))) errors['co-cvc'] = '3〜4 桁の数字です';
-  return Object.keys(errors).length ? {errors} : {payment: {method: 'demo', last4: number.slice(-4)}};
-}
-function showErrors(form, errors) {
-  for (const el of form.querySelectorAll('[data-error-for]')) {
-    const msg = errors[el.dataset.errorFor] ?? '';
-    el.textContent = msg;
-    const input = form.querySelector(`#${el.dataset.errorFor}`);
-    input?.classList.toggle('is-invalid', !!msg);
-    input?.setAttribute('aria-invalid', msg ? 'true' : 'false');
-  }
-  form.querySelector('.is-invalid')?.focus();
-}
 /** レジで買う（デモ決済）。終わったら注文完了のページへ */
-async function pay(button, payment) {
+async function pay(button) {
   const s = st();
   const items = cartItems(s);
   if (!items.length) return toast('カートが空です', {error: true});
+  const payment = cartTotal(items.map((it) => it.id)) > 0 ? {method: 'demo'} : null; // 円の品があればデモ決済
   button.disabled = true;
   const label = button.innerHTML;
   button.innerHTML = payment ? '決済を確かめています…' : '受け取っています…';
@@ -732,19 +675,6 @@ async function pay(button, payment) {
       .join('・') || '受け取りました'
   );
 }
-
-document.addEventListener('submit', (e) => {
-  const form = e.target.closest('form#checkout');
-  if (!form) return;
-  e.preventDefault();
-  const {payment, errors} = checkCard(form);
-  if (errors) {
-    showErrors(form, errors);
-    return toast('入力を確かめてください', {error: true, untilNavigate: true});
-  }
-  showErrors(form, {});
-  pay(form.querySelector('[data-shop="buy"]'), payment);
-});
 
 // 検索欄：字を打つたびに結果だけ描き直す（画面全体を描き直すと入力の途中で手が止まるので）
 document.addEventListener('input', (e) => {
@@ -795,7 +725,7 @@ document.addEventListener('click', (e) => {
     } else if (what === 'remove') {
       cart.remove(sb.dataset.id);
       refresh();
-    } else if (what === 'buy' && sb.type !== 'submit') pay(sb, null); // 無料だけのレジ。有料は form の submit から
+    } else if (what === 'buy') pay(sb);
     return;
   }
   const b = e.target.closest('.fudebako [data-fb]');
