@@ -1,41 +1,37 @@
 import {esc} from './html.js';
+import {
+  INK,
+  SOFT,
+  WATER,
+  LABEL_SERIF,
+  LABEL_GOTHIC,
+  r1,
+  rad,
+  head,
+  arrow,
+  dash,
+  polygonPoints,
+  poly,
+  grid,
+  axesPath,
+  pathOf,
+  spring,
+  ceiling,
+  wallLeft,
+  ground,
+  dot,
+  lead,
+  M,
+  J
+} from './figure-parts.js';
+import {HS_DEFS} from './figures-hs.js';
 // 素材（左下の隅）：授業でよく使う図。SVG をその場で作る（画像ファイルを持たない）。副作用なし。
 // ページに貼ると注釈の stamp（style.type = 'figure'、style.ref = id）になる。線は黒、塗りは淡い色。
 // - 決め事（params）：図ごとに変えられる値（ビーカーの水の量・振り子の角度・グラフの式など）。schema は params の並び
 // - 文字（labels）：x・y・O・θ・部分の名前など。図の上に別に置き、書き換え・足す・消すができる（辺の長さ・角度などを書き込む）。
 //   位置は図の幅・高さに対する割合（大きさを変えても付いてくる）。書き換えていなければ、決め事に合わせた既定の文字を出す
 // - 座標平面・放物線・一次関数のグラフ（graph）は、式の種類（なし・一次・二次・三次）と係数で曲線を描く
-const INK = '#2b2b2b';
-const SOFT = '#9aa3ad'; // 補助の線（方眼・点線）
-const WATER = '#d6ebff';
-export const LABEL_SERIF = "'Times New Roman',Times,serif";
-export const LABEL_GOTHIC = "'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif";
-const r1 = (v) => Math.round(v * 10) / 10;
-const rad = (deg) => (deg * Math.PI) / 180;
-
-/** 矢印の先（x, y が先端。向きは角度 deg。0 が右） */
-const head = (x, y, deg, fill = INK) =>
-  `<path d="M0 0L-9 -4.5L-9 4.5Z" transform="translate(${r1(x)} ${r1(y)}) rotate(${r1(deg)})" fill="${fill}" stroke="none"/>`;
-const arrow = (x1, y1, x2, y2, {color = INK, width} = {}) => {
-  const deg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
-  const k = 8 / (Math.hypot(x2 - x1, y2 - y1) || 1); // 先の手前で線を止める
-  return `<path d="M${r1(x1)} ${r1(y1)}L${r1(x2 - (x2 - x1) * k)} ${r1(y2 - (y2 - y1) * k)}"${color !== INK ? ` stroke="${color}"` : ''}${width ? ` stroke-width="${width}"` : ''}/>${head(x2, y2, deg, color)}`;
-};
-const dash = 'stroke-dasharray="5 4"';
-/** 正多角形の頂点（中心 cx, cy、半径 r、上の頂点から時計回り） */
-export const polygonPoints = (n, cx, cy, r) =>
-  Array.from({length: n}, (_, i) => {
-    const a = -Math.PI / 2 + (Math.PI * 2 * i) / n;
-    return [r1(cx + r * Math.cos(a)), r1(cy + r * Math.sin(a))];
-  });
-const poly = (pts) => pts.map(([x, y]) => `${x},${y}`).join(' ');
-const grid = (w, h, step, {from = 0, fromY = from, color = '#d5dae0', width = 1} = {}) => {
-  const d = [];
-  for (let v = from; v <= w; v += step) d.push(`M${v} 0V${h}`);
-  for (let v = fromY; v <= h; v += step) d.push(`M0 ${v}H${w}`);
-  return `<path d="${d.join('')}" stroke="${color}" stroke-width="${width}"/>`;
-};
-const axesPath = (w, h, ox, oy) => `${arrow(8, oy, w - 6, oy)}${arrow(ox, h - 8, ox, 6)}`;
+export {LABEL_SERIF, LABEL_GOTHIC, polygonPoints};
 // 表：ます 1 つは 56×28（viewBox）。縦・横のますの数は決め事で、伸ばすと増える（fit）
 const CELL_W = 56,
   CELL_H = 28;
@@ -59,63 +55,19 @@ const tableDef = {
     return `<rect x="2" y="2" width="${w}" height="${CELL_H}" fill="#eef1f5" stroke="none"/><rect x="2" y="2" width="${w}" height="${h}"/>${d.length ? `<path d="${d.join('')}"/>` : ''}`;
   }
 };
-/** 曲線の点の並びを path に（null の点で切る） */
-const pathOf = (pts) => {
-  let d = '',
-    pen = false;
-  for (const p of pts) {
-    if (!p) {
-      pen = false;
-      continue;
-    }
-    d += `${pen ? 'L' : 'M'}${r1(p[0])} ${r1(p[1])}`;
-    pen = true;
-  }
-  return d;
-};
-/** ばね（ジグザグ）：x1 から x2 まで、高さ y、山の数 n */
-const spring = (x1, x2, y, n = 10, amp = 9) => {
-  const pts = [[x1, y]];
-  const lead = 8;
-  const seg = (x2 - x1 - lead * 2) / n;
-  pts.push([x1 + lead, y]);
-  for (let i = 0; i < n; i++) pts.push([x1 + lead + seg * (i + 0.5), y + (i % 2 ? amp : -amp)]);
-  pts.push([x2 - lead, y], [x2, y]);
-  return `<path d="${pathOf(pts)}"/>`;
-};
-/** 天井・壁の斜線（x1〜x2 の横線の上に） */
-const ceiling = (x1, x2, y) => {
-  const d = [`M${x1} ${y}H${x2}`];
-  for (let x = x1 + 4; x <= x2; x += 8) d.push(`M${x} ${y}l-6 -7`);
-  return `<path d="${d.join('')}"/>`;
-};
-const wallLeft = (x, y1, y2) => {
-  const d = [`M${x} ${y1}V${y2}`];
-  for (let y = y1 + 4; y <= y2; y += 8) d.push(`M${x} ${y}l-7 -6`);
-  return `<path d="${d.join('')}"/>`;
-};
-const ground = (x1, x2, y) => {
-  const d = [`M${x1} ${y}H${x2}`];
-  for (let x = x1 + 6; x <= x2; x += 10) d.push(`M${x} ${y}l-6 7`);
-  return `<path d="${d.join('')}" stroke="${SOFT}"/><path d="M${x1} ${y}H${x2}"/>`;
-};
-const dot = (x, y, r = 2.5, fill = INK) =>
-  `<circle cx="${r1(x)}" cy="${r1(y)}" r="${r}" fill="${fill}" stroke="none"/>`;
-/** 引き出し線（部分の名前へ） */
-const lead = (x1, y1, x2, y2) =>
-  `<path d="M${r1(x1)} ${r1(y1)}L${r1(x2)} ${r1(y2)}" stroke="${SOFT}" stroke-width="1"/>`;
-
-// ---- 文字（既定）：[x, y, 文字, {m: 数学の文字（斜体の明朝）, s: 大きさ}]。x・y は viewBox の点（文字の真ん中） ----
-const M = (x, y, t, s) => [x, y, t, {m: true, s}];
-const J = (x, y, t, s = 11) => [x, y, t, {s}];
 
 // ---- グラフ（座標平面）：1 目盛り 10、原点は真ん中。x・y は −11〜11。目盛りの数は 5 ずつ（−10・−5・5・10） ----
 export const GRAPH_FNS = [
   ['none', '式なし'],
   ['linear', '一次関数'],
   ['quad', '二次関数'],
-  ['cubic', '三次関数']
+  ['cubic', '三次関数'],
+  ['sin', '三角関数（sin）'],
+  ['cos', '三角関数（cos）'],
+  ['exp', '指数関数'],
+  ['log', '対数関数']
 ];
+const WAVE_LAM = 120; // 波（横波）の 1 波長（viewBox）
 const GU = 10; // 1 目盛り（viewBox）
 const GR = 12; // はじめの範囲（原点から片側 12 目盛り。大きさ 240）
 // 座標平面の大きさ：x・y の範囲（原点から片側の目盛りの数）で決まる。伸ばすと目盛りが増える（原点は真ん中のまま）
@@ -205,13 +157,27 @@ function baseFormula(p) {
       [p.c, 'x'],
       [p.d, '']
     ])}`;
+  if (p.fn === 'sin' || p.fn === 'cos') {
+    if (!p.a) return `y = ${polyText([[p.d, '']])}`;
+    const lead = Math.abs(p.a) === 1 ? (p.a < 0 ? '−' : '') : `${p.a < 0 ? '−' : ''}${num(p.a)}`;
+    const arg = p.b === 1 ? 'x' : p.b === -1 ? '(−x)' : p.b < 0 ? `(−${num(p.b)}x)` : `${num(p.b)}x`;
+    return `y = ${lead}${/\d$/.test(lead) ? ' ' : ''}${p.fn} ${arg}${p.d ? ` ${p.d < 0 ? '−' : '+'} ${num(p.d)}` : ''}`;
+  }
+  if (p.fn === 'exp') return `y = ${num(p.base)}ˣ`;
+  if (p.fn === 'log') return `y = log${[...num(p.base)].map((c) => SUB[c] ?? c).join('')} x`;
   return '';
 }
+const SUB = {0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', '.': '.'};
 /** グラフの y（式なしは null） */
 export function graphY(p, x) {
   if (p.fn === 'linear') return p.a * x + p.b;
   if (p.fn === 'quad') return p.a * (x - p.p) ** 2 + p.q;
   if (p.fn === 'cubic') return p.a * x ** 3 + p.b * x ** 2 + p.c * x + p.d;
+  if (p.fn === 'sin') return p.a * Math.sin(p.b * x) + p.d;
+  if (p.fn === 'cos') return p.a * Math.cos(p.b * x) + p.d;
+  // 指数・対数の底は 0.1〜10（対数は底が 1 でなく x > 0 のときだけ。ほかは NaN で描かない）
+  if (p.fn === 'exp') return p.base ** x;
+  if (p.fn === 'log') return p.base !== 1 && x > 0 ? Math.log(x) / Math.log(p.base) : NaN;
   return null;
 }
 const coef = (key, label, def, when) => ({key, label, type: 'num', min: -99, max: 99, step: 0.1, def, when});
@@ -228,6 +194,10 @@ const GRAPH_PARAMS = [
   coef('b', 'x² の係数 b', 0, (p) => p.fn === 'cubic'),
   coef('c', 'x の係数 c', -3, (p) => p.fn === 'cubic'),
   coef('d', '定数 d', 0, (p) => p.fn === 'cubic'),
+  coef('a', '振幅 a', 3, (p) => p.fn === 'sin' || p.fn === 'cos'),
+  coef('b', 'x の係数 b（周期は 2π ÷ b）', 1, (p) => p.fn === 'sin' || p.fn === 'cos'),
+  coef('d', '上下の移動 d', 0, (p) => p.fn === 'sin' || p.fn === 'cos'),
+  {...coef('base', '底 a（0 より大きく 1 でない）', 2, (p) => p.fn === 'exp' || p.fn === 'log'), min: 0.1, max: 10},
   // 定義域・値域・領域（不等式）
   {
     key: 'dom',
@@ -330,8 +300,10 @@ const graphDraw = (p) => {
     if (p.region && p.region !== 'none') {
       const up = p.region === 'gt' || p.region === 'ge';
       const edge = Y(up ? LIM : -LIM);
-      const pts = xs.map((x) => [X(x), Y(Math.max(-LIM, Math.min(LIM, graphY(p, x))))]);
-      body += `<path d="M${r1(X(lo))} ${edge}${pts.map(([x, y]) => `L${r1(x)} ${r1(y)}`).join('')}L${r1(X(hi))} ${edge}Z" fill="#d6336c" fill-opacity="0.13" stroke="none"/>`;
+      const fx = xs.filter((x) => Number.isFinite(graphY(p, x))); // 対数の x ≦ 0 などは除く
+      const pts = fx.map((x) => [X(x), Y(Math.max(-LIM, Math.min(LIM, graphY(p, x))))]);
+      if (pts.length)
+        body += `<path d="M${r1(X(fx[0]))} ${edge}${pts.map(([x, y]) => `L${r1(x)} ${r1(y)}`).join('')}L${r1(X(fx.at(-1)))} ${edge}Z" fill="#d6336c" fill-opacity="0.13" stroke="none"/>`;
     }
     const pts = xs.map((x) => {
       const y = graphY(p, x);
@@ -412,6 +384,9 @@ const DEFS = [
   {key: 'linear', name: '一次関数のグラフ', subject: '数学', ...graph({fn: 'linear', a: 1, b: 1})},
   {key: 'parabola', name: '放物線（二次関数）', subject: '数学', ...graph({fn: 'quad', a: 0.5, p: 0, q: -5})},
   {key: 'cubic', name: '三次関数のグラフ', subject: '数学', ...graph({fn: 'cubic', a: 0.1, b: 0, c: -3, d: 0})},
+  {key: 'trig', name: '三角関数のグラフ', subject: '数学', ...graph({fn: 'sin', a: 3, b: 1, d: 0})},
+  {key: 'exp', name: '指数関数のグラフ', subject: '数学', ...graph({fn: 'exp', base: 2})},
+  {key: 'log', name: '対数関数のグラフ', subject: '数学', ...graph({fn: 'log', base: 2})},
   {
     key: 'numline',
     name: '数直線',
@@ -783,23 +758,33 @@ const DEFS = [
     key: 'wave',
     name: '波（横波）',
     subject: '物理',
+    // 1 波長は 120。横に伸ばすと波の数が、縦に伸ばすと振幅が増える
     w: 280,
     h: 140,
     params: [
-      {key: 'n', label: '波の数', type: 'num', min: 1, max: 5, step: 0.5, def: 2},
-      {key: 'amp', label: '振幅', type: 'range', min: 10, max: 50, step: 1, def: 36}
+      {key: 'n', label: '波の数', type: 'num', min: 1, max: 8, step: 0.5, def: 2},
+      {key: 'amp', label: '振幅', type: 'range', min: 10, max: 80, step: 1, def: 36}
     ],
+    size: (p) => ({w: 40 + p.n * WAVE_LAM, h: 2 * p.amp + 68}),
+    fit: (w, h) => ({n: Math.round(((w - 40) / WAVE_LAM) * 2) / 2, amp: Math.round((h - 68) / 2)}),
+    growLabel: (p) => `波 ${p.n} 個・振幅 ${p.amp}`,
     draw: (p) => {
+      const L = p.n * WAVE_LAM,
+        mid = p.amp + 34;
       const pts = [];
-      for (let x = 0; x <= 240; x += 2) pts.push([20 + x, 70 - p.amp * Math.sin((2 * Math.PI * p.n * x) / 240)]);
-      const lam = 240 / p.n;
-      const cx = 20 + lam / 4;
-      return `${arrow(14, 70, 274, 70)}<path d="${pathOf(pts)}" stroke="#1c7ed6" stroke-width="2.2"/><path d="M${r1(cx)} 70V${70 - p.amp}" ${dash} stroke="${SOFT}"/><path d="M${r1(cx)} ${126}H${r1(cx + lam)}" stroke="${SOFT}"/><path d="M${r1(cx)} 120V132M${r1(cx + lam)} 120V132" stroke="${SOFT}"/>`;
+      for (let x = 0; x <= L; x += 2) pts.push([20 + x, mid - p.amp * Math.sin((2 * Math.PI * x) / WAVE_LAM)]);
+      const cx = 20 + WAVE_LAM / 4,
+        ly = mid + p.amp + 20;
+      return `${arrow(14, mid, L + 34, mid)}<path d="${pathOf(pts)}" stroke="#1c7ed6" stroke-width="2.2"/><path d="M${r1(cx)} ${mid}V${mid - p.amp}" ${dash} stroke="${SOFT}"/><path d="M${r1(cx)} ${ly}H${r1(cx + WAVE_LAM)}" stroke="${SOFT}"/><path d="M${r1(cx)} ${ly - 6}V${ly + 6}M${r1(cx + WAVE_LAM)} ${ly - 6}V${ly + 6}" stroke="${SOFT}"/>`;
     },
     labels: (p) => {
-      const lam = 240 / p.n;
-      const cx = 20 + lam / 4;
-      return [M(cx - 10, 70 - p.amp / 2, 'A'), M(cx + lam / 2, 118, 'λ'), M(268, 82, 'x')];
+      const mid = p.amp + 34;
+      const cx = 20 + WAVE_LAM / 4;
+      return [
+        M(cx - 10, mid - p.amp / 2, 'A'),
+        M(cx + WAVE_LAM / 2, mid + p.amp + 12, 'λ'),
+        M(p.n * WAVE_LAM + 28, mid + 12, 'x')
+      ];
     }
   },
   {
@@ -903,11 +888,40 @@ const DEFS = [
     key: 'vt-graph',
     name: 'v-t グラフ',
     subject: '物理',
+    // 目盛りは 20 ごと。横に伸ばすと t の、縦に伸ばすと v の目盛りが増える（原点は左下）
     w: 220,
     h: 180,
-    draw: () =>
-      `${axesPath(220, 180, 30, 150)}<path d="M30 150L190 50V150Z" fill="#e7f5ff" stroke="none"/><path d="M30 150L190 50" stroke="#1c7ed6" stroke-width="2.2"/><path d="M190 50V150" ${dash} stroke="${SOFT}"/>`,
-    labels: () => [M(42, 12, 'v'), M(208, 162, 't'), M(22, 162, 'O'), J(140, 128, '移動距離', 10)]
+    params: [
+      {key: 'tn', label: 't の目盛りの数', type: 'num', min: 3, max: 30, step: 1, def: 8},
+      {key: 'vn', label: 'v の目盛りの数', type: 'num', min: 2, max: 20, step: 1, def: 5}
+    ],
+    size: (p) => ({w: 60 + p.tn * 20, h: 80 + p.vn * 20}),
+    fit: (w, h) => ({tn: Math.round((w - 60) / 20), vn: Math.round((h - 80) / 20)}),
+    growLabel: (p) => `t の目盛り ${p.tn} × v の目盛り ${p.vn}`,
+    draw: (p) => {
+      const w = 60 + p.tn * 20,
+        h = 80 + p.vn * 20;
+      const OY = h - 30,
+        X = 30 + p.tn * 20,
+        Y = OY - p.vn * 20;
+      const ticks = [
+        ...Array.from({length: p.tn}, (_, i) => `M${50 + i * 20} ${OY}V${OY + 4}`),
+        ...Array.from({length: p.vn}, (_, j) => `M30 ${OY - 20 - j * 20}H26`)
+      ].join('');
+      return `${axesPath(w, h, 30, OY)}<path d="M30 ${OY}L${X} ${Y}V${OY}Z" fill="#e7f5ff" stroke="none"/><path d="${ticks}" stroke-width="1.2"/><path d="M30 ${OY}L${X} ${Y}" stroke="#1c7ed6" stroke-width="2.2"/><path d="M${X} ${Y}V${OY}" ${dash} stroke="${SOFT}"/>`;
+    },
+    labels: (p) => {
+      const w = 60 + p.tn * 20,
+        h = 80 + p.vn * 20;
+      const OY = h - 30,
+        X = 30 + p.tn * 20;
+      return [
+        M(42, 12, 'v'),
+        M(w - 12, OY + 12, 't'),
+        M(22, OY + 12, 'O'),
+        J((30 + 2 * X) / 3 + 3, OY - (p.vn * 20) / 3 + 11, '移動距離', 10)
+      ];
+    }
   },
 
   // ======== 化学 ========
@@ -1547,11 +1561,11 @@ const DEFS = [
     ]
   },
 
-  // ======== 社会 ========
+  // ======== 地理・歴史・公民 ========
   {
     key: 'compass',
     name: '方位記号',
-    subject: '社会',
+    subject: '地理',
     w: 100,
     h: 150,
     draw: () => `<path d="M50 34L66 140L50 126Z"/><path d="M50 34L34 140L50 126Z" fill="${INK}"/>`,
@@ -1560,7 +1574,7 @@ const DEFS = [
   {
     key: 'timeline',
     name: '年表',
-    subject: '社会',
+    subject: '歴史',
     // 目盛りは 46 ごと。右へ伸ばすと目盛りが増える
     w: 280,
     h: 70,
@@ -1576,7 +1590,7 @@ const DEFS = [
   {
     key: 'supply-demand',
     name: '需要と供給',
-    subject: '社会',
+    subject: '公民',
     w: 220,
     h: 200,
     draw: () =>
@@ -1584,11 +1598,11 @@ const DEFS = [
     labels: () => [J(196, 192, '数量', 10), J(52, 10, '価格', 10), M(198, 156, 'D'), M(198, 30, 'S'), M(22, 192, 'O')]
   },
 
-  // ======== 国語・英語・音楽 ========
+  // ======== 国語・英語・芸術 ========
   {
     key: 'genko',
     name: '原稿用紙',
-    subject: '国語・英語・音楽',
+    subject: '国語',
     // ます 1 つは 20。縦・横に伸ばすとますが増える
     w: 200,
     h: 200,
@@ -1609,7 +1623,7 @@ const DEFS = [
   {
     key: 'four-lines',
     name: '英語の 4 線',
-    subject: '国語・英語・音楽',
+    subject: '英語',
     // 1 段は高さ 56。横に伸ばすと線が長く（40 ごと）、縦に伸ばすと段が増える
     w: 280,
     h: 56,
@@ -1630,7 +1644,7 @@ const DEFS = [
   {
     key: 'staff',
     name: '五線譜',
-    subject: '国語・英語・音楽',
+    subject: '芸術',
     // 1 段は高さ 60。横に伸ばすと線が長く（40 ごと）、縦に伸ばすと段が増える
     w: 280,
     h: 60,
@@ -1649,12 +1663,12 @@ const DEFS = [
     }
   },
 
-  // ======== 表・方眼 ========
-  {key: 'table', name: '表', subject: '表・方眼', ...tableDef},
+  // ======== 表・グラフ ========
+  {key: 'table', name: '表', subject: '表・グラフ', ...tableDef},
   {
     key: 'graph-paper',
     name: '方眼',
-    subject: '表・方眼',
+    subject: '表・グラフ',
     // ます 1 つは 10（5 ますごとに濃い線）。縦・横に伸ばすとますが増える
     w: 200,
     h: 200,
@@ -1684,8 +1698,27 @@ const OLD = {
   'fig-table-4x5': ['fig-table', {cols: 4, rows: 5}]
 };
 
-export const FIGURE_SUBJECTS = [...new Set(DEFS.map((d) => d.subject))];
-export const FIGURES = DEFS.map((d) => ({...d, id: `fig-${d.key}`, params: d.params ?? []}));
+// 素材の教科（タブの並び）。高校の教科・科目にそろえる
+export const FIGURE_SUBJECTS = [
+  '数学',
+  '物理',
+  '化学',
+  '生物',
+  '地学',
+  '国語',
+  '英語',
+  '地理',
+  '歴史',
+  '公民',
+  '情報',
+  '保健体育',
+  '家庭',
+  '芸術',
+  '表・グラフ'
+];
+export const FIGURES = [...DEFS, ...HS_DEFS]
+  .map((d) => ({...d, id: `fig-${d.key}`, params: d.params ?? []}))
+  .sort((a, b) => FIGURE_SUBJECTS.indexOf(a.subject) - FIGURE_SUBJECTS.indexOf(b.subject));
 const BY_ID = new Map(FIGURES.map((f) => [f.id, f]));
 /** 図の定義（前の版の id も今の図に読み替える）。なければ null */
 export const figureOf = (id) => BY_ID.get(OLD[id]?.[0] ?? id) ?? null;
