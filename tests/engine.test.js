@@ -522,3 +522,39 @@ test('失敗の分類と並行実行', async () => {
   });
   assert.deepEqual([...order].sort(), [1, 2, 3, 4, 5]);
 });
+
+test('同期の途中でログインの画面に戻されたら、1 回だけログインし直してその授業を読み直す', async (t) => {
+  const {connection, engine, term} = await setup(t);
+  const base = fakeConnector(data());
+  let expired = false;
+  let logins = 0;
+  let first = true;
+  const connector = {
+    ...base,
+    async ensureSession() {
+      return expired ? 'login-required' : 'ok';
+    },
+    async login() {
+      logins++;
+      expired = false;
+    },
+    async listRounds(ctx, course) {
+      // 最初に読んだ授業で、セッションが切れて manabo 自身のログイン画面に戻された
+      if (first) {
+        first = false;
+        expired = true;
+      }
+      if (expired) throw Object.assign(new Error('ログインページに戻されました'), {code: 'login-required'});
+      return base.listRounds(ctx, course);
+    }
+  };
+  const r = await engine.run({connection, connector, term});
+  assert.equal(r.status, 'ok');
+  assert.equal(logins, 1, 'ログインし直すのは 1 回だけ');
+  assert.deepEqual(
+    r.events.filter((e) => e.level === 'error'),
+    [],
+    '読み直した授業は失敗にしない'
+  );
+  assert.ok(r.materials > 0);
+});

@@ -137,16 +137,33 @@ export class SyncEngine {
       const fullCrawl = full || !connection.last_sync_at;
 
       let done = 0;
+      // 途中でログインの画面に戻されたら（manabo の自身のログイン画面など）、1 回だけログインし直して、その授業を読み直す
+      let relogin = null;
+      const readCourse = (course) =>
+        withIdleTimeout(
+          (touch) => this.syncCourse({ctx, connector, connection, term, course, fullCrawl, event, touch}),
+          this.courseTimeoutMs,
+          `${course.name} の読み取りが時間切れになりました`
+        );
       await parallel(targets, connector.parallelism ?? 3, async (course) => {
         this.onProgress({phase: 'course', current: ++done, total: targets.length, courseName: course.name});
         try {
-          const saved = await withIdleTimeout(
-            (touch) => this.syncCourse({ctx, connector, connection, term, course, fullCrawl, event, touch}),
-            this.courseTimeoutMs,
-            `${course.name} の読み取りが時間切れになりました`
-          );
+          const saved = await readCourse(course); // += の左を await の前に読むと、並行で数がずれるので分ける
           summary.materials += saved;
         } catch (e) {
+          if (classify(e) === 'login-required') {
+            relogin ??= this.loginIfNeeded({connection, connector, ctx});
+            const {error} = await relogin;
+            if (!error)
+              try {
+                const saved = await readCourse(course);
+                summary.materials += saved;
+                return;
+              } catch (e2) {
+                event('error', course, classify(e2), e2.message);
+                return;
+              }
+          }
           event('error', course, classify(e), e.message);
         }
       });
