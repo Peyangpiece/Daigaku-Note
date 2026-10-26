@@ -1,5 +1,7 @@
 // PDF の編集画面：ポインタの振り分け（押す・動かす・離す）。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 import {DRAW_TOOLS} from './shared.js';
+import {figureSize, growsWithSize} from '../../../shared/figures.js';
+import {growFigure, renderFigure} from '../../figure-view.js';
 
 export const methods = {
   onPointerDown(e) {
@@ -44,6 +46,7 @@ export const methods = {
         resize: a.kind === 'stamp' && !!e.target.closest('.anno-stamp__grip'),
         width: a.el.offsetWidth,
         height: a.el.offsetHeight,
+        style: a.style, // 伸びる図（表・数直線・座標平面）は、伸ばしたらます・目盛りを増やす
         moved: false,
         pointer: e.pointerId
       };
@@ -97,6 +100,17 @@ export const methods = {
     if (!d.moved && Math.hypot(dx, dy) < 3) return;
     d.moved = true;
     d.a.el.classList.add('is-dragging');
+    if (d.resize && d.a.style.type === 'figure' && growsWithSize(d.a.style.ref)) {
+      // 表・数直線・座標平面：縦に伸ばすと縦の、横に伸ばすと横のます・目盛りが増える（1 ますの大きさは変えない）
+      const unit = d.width / figureSize(d.style.ref, d.style.params).w;
+      const g = growFigure(d.style, unit, Math.max(16, d.width + dx), Math.max(16, d.height + dy));
+      d.a.style = g.style;
+      d.a.el.style.width = `${g.w}px`;
+      d.a.el.style.height = `${g.h}px`;
+      renderFigure(d.a.el.querySelector('.anno-stamp__fig'), g.style);
+      this.showGrowTip(d.a.el, g.style);
+      return;
+    }
     if (d.resize) {
       // シール・図は縦横の比を保つ。紙は自由に（文字は折り返し直す）
       const w = Math.max(16, d.width + dx);
@@ -135,6 +149,7 @@ export const methods = {
     this.drag = null;
     const a = d.a;
     a.el.classList.remove('is-dragging');
+    this.showGrowTip(null);
     if (d.moved) {
       const p = this.pages[a.page - 1];
       // ページの外へは出さない

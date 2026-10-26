@@ -11,7 +11,8 @@ import {state} from './store.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, tearClip} from './desk-tools.js';
 import {TYPE_LABEL, heldPen, itemOf, stationeryState, toolArt} from '../shared/stationery.js';
 import {createCapture, strokePath, touchesStroke} from '../shared/ink.js';
-import {openFigureEditor, renderFigure} from './figure-view.js';
+import {growFigure, openFigureEditor, renderFigure} from './figure-view.js';
+import {figureSize, growsWithSize} from '../shared/figures.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ERASER_PX = 12;
@@ -256,7 +257,7 @@ class Desk extends DeskTools {
       // 図：押すと書き換え（決め事・文字）。右クリックでも（座標平面は描く式を選ぶ）
       const fig = document.createElement('div');
       el.append(fig);
-      el.figStyle = {type: 'figure', ref: spec.ref};
+      el.figStyle = {type: 'figure', ref: spec.ref, ...(spec.params ? {params: spec.params} : {})};
       renderFigure(fig, el.figStyle);
       el.addEventListener('contextmenu', (e) => {
         e.preventDefault();
@@ -289,13 +290,23 @@ class Desk extends DeskTools {
         t0 = parseFloat(el.style.top),
         w0 = el.offsetWidth,
         h0 = el.offsetHeight;
+      const style0 = el.figStyle;
       let moved = false;
       const move = (ev) => {
         const dx = ev.clientX - x0,
           dy = ev.clientY - y0;
         if (!moved && Math.hypot(dx, dy) < 4) return;
         moved = true;
-        if (resize) {
+        if (resize && el.figStyle && growsWithSize(el.figStyle.ref)) {
+          // 表・数直線・座標平面：伸ばした向きのます・目盛りが増える（1 ますの大きさは変えない）
+          const unit = w0 / figureSize(style0.ref, style0.params).w;
+          const g = growFigure(style0, unit, Math.max(24, w0 + dx), Math.max(24, h0 + dy));
+          el.figStyle = g.style;
+          el.style.width = `${g.w}px`;
+          el.style.height = `${g.h}px`;
+          renderFigure(el.querySelector('.fig'), g.style);
+          this.showGrowTip(el, g.style);
+        } else if (resize) {
           const w = Math.max(24, w0 + dx);
           el.style.width = `${w}px`;
           el.style.height = `${spec.type === 'memo' ? Math.max(24, h0 + dy) : (w * h0) / w0}px`;
@@ -307,6 +318,7 @@ class Desk extends DeskTools {
       const up = () => {
         el.removeEventListener('pointermove', move);
         el.removeEventListener('pointerup', up);
+        this.showGrowTip(null);
         if (!moved && !resize && el.figStyle) this.editFigure(el, e.target.closest('[data-curve]') ? 'formula' : null);
       };
       el.addEventListener('pointermove', move);
@@ -325,6 +337,11 @@ class Desk extends DeskTools {
       style: el.figStyle,
       focus,
       onChange: (st) => (el.figStyle = st),
+      // ます・目盛りの数を変えたら、貼った大きさも同じ割合で
+      onResize: (kx, ky) => {
+        el.style.width = `${el.offsetWidth * kx}px`;
+        el.style.height = `${el.offsetHeight * ky}px`;
+      },
       onClose: (st) => {
         el.figStyle = st;
         this.figEditor = null;

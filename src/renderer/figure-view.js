@@ -8,9 +8,12 @@ import {
   cleanParams,
   defaultLabels,
   figureOf,
+  figureSize,
   figureSvg,
+  fitFigure,
   formulaOf,
-  labelSize
+  labelSize,
+  moveLabels
 } from '../shared/figures.js';
 
 import {esc} from '../shared/html.js';
@@ -23,7 +26,7 @@ export function renderFigure(el, style) {
   const f = figureOf(style.ref);
   if (!f) return;
   el.classList.add('fig');
-  el.style.setProperty('--fig-w', String(f.w));
+  el.style.setProperty('--fig-w', String(figureSize(style.ref, style.params).w));
   el.innerHTML = `${figureSvg(style.ref, style.params, false).replace('<svg ', '<svg class="fig__svg" preserveAspectRatio="none" ')}<div class="fig__labels"></div>`;
   renderLabels(el, figureLabels(style));
 }
@@ -34,6 +37,20 @@ function renderLabels(el, labels) {
         `<span class="fig__label${l.m ? ' is-math' : ''}" data-i="${i}" style="left: ${(l.x * 100).toFixed(2)}%; top: ${(l.y * 100).toFixed(2)}%; --s: ${labelSize(l)}">${esc(l.t)}</span>`
     )
     .join('');
+}
+
+/**
+ * 伸びる図（表・数直線・座標平面）の大きさを変える：画面の幅・高さ（px）と、viewBox の 1 単位の px（unit）から、
+ * ます・目盛りの数を決め、ちょうどの大きさ（px）にそろえる。書き換えた文字は図の中の同じ所に残す。
+ * 戻りは {style, w, h}（style は新しい図の中身）
+ */
+export function growFigure(style, unit, wPx, hPx) {
+  const from = figureSize(style.ref, style.params);
+  const params = fitFigure(style.ref, style.params, wPx / unit, hPx / unit);
+  const to = figureSize(style.ref, params);
+  const next = {...style, params};
+  if (style.labels) next.labels = moveLabels(style.ref, style.labels, from, to);
+  return {style: next, w: to.w * unit, h: to.h * unit};
 }
 
 const fieldHtml = (s, v) => {
@@ -49,9 +66,10 @@ const fieldHtml = (s, v) => {
 /**
  * 図を書き換える。host：窓を入れる要素。el：図の要素（renderFigure したもの）。style：今の図の中身。
  * onChange(style)：書き換えるたびに呼ぶ（使う側が保存する）。onClose(style)：閉じたとき（取り消しの 1 手にまとめる）。
- * focus：'formula' なら式の入力から始める（放物線を押したとき・右クリック）。戻りは {close}
+ * focus：'formula' なら式の入力から始める（放物線を押したとき・右クリック）。
+ * onResize(kx, ky)：ます・目盛りの数を変えて図の大きさが変わったとき、貼った大きさを何倍にするか（使う側が直す）。戻りは {close}
  */
-export function openFigureEditor({host, el, style, onChange, onClose, focus = null}) {
+export function openFigureEditor({host, el, style, onChange, onClose, onResize = null, focus = null}) {
   const f = figureOf(style.ref);
   if (!f) return null;
   let cur = {...style, params: cleanParams(style.ref, style.params)};
@@ -99,7 +117,14 @@ export function openFigureEditor({host, el, style, onChange, onClose, focus = nu
     const before = activeParams(f, cur.params)
       .map((x) => x.key)
       .join();
+    const from = figureSize(cur.ref, cur.params);
     cur = {...cur, params: cleanParams(cur.ref, {...cur.params, [key]: v})};
+    const to = figureSize(cur.ref, cur.params);
+    if (to.w !== from.w || to.h !== from.h) {
+      // ます・目盛りの数を変えた：書き換えた文字を同じ所に残し、貼った大きさも同じ割合で変える
+      if (cur.labels) cur = {...cur, labels: moveLabels(cur.ref, cur.labels, from, to)};
+      onResize?.(to.w / from.w, to.h / from.h);
+    }
     renderFigure(el, cur); // 書き換えた文字はそのまま、既定の文字は決め事に合わせて出し直す
     markEditing();
     emit();

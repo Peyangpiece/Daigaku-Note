@@ -29,25 +29,35 @@ export const polygonPoints = (n, cx, cy, r) =>
     return [r1(cx + r * Math.cos(a)), r1(cy + r * Math.sin(a))];
   });
 const poly = (pts) => pts.map(([x, y]) => `${x},${y}`).join(' ');
-const grid = (w, h, step, {from = 0, color = '#d5dae0', width = 1} = {}) => {
+const grid = (w, h, step, {from = 0, fromY = from, color = '#d5dae0', width = 1} = {}) => {
   const d = [];
   for (let v = from; v <= w; v += step) d.push(`M${v} 0V${h}`);
-  for (let v = from; v <= h; v += step) d.push(`M0 ${v}H${w}`);
+  for (let v = fromY; v <= h; v += step) d.push(`M0 ${v}H${w}`);
   return `<path d="${d.join('')}" stroke="${color}" stroke-width="${width}"/>`;
 };
 const axesPath = (w, h, ox, oy) => `${arrow(8, oy, w - 6, oy)}${arrow(ox, h - 8, ox, 6)}`;
-const table = (cols, rows, cw = 56, ch = 28) => {
-  const w = cols * cw,
-    h = rows * ch;
-  const d = [];
-  for (let i = 1; i < cols; i++) d.push(`M${i * cw + 2} 2V${h + 2}`);
-  for (let j = 1; j < rows; j++) d.push(`M2 ${j * ch + 2}H${w + 2}`);
-  return {
-    w: w + 4,
-    h: h + 4,
-    draw: () =>
-      `<rect x="2" y="2" width="${w}" height="${ch}" fill="#eef1f5" stroke="none"/><rect x="2" y="2" width="${w}" height="${h}"/><path d="${d.join('')}"/>`
-  };
+// 表：ます 1 つは 56×28（viewBox）。縦・横のますの数は決め事で、伸ばすと増える（fit）
+const CELL_W = 56,
+  CELL_H = 28;
+const tableDef = {
+  w: 3 * CELL_W + 4,
+  h: 3 * CELL_H + 4,
+  params: [
+    {key: 'cols', label: '横のますの数', type: 'num', min: 1, max: 12, step: 1, def: 3},
+    {key: 'rows', label: '縦のますの数', type: 'num', min: 1, max: 30, step: 1, def: 3}
+  ],
+  size: (p) => ({w: p.cols * CELL_W + 4, h: p.rows * CELL_H + 4}),
+  fit: (w, h) => ({cols: Math.round((w - 4) / CELL_W), rows: Math.round((h - 4) / CELL_H)}),
+  growLabel: (p) => `横 ${p.cols} × 縦 ${p.rows}`,
+  drawToPlace: '縦・横のますの数',
+  draw: (p) => {
+    const w = p.cols * CELL_W,
+      h = p.rows * CELL_H;
+    const d = [];
+    for (let i = 1; i < p.cols; i++) d.push(`M${i * CELL_W + 2} 2V${h + 2}`);
+    for (let j = 1; j < p.rows; j++) d.push(`M2 ${j * CELL_H + 2}H${w + 2}`);
+    return `<rect x="2" y="2" width="${w}" height="${CELL_H}" fill="#eef1f5" stroke="none"/><rect x="2" y="2" width="${w}" height="${h}"/>${d.length ? `<path d="${d.join('')}"/>` : ''}`;
+  }
 };
 /** 曲線の点の並びを path に（null の点で切る） */
 const pathOf = (pts) => {
@@ -107,8 +117,9 @@ export const GRAPH_FNS = [
   ['cubic', '三次関数']
 ];
 const GU = 10; // 1 目盛り（viewBox）
-const GS = 240; // グラフの大きさ（viewBox）
-const GO = GS / 2; // 原点
+const GR = 12; // はじめの範囲（原点から片側 12 目盛り。大きさ 240）
+// 座標平面の大きさ：x・y の範囲（原点から片側の目盛りの数）で決まる。伸ばすと目盛りが増える（原点は真ん中のまま）
+const graphSize = (p) => ({w: 2 * (p.xr ?? GR) * GU, h: 2 * (p.yr ?? GR) * GU});
 const num = (v) => {
   const n = Number(Number(v).toFixed(3));
   return Object.is(n, -0) ? '0' : String(Math.abs(n));
@@ -206,6 +217,8 @@ export function graphY(p, x) {
 const coef = (key, label, def, when) => ({key, label, type: 'num', min: -99, max: 99, step: 0.1, def, when});
 const GRAPH_PARAMS = [
   {key: 'fn', label: '描く式', type: 'select', options: GRAPH_FNS, def: 'none'},
+  {key: 'xr', label: 'x の目盛り（原点から片側）', type: 'num', min: 4, max: 30, step: 1, def: GR},
+  {key: 'yr', label: 'y の目盛り（原点から片側）', type: 'num', min: 4, max: 30, step: 1, def: GR},
   coef('a', '傾き a', 1, (p) => p.fn === 'linear'),
   coef('b', '切片 b', 0, (p) => p.fn === 'linear'),
   coef('a', 'a（開き方。負なら下に開く）', 1, (p) => p.fn === 'quad'),
@@ -278,26 +291,41 @@ const GRAPH_PARAMS = [
   }
 ];
 const graphDraw = (p) => {
-  const X = (x) => GO + x * GU,
-    Y = (y) => GO - y * GU;
-  // 方眼は 1 ずつ（薄く）と 5 ずつ（少し濃く）。数は 5 ずつ
-  const ticks = [-10, -5, 5, 10];
-  const nums = ticks
-    .map(
-      (v) =>
-        `<text x="${X(v)}" y="${GO + 14}" text-anchor="middle">${v < 0 ? `−${-v}` : v}</text><text x="${GO - 5}" y="${Y(v) + 3.5}" text-anchor="end">${v < 0 ? `−${-v}` : v}</text>`
-    )
-    .join('');
-  const marks = ticks.map((v) => `M${X(v)} ${GO - 3}V${GO + 3}M${GO - 3} ${Y(v)}H${GO + 3}`).join('');
-  let body = `<rect width="${GS}" height="${GS}" fill="#fff" stroke="none"/>${grid(GS, GS, GU, {color: '#e9ecef'})}${grid(GS, GS, GU * 5, {from: GO % (GU * 5), color: '#ced4da'})}${axesPath(GS, GS, GO, GO)}<path d="${marks}"/><g font-family="${LABEL_GOTHIC}" font-size="9" fill="#495057" stroke="none">${nums}</g>`;
+  const {w: GW, h: GH} = graphSize(p);
+  const OX = GW / 2,
+    OY = GH / 2;
+  const X = (x) => OX + x * GU,
+    Y = (y) => OY - y * GU;
+  // 方眼は 1 ずつ（薄く）と 5 ずつ（少し濃く）。数は 5 ずつ（端の目盛りの手前まで）
+  const fives = (r) => {
+    const out = [];
+    for (let v = 5; v < r - 0.5; v += 5) out.push(-v, v);
+    return out;
+  };
+  const sign = (v) => (v < 0 ? `−${-v}` : v);
+  const nums =
+    fives(p.xr)
+      .map((v) => `<text x="${X(v)}" y="${OY + 14}" text-anchor="middle">${sign(v)}</text>`)
+      .join('') +
+    fives(p.yr)
+      .map((v) => `<text x="${OX - 5}" y="${Y(v) + 3.5}" text-anchor="end">${sign(v)}</text>`)
+      .join('');
+  const marks =
+    fives(p.xr)
+      .map((v) => `M${X(v)} ${OY - 3}V${OY + 3}`)
+      .join('') +
+    fives(p.yr)
+      .map((v) => `M${OX - 3} ${Y(v)}H${OX + 3}`)
+      .join('');
+  let body = `<rect width="${GW}" height="${GH}" fill="#fff" stroke="none"/>${grid(GW, GH, GU, {color: '#e9ecef'})}${grid(GW, GH, GU * 5, {from: OX % (GU * 5), fromY: OY % (GU * 5), color: '#ced4da'})}${axesPath(GW, GH, OX, OY)}<path d="${marks}"/><g font-family="${LABEL_GOTHIC}" font-size="9" fill="#495057" stroke="none">${nums}</g>`;
   if (p.fn !== 'none') {
     const dom = p.dom === 'on';
-    const lo = dom ? Math.min(p.x1, p.x2) : -12.2,
-      hi = dom ? Math.max(p.x1, p.x2) : 12.2;
+    const lo = dom ? Math.min(p.x1, p.x2) : -(p.xr + 0.2),
+      hi = dom ? Math.max(p.x1, p.x2) : p.xr + 0.2;
     const xs = [];
     for (let x = lo; x < hi; x += 0.04) xs.push(x);
     xs.push(hi);
-    const LIM = 13;
+    const LIM = p.yr + 1;
     // 領域：曲線と、上（y > ・≧）か下（y < ・≦）の端で囲んだ所を塗る（定義域があればその幅だけ）
     if (p.region && p.region !== 'none') {
       const up = p.region === 'gt' || p.region === 'ge';
@@ -328,7 +356,7 @@ const graphDraw = (p) => {
     if (v)
       body += `<path d="${[v.min, v.max]
         .filter((y) => Math.abs(y) <= LIM)
-        .map((y) => `M${GO} ${r1(Y(y))}H${GS}`)
+        .map((y) => `M${OX} ${r1(Y(y))}H${GW}`)
         .join('')}" stroke="#1c7ed6" stroke-width="1.2" stroke-dasharray="4 3"/>`;
     const lines = [formulaOf(p), v ? `値域：${rangeText(p)}` : ''].filter(Boolean);
     lines.forEach((f, i) => {
@@ -340,12 +368,20 @@ const graphDraw = (p) => {
   return body;
 };
 const graph = (def) => ({
-  w: GS,
-  h: GS,
+  w: 2 * GR * GU,
+  h: 2 * GR * GU,
   params: GRAPH_PARAMS,
   defaults: def,
   draw: graphDraw,
-  labels: () => [M(GS - 12, GO - 10, 'x'), M(GO + 12, 10, 'y'), M(GO - 9, GO + 13, 'O')]
+  size: graphSize,
+  // 伸ばした幅・高さから、x・y の範囲（片側の目盛りの数）を決める
+  fit: (w, h) => ({xr: Math.round(w / 2 / GU), yr: Math.round(h / 2 / GU)}),
+  growAnchor: 'center',
+  growLabel: (p) => `x：−${p.xr}〜${p.xr}　y：−${p.yr}〜${p.yr}`,
+  labels: (p) => {
+    const {w, h} = graphSize(p);
+    return [M(w - 12, h / 2 - 10, 'x'), M(w / 2 + 12, 10, 'y'), M(w / 2 - 9, h / 2 + 13, 'O')];
+  }
 });
 
 // ---- 目盛りの数字（ビーカー・メスシリンダー・ビュレット・温度計）----
@@ -380,11 +416,26 @@ const DEFS = [
     key: 'numline',
     name: '数直線',
     subject: '数学',
+    // 目盛りは 40 ごと。左の端の数（lo）と目盛りの数（n）で決まる。右へ伸ばすと目盛りが増える
     w: 260,
     h: 64,
-    draw: () =>
-      `${arrow(8, 28, 254, 28)}<path d="${[0, 1, 2, 3, 4, 5].map((i) => `M${30 + i * 40} 22V34`).join('')}"/>`,
-    labels: () => [-2, -1, 0, 1, 2, 3].map((v, i) => J(30 + i * 40, 48, v < 0 ? `−${-v}` : String(v), 13))
+    params: [
+      {key: 'lo', label: '左の端の数', type: 'num', min: -50, max: 50, step: 1, def: -2},
+      {key: 'n', label: '目盛りの数', type: 'num', min: 2, max: 31, step: 1, def: 6}
+    ],
+    size: (p) => ({w: 60 + (p.n - 1) * 40, h: 64}),
+    fit: (w) => ({n: Math.round((w - 60) / 40) + 1}),
+    growLabel: (p) =>
+      `${p.lo < 0 ? `−${-p.lo}` : p.lo} 〜 ${p.lo + p.n - 1 < 0 ? `−${-(p.lo + p.n - 1)}` : p.lo + p.n - 1}（目盛り ${p.n}）`,
+    draw: (p) => {
+      const w = 60 + (p.n - 1) * 40;
+      return `${arrow(8, 28, w - 6, 28)}<path d="${Array.from({length: p.n}, (_, i) => `M${30 + i * 40} 22V34`).join('')}"/>`;
+    },
+    labels: (p) =>
+      Array.from({length: p.n}, (_, i) => {
+        const v = p.lo + i;
+        return J(30 + i * 40, 48, v < 0 ? `−${-v}` : String(v), 13);
+      })
   },
   {
     key: 'circle',
@@ -1510,10 +1561,17 @@ const DEFS = [
     key: 'timeline',
     name: '年表',
     subject: '社会',
+    // 目盛りは 46 ごと。右へ伸ばすと目盛りが増える
     w: 280,
     h: 70,
-    draw: () =>
-      `${arrow(8, 34, 274, 34)}<path d="${[0, 1, 2, 3, 4, 5].map((i) => `M${28 + i * 46} 26V42`).join('')}"/>${[0, 1, 2, 3, 4, 5].map((i) => dot(28 + i * 46, 34, 3)).join('')}`
+    params: [{key: 'n', label: '目盛りの数', type: 'num', min: 2, max: 30, step: 1, def: 6}],
+    size: (p) => ({w: 50 + (p.n - 1) * 46, h: 70}),
+    fit: (w) => ({n: Math.round((w - 50) / 46) + 1}),
+    growLabel: (p) => `目盛り ${p.n}`,
+    draw: (p) => {
+      const xs = Array.from({length: p.n}, (_, i) => 28 + i * 46);
+      return `${arrow(8, 34, 50 + (p.n - 1) * 46 - 6, 34)}<path d="${xs.map((x) => `M${x} 26V42`).join('')}"/>${xs.map((x) => dot(x, 34, 3)).join('')}`;
+    }
   },
   {
     key: 'supply-demand',
@@ -1531,39 +1589,88 @@ const DEFS = [
     key: 'genko',
     name: '原稿用紙',
     subject: '国語・英語・音楽',
+    // ます 1 つは 20。縦・横に伸ばすとますが増える
     w: 200,
     h: 200,
-    draw: () =>
-      `${grid(200, 200, 20, {color: '#e07a6f'})}<rect x="0.5" y="0.5" width="199" height="199" stroke="#e07a6f" stroke-width="2"/>`
+    params: [
+      {key: 'cols', label: '横のますの数', type: 'num', min: 1, max: 40, step: 1, def: 10},
+      {key: 'rows', label: '縦のますの数', type: 'num', min: 1, max: 40, step: 1, def: 10}
+    ],
+    size: (p) => ({w: p.cols * 20, h: p.rows * 20}),
+    fit: (w, h) => ({cols: Math.round(w / 20), rows: Math.round(h / 20)}),
+    growLabel: (p) => `横 ${p.cols} × 縦 ${p.rows}`,
+    drawToPlace: '縦・横のますの数',
+    draw: (p) => {
+      const w = p.cols * 20,
+        h = p.rows * 20;
+      return `${grid(w, h, 20, {color: '#e07a6f'})}<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" stroke="#e07a6f" stroke-width="2"/>`;
+    }
   },
   {
     key: 'four-lines',
     name: '英語の 4 線',
     subject: '国語・英語・音楽',
+    // 1 段は高さ 56。横に伸ばすと線が長く（40 ごと）、縦に伸ばすと段が増える
     w: 280,
     h: 56,
-    draw: () => `<path d="M4 10H276M4 22H276M4 46H276" stroke="${SOFT}"/><path d="M4 34H276" stroke="#e5484d"/>`
+    params: [
+      {key: 'len', label: '線の長さ', type: 'num', min: 2, max: 20, step: 1, def: 7},
+      {key: 'rows', label: '段の数', type: 'num', min: 1, max: 20, step: 1, def: 1}
+    ],
+    size: (p) => ({w: p.len * 40, h: p.rows * 56}),
+    fit: (w, h) => ({len: Math.round(w / 40), rows: Math.round(h / 56)}),
+    growLabel: (p) => `${p.rows} 段`,
+    drawToPlace: '線の長さと段の数',
+    draw: (p) => {
+      const x2 = p.len * 40 - 4;
+      const ys = Array.from({length: p.rows}, (_, j) => j * 56);
+      return `<path d="${ys.map((y) => `M4 ${y + 10}H${x2}M4 ${y + 22}H${x2}M4 ${y + 46}H${x2}`).join('')}" stroke="${SOFT}"/><path d="${ys.map((y) => `M4 ${y + 34}H${x2}`).join('')}" stroke="#e5484d"/>`;
+    }
   },
   {
     key: 'staff',
     name: '五線譜',
     subject: '国語・英語・音楽',
+    // 1 段は高さ 60。横に伸ばすと線が長く（40 ごと）、縦に伸ばすと段が増える
     w: 280,
     h: 60,
-    draw: () =>
-      `<path d="${[0, 1, 2, 3, 4].map((i) => `M4 ${10 + i * 10}H276`).join('')}"/><path d="M4 10V50M276 10V50"/>`
+    params: [
+      {key: 'len', label: '線の長さ', type: 'num', min: 2, max: 20, step: 1, def: 7},
+      {key: 'rows', label: '段の数', type: 'num', min: 1, max: 20, step: 1, def: 1}
+    ],
+    size: (p) => ({w: p.len * 40, h: p.rows * 60}),
+    fit: (w, h) => ({len: Math.round(w / 40), rows: Math.round(h / 60)}),
+    growLabel: (p) => `${p.rows} 段`,
+    drawToPlace: '線の長さと段の数',
+    draw: (p) => {
+      const x2 = p.len * 40 - 4;
+      const ys = Array.from({length: p.rows}, (_, j) => j * 60);
+      return `<path d="${ys.map((y) => [0, 1, 2, 3, 4].map((i) => `M4 ${y + 10 + i * 10}H${x2}`).join('')).join('')}"/><path d="${ys.map((y) => `M4 ${y + 10}V${y + 50}M${x2} ${y + 10}V${y + 50}`).join('')}"/>`;
+    }
   },
 
   // ======== 表・方眼 ========
-  {key: 'table-3x3', name: '表（3×3）', subject: '表・方眼', ...table(3, 3)},
-  {key: 'table-4x5', name: '表（4×5）', subject: '表・方眼', ...table(4, 5)},
+  {key: 'table', name: '表', subject: '表・方眼', ...tableDef},
   {
     key: 'graph-paper',
     name: '方眼',
     subject: '表・方眼',
+    // ます 1 つは 10（5 ますごとに濃い線）。縦・横に伸ばすとますが増える
     w: 200,
     h: 200,
-    draw: () => `${grid(200, 200, 10, {color: '#e1e6ea'})}${grid(200, 200, 50, {color: '#aab6c2'})}`
+    params: [
+      {key: 'cols', label: '横のますの数', type: 'num', min: 2, max: 80, step: 1, def: 20},
+      {key: 'rows', label: '縦のますの数', type: 'num', min: 2, max: 80, step: 1, def: 20}
+    ],
+    size: (p) => ({w: p.cols * 10, h: p.rows * 10}),
+    fit: (w, h) => ({cols: Math.round(w / 10), rows: Math.round(h / 10)}),
+    growLabel: (p) => `横 ${p.cols} × 縦 ${p.rows}`,
+    drawToPlace: '縦・横のますの数',
+    draw: (p) => {
+      const w = p.cols * 10,
+        h = p.rows * 10;
+      return `${grid(w, h, 10, {color: '#e1e6ea'})}${grid(w, h, 50, {color: '#aab6c2'})}`;
+    }
   }
 ];
 
@@ -1572,7 +1679,9 @@ const OLD = {
   'fig-triangle': ['fig-polygon', {n: 3}],
   'fig-pentagon': ['fig-polygon', {n: 5}],
   'fig-hexagon': ['fig-polygon', {n: 6}],
-  'fig-octagon': ['fig-polygon', {n: 8}]
+  'fig-octagon': ['fig-polygon', {n: 8}],
+  'fig-table-3x3': ['fig-table', {cols: 3, rows: 3}],
+  'fig-table-4x5': ['fig-table', {cols: 4, rows: 5}]
 };
 
 export const FIGURE_SUBJECTS = [...new Set(DEFS.map((d) => d.subject))];
@@ -1610,13 +1719,48 @@ export function cleanParams(id, raw) {
   return out;
 }
 
+/** 図の大きさ（viewBox）。表・数直線・座標平面は決め事（ますや目盛りの数）で変わる */
+export function figureSize(id, params) {
+  const f = figureOf(id);
+  if (!f) return {w: 0, h: 0};
+  return f.size ? f.size(cleanParams(id, params)) : {w: f.w, h: f.h};
+}
+/** 伸ばすと中身（ます・目盛り）が増える図か */
+export const growsWithSize = (id) => !!figureOf(id)?.fit;
+/** 伸ばした大きさ（viewBox の単位）に合う決め事。伸びない図はそのまま */
+export function fitFigure(id, params, w, h) {
+  const f = figureOf(id);
+  const p = cleanParams(id, params);
+  return f?.fit ? cleanParams(id, {...p, ...f.fit(w, h, p)}) : p;
+}
+/** 押したまま広げて貼る図なら、広げて決まるもの（例：縦・横のますの数）。ほかは '' */
+export const drawToPlace = (id) => figureOf(id)?.drawToPlace ?? '';
+/** 伸ばしている間に見せる数（例：横 4 × 縦 3） */
+export const growLabel = (id, params) => figureOf(id)?.growLabel?.(cleanParams(id, params)) ?? '';
+/**
+ * 大きさが変わったとき、書き換えた文字（割合の位置）が図の中で同じ所に残るよう直す。
+ * 座標平面は原点が真ん中にあるので、真ん中からの位置を保つ
+ */
+export function moveLabels(id, labels, from, to) {
+  if (!Array.isArray(labels) || !from.w || !to.w) return labels;
+  const center = figureOf(id)?.growAnchor === 'center';
+  const dx = center ? (to.w - from.w) / 2 : 0,
+    dy = center ? (to.h - from.h) / 2 : 0;
+  return labels.map((l) => ({
+    ...l,
+    x: Number(((l.x * from.w + dx) / to.w).toFixed(4)),
+    y: Number(((l.y * from.h + dy) / to.h).toFixed(4))
+  }));
+}
+
 /** 既定の文字（決め事に合わせた位置）。位置は図の幅・高さに対する割合 */
 export function defaultLabels(id, params) {
   const f = figureOf(id);
   if (!f?.labels) return [];
+  const {w, h} = figureSize(id, params);
   return f.labels(cleanParams(id, params)).map(([x, y, t, o = {}]) => ({
-    x: Number((x / f.w).toFixed(4)),
-    y: Number((y / f.h).toFixed(4)),
+    x: Number((x / w).toFixed(4)),
+    y: Number((y / h).toFixed(4)),
     t,
     ...(o.m ? {m: true} : {}),
     ...(o.s ? {s: o.s} : {})
@@ -1658,7 +1802,8 @@ export function figureSvg(id, params, labels = null) {
   if (!f) return '';
   const p = cleanParams(id, params);
   const labs = labels === false ? [] : (labels ?? defaultLabels(id, p));
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f.w} ${f.h}" width="${f.w}" height="${f.h}"><g fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${f.draw(p)}</g>${labs.map((l) => labelText(f, l)).join('')}</svg>`;
+  const z = figureSize(id, p);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${z.w} ${z.h}" width="${z.w}" height="${z.h}"><g fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${f.draw(p)}</g>${labs.map((l) => labelText(z, l)).join('')}</svg>`;
 }
 /** 図の画像（data: URL）。文字も描き込む */
 export const figureUrl = (id, params = null, labels = null) => {

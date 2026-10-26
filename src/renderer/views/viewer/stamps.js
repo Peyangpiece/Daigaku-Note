@@ -53,7 +53,7 @@ export const methods = {
         ? {type: 'memo', color: spec.color ?? MEMO_COLOR, size: spec.size ?? MEMO_SIZE}
         : spec.type === 'index'
           ? {type: 'index', color: spec.color}
-          : {type: spec.type, ref: spec.ref};
+          : {type: spec.type, ref: spec.ref, ...(spec.params ? {params: spec.params} : {})};
     const a = this.addAnno({
       key: `k${this.seq++}`,
       id: null,
