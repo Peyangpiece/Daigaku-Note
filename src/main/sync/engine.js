@@ -414,7 +414,9 @@ export class SyncEngine {
         }
       }
       if (lmsRef && lmsRef !== row.lms_ref) patch.lms_ref = lmsRef;
-      if (!row.date && (date ?? dates[number - 1])) patch.date = date ?? dates[number - 1];
+      // 回の日付はいつも学期の設定（学年暦の授業回・休講日・振替授業日）どおりに（前の設定での日付を残さない）
+      const want = date ?? dates[number - 1] ?? null;
+      if (number >= 1 && course.weekday && row.date !== want) patch.date = want;
       if (Object.keys(patch).length) {
         row = this.repo.updateRound(row.id, patch);
         byNumber.set(number, row);

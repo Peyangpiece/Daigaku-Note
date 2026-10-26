@@ -5,6 +5,7 @@ import {existsSync, mkdirSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {openDatabase} from './db/db.js';
+import {syncRoundDates} from './terms.js';
 import {Repo} from './db/repo.js';
 import {createSecrets} from './secrets.js';
 import {createLogger} from './log.js';
@@ -279,6 +280,9 @@ app.whenReady().then(async () => {
     ctx.db = db;
     const repo = new Repo(db);
     ctx.repo = repo;
+    // 回の日付を学期の設定（学年暦の授業回・休講日・振替授業日）にそろえる（前の版の計算で入った日付を直す）
+    const redated = syncRoundDates(repo);
+    if (redated) log.info(`回の日付を ${redated} 件、学年暦に合わせました`);
     ctx.secrets = createSecrets(path.join(userData, 'secrets.json'), log);
     ctx.rootDir = () => repo.getSetting('storage.root') || defaultRoot(app.getPath('desktop'));
     ctx.files = new FileManager({

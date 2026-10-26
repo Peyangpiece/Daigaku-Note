@@ -3,7 +3,7 @@ import {dialog} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {renameCourse} from '../folders.js';
-import {mergeAutoTerms, recomputeRoundDates, removeTerm, saveTerm} from '../terms.js';
+import {mergeAutoTerms, removeTerm, saveTerm, syncRoundDates} from '../terms.js';
 import {parseCalendar} from '../../shared/calendar.js';
 import {calendarText} from '../calendar-pdf.js';
 import {str, id, bad} from './common.js';
@@ -12,12 +12,11 @@ export function register({handle, ctx, repo, files, getWindow}) {
   // 学期の保存（main/terms.js）。term.id があればその学期を直す（学期名・年度を変えても同じ学期のまま）
   handle('term.save', async ({term}) => {
     const input = {...(term ?? {}), id: typeof term?.id === 'string' && /^[\w-]{1,40}$/.test(term.id) ? term.id : null};
-    const before = input.id ? repo.get('term', input.id) : null;
     const row = await saveTerm({repo, rootDir: ctx.rootDir()}, input);
     // LMS をつなぐ前に作った仮の学期が同じ時期にあれば、授業・フォルダとパソコンのフォルダをこの学期へまとめる
     await mergeAutoTerms({repo, rootDir: ctx.rootDir()}, row);
-    // 学年暦・期間・回数が変わったら、この学期の授業の回の日付を計算し直す（LMS から来た日付はそのまま）
-    const redated = recomputeRoundDates(repo, before, row);
+    // この学期の授業の回の日付を、学年暦・期間・回数にそろえる
+    const redated = syncRoundDates(repo, row.id);
     return {ok: true, term: row, redated};
   });
 
@@ -75,7 +74,9 @@ export function register({handle, ctx, repo, files, getWindow}) {
       const name = (str(patch.name, 200) ?? '').trim().slice(0, 80) || bad('名前を入れてください');
       await renameCourse({repo, courseDir: (t, c) => files.courseDir(t, c)}, cid, name); // パソコンの授業フォルダの名前も変える
     }
-    return {course: repo.updateCourse(cid, allowed)};
+    const course = repo.updateCourse(cid, allowed);
+    if (allowed.weekday) syncRoundDates(repo, course.term_id); // 曜日を変えたら回の日付もその曜日の授業回に
+    return {course};
   });
 
   // 回の名前（付箋の題）：自分で変える。空なら LMS の題に戻す
