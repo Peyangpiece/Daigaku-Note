@@ -8,7 +8,7 @@ import {openDatabase} from './db/db.js';
 import {Repo} from './db/repo.js';
 import {createSecrets} from './secrets.js';
 import {createLogger} from './log.js';
-import {registerIpc} from './ipc.js';
+import {registerIpc} from './ipc/index.js';
 import {JobRunner} from './jobs.js';
 import {Scheduler} from './scheduler.js';
 import {FileManager} from './sync/files.js';
