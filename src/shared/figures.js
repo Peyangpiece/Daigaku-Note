@@ -49,6 +49,7 @@ const tableDef = {
   size: (p) => ({w: p.cols * CELL_W + 4, h: p.rows * CELL_H + 4}),
   fit: (w, h) => ({cols: Math.round((w - 4) / CELL_W), rows: Math.round((h - 4) / CELL_H)}),
   growLabel: (p) => `横 ${p.cols} × 縦 ${p.rows}`,
+  drawToPlace: '縦・横のますの数',
   draw: (p) => {
     const w = p.cols * CELL_W,
       h = p.rows * CELL_H;
@@ -1560,10 +1561,17 @@ const DEFS = [
     key: 'timeline',
     name: '年表',
     subject: '社会',
+    // 目盛りは 46 ごと。右へ伸ばすと目盛りが増える
     w: 280,
     h: 70,
-    draw: () =>
-      `${arrow(8, 34, 274, 34)}<path d="${[0, 1, 2, 3, 4, 5].map((i) => `M${28 + i * 46} 26V42`).join('')}"/>${[0, 1, 2, 3, 4, 5].map((i) => dot(28 + i * 46, 34, 3)).join('')}`
+    params: [{key: 'n', label: '目盛りの数', type: 'num', min: 2, max: 30, step: 1, def: 6}],
+    size: (p) => ({w: 50 + (p.n - 1) * 46, h: 70}),
+    fit: (w) => ({n: Math.round((w - 50) / 46) + 1}),
+    growLabel: (p) => `目盛り ${p.n}`,
+    draw: (p) => {
+      const xs = Array.from({length: p.n}, (_, i) => 28 + i * 46);
+      return `${arrow(8, 34, 50 + (p.n - 1) * 46 - 6, 34)}<path d="${xs.map((x) => `M${x} 26V42`).join('')}"/>${xs.map((x) => dot(x, 34, 3)).join('')}`;
+    }
   },
   {
     key: 'supply-demand',
@@ -1581,27 +1589,64 @@ const DEFS = [
     key: 'genko',
     name: '原稿用紙',
     subject: '国語・英語・音楽',
+    // ます 1 つは 20。縦・横に伸ばすとますが増える
     w: 200,
     h: 200,
-    draw: () =>
-      `${grid(200, 200, 20, {color: '#e07a6f'})}<rect x="0.5" y="0.5" width="199" height="199" stroke="#e07a6f" stroke-width="2"/>`
+    params: [
+      {key: 'cols', label: '横のますの数', type: 'num', min: 1, max: 40, step: 1, def: 10},
+      {key: 'rows', label: '縦のますの数', type: 'num', min: 1, max: 40, step: 1, def: 10}
+    ],
+    size: (p) => ({w: p.cols * 20, h: p.rows * 20}),
+    fit: (w, h) => ({cols: Math.round(w / 20), rows: Math.round(h / 20)}),
+    growLabel: (p) => `横 ${p.cols} × 縦 ${p.rows}`,
+    drawToPlace: '縦・横のますの数',
+    draw: (p) => {
+      const w = p.cols * 20,
+        h = p.rows * 20;
+      return `${grid(w, h, 20, {color: '#e07a6f'})}<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" stroke="#e07a6f" stroke-width="2"/>`;
+    }
   },
   {
     key: 'four-lines',
     name: '英語の 4 線',
     subject: '国語・英語・音楽',
+    // 1 段は高さ 56。横に伸ばすと線が長く（40 ごと）、縦に伸ばすと段が増える
     w: 280,
     h: 56,
-    draw: () => `<path d="M4 10H276M4 22H276M4 46H276" stroke="${SOFT}"/><path d="M4 34H276" stroke="#e5484d"/>`
+    params: [
+      {key: 'len', label: '線の長さ', type: 'num', min: 2, max: 20, step: 1, def: 7},
+      {key: 'rows', label: '段の数', type: 'num', min: 1, max: 20, step: 1, def: 1}
+    ],
+    size: (p) => ({w: p.len * 40, h: p.rows * 56}),
+    fit: (w, h) => ({len: Math.round(w / 40), rows: Math.round(h / 56)}),
+    growLabel: (p) => `${p.rows} 段`,
+    drawToPlace: '線の長さと段の数',
+    draw: (p) => {
+      const x2 = p.len * 40 - 4;
+      const ys = Array.from({length: p.rows}, (_, j) => j * 56);
+      return `<path d="${ys.map((y) => `M4 ${y + 10}H${x2}M4 ${y + 22}H${x2}M4 ${y + 46}H${x2}`).join('')}" stroke="${SOFT}"/><path d="${ys.map((y) => `M4 ${y + 34}H${x2}`).join('')}" stroke="#e5484d"/>`;
+    }
   },
   {
     key: 'staff',
     name: '五線譜',
     subject: '国語・英語・音楽',
+    // 1 段は高さ 60。横に伸ばすと線が長く（40 ごと）、縦に伸ばすと段が増える
     w: 280,
     h: 60,
-    draw: () =>
-      `<path d="${[0, 1, 2, 3, 4].map((i) => `M4 ${10 + i * 10}H276`).join('')}"/><path d="M4 10V50M276 10V50"/>`
+    params: [
+      {key: 'len', label: '線の長さ', type: 'num', min: 2, max: 20, step: 1, def: 7},
+      {key: 'rows', label: '段の数', type: 'num', min: 1, max: 20, step: 1, def: 1}
+    ],
+    size: (p) => ({w: p.len * 40, h: p.rows * 60}),
+    fit: (w, h) => ({len: Math.round(w / 40), rows: Math.round(h / 60)}),
+    growLabel: (p) => `${p.rows} 段`,
+    drawToPlace: '線の長さと段の数',
+    draw: (p) => {
+      const x2 = p.len * 40 - 4;
+      const ys = Array.from({length: p.rows}, (_, j) => j * 60);
+      return `<path d="${ys.map((y) => [0, 1, 2, 3, 4].map((i) => `M4 ${y + 10 + i * 10}H${x2}`).join('')).join('')}"/><path d="${ys.map((y) => `M4 ${y + 10}V${y + 50}M${x2} ${y + 10}V${y + 50}`).join('')}"/>`;
+    }
   },
 
   // ======== 表・方眼 ========
@@ -1610,9 +1655,22 @@ const DEFS = [
     key: 'graph-paper',
     name: '方眼',
     subject: '表・方眼',
+    // ます 1 つは 10（5 ますごとに濃い線）。縦・横に伸ばすとますが増える
     w: 200,
     h: 200,
-    draw: () => `${grid(200, 200, 10, {color: '#e1e6ea'})}${grid(200, 200, 50, {color: '#aab6c2'})}`
+    params: [
+      {key: 'cols', label: '横のますの数', type: 'num', min: 2, max: 80, step: 1, def: 20},
+      {key: 'rows', label: '縦のますの数', type: 'num', min: 2, max: 80, step: 1, def: 20}
+    ],
+    size: (p) => ({w: p.cols * 10, h: p.rows * 10}),
+    fit: (w, h) => ({cols: Math.round(w / 10), rows: Math.round(h / 10)}),
+    growLabel: (p) => `横 ${p.cols} × 縦 ${p.rows}`,
+    drawToPlace: '縦・横のますの数',
+    draw: (p) => {
+      const w = p.cols * 10,
+        h = p.rows * 10;
+      return `${grid(w, h, 10, {color: '#e1e6ea'})}${grid(w, h, 50, {color: '#aab6c2'})}`;
+    }
   }
 ];
 
@@ -1675,6 +1733,8 @@ export function fitFigure(id, params, w, h) {
   const p = cleanParams(id, params);
   return f?.fit ? cleanParams(id, {...p, ...f.fit(w, h, p)}) : p;
 }
+/** 押したまま広げて貼る図なら、広げて決まるもの（例：縦・横のますの数）。ほかは '' */
+export const drawToPlace = (id) => figureOf(id)?.drawToPlace ?? '';
 /** 伸ばしている間に見せる数（例：横 4 × 縦 3） */
 export const growLabel = (id, params) => figureOf(id)?.growLabel?.(cleanParams(id, params)) ?? '';
 /**

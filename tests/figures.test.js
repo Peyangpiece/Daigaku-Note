@@ -10,6 +10,7 @@ import {
   figureSize,
   figureSvg,
   fitFigure,
+  drawToPlace,
   growLabel,
   growsWithSize,
   moveLabels,
@@ -138,4 +139,34 @@ test('伸びる図：表・数直線・座標平面は、伸ばした大きさ�
   assert.deepEqual(moveLabels('fig-coord', [{x: 0.5, y: 0.5, t: 'O'}], {w: 240, h: 240}, {w: 400, h: 200}), [
     {x: 0.5, y: 0.5, t: 'O'}
   ]);
+});
+
+test('伸びる図（ほかの教科）：方眼・原稿用紙・4 線・五線譜・年表も、伸ばすとます・段・目盛りが増える', () => {
+  // はじめは前の版と同じ大きさ（決め事のない、前に貼った図もそのまま）
+  for (const [id, w, h] of [
+    ['fig-graph-paper', 200, 200],
+    ['fig-genko', 200, 200],
+    ['fig-four-lines', 280, 56],
+    ['fig-staff', 280, 60],
+    ['fig-timeline', 280, 70]
+  ]) {
+    assert.deepEqual(figureSize(id, null), {w, h}, id);
+    assert.ok(growsWithSize(id), id);
+  }
+  assert.deepEqual(fitFigure('fig-graph-paper', null, 305, 120), {cols: 31, rows: 12});
+  assert.deepEqual(fitFigure('fig-genko', null, 400, 100), {cols: 20, rows: 5});
+  // 4 線・五線譜：横は線の長さ、縦は段の数
+  const fl = fitFigure('fig-four-lines', null, 400, 170);
+  assert.deepEqual(fl, {len: 10, rows: 3});
+  assert.equal((figureSvg('fig-four-lines', fl).match(/H396/g) ?? []).length, 12, '3 段 × 4 本');
+  assert.deepEqual(fitFigure('fig-staff', null, 280, 125), {len: 7, rows: 2});
+  // 年表：右へ伸ばすと目盛りが増える。縦は変わらない
+  const tl = fitFigure('fig-timeline', null, 500, 300);
+  assert.equal(tl.n, 11);
+  assert.deepEqual(figureSize('fig-timeline', tl), {w: 510, h: 70});
+  // 押したまま広げて貼るのは、ます・段の数を決める図
+  assert.equal(drawToPlace('fig-table'), '縦・横のますの数');
+  assert.equal(drawToPlace('fig-staff'), '線の長さと段の数');
+  assert.equal(drawToPlace('fig-timeline'), '');
+  assert.equal(drawToPlace('fig-circle'), '');
 });

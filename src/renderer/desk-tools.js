@@ -5,7 +5,15 @@ import {esc, toast} from './ui-kit.js';
 import {state} from './store.js';
 import {MEMO_COLOR, MEMO_SIZE} from '../shared/annotation.js';
 import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, builtinStickerUrl, isBuiltinSticker} from '../shared/stickers.js';
-import {FIGURES, FIGURE_PT_PER_UNIT, FIGURE_SUBJECTS, figureOf, figureUrl, growLabel} from '../shared/figures.js';
+import {
+  FIGURES,
+  FIGURE_PT_PER_UNIT,
+  FIGURE_SUBJECTS,
+  drawToPlace,
+  figureOf,
+  figureUrl,
+  growLabel
+} from '../shared/figures.js';
 import {growFigure, renderFigure} from './figure-view.js';
 import {evaluate, formatNumber} from '../shared/calc.js';
 import {
@@ -294,8 +302,8 @@ export class DeskTools {
       this.on(this.root.querySelector(`[data-corner="${name}"]`), 'pointerdown', (e) => {
         const item = e.target.closest('[data-seal], [data-figure]');
         if (!item) return;
-        // 表は、押したまま広げて縦・横のますの数を決めて貼る
-        if (item.dataset.figure === 'fig-table' && e.button === 0) {
+        // 表・方眼・原稿用紙・4 線・五線譜は、押したまま広げてますや段の数を決めて貼る
+        if (drawToPlace(item.dataset.figure) && e.button === 0) {
           e.preventDefault();
           return this.startGrowDraw(this.itemSpec(item));
         }
@@ -349,16 +357,15 @@ export class DeskTools {
   }
 
   /**
-   * 押したまま広げて大きさを決める図（表）。画面の上に薄い層を出し、押した所から離した所までの四角に、
-   * ます（1 つ 56×28）がいくつ入るかで縦・横の数を決めて、離した所に貼る。広げている間は数を見せる。Esc か押さずに離すとやめる
+   * 押したまま広げて大きさを決める図（表・方眼など）。画面の上に薄い層を出し、押した所から離した所までの四角に、
+   * ます・段がいくつ入るかで数を決めて、離した所に貼る。広げている間は数を見せる。Esc か押さずに離すとやめる
    */
   startGrowDraw(spec) {
     if (this.growDraw) return;
     this.openCorner(null);
     const layer = document.createElement('div');
     layer.className = 'grow-draw';
-    layer.innerHTML =
-      '<p class="grow-draw__hint">貼りたい所を押したまま広げると、縦・横のますの数が決まります（Esc でやめる）</p><div class="grow-draw__box" hidden><div class="fig"></div></div>';
+    layer.innerHTML = `<p class="grow-draw__hint">貼りたい所を押したまま広げると、${esc(drawToPlace(spec.ref))}が決まります（Esc でやめる）</p><div class="grow-draw__box" hidden><div class="fig"></div></div>`;
     this.root.append(layer);
     const box = layer.querySelector('.grow-draw__box');
     const unit = this.stampScale() * FIGURE_PT_PER_UNIT; // viewBox の 1 単位の px
