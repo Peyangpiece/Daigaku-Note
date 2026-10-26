@@ -49,7 +49,7 @@ export function fileCard(m, course, places) {
   const bmSticker = sk.stickers.find((st) => st.place === 'bookmark');
   return `<div class="file${ok ? '' : ' file--missing'}"${ok ? ` draggable="true" data-drag-material="${esc(m.id)}"` : ''}>
     <button class="file__open" data-action="${action}" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}${m.bookmarks ? `（しおり ${m.bookmarks}）` : ''}">
-      <span class="file__art">${fileArt(m.name, {colors: sk.file, art: sk.fileArt})}${fixedSticker(
+      <span class="file__art">${fileArt(m.name, {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}${fixedSticker(
         sk.stickers.find((st) => st.place === 'file' && st.kind === kind),
         state.data,
         {x: 0.12, y: 0.16, base: 30}

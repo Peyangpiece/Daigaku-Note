@@ -96,6 +96,8 @@ export const DEFAULT_PARTS = {
   folder: {card: 'default', tab: 'default'},
   tape: {color: 'course', pattern: 'course', image: null},
   file: Object.fromEntries(FILE_KINDS.map((k) => [k, 'default'])),
+  // 資料のイラストの紙の色（default は白。テーマ・置く場所によらず同じ）
+  fileBody: Object.fromEntries(FILE_KINDS.map((k) => [k, 'default'])),
   fileArt: Object.fromEntries(
     FILE_KINDS.map((k) => [k, {mark: {dx: 0, dy: 0, on: true}, label: {dx: 0, dy: 0, on: true}}])
   ),
@@ -146,6 +148,7 @@ export function normalizeParts(raw = {}) {
     folder: {card: color(f.card, d.folder.card), tab: color(f.tab, d.folder.tab)},
     tape: tape(t),
     file: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.file?.[k], 'default')])),
+    fileBody: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.fileBody?.[k], 'default')])),
     fileArt: fileArtParts(raw.fileArt),
     // 前の版の 8 色の並びは、先頭の 5 色を引き継ぐ
     sticky: {
@@ -292,6 +295,7 @@ export function resolveSkin(templates, globalId, course = null) {
     folder: (own ?? global).parts.folder,
     tape: (own ?? global).parts.tape,
     file: (own ?? global).parts.file,
+    fileBody: (own ?? global).parts.fileBody,
     fileArt: (own ?? global).parts.fileArt,
     sticky: (own ?? global).parts.sticky,
     bookmark: (own ?? global).parts.bookmark,
