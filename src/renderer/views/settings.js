@@ -1,6 +1,7 @@
 // 設定（SPEC §12.2）。学期・授業・保存先・クイズ・見た目、下に LMS との連携（任意）と同期。変更はすぐ保存する。
 import {AI_CONSENT_VERSION, AI_NOT_SENDS, AI_SENDS} from '../../shared/policy.js';
-import {confirmDialog, esc, reload, toast} from '../app.js';
+import {confirmDialog, esc, toast} from '../ui-kit.js';
+import {reload} from '../store.js';
 import {ROLES, USES, features} from '../../shared/profile.js';
 
 const api = window.daigaku;

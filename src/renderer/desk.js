@@ -6,7 +6,8 @@
 // - ペンを持っている間は下書きの層が指・マウスを受ける（下のボタンは押せない）。もう一度押す・Esc・「ペンを置く」で置く
 // - 下書きの線と貼りものは、ページと一緒にスクロールする（文書の座標で持つ）
 // - 赤シート（ポーチ・⌘R）：赤を乗算で重ねる。赤い字は消え、文字隠しペンの線は黒くなる
-import {isTyping, state} from './app.js';
+import {isTyping} from './ui-kit.js';
+import {state} from './store.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, tearClip} from './desk-tools.js';
 import {TYPE_LABEL, heldPen, itemOf, stationeryState, toolArt} from '../shared/stationery.js';
 import {createCapture, strokePath, touchesStroke} from '../shared/ink.js';

@@ -2,7 +2,11 @@
 // 自分のファイルは「振り分け前」の付箋に入り、ドラッグか「移す」で回の付箋へ振り分ける（回に入れた資料はその回のクイズの材料になる）。
 // 「振り分け前」の呼び名は main/ipc.js（取り込みの知らせ）と合わせる
 import {todayJst} from '../../shared/schedule.js';
-import {canRename, esc, jaWrap, progressText, state} from '../app.js';
+import {MIN_MASKS} from '../../shared/cloze.js';
+import {esc, jaWrap, progressText} from '../ui-kit.js';
+import {hash32} from '../../shared/hash.js';
+import {orderRounds} from '../../shared/rounds.js';
+import {canRename, state} from '../store.js';
 import {extOf, fileArt, kindOf} from './file-art.js';
 import {bookmarkLook, fixedSticker, skinOf, stickerLayer} from '../skin.js';
 import {roundColorIndex} from '../../shared/skin.js';
@@ -13,44 +17,12 @@ const fmtDate = (d) =>
     ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}（${'日月火水木金土'[new Date(d + 'T00:00:00').getDay()]}）`
     : '';
 
-// shared/rounds.js の weekStart・orderRounds と同じ（レンダラは main のモジュールを読まないので写す。テストは shared のほう）
-/** その日を含む週の月曜（'YYYY-MM-DD'） */
-function weekStart(day) {
-  const d = new Date(`${day}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-  return d.toISOString().slice(0, 10);
-}
-
-/**
- * 授業画面の付箋の並び。今週（月〜日）の回を先頭（左上）に、そのあとの回を順に、前の回は第 1 回から順に後ろへ。「その他」（第 0 回）は最後。
- * 今週に回がなければ次の回が先頭。学期が終わっていれば全部が前の回（第 1 回から）。日付のある回がなければ回の順のまま
- * @returns {{current: object[], past: object[], other: object[]}}
- */
-function orderRounds(rounds, today) {
-  const numbered = rounds.filter((r) => r.number > 0).sort((a, b) => a.number - b.number);
-  const other = rounds.filter((r) => r.number === 0);
-  if (!numbered.some((r) => r.date)) return {current: numbered, past: [], other};
-  const monday = weekStart(today);
-  let i = numbered.findIndex((r) => r.date && r.date >= monday);
-  if (i < 0) i = numbered.length;
-  return {current: numbered.slice(i), past: numbered.slice(0, i), other};
-}
-
-// shared/ids.js の hash32 と同じ（レンダラは main のモジュールを読まないので写す）。付箋ごとの小さな傾き
-function hash32(str) {
-  let h = 0x811c9dc5;
-  for (const b of new TextEncoder().encode(str)) {
-    h ^= b;
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
-}
 const tilt = (id) => ((hash32(id) % 7) - 3) * 0.5; // -1.5 〜 +1.5 度
 
 const EXTRACTABLE = /\.(pdf|docx|pptx|txt|md)$/i;
 // 「その他」は回の名前ではないので、名前を自分で変えられる（title_user。空ならその他）
 const otherName = (r) => r.title_user || 'その他';
-export const OWN_LABEL = '振り分け前'; // 回を決めていないファイルの置き場（PDF の中の「メモ」や回の付箋と紛れない名前に）
+const OWN_LABEL = '振り分け前'; // 回を決めていないファイルの置き場（PDF の中の「メモ」や回の付箋と紛れない名前に）
 const placeName = (r) => (r ? (r.number === 0 ? otherName(r) : `第${r.number}回`) : OWN_LABEL);
 
 // places：移せる先（「振り分け前」と回）。資料の紙はドラッグで別の付箋へ移せる。キーボードでは「移す」の選択で
@@ -170,6 +142,12 @@ function testPanel(course, quizzes, makeable, byRound, hasKey) {
 // 回のクイズの行（SPEC §8.2「クイズ」）：作った問題の数・正答率・要確認と「解く」「作り直す」「編集」。資料があってクイズがなければ「作る」
 export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この回', {hintWhenNoKey = false} = {}) {
   const extractable = list.some((m) => m.status === 'ok' && EXTRACTABLE.test(m.name));
+  // 文字隠しマーカーが MIN_MASKS 以上あれば、AI を使わない穴埋め（§11.3）。API キーがなくても作れる
+  const masks = list.reduce((n, m) => n + (m.masks ?? 0), 0);
+  const cloze =
+    masks >= MIN_MASKS
+      ? `<button class="btn btn--small btn--quiet" data-action="quiz-cloze" data-round="${esc(round.id)}" data-has-quiz="${quiz ? '1' : ''}" title="AI を使わず、文字隠しマーカーで隠した語（${masks} か所）を穴埋めの問題にします（API キーは要りません）">隠した箇所から穴埋めを作る</button>`
+      : '';
   if (gen)
     return `<div class="round-quiz round-quiz--busy" role="status">${gen.state === 'failed' ? `<span>${esc(/^クイズを作れませんでした/.test(gen.message) ? gen.message : `クイズを作れませんでした：${gen.message}`)}</span> <button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">もう一度</button>` : `<span class="spinner" aria-hidden="true"></span><span>${esc(gen.message)}</span>`}</div>`;
   if (quiz) {
@@ -180,6 +158,7 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
         <button class="btn btn--small btn--primary" data-action="nav" data-route="/quiz?course=${esc(course.id)}&quizzes=${esc(quiz.id)}&mode=quiz">解く</button>
         <button class="btn btn--small btn--quiet" data-action="nav" data-route="/quiz-edit/${esc(quiz.id)}">編集</button>
         ${hasKey && extractable ? `<button class="btn btn--small btn--quiet" data-action="quiz-generate" data-rounds="${esc(round.id)}" title="資料から作り直します（前の版の記録は残ります）">作り直す</button>` : ''}
+        ${cloze}
       </span></div>`;
   }
   if (!extractable) return '';
@@ -187,9 +166,9 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
   // hintWhenNoKey で 1 行だけ案内する（入口がどこにもないと、クイズの機能に気づけない）
   if (!hasKey)
     return hintWhenNoKey
-      ? `<div class="round-quiz"><span class="muted">資料からクイズを作れます（自分の Claude API キーが要ります。1 回およそ十数円）</span> <button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">設定 → クイズ</button></div>`
-      : '';
-  return `<div class="round-quiz"><button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button></div>`;
+      ? `<div class="round-quiz"><span class="muted">資料からクイズを作れます（自分の Claude API キーが要ります。1 回およそ十数円）</span> <button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">設定 → クイズ</button>${cloze}</div>`
+      : cloze && `<div class="round-quiz">${cloze}</div>`;
+  return `<div class="round-quiz"><button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button>${cloze}</div>`;
 }
 
 function roundNote(round, list, course, today, quizzes = {}, places = []) {

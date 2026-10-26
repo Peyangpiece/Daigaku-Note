@@ -1,0 +1,255 @@
+/* 大学ノートの画面：試し書き（詳細ページの付箋と赤シート）。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* 試し書き（詳細ページ。views/tryout.js）：罫線のある白い正方形の付箋を、木のメモトレーに載せる。右下がめくれていて、押すか引くとはがれる。
+   文字隠しペン・赤シートで消える色のペンは、横に赤シート（乗算で重ねる。編集画面の .red-sheet と同じ赤） */
+@property --curl {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 26px;
+}
+.fb-try {
+  container-type: inline-size; /* 付箋の大きさ・赤シートの置き場所は、欄の幅で決める（画面の幅ではなく） */
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.fb-try__hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-small);
+}
+.ts-refills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-2);
+}
+.ts-refills__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+.ts-desk {
+  --note: min(300px, calc(100cqi - 2 * var(--frame) - 2 * var(--gap)));
+  /* 木のメモトレー：縁の幅・付箋とくぼみの壁のすき間（付箋のまわりは同じ幅） */
+  --frame: 18px;
+  --frame-top: 18px;
+  --gap: 8px;
+  --tray-w: calc(var(--note) + 2 * var(--frame) + 2 * var(--gap));
+  --tray-h: calc(var(--frame-top) + var(--gap) + var(--note) + var(--gap) + var(--frame));
+  position: relative;
+  height: calc(var(--tray-h) + 10px);
+  margin-top: 4px;
+}
+/* 木のメモトレー（ウォールナット風の板。縁を残して彫ったくぼみに付箋を置く。横から見ると合板の層） */
+.ts-tray {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tray-w);
+  height: var(--tray-h);
+  border-radius: 7px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.1)),
+    repeating-linear-gradient(
+      93deg,
+      rgba(60, 35, 15, 0.1) 0 2px,
+      transparent 2px 7px,
+      rgba(255, 238, 215, 0.07) 7px 9px,
+      transparent 9px 16px
+    ),
+    repeating-linear-gradient(87deg, rgba(70, 42, 20, 0.09) 0 1px, transparent 1px 29px), #9b7b5d;
+  box-shadow:
+    0 2px 0 #6c4d33,
+    0 3px 0 #b48f69,
+    0 5px 0 #5f4430,
+    0 6px 0 #a8845f,
+    0 12px 20px rgba(0, 0, 0, 0.28);
+}
+.ts-tray__well {
+  position: absolute;
+  top: var(--frame-top);
+  left: var(--frame);
+  right: var(--frame);
+  bottom: var(--frame);
+  border-radius: 2px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(
+      92deg,
+      rgba(55, 32, 14, 0.1) 0 2px,
+      transparent 2px 8px,
+      rgba(255, 238, 215, 0.06) 8px 10px,
+      transparent 10px 17px
+    ),
+    #8f6f52;
+  box-shadow:
+    inset 3px 4px 3px rgba(40, 22, 8, 0.45),
+    inset -1px -1px 0 rgba(255, 240, 220, 0.18);
+}
+.ts-pad {
+  --curl: 26px;
+  position: absolute;
+  top: calc(var(--frame-top) + var(--gap));
+  left: calc(var(--frame) + var(--gap));
+  width: var(--note);
+  height: var(--note);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18));
+}
+/* 下の新しい紙と、その下の紙のふち（束に見せる） */
+.ts-under {
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    1px 2px 0 #ececea,
+    2px 4px 0 #dcdcd8;
+}
+.ts-under svg,
+.ts-paper,
+.ts-seen {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.ts-note {
+  position: absolute;
+  inset: 0;
+  /* めくれた角の三角は紙から切り取り、その内側に折り返し（.ts-curl__flap）を描く */
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--curl)), calc(100% - var(--curl)) 100%, 0 100%);
+  transform-origin: 0 0;
+  transition:
+    transform calc(var(--motion) * 2.25) cubic-bezier(0.5, 0, 0.9, 0.6),
+    opacity calc(var(--motion) * 2.25) ease-in;
+}
+.ts-pad {
+  transition: --curl var(--motion) ease;
+}
+.ts-pad.is-pulling,
+.ts-pad.is-fresh,
+.ts-pad.is-fresh .ts-note {
+  transition: none;
+}
+.ts-pad.is-peeling .ts-note {
+  transform: translate(-20%, -55%) rotate(-16deg);
+  opacity: 0;
+  pointer-events: none;
+}
+.ts-pad.is-peeling .ts-curl {
+  visibility: hidden;
+}
+.ts-paper {
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+.ts-ground {
+  fill: #ffffff;
+}
+.ts-rules {
+  stroke: #9fb4cc;
+  stroke-width: 0.8;
+}
+.ts-word {
+  fill: #2b2b2b;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+.ts-hl {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  mix-blend-mode: multiply;
+}
+/* 赤シートを通した写しの、文字隠しペンの線：不透明の黒（下の字を完全に隠す） */
+.ts-cover {
+  fill: none;
+  stroke: #000;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ts-seen {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* めくれた角：押せる広さは大きめに。折り返しは紙の裏（少し影のある白） */
+.ts-curl {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: max(var(--curl), 56px);
+  height: max(var(--curl), 56px);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+  filter: drop-shadow(-2px -2px 2px rgba(0, 0, 0, 0.22));
+}
+.ts-curl:active {
+  cursor: grabbing;
+}
+.ts-curl:focus-visible {
+  outline: 2px solid var(--accent, #1a5fd0);
+  outline-offset: -2px;
+}
+.ts-curl__flap {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: var(--curl);
+  height: var(--curl);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  background: linear-gradient(to top left, #c9c9c4 0%, #e2e2de 50%, #f3f3f0 75%, #ffffff 100%);
+}
+/* 赤シート：付箋の横に置き、ドラッグで重ねる。重なったところは .ts-seen（赤だけを通した濃淡）に乗算で赤を重ねる */
+.ts-sheet {
+  position: absolute;
+  top: 18px;
+  left: calc(var(--tray-w) + 28px);
+  width: 150px;
+  height: 210px;
+  border-radius: var(--radius-s);
+  background: #e60000;
+  mix-blend-mode: multiply;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.ts-sheet.is-dragging {
+  cursor: grabbing;
+}
+.ts-sheet span {
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  color: #fff;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+}
+/* 狭い欄（メモトレーの横に赤シートが入らない）：赤シートはメモトレーの下に横長で置く */
+@container (max-width: 560px) {
+  .ts-desk--sheet {
+    height: calc(var(--tray-h) + 150px);
+  }
+  .ts-sheet {
+    top: calc(var(--tray-h) + 24px);
+    left: 0;
+    width: 210px;
+    height: 110px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ts-pad,
+  .ts-note {
+    transition: none;
+  }
+}

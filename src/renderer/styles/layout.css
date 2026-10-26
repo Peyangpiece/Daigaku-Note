@@ -1,0 +1,167 @@
+/* 大学ノートの画面：画面の上の段・設定の並び・ホームの案内とフッター・学年暦の一覧。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* 画面の上の段（← 戻る・見出し）と、ボタンの並び */
+/* 設定：まとまりごとの見出しと、広い窓では 2 列の並び */
+.settings {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 1120px;
+}
+.settings__group {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-small);
+  color: var(--paper-ink-weak);
+  letter-spacing: 0.08em;
+}
+.settings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+.settings__more {
+  margin-top: var(--space-2);
+}
+.settings__more summary {
+  cursor: pointer;
+  color: var(--paper-ink-weak);
+}
+.page-nav {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+.actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+
+/* ホーム：フォルダと要確認の付箋（流れの中に置く。重ならない） */
+.home--attention {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: var(--space-4);
+  align-items: start;
+}
+/* 要確認があるときは 2 列：左に授業とフォルダ（.home__main にまとめる。1 つずつ列に入ると授業が細い右の列に縦に並ぶ）、右に要確認 */
+.home__main {
+  min-width: 0;
+}
+/* 授業とフォルダはいつも左の列に左詰め、要確認は右の列 */
+.home--attention .home__main {
+  grid-column: 1;
+  grid-row: 1;
+}
+.home--attention .attention {
+  order: 2;
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: var(--space-3);
+}
+@media (max-width: 1040px) {
+  .home--attention {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home--attention .home__main,
+  .home--attention .attention {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .home--attention .attention {
+    order: 0;
+    max-width: none;
+    margin-top: 0;
+    transform: rotate(-0.5deg);
+  }
+}
+.attention ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.attention .btn {
+  margin-top: 4px;
+}
+.attention details {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+/* 下の帯：同期と設定。長い画面でも画面の下に見えている */
+.home-foot {
+  /* 画面の下に貼り付けない（最小の窓で 2 行になるとフォルダを覆っていた） */
+  margin-top: var(--space-6);
+  padding: 12px 0;
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* 授業画面の上：同期のボタンと進み具合 */
+.course-actions {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.course-help {
+  margin: 6px 0 var(--space-3);
+  max-width: 720px;
+}
+
+/* ---- 設定 → 学期 → 学年暦（休講日・振替授業日）の一覧 ---- */
+.cal-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.cal-cols h4 {
+  margin: 0 0 4px;
+}
+.cal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 16em;
+  overflow: auto;
+}
+.cal-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
+}
+.cal-remove {
+  margin-left: auto;
+  min-width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--paper-ink-weak);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+.cal-remove:hover,
+.cal-remove:focus-visible {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+  color: var(--paper-ink);
+}
+.cal-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cal-add .input {
+  width: auto;
+}

@@ -1,3 +1,4 @@
+import {esc} from './html.js';
 // 素材（左下の隅）：授業でよく使う図。SVG をその場で作る（画像ファイルを持たない）。副作用なし。
 // ページに貼ると注釈の stamp（style.type = 'figure'、style.ref = id）になる。線は黒、塗りは淡い色。
 // - 決め事（params）：図ごとに変えられる値（ビーカーの水の量・振り子の角度・グラフの式など）。schema は params の並び
@@ -11,7 +12,6 @@ export const LABEL_SERIF = "'Times New Roman',Times,serif";
 export const LABEL_GOTHIC = "'Hiragino Kaku Gothic ProN','Hiragino Sans',sans-serif";
 const r1 = (v) => Math.round(v * 10) / 10;
 const rad = (deg) => (deg * Math.PI) / 180;
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
 
 /** 矢印の先（x, y が先端。向きは角度 deg。0 が右） */
 const head = (x, y, deg, fill = INK) =>

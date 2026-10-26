@@ -9,7 +9,7 @@
 //   紙は白・罫線は薄い灰色・印字は黒で、その上に赤シートの赤を乗算で重ねる（編集画面の赤シートと同じ色）。
 //   色の計算（フィルタ）だけで見え方を作ると、線のふちや色によって字や線がうっすら透けるため、描き分けて確実に隠す
 // 付箋の右下はめくれていて、押すか左上へ引くと、はがれて下の新しい紙になる。書いた線はこの画面を開いている間だけ覚える（保存しない）
-import {esc} from '../app.js';
+import {esc} from '../ui-kit.js';
 import {createCapture, strokePath} from '../../shared/ink.js';
 import {TOOL_TYPES, fadesUnderRedSheet, itemOf, needsRedSheet} from '../../shared/stationery.js';
 

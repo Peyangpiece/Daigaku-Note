@@ -2,7 +2,8 @@
 // 初回（#/setup）は あなたと使い方・授業の資料・（利用規約）・学期と保存先、大学の LMS とつなぐ人はそのまま LMS とつなぐ（URL とログイン）・授業の確認と同期（1 本の連番）。
 // あとから LMS とつなぐ手順（#/settings/lms）は 設定 → 大学の LMS から入る
 // （利用規約に同意していなければ最初に同意。Moodle の ID・パスワードと画面操作型のブラウザ窓。学期がまだなければ学期の設定も挟む）
-import {esc, navigate, reload, toast} from '../app.js';
+import {esc, toast} from '../ui-kit.js';
+import {navigate, reload} from '../store.js';
 import {termForm, readTermForm} from './term.js';
 import {ROLES, USES, features} from '../../shared/profile.js';
 import {LMS_FEATURE, LMS_NOTICE, LMS_TERMS, LMS_TERMS_VERSION} from '../../shared/lms-terms.js';

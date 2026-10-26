@@ -1,0 +1,188 @@
+/* 大学ノートの画面：紙・罫線・見出し・共通の小さな部品（.muted・.sr-only）。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* 罫線ノート・マスキングテープのフォルダ・付箋・バッジ（SPEC §8.0） */
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.7;
+  color: var(--paper-ink);
+  background: var(--paper);
+}
+
+/* 紙（SPEC §8.0.2・SPEC-KISEKAE §5）：ノートの種類は data-note（ruled 横罫・grid 方眼・dot ドット・ring 丸ドット・plain 無地・cornell コーネル）、
+   左の余白の縦線は data-margin。html に付けて画面全体に、着せ替えの見本では見本の紙に付ける。
+   模様は 5 枚の重ね（余白の縦線・コーネルの見出し欄の線・コーネルの要約欄の線・模様・模様 2）。使わない重ねは none */
+[data-note] {
+  --line: color-mix(in srgb, var(--rule) calc(var(--rule-alpha) * 100%), transparent);
+  --margin-line: color-mix(in srgb, var(--rule-margin) calc(var(--rule-alpha) * 100%), transparent);
+  --note-margin: linear-gradient(
+    to right,
+    transparent 71px,
+    var(--margin-line) 71px,
+    var(--margin-line) 72px,
+    transparent 72px
+  );
+  --note-cue: none;
+  --note-summary: none;
+  --note-pattern: linear-gradient(
+    to bottom,
+    transparent calc(var(--rule-gap) - 1px),
+    var(--line) calc(var(--rule-gap) - 1px)
+  );
+  --note-pattern2: none;
+}
+[data-note][data-margin='off'] {
+  --note-margin: none;
+}
+[data-note='grid'] {
+  --note-pattern2: linear-gradient(
+    to right,
+    transparent calc(var(--rule-gap) - 1px),
+    var(--line) calc(var(--rule-gap) - 1px)
+  );
+}
+[data-note='dot'] {
+  --note-pattern: radial-gradient(circle, var(--line) 0 1.7px, transparent 2.2px);
+}
+[data-note='ring'] {
+  /* 丸ドット：中央がくり抜かれた輪 */
+  --note-pattern: radial-gradient(circle, transparent 0 1.9px, var(--line) 2.2px 3.3px, transparent 3.7px);
+}
+[data-note='plain'] {
+  --note-pattern: none;
+}
+[data-note='cornell'] {
+  --note-cue: linear-gradient(to right, transparent 231px, var(--line) 231px, var(--line) 233px, transparent 233px);
+  --note-summary: linear-gradient(var(--line), var(--line));
+}
+.paper,
+html.paper-canvas,
+.note-swatch {
+  background-color: var(--paper);
+  background-image: var(--note-margin), var(--note-cue), var(--note-summary), var(--note-pattern), var(--note-pattern2);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 2px,
+    100% var(--rule-gap),
+    var(--rule-gap) var(--rule-gap);
+  background-repeat: repeat-y, repeat-y, no-repeat, repeat, repeat;
+  background-position:
+    0 0,
+    0 0,
+    0 calc(100% - 128px),
+    0 96px,
+    0 96px;
+}
+/* 編集画面（PDF のまわりの紙）には左の赤い縦線を引かない（SPEC §8.0.6） */
+html.paper-canvas {
+  --note-margin: none;
+}
+html:is([data-note='dot'], [data-note='ring']) .paper,
+html:is([data-note='dot'], [data-note='ring']).paper-canvas,
+.note-swatch:is([data-note='dot'], [data-note='ring']) {
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 2px,
+    var(--rule-gap) var(--rule-gap),
+    var(--rule-gap) var(--rule-gap);
+  background-position:
+    0 0,
+    0 0,
+    0 calc(100% - 128px),
+    calc(var(--rule-gap) / -2) calc(96px - var(--rule-gap) / 2),
+    0 96px;
+}
+/* 紙：内容と一緒にスクロールする。上に 96px の上余白、左の余白の縦線の右から内容（.paper--margin） */
+.paper {
+  position: relative; /* ホームの余白のシール（.sticker-layer--home）の基準 */
+  min-height: 100%;
+  padding: 96px var(--space-6) var(--space-6);
+  background-attachment: local;
+}
+.paper--margin {
+  padding-left: 112px;
+}
+
+/* 編集画面：同じ紙を窓（html）いっぱいに敷く。拡大して PDF が横にはみ出しても、はみ出したところまで罫線が続く。
+   模様は 1 つずつくり返すので、PDF の拡大・縮小では大きさが変わらない。余白の縦線は左に 1 本だけ。
+   html の背景は窓の高さでくり返すので、コーネルの要約欄の線は出さない */
+html.paper-canvas {
+  --note-summary: none;
+}
+html.paper-canvas body,
+.paper.paper--viewer {
+  background: none;
+}
+.paper.paper--viewer {
+  padding-left: var(--space-6);
+}
+/* 編集画面は紙だけ（アプリ名・学期・日付は出さない。ツールバーの下からのぞかないように） */
+.paper--viewer .notebook-head {
+  display: none;
+}
+
+/* 上余白（ノートの上部）：アプリ名・学期・日付 */
+.notebook-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 calc(var(--space-6) + 276px) 0 var(--space-6); /* 右は上の固定ボタン（ホーム・着せ替え・筆箱）の分 */
+}
+h1,
+h2,
+h3,
+.head {
+  font-family: var(--font-head);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+h1 {
+  font-size: var(--fs-h1);
+}
+h2 {
+  font-size: var(--fs-h2);
+}
+h3 {
+  font-size: var(--fs-h3);
+}
+.ja-wrap {
+  /* 授業名など：app.js の jaWrap が入れた <wbr> の位置でだけ折り返す（「国際ビジネス戦／略」にしない） */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+h2[tabindex='-1']:focus {
+  outline: none; /* 画面が変わったときに見出しへ移すフォーカス（読み上げ用）。枠は出さない */
+}
+.muted {
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+}
+/* 段落の説明（セットアップの案内・設定の補足など）は 1 段大きく、少し濃く。短い添え書き（span の .muted）は小さいまま */
+p.muted {
+  font-size: 14px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--paper-ink-weak) 55%, var(--paper-ink));
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}

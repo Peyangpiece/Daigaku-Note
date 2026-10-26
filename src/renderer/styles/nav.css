@@ -1,0 +1,99 @@
+/* 大学ノートの画面：上の固定ボタン・右クリックメニュー・説明の寄せ。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* ボタンの並びのすぐ下に説明があるとき（自分のフォルダの画面）は、説明をボタンに寄せる */
+.course-actions + .course-help {
+  margin-top: calc(var(--space-3) * -1 + 6px);
+}
+.viewer-bar .btn[hidden] {
+  display: none;
+}
+/* ホームのカードの右クリックのメニュー */
+.card-menu {
+  position: fixed;
+  z-index: 50;
+  display: grid;
+  min-width: 140px;
+  padding: 4px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow-hover);
+}
+.card-menu button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.card-menu button:hover,
+.card-menu button:focus-visible {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+  outline: none;
+}
+.card-menu__danger {
+  color: var(--danger-ink) !important;
+}
+:root[data-theme='dark'] .card-menu__danger,
+:root[data-surface='dark'] .card-menu__danger {
+  color: var(--danger-ink-on-dark) !important;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .card-menu__danger {
+    color: var(--danger-ink-on-dark) !important;
+  }
+}
+
+/* ---- 上の固定ボタン（ホーム・着せ替え。SPEC-KISEKAE §3.1）。スクロールしても動かない。編集画面では上の見出しごと隠れる ---- */
+.topnav {
+  position: fixed;
+  top: 28px;
+  right: var(--space-6);
+  z-index: 30;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--card); /* 下にスクロールして本文に重なっても読めるように不透明。まわりに紙色のふちを敷く */
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--paper) 85%, transparent),
+    var(--card-shadow);
+}
+.topnav__btn {
+  padding: 7px 14px; /* 高さおよそ 32px */
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+.topnav__btn:hover {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.topnav__btn[aria-current='page'] {
+  background: var(--paper-ink);
+  color: var(--card);
+}
+/* 復習のボタンに今日の問題数 */
+.topnav__count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--c2);
+  color: #2b2b2b;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  vertical-align: 1px;
+}
+.topnav__btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}

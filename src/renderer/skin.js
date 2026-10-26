@@ -4,7 +4,7 @@ import {BUILTIN_TEMPLATES, CLASSIC_ID, NOTE_GAPS, INK_LIGHT, darken, inkOn, reso
 import {builtinStickerUrl, isBuiltinSticker} from '../shared/stickers.js';
 
 /** 今が暗い表示か（設定のテーマ、または OS に合わせる） */
-export function isDark() {
+function isDark() {
   const t = document.documentElement.dataset.theme;
   return t === 'dark' || (!t && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
 }
@@ -22,8 +22,7 @@ const DARK = {
   line: {lo: 0.26, span: 0.1, sat: 0.4},
   tab: {lo: 0.24, span: 0.12, sat: 0.55}
 };
-export const tone = (hex, kind, dark = isDark()) =>
-  !hex || hex === 'default' ? null : dark ? darken(hex, DARK[kind]) : hex;
+const tone = (hex, kind, dark = isDark()) => (!hex || hex === 'default' ? null : dark ? darken(hex, DARK[kind]) : hex);
 
 /** ノートの見た目を変数にする（html にも見本の紙にも使う）。戻りは {attrs, vars} */
 export function noteVars(note, dark = isDark()) {
@@ -160,7 +159,7 @@ export function fixedSticker(st, data, {x, y, base, cls = ''}) {
   return img ? `<span class="sticker-layer sticker-layer--fixed ${cls}" aria-hidden="true">${img}</span>` : '';
 }
 /** しおりのリボンの色と形（着せ替え）。色が default ならはじめの赤 */
-export const BOOKMARK_COLOR = '#e8505b';
+const BOOKMARK_COLOR = '#e8505b';
 export function bookmarkLook(skin) {
   const color = skin.bookmark.color === 'default' ? BOOKMARK_COLOR : skin.bookmark.color;
   return {cls: `bm--${skin.bookmark.shape}`, style: `--bm-color: ${color}; --bm-ink: ${inkOn(color)}`};

@@ -28,17 +28,4 @@ export function ulid(now = Date.now()) {
 
 export const isUlid = (s) => /^[0-9A-HJKMNP-TV-Z]{26}$/.test(String(s ?? ''));
 
-/** FNV-1a 32 ビット。テープの角度など、見た目を安定させる用途 */
-export function hash32(str) {
-  let h = 0x811c9dc5;
-  for (const ch of String(str)) {
-    for (const b of Buffer.from(ch, 'utf8')) {
-      h ^= b;
-      h = Math.imul(h, 0x01000193) >>> 0;
-    }
-  }
-  return h >>> 0;
-}
-
-/** マスキングテープの角度：−6〜+6 度。授業 ID から決める（毎回同じ） */
-export const tapeAngle = (id) => (hash32(id) % 13) - 6;
+export {hash32, tapeAngle} from './hash.js';

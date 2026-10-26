@@ -1,0 +1,184 @@
+/* 大学ノートの画面：ボタン・入力・focus・slip・empty・toast・危険の色。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* ボタン・入力 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--paper-ink);
+  background: var(--paper);
+  color: var(--paper-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  cursor: default;
+  border-style: dashed;
+  border-color: var(--paper-ink-weak);
+  background: transparent;
+  color: var(--paper-ink-weak);
+}
+.btn--small {
+  padding: 5px 12px; /* 高さおよそ 32px。指でも押しやすい大きさ（以前は 2px で 26px ほどだった） */
+  font-size: var(--fs-small);
+}
+.btn--quiet {
+  border-color: var(--paper-ink-weak);
+  font-weight: 500;
+}
+.btn--primary {
+  background: var(--paper-ink);
+  color: var(--paper);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.input {
+  width: 100%;
+  padding: 6px 2px;
+  border: 0;
+  border-bottom: 1.5px solid var(--paper-ink-weak); /* 入力欄の境目はコントラスト 3:1 以上 */
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.input:focus {
+  outline: none;
+  border-bottom-color: var(--accent, var(--c4));
+}
+/* キーボードで来たときは下線の色だけでなく枠も出す（どこにいるか分かるように） */
+.input:focus-visible {
+  outline: 2px solid var(--accent, var(--c4));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 紙片（資料の行・カード） */
+.slip {
+  background: var(--card);
+  border-radius: var(--radius-m);
+  box-shadow: var(--card-shadow);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  padding: var(--space-3);
+}
+
+/* 空の状態 */
+.empty {
+  padding: var(--space-6) 0;
+  color: var(--paper-ink-weak);
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+/* トースト：紙片が下に貼られる。重ねずに積む（新しいものが下）。押すと消える */
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  width: max-content;
+  max-width: min(640px, calc(100vw - 48px));
+  z-index: 10;
+}
+.toast {
+  background: var(--card);
+  box-shadow: var(--card-shadow-hover);
+  border-radius: var(--radius-m);
+  padding: 10px 16px;
+  cursor: pointer;
+  animation: paste var(--motion) ease-out;
+}
+.toast--error {
+  border-left: 4px solid var(--rule-margin);
+}
+@keyframes paste {
+  from {
+    transform: translateY(12px) rotate(-1deg);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) rotate(0);
+    opacity: 1;
+  }
+}
+
+.btn--danger {
+  color: var(--danger-ink);
+}
+:root[data-theme='dark'] .btn--danger,
+:root[data-surface='dark'] .btn--danger {
+  color: var(--danger-ink-on-dark);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .btn--danger {
+    color: var(--danger-ink-on-dark);
+  }
+}
+.toast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.toast__text {
+  flex: 1 1 auto;
+}
+.toast__close {
+  margin-left: auto;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--paper-ink-weak);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast__close:hover,
+.toast__close:focus-visible {
+  color: var(--paper-ink);
+}
+.toast__detail {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--paper-ink) 6%, transparent);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 8em;
+  overflow: auto;
+  cursor: text;
+}
+.toast__action {
+  margin-left: 0;
+  padding: 2px 10px;
+  border: 1.5px solid currentColor;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

@@ -2,6 +2,18 @@
 
 版ごとの変更。新しい版が上。公開のときに Release の本文へその版の節が入る（`.github/workflows/release.yml`）。
 
+## 0.10.4
+
+評価の「段階 4」の前半：設計の整理と、AI を使わない穴埋め。
+
+- **隠した箇所から穴埋めを作る**（SPEC §11.3）：回の資料に文字隠しマーカーが 5 つ以上あれば、授業画面のクイズの行にボタンが出る。隠した語を含む一文を引用にし、語を `[＿]` にした穴埋めを、ほかのマーカーの語を誤答にして作る。AI も API キーも使わない。同じ回のクイズがあれば版を上げる（前の版の記録は残る）
+- しおりの数を、上書き保存した PDF でも元の中身（base_sha256）で数えるように（授業画面のリボンが消えなくなる）
+- 画面の CSS を 1 つの `notebook.css` から 16 のファイル（base・home・course・components・layout・setup・quiz・viewer・nav・kisekae・fudebako・dialogs・tryout・swipe・desk-tools・desk）に分けた。描画は分割前と同じ（全画面の写しで確かめた）
+- レンダラの循環 import をなくした：DOM の部品（エスケープ・窓・トースト）を `ui-kit.js`、状態と経路を `store.js` に分け、画面は `app.js` を読まない。テスト（`tests/imports.test.js`）で決まりを確かめる
+- 重複していたコードを 1 つに：HTML のエスケープ（7 か所 → `shared/html.js`）、ハッシュと付箋の傾き（`shared/hash.js`）、回の並び（`shared/rounds.js`）、PDF の編集画面の定数（`shared/annotation.js`）
+- 使われていない IPC の窓口（`quiz.status`・`quiz.list`・`app.version`・`app.openWindow`・`stationery.acquire`・`attention.changed`）と、使われていない export を整理
+- 狭い付箋（自分のフォルダ）でクイズのボタンが縦に潰れないように折り返す
+
 ## 0.10.3
 
 評価の「段階 3」：使いやすさの残り。

@@ -391,6 +391,17 @@ export class Repo {
         .map((r) => [r.sha256, Number(r.n)])
     );
   }
+  /** 資料（注釈の鍵 = base_sha256 か sha256）ごとの、隠した語のある文字隠しマーカーの数（§11.3 の「隠した箇所から穴埋めを作る」を出す判断） */
+  maskCounts() {
+    return Object.fromEntries(
+      this.db
+        .prepare(
+          "SELECT sha256, COUNT(*) AS n FROM annotation WHERE kind = 'mask' AND TRIM(body) != '' GROUP BY sha256"
+        )
+        .all()
+        .map((r) => [r.sha256, Number(r.n)])
+    );
+  }
   listStickers() {
     return this.db.prepare('SELECT * FROM sticker ORDER BY created_at DESC').all();
   }

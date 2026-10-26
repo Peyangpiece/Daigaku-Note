@@ -1,0 +1,29 @@
+/* 大学ノートの画面：2 本指のスワイプで戻る・進むときのスライド。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* トラックパッドの 2 本指の横スワイプ（renderer/swipe.js）：ノートのページ（#app）が指と同じだけ横へスライドする。
+   スライドしている間は、ページの下に机（紙より暗い色）が見え、ページの縁に影が付く */
+html.is-page-sliding,
+html.is-page-sliding body {
+  overflow-x: hidden;
+  background: color-mix(in srgb, var(--paper) 78%, #000);
+}
+html.is-page-sliding #app {
+  min-height: 100vh;
+  box-shadow: 0 0 32px rgba(0, 0, 0, 0.25);
+  will-change: transform;
+}
+/* スワイプで並ぶ行き先のページの写し（前に開いていたときのもの）。いまのページと並んで横にスライドする */
+.swipe-under.paper {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-attachment: scroll;
+  will-change: transform;
+}
+.swipe-under.is-leaving {
+  opacity: 0;
+  transition: opacity calc(var(--motion) * 1.5) ease calc(var(--motion) * 1.25);
+}
