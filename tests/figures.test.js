@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   FIGURES,
+  FIGURE_SUBJECTS,
   activeParams,
   cleanLabels,
   cleanParams,
@@ -56,7 +57,7 @@ test('素材：決め事を整える（範囲・候補・使う項目）。前�
   assert.deepEqual(cleanParams('fig-beaker', null), {level: 45, cap: '100'});
   assert.match(figureSvg('fig-beaker', {cap: '200'}), />200</, '目盛りの数字（容量 200 mL）');
   assert.doesNotMatch(figureSvg('fig-beaker', {cap: '0'}), />mL</);
-  assert.equal(cleanParams('fig-coord', {fn: 'sin'}).fn, 'none');
+  assert.equal(cleanParams('fig-coord', {fn: 'tan'}).fn, 'none', '知らない式は「式なし」');
   assert.equal(cleanParams('fig-parabola', {}).fn, 'quad', '放物線の既定は二次関数');
   assert.equal(cleanParams('fig-coord', {fn: 'quad', a: 0.25}).a, 0.3, '0.1 刻み');
   const coord = figureOf('fig-coord');
@@ -169,4 +170,90 @@ test('伸びる図（ほかの教科）：方眼・原稿用紙・4 線・五線
   assert.equal(drawToPlace('fig-staff'), '線の長さと段の数');
   assert.equal(drawToPlace('fig-timeline'), '');
   assert.equal(drawToPlace('fig-circle'), '');
+});
+
+test('素材（高校の教科）：教科のタブがそろい、どの図もどれかの教科に入る', () => {
+  assert.deepEqual(FIGURE_SUBJECTS, [
+    '数学',
+    '物理',
+    '化学',
+    '生物',
+    '地学',
+    '国語',
+    '英語',
+    '地理',
+    '歴史',
+    '公民',
+    '情報',
+    '保健体育',
+    '家庭',
+    '芸術',
+    '表・グラフ'
+  ]);
+  for (const s of FIGURE_SUBJECTS)
+    assert.ok(
+      FIGURES.some((f) => f.subject === s),
+      `${s} の図がない`
+    );
+  assert.ok(FIGURES.every((f) => FIGURE_SUBJECTS.includes(f.subject)));
+  // 前の版の図は、教科が変わっても同じ id で読める
+  assert.equal(figureOf('fig-staff').subject, '芸術');
+  assert.equal(figureOf('fig-compass').subject, '地理');
+  assert.equal(figureOf('fig-graph-paper').subject, '表・グラフ');
+  // 決め事で形が変わる図は、どの選び方でも SVG になる
+  for (const [id, key] of [
+    ['fig-scatter', 'kind'],
+    ['fig-fault', 'kind'],
+    ['fig-titration-curve', 'kind'],
+    ['fig-population-pyramid', 'kind'],
+    ['fig-logic-gates', 'gate'],
+    ['fig-tree-diagram', 'kind']
+  ])
+    for (const [v] of figureOf(id).params.find((s) => s.key === key).options)
+      assert.doesNotMatch(figureSvg(id, {[key]: v}), /NaN|undefined/, `${id} ${v}`);
+  for (let n = 2; n <= 8; n++) assert.doesNotMatch(figureSvg('fig-pie-chart', {n}), /NaN|undefined/);
+  assert.match(figureSvg('fig-logic-gates', {gate: 'or'}), /OR（論理和）/);
+});
+
+test('グラフ：三角関数・指数関数・対数関数の式と値', () => {
+  const sin = cleanParams('fig-trig', null);
+  assert.equal(formulaOf(sin), 'y = 3 sin x');
+  assert.equal(formulaOf(cleanParams('fig-coord', {fn: 'cos', a: -1, b: 2, d: 1})), 'y = −cos 2x + 1');
+  assert.ok(Math.abs(graphY(sin, Math.PI / 2) - 3) < 1e-9);
+  assert.equal(formulaOf(cleanParams('fig-exp', null)), 'y = 2ˣ');
+  assert.equal(graphY(cleanParams('fig-exp', null), 3), 8);
+  assert.equal(formulaOf(cleanParams('fig-log', {fn: 'log', base: 10})), 'y = log₁₀ x');
+  assert.ok(Number.isNaN(graphY(cleanParams('fig-log', null), -1)), '対数は x ≦ 0 で描かない');
+  assert.equal(graphY(cleanParams('fig-log', null), 8), 3);
+  // 底は 0.1〜10。ほかの式の係数 a の範囲は変えない
+  assert.equal(cleanParams('fig-exp', {fn: 'exp', base: 50}).base, 10);
+  assert.equal(cleanParams('fig-linear', {fn: 'linear', a: -3}).a, -3);
+  // 領域を塗っても、対数の x ≦ 0 の所で絵が崩れない
+  assert.doesNotMatch(figureSvg('fig-log', {fn: 'log', base: 2, region: 'gt'}), /NaN/);
+});
+
+test('伸びる図（高校の教科）：波・v-t グラフ・グラフ類・地層などは伸ばすと数が増える', () => {
+  // はじめは前の版と同じ大きさ
+  assert.deepEqual(figureSize('fig-wave', null), {w: 280, h: 140});
+  assert.deepEqual(figureSize('fig-vt-graph', null), {w: 220, h: 180});
+  // 波：横に伸ばすと波の数（1 波長 120）、縦に伸ばすと振幅
+  assert.deepEqual(fitFigure('fig-wave', null, 460, 100), {n: 3.5, amp: 16});
+  // v-t グラフ：横に t、縦に v の目盛り
+  assert.deepEqual(fitFigure('fig-vt-graph', null, 300, 240), {tn: 12, vn: 8});
+  // 棒グラフ・ヒストグラム：横に棒（階級）、縦に目盛り
+  const bar = fitFigure('fig-bar-chart', null, 360, 300);
+  assert.deepEqual(bar, {n: 10, m: 10});
+  assert.equal((figureSvg('fig-bar-chart', bar).match(/fill="#a5d8ff"/g) ?? []).length, 10);
+  assert.equal(drawToPlace('fig-histogram'), '階級の数と目盛りの数');
+  // 地層：縦に伸ばすと層が増え、層の名前も付く
+  const st = fitFigure('fig-strata', null, 200, 300);
+  assert.equal(st.n, 10);
+  assert.equal(defaultLabels('fig-strata', st).length, 10);
+  // 鍵盤・2 進数・縦波・定常波・樹形図は横に
+  assert.equal(fitFigure('fig-keyboard', null, 600, 110).n, 4);
+  assert.equal(fitFigure('fig-binary', null, 440, 86).n, 12);
+  assert.equal(fitFigure('fig-standing-wave', null, 400, 120).n, 6);
+  assert.equal(fitFigure('fig-tree-diagram', null, 320, 100).n, 4);
+  assert.equal(growLabel('fig-tree-diagram', {n: 3}), '3 段（8 通り）');
+  assert.equal(drawToPlace('fig-tategaki'), '行の数と長さ');
 });
