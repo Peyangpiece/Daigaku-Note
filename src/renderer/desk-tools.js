@@ -307,7 +307,8 @@ export class DeskTools {
     ];
     this.$('seal-tabs').innerHTML = tabs
       .map(
-        ([v, l]) => `<button type="button" role="tab" data-seal-tab="${v}" aria-selected="${v === tab}">${l}</button>`
+        ([v, l]) =>
+          `<button type="button" role="tab" data-seal-tab="${v}" aria-selected="${v === tab}" tabindex="${v === tab ? 0 : -1}">${l}</button>`
       )
       .join('');
     const items =
@@ -329,7 +330,7 @@ export class DeskTools {
     this.sozaiSubject = subject;
     this.$('sozai-tabs').innerHTML = FIGURE_SUBJECTS.map(
       (v) =>
-        `<button type="button" role="tab" data-sozai-tab="${esc(v)}" aria-selected="${v === subject}">${esc(v)}</button>`
+        `<button type="button" role="tab" data-sozai-tab="${esc(v)}" aria-selected="${v === subject}" tabindex="${v === subject ? 0 : -1}">${esc(v)}</button>`
     ).join('');
     this.$('sozai-grid').innerHTML = FIGURES.filter((f) => f.subject === subject)
       .map(

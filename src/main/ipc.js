@@ -370,7 +370,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
 
   handle('course.update', async ({courseId, patch}) => {
-    const cid = id(courseId) ?? bad('授業が不正です');
+    const cid = id(courseId) ?? bad('この授業は見つかりませんでした');
     const allowed = {};
     if (Number.isInteger(patch.color) && patch.color >= 1 && patch.color <= 8) allowed.color = patch.color;
     if (['plain', 'stripe', 'dot'].includes(patch.tape_pattern)) allowed.tape_pattern = patch.tape_pattern;
@@ -426,7 +426,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   handle('skin.apply', ({courseId, templateId, stickerMode}) => {
     if (templateId != null && !templateExists(templateId)) bad('テンプレートが見つかりません');
     if (courseId) {
-      const cid = id(courseId) ?? bad('授業が不正です');
+      const cid = id(courseId) ?? bad('この授業は見つかりませんでした');
       const patch = {};
       if (templateId !== undefined) patch.skin_template_id = templateId ?? null;
       if (STICKER_MODES.includes(stickerMode)) patch.sticker_mode = stickerMode;
@@ -642,11 +642,11 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
 
   handle('sync.run', async ({connectionId, courseId, full}) => {
-    if (courseId && repo.get('course', id(courseId) ?? bad('授業が不正です'))?.kind === 'folder')
+    if (courseId && repo.get('course', id(courseId) ?? bad('この授業は見つかりませんでした'))?.kind === 'folder')
       return folders.scan(courseId);
     const payload = {};
     if (connectionId) payload.connectionId = id(connectionId) ?? bad('接続が不正です');
-    if (courseId) payload.courseId = id(courseId) ?? bad('授業が不正です');
+    if (courseId) payload.courseId = id(courseId) ?? bad('この授業は見つかりませんでした');
     if (full === true) payload.full = true;
     payload.kind = courseId ? 'course' : 'manual';
     return {jobId: jobs.enqueue('sync', payload).id};
@@ -831,7 +831,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   // ファイルの場所はレンダラから受け取らない：「ファイルを追加」はメインで選ぶ窓を開き、ドラッグは中身（バイト列）と名前だけを受け取る
   const MAX_UPLOAD = 300 * 1024 * 1024;
   const placeFor = (courseId, roundId) => {
-    const course = repo.get('course', id(courseId) ?? bad('授業が不正です')) ?? bad('授業がありません');
+    const course = repo.get('course', id(courseId) ?? bad('この授業は見つかりませんでした')) ?? bad('授業がありません');
     const term = repo.get('term', course.term_id) ?? bad('学期がありません');
     if (course.kind === 'folder') return {course, term, round: folders.roundOf(course)}; // フォルダの中にコピーする
     const round = roundId ? (repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません')) : null;
@@ -930,23 +930,27 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     const out = await folders.importCourses(r.filePaths[0]);
     return {added: out.added.map((c) => c.name), failed: out.failed};
   });
-  handle('folder.scan', async ({courseId}) => folders.scan(id(courseId) ?? bad('フォルダが不正です')));
+  handle('folder.scan', async ({courseId}) => folders.scan(id(courseId) ?? bad('このフォルダは見つかりませんでした')));
   // 自分のフォルダの中の下のフォルダ（付箋 1 枚）の名前を変える：パソコンのフォルダの名前を変えて、読み直す（中身の記録は SHA-256 で付いていく）
   handle('folder.renameSub', async ({courseId, sub, name}) => {
-    const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
+    const c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));
     return {
       ok: true,
-      ...(await folders.renameSub(c.id, str(sub, 1000) ?? bad('フォルダが不正です'), str(name, 200) ?? ''))
+      ...(await folders.renameSub(
+        c.id,
+        str(sub, 1000) ?? bad('このフォルダは見つかりませんでした'),
+        str(name, 200) ?? ''
+      ))
     };
   });
   handle('folder.reveal', async ({courseId}) => {
-    const c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
+    const c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));
     const e = await shell.openPath(c.dir);
     if (e) bad(`フォルダを開けませんでした（${e}）`);
     return {ok: true};
   });
   handle('folder.update', async ({courseId, name, scope}) => {
-    let c = folders.folderCourse(id(courseId) ?? bad('フォルダが不正です'));
+    let c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));
     const patch = {};
     if (name !== undefined) c = await folders.rename(c.id, str(name, 200) ?? ''); // パソコンのフォルダの名前も変える
     if (scope !== undefined) {
@@ -995,7 +999,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     // フォルダごとの色（タブ・フォルダ・マスキングテープ・新着の知らせ）。color が null ならその色を元に戻す。reset ですべて元に戻す
     if (patch.folderLook && typeof patch.folderLook === 'object') {
       const {courseId: fcid, part, color: c, reset} = patch.folderLook;
-      const cid = id(fcid) ?? bad('フォルダが不正です');
+      const cid = id(fcid) ?? bad('このフォルダは見つかりませんでした');
       const map = {...repo.getSetting('skin.folderLooks', {})};
       const look = {...(map[cid] ?? {})};
       if (reset === true) Object.keys(look).forEach((k) => delete look[k]);
@@ -1011,7 +1015,7 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
     }
     // 「振り分け前」の付箋の色：5 色の何番目か（0〜4）。null で元の白に戻す
     if (patch.ownColor && typeof patch.ownColor === 'object') {
-      const cid = id(patch.ownColor.courseId) ?? bad('授業が不正です');
+      const cid = id(patch.ownColor.courseId) ?? bad('この授業は見つかりませんでした');
       const i = patch.ownColor.index;
       if (i !== null && !(Number.isInteger(i) && i >= 0 && i < 5)) bad('色が不正です');
       const map = {...repo.getSetting('ui.ownColors', {})};
@@ -1094,12 +1098,14 @@ export function registerIpc(ctx, {openWindow, getWindow = () => null}) {
   });
   handle('quiz.list', ({courseId}) =>
     repo
-      .listQuizzes(id(courseId) ?? bad('授業が不正です'))
+      .listQuizzes(id(courseId) ?? bad('この授業は見つかりませんでした'))
       .map((z) => ({...z, source: JSON.parse(z.source_json ?? '{}'), source_json: undefined}))
   );
   handle('quiz.questions', ({quizIds, courseId}) =>
     repo
-      .listQuestions(quizIds ? {quizIds: ids(quizIds)} : {courseId: id(courseId) ?? bad('授業が不正です')})
+      .listQuestions(
+        quizIds ? {quizIds: ids(quizIds)} : {courseId: id(courseId) ?? bad('この授業は見つかりませんでした')}
+      )
       .map(parseQ)
   );
   handle('quiz.answer', ({questionId, answer, mode, seconds}) => {
