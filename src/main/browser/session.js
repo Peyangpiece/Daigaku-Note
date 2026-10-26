@@ -72,7 +72,7 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
    */
   async function loginVisible(
     connection,
-    {url, isLoggedIn, capture = null, autofill = null, timeoutMs = 600000, onStatus = () => {}}
+    {url, isLoggedIn, capture = null, autofill = null, sso = null, timeoutMs = 600000, onStatus = () => {}}
   ) {
     const {chromium} = await loadPw();
     const b = await chromium.launch(launchOptions(false));
@@ -117,6 +117,22 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     const started = Date.now();
     try {
       await page.goto(url, {waitUntil: 'domcontentloaded'}).catch(() => {});
+      // LMS 自身のログイン画面なら、統合認証へのリンク（レシピの login.sso）を 1 回だけ押して大学のログインへ進める
+      if (
+        sso &&
+        (await page
+          .locator(sso)
+          .count()
+          .catch(() => 0)) > 0
+      )
+        await Promise.all([
+          page.waitForLoadState('domcontentloaded').catch(() => {}),
+          page
+            .locator(sso)
+            .first()
+            .click({timeout: 5000})
+            .catch(() => {})
+        ]);
       onStatus('ログインできたら自動で閉じます');
       while (Date.now() - started < timeoutMs) {
         if (page.isClosed() || !b.isConnected())

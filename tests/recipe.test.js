@@ -97,6 +97,12 @@ test('レシピの検査', () => {
   );
   auto.notices.container = '#news';
   assert.deepEqual(validateRecipe(auto), []);
+  // login.sso：LMS 自身のログイン画面に出る統合認証へのリンク（セレクタの文字列）
+  const sso = structuredClone(good);
+  sso.login.sso = "a[href*='/auth/shibboleth']";
+  assert.deepEqual(validateRecipe(sso), []);
+  sso.login.sso = '';
+  assert.ok(validateRecipe(sso).some((e) => e.includes('login.sso')));
 });
 
 test('大学別の上書きと判定', () => {

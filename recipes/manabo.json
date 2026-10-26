@@ -1,7 +1,7 @@
 {
   "id": "manabo",
   "name": "manabo",
-  "version": "2026.10.2",
+  "version": "2026.10.3",
   "verified": false,
   "note": "SPEC §18.1 の構造を元に書いた。回の題名は押す要素の文字、なければその行の 1 つ前の行。お知らせは #div-class-news に AJAX で入り [+] で開くので container と auto を使う。実物の manabo で確かめるまで verified は false。確かめたら true にして version を上げる",
   "detect": {
@@ -10,6 +10,7 @@
   },
   "login": {
     "loggedIn": {"selector": "#button-logout, a[href*='logout']"},
+    "sso": "a[href*='/auth/shibboleth']",
     "form": null
   },
   "courses": {

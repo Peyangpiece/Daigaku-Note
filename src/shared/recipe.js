@@ -98,6 +98,8 @@ export function validateRecipe(r) {
   if (!r.login || !r.login.loggedIn?.selector) errors.push('login.loggedIn.selector が要ります');
   if (r.login?.form && (!r.login.form.user || !r.login.form.password || !r.login.form.submit))
     errors.push('login.form には user・password・submit が要ります');
+  if (r.login?.sso !== undefined && (typeof r.login.sso !== 'string' || !r.login.sso.trim()))
+    errors.push('login.sso はセレクタの文字列');
   for (const [sec, fields] of Object.entries(SECTION_FIELDS)) {
     if (!r[sec]) {
       errors.push(`${sec} がありません`);
