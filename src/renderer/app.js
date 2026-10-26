@@ -748,6 +748,8 @@ reload().catch((e) => {
 
 // 画面側で捕まえ損ねた例外・Promise の失敗：黙って止まらず、知らせてログに残す（main の process.on と対）
 window.addEventListener('error', (e) => {
+  // ResizeObserver の「ループ」は、描き直しを次の枠へ回したという知らせで、害がない（仕様どおり）。知らせに出さない
+  if (/^ResizeObserver loop/.test(e.message ?? '')) return;
   console.error(e.error ?? e.message);
   toast('画面で問題が起きました', {error: true, detail: String(e.error?.stack ?? e.message ?? e)});
 });

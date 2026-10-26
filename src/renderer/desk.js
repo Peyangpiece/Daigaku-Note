@@ -40,11 +40,14 @@ class Desk extends DeskTools {
     root.className = 'desk';
     root.hidden = true;
     super(root);
-    root.innerHTML = `<div class="desk-scratch" data-v="scratch"><svg class="desk-scratch__ink" aria-hidden="true"></svg></div>
+    // 下書きの層は大きさ 0 の目印（文書の左上）。線と貼りものは文書の座標で、そこからはみ出して描く（文書の高さを変えない）。
+    // ペンを持っている間だけ、窓いっぱいの受け皿（catch）が指・マウスを受ける
+    root.innerHTML = `<div class="desk-scratch" data-v="scratch"><svg class="desk-scratch__ink" aria-hidden="true"></svg></div><div class="desk-catch" data-v="catch"></div>
       ${FUDE}${cornersHtml()}
       <div class="desk-holding" data-v="holding" hidden><span data-v="holding-name"></span><button type="button" class="btn btn--small" data-desk-put title="ペンを置く（Esc）">ペンを置く</button></div>`;
     document.body.append(root);
     this.scratch = this.$('scratch');
+    this.catcher = this.$('catch');
     this.inkSvg = root.querySelector('.desk-scratch__ink');
     this.strokes = []; // {el, points, width}
     this.held = null; // 持っている道具：{item, i} か 'eraser'
@@ -60,7 +63,6 @@ class Desk extends DeskTools {
     if (!mode) return this.deactivate();
     this.root.dataset.mode = mode;
     if (!this.active) this.activate();
-    this.sizeScratch();
   }
   activate() {
     this.active = true;
@@ -92,7 +94,7 @@ class Desk extends DeskTools {
       if (t.dataset.deskPut !== undefined) return this.hold(null);
     };
     this.on(this.root, 'click', onClick);
-    this.on(this.scratch, 'pointerdown', (e) => this.onDown(e));
+    this.on(this.catcher, 'pointerdown', (e) => this.onDown(e));
     this.on(document, 'keydown', (e) => {
       if (isTyping(e)) return;
       const mod = IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
@@ -104,9 +106,6 @@ class Desk extends DeskTools {
         this.openCorner(null);
       }
     });
-    this.on(window, 'resize', () => this.sizeScratch());
-    this.resizeObs = new ResizeObserver(() => this.sizeScratch());
-    this.resizeObs.observe(document.body);
   }
   deactivate() {
     if (!this.active) return;
@@ -115,7 +114,6 @@ class Desk extends DeskTools {
     this.openCorner(null);
     this.toggleSheet(false);
     this.closeTools();
-    this.resizeObs?.disconnect();
     this.root.hidden = true;
   }
 
@@ -152,13 +150,6 @@ class Desk extends DeskTools {
   }
 
   // ---- 下書き ----
-  /** 下書きの層を文書の大きさに合わせる（スクロールしても線がずれない） */
-  sizeScratch() {
-    // 幅は窓の幅（scrollWidth にすると、画面の外にしまってある筆箱・ポーチの分まで広がり、紙が横に動いてしまう）
-    const el = document.scrollingElement;
-    this.scratch.style.width = `${document.documentElement.clientWidth}px`;
-    this.scratch.style.height = `${el.scrollHeight}px`;
-  }
   clearScratch() {
     this.figEditor?.close();
     for (const s of this.strokes) s.el.remove();
@@ -169,9 +160,9 @@ class Desk extends DeskTools {
     return !!(this.drawing || this.carry);
   }
   onDown(e) {
-    if (!this.held || e.button !== 0 || e.target.closest('.desk-stamp')) return;
+    if (!this.held || e.button !== 0) return;
     e.preventDefault();
-    this.scratch.setPointerCapture(e.pointerId);
+    this.catcher.setPointerCapture(e.pointerId);
     const x0 = window.scrollX,
       y0 = window.scrollY;
     const at = (ev) => {
@@ -186,9 +177,9 @@ class Desk extends DeskTools {
     };
     const up = (ev) => {
       if (ev.pointerId !== e.pointerId) return;
-      this.scratch.removeEventListener('pointermove', move);
-      this.scratch.removeEventListener('pointerup', up);
-      this.scratch.removeEventListener('pointercancel', up);
+      this.catcher.removeEventListener('pointermove', move);
+      this.catcher.removeEventListener('pointerup', up);
+      this.catcher.removeEventListener('pointercancel', up);
       const d = this.drawing;
       this.drawing = null;
       if (d?.kind === 'ink') {
@@ -216,9 +207,9 @@ class Desk extends DeskTools {
       };
     }
     this.drawAt(e, at);
-    this.scratch.addEventListener('pointermove', move);
-    this.scratch.addEventListener('pointerup', up);
-    this.scratch.addEventListener('pointercancel', up);
+    this.catcher.addEventListener('pointermove', move);
+    this.catcher.addEventListener('pointerup', up);
+    this.catcher.addEventListener('pointercancel', up);
   }
   drawAt(ev, at) {
     const d = this.drawing;
