@@ -144,43 +144,44 @@ function renderRoundCheck() {
     swaps: cal.swaps.map(({date, weekday}) => ({date, weekday})),
     listed: cal.rounds
   });
-  const fix = {holidays: res.flatMap((r) => r.fix.holidays), swaps: res.flatMap((r) => r.fix.swaps)};
   const li = (r) => {
     const notes = [];
-    if (!r.complete) {
-      const have = new Set(cal.rounds.filter((x) => x.weekday === r.weekday).map((x) => x.n));
-      const miss = Array.from({length: r.last}, (_, i) => i + 1).filter((n) => !have.has(n));
-      notes.push(`第 ${miss.join('・')} 回が読み取れなかったので、休講日・振替授業日は足しません`);
-    } else if (r.last !== rounds) notes.push(`学年暦は ${r.last} 回、学期の回数は ${rounds} 回です`);
+    if (!r.complete) notes.push('読み取れなかった回があるので、休講日・振替授業日は足しません');
+    else if (r.last !== rounds) notes.push(`学年暦は ${r.last} 回、学期の回数は ${rounds} 回です`);
     const head = `<strong>${r.weekday}曜日</strong> 第 1〜${r.last} 回`;
-    if (!r.mismatches.length)
-      return `<li class="is-ok">${head}：計算と同じ日付です${notes.length ? `<span class="muted">（${notes.join('。')}）</span>` : ''}</li>`;
-    const rows = r.mismatches
-      .map(
-        (m) =>
-          `<li>第 ${m.n} 回：学年暦 ${fmt(m.listed)} ／ 計算 ${m.computed ? fmt(m.computed) : '期間内にありません'}</li>`
-      )
-      .join('');
-    return `<li class="is-off">${head}：${r.mismatches.length} 回の日付が違います${notes.length ? `<span class="muted">（${notes.join('。')}）</span>` : ''}<ul>${rows}</ul></li>`;
+    const note = notes.length ? `<span class="muted">（${notes.join('。')}）</span>` : '';
+    if (!r.mismatches.length) return `<li class="is-ok">${head}：計算と同じ日付です${note}</li>`;
+    const SHOW = 3; // 違う回が多いとき（開始日のずれなど）は初めの 3 回だけ
+    const rows =
+      r.mismatches
+        .slice(0, SHOW)
+        .map(
+          (m) =>
+            `<li>第 ${m.n} 回：学年暦 ${fmt(m.listed)} ／ 計算 ${m.computed ? fmt(m.computed) : '期間内にありません'}</li>`
+        )
+        .join('') + (r.mismatches.length > SHOW ? `<li class="muted">ほか ${r.mismatches.length - SHOW} 回</li>` : '');
+    return `<li class="is-off">${head}：${r.mismatches.length} 回の日付が違います${note}<ul>${rows}</ul></li>`;
   };
-  const off = res.some((r) => r.mismatches.length);
-  box.innerHTML = `<h4>授業回の確かめ <span class="muted">学年暦の「第○回」「①」などと、回の日付の計算を比べます</span></h4>
-    <ul class="cal-check__list">${res.map(li).join('')}</ul>
-    ${
-      fix.holidays.length || fix.swaps.length
-        ? `<div class="actions"><button type="button" class="btn btn--small" id="tm-round-fix">学年暦の授業回に合わせる（休講日 ${fix.holidays.length} 日・振替授業日 ${fix.swaps.length} 日を足す）</button></div>`
-        : off
-          ? '<p class="muted">開始日・終了日が学年暦の回の日付を含んでいるか確かめてください。</p>'
-          : ''
-    }`;
+  const {fix} = res;
+  const parts = [
+    res.start && `開始日を ${fmt(res.start)}に`,
+    res.end && `終了日を ${fmt(res.end)}に`,
+    fix.holidays.length && `休講日を ${fix.holidays.length} 日足す`,
+    fix.swaps.length && `振替授業日を ${fix.swaps.length} 日足す`
+  ].filter(Boolean);
+  box.innerHTML = res.rows.length
+    ? `<h4>授業回の確かめ <span class="muted">学年暦の「第○回」「①」などと、回の日付の計算を比べます</span></h4>
+    <ul class="cal-check__list">${res.rows.map(li).join('')}</ul>
+    ${parts.length ? `<div class="actions"><button type="button" class="btn btn--small" id="tm-round-fix">学年暦の授業回に合わせる（${parts.join('・')}）</button></div>` : ''}`
+    : '<h4>授業回の確かめ</h4><p class="muted">学年暦の授業回に、この学期の期間の日がありません。開始日・終了日を確かめてください。</p>';
   const b = $('tm-round-fix');
   if (b)
     b.onclick = () => {
+      if (res.start) $('tm-start').value = res.start;
+      if (res.end) $('tm-end').value = res.end;
       addToCal(fix);
       refresh();
-      toast(
-        `休講日 ${fix.holidays.length} 日・振替授業日 ${fix.swaps.length} 日を足しました。内容を確かめて「保存」を押してください`
-      );
+      toast(`学年暦の授業回に合わせました（${parts.join('・')}）。内容を確かめて「保存」を押してください`);
     };
 }
 

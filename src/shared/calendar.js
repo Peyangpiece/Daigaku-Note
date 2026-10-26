@@ -48,12 +48,12 @@ export function normalizeText(s) {
     .replace(/[ \t　]+/g, ' ');
 }
 
-// 日付：2026/4/1・2026年4月1日・令和8年4月1日・4/1・4月1日・4.1。続けて (月)・(月曜日) があれば曜日も取る
+// 日付：2026/4/1・2026年4月1日・令和8年4月1日・4/1・4月1日・4.1。続けて (月)・(月曜日) があれば曜日も取る。
+// 「1.4/29」（箇条の番号＋日付）の「1.4」は日付にしない（後ろに「/29」が続く）。行をまたいで読まない（「4月\n5月」）
 const DATE_RE =
-  /(?:(?:(\d{4})|令和\s?(\d{1,2})|R\s?(\d{1,2}))\s?[年/.]\s?)?(\d{1,2})\s?[月/.]\s?(\d{1,2})\s?日?(?:\s?\(\s?([月火水木金土日])\s?(?:曜日?)?\s?\))?/g;
+  /(?<!\d)(?:(?:(\d{4})|令和 ?(\d{1,2})|R ?(\d{1,2})) ?[年/.] ?)?(\d{1,2}) ?[月/.] ?(\d{1,2})(?!\d|[/.]\d) ?日?(?: ?\( ?([月火水木金土日]) ?(?:曜日?)? ?\))?/g;
 // 範囲の終わり：「〜9/20」「〜20日」「〜9月20日」
-const RANGE_END_RE =
-  /^\s?〜\s?(?:(\d{1,2})\s?[月/.]\s?)?(\d{1,2})\s?日?(?:\s?\(\s?[月火水木金土日]\s?(?:曜日?)?\s?\))?/;
+const RANGE_END_RE = /^ ?〜 ?(?:(\d{1,2}) ?[月/.] ?)?(\d{1,2}) ?日?(?: ?\( ?[月火水木金土日] ?(?:曜日?)? ?\))?/;
 
 // 言葉の決まり。振替（別の曜日の授業）＞ 授業を行う ＞ 休み の順に強い
 const SWAP_RE =
@@ -61,7 +61,7 @@ const SWAP_RE =
 const CLASS_RE =
   /(?:授業|講義)\s?(?:実施|日|を行う|あり|を行います)|平常\s?(?:通り|どおり)|通常\s?(?:通り|どおり)?\s?(?:授業|講義)/;
 const HOLIDAY_RE =
-  /全学休講|休講|休業|閉講|休校|創立記念|学園祭|大学祭|文化祭|入学試験|入試|一斉休|臨時休|年末年始|定期試験|期末試験|試験期間|補講|休日|休み/;
+  /全学休講|休講|休業|閉講|休校|創立記念|学園祭|大学祭|文化祭|入学試験|入試|一斉休|臨時休|年末年始|休暇|定期試験|期末試験|試験期間|補講|休日|休み/;
 
 // 授業回の印：「第5回」「5回目」「⑤」。前に曜日（「月⑤」「月曜 第5回」）があれば、その曜日の授業の回
 const ROUND = String.raw`(?:([月火水木金土])\s?(?:曜日?)?\s?(?:の)?\s?)?(?:第\s?(\d{1,2})\s?回(?!数)|(\d{1,2})\s?回目|([\u2460-\u2473]))`;
@@ -81,11 +81,98 @@ function classify(before, after) {
     if (sw) return {kind: 'swap', weekday: sw[1] ?? sw[2] ?? sw[3] ?? sw[4]};
   }
   for (const s of [after, before]) if (CLASS_RE.test(s)) return {kind: 'class'};
-  for (const s of [after, before]) {
-    const h = s.match(HOLIDAY_RE);
-    if (h) return {kind: 'holiday', label: h[0]};
+  const h = after.match(HOLIDAY_RE) ?? [...before.matchAll(new RegExp(HOLIDAY_RE, 'g'))].at(-1); // 前の言葉は日付にいちばん近いもの
+  return h ? {kind: 'holiday', label: h[0]} : null;
+}
+
+// 月ごとのます目の学年暦：1 週が 1 行で「13 ① 14 ② 15 ② 16 ② 17 ② 18 補 19 ×」のように日と印が並ぶ（PDF の文字の取り出し）。
+// 行に月がない（「9月 21 × 22 …」のように行の頭にあることもある）ので、続いた行の並びと月の長さから日付を決める
+const MARK = String.raw`[\u2460-\u2473\u3251-\u325a]|補|[×✕]`;
+const GRID_LINE_RE = new RegExp(String.raw`^ ?(?:(\d{1,2}) ?月 )?((?:\d{1,2} ?(?:${MARK})? ?){4,7})$`);
+const GRID_CELL_RE = new RegExp(String.raw`(\d{1,2}) ?(${MARK})?`, 'g');
+const circledNumber = (c) => {
+  const x = c?.charCodeAt(0) ?? 0;
+  if (x >= 0x2460 && x <= 0x2473) return x - 0x2460 + 1;
+  if (x >= 0x3251 && x <= 0x325a) return x - 0x3251 + 21;
+  return 0;
+};
+
+/** ます目の行を探して日付を付ける。戻り：{lines: [[行の始め, 終わり]], cells: [{date, mark}]}。日付の決まらない並びは捨てる */
+function parseGrid(t, year) {
+  const rows = [];
+  let pos = 0;
+  for (const line of t.split('\n')) {
+    const m = line.match(GRID_LINE_RE);
+    if (m) {
+      const cells = [...m[2].matchAll(GRID_CELL_RE)].map((c) => ({day: Number(c[1]), mark: c[2] ?? ''}));
+      // 日は 1 つずつ（抜けは 2 つまで）増え、月の終わりで 1〜3 日に戻る
+      const ok = cells.every((c, i) => {
+        if (c.day < 1 || c.day > 31) return false;
+        if (!i) return true;
+        const g = c.day - cells[i - 1].day;
+        return (g >= 1 && g <= 3) || (c.day <= 3 && cells[i - 1].day >= 27);
+      });
+      if (ok) rows.push({start: pos, end: pos + line.length, month: m[1] ? Number(m[1]) : 0, cells});
+    }
+    pos += line.length + 1;
   }
-  return null;
+  // 続いた行（次の行の頭の日が 6〜8 日あと。月をまたげば 20〜25 日もどる）をまとめる
+  const segs = [];
+  for (const r of rows) {
+    const prev = segs.at(-1)?.at(-1);
+    const g = prev ? r.cells[0].day - prev.cells[0].day : null;
+    if (prev && ((g >= 6 && g <= 8) || (g >= -25 && g <= -20))) segs.at(-1).push(r);
+    else segs.push([r]);
+  }
+  const fyFrom = `${year}-04-01`,
+    fyTo = `${year + 1}-03-31`;
+  const out = {lines: [], cells: []};
+  for (const seg of segs) {
+    if (seg.length < 3) continue; // 短い並びは、ます目かどうか分からない
+    // 始まりの日の候補（年度の前後 1 年）を順に当て、すべての日が 7 日ずつの枠に入るものを選ぶ。
+    // 2 つ以上あれば、半分以上が年度に入るもののうち、祝日の合うもの、次に年度に入る日が多いもの。それでも決まらなければ読まない
+    const fits = [];
+    for (let s0 = `${year - 1}-01-01`; s0 <= `${year + 1}-12-31`; s0 = addDays(s0, 1)) {
+      const dates = [];
+      let ok = true;
+      for (let k = 0; ok && k < seg.length; k++) {
+        const ws = addDays(s0, 7 * k);
+        let from = 0;
+        for (const [ci, c] of seg[k].cells.entries()) {
+          let hit = -1;
+          for (let j = from; j < 7; j++)
+            if (Number(addDays(ws, j).slice(8)) === c.day) {
+              hit = j;
+              break;
+            }
+          if (hit < 0) {
+            ok = false;
+            break;
+          }
+          const d = addDays(ws, hit);
+          if (!ci && seg[k].month && Number(d.slice(5, 7)) !== seg[k].month) {
+            ok = false;
+            break;
+          }
+          dates.push({date: d, mark: c.mark});
+          from = hit + 1;
+        }
+      }
+      if (!ok) continue;
+      // 祝日の合い方：平日の祝日に回の印がなければ +1、あれば −1（祝日に授業をする日は少ない）
+      const hol = holidaysBetween(dates[0].date, dates.at(-1).date);
+      let fit = 0;
+      for (const x of dates)
+        if (hol.has(x.date) && !['土', '日'].includes(WD[weekdayOf(x.date)])) fit += circledNumber(x.mark) ? -1 : 1;
+      fits.push({dates, inFy: dates.filter((x) => x.date >= fyFrom && x.date <= fyTo).length, fit});
+    }
+    const near = fits.filter((f) => f.inFy * 2 >= f.dates.length).sort((a, b) => b.fit - a.fit || b.inFy - a.inFy);
+    const [a, b] = near;
+    if (!a || (b && b.inFy === a.inFy && b.fit === a.fit)) continue; // 決まらなければ読まない
+    out.lines.push(...seg.map((r) => [r.start, r.end]));
+    out.cells.push(...a.dates);
+  }
+  return out;
 }
 
 /** 年の決め方：書いてあればそれ。なければ年度（4〜12 月はその年、1〜3 月は次の年）。曜日が書いてあれば、合う年（前後 1 年）を選ぶ */
@@ -112,13 +199,16 @@ const validDate = (s) => {
  * 同じ日が両方にあれば振替授業日を優先。日付の順に並べる。
  * 授業回：日付の後ろ（行の頭の日付の前に印があれば、その行は前）の「第5回」「⑤」などを、その曜日の第 N 回として読む。
  * 曜日は、印の前の曜日（「月⑤」）＞ 振替の言葉（「月曜日の授業」）＞ 行の頭の曜日 ＞ その日の曜日。
- * ふだんと違う曜日の回・祝日の回は、振替授業日にも入れる（休講の言葉のある日の印は読まない）
+ * ふだんと違う曜日の回・祝日の回は、振替授業日にも入れる（休講の言葉のある日の印は読まない）。
+ * 月ごとのます目（1 週が 1 行）の学年暦は parseGrid で日付を決め、丸数字をその日の曜日の第 N 回として読む
  */
 export function parseCalendar(text, {year} = {}) {
   const t = normalizeText(text);
   const y0 = Number.isInteger(year) ? year : new Date().getFullYear();
   const tokens = [];
+  const grid = parseGrid(t, y0);
   for (const m of t.matchAll(DATE_RE)) {
+    if (grid.lines.some(([a, b]) => m.index >= a && m.index < b)) continue; // ます目の行（下で読む）
     const month = Number(m[4]),
       day = Number(m[5]);
     if (month < 1 || month > 12 || day < 1 || day > 31) continue;
@@ -167,16 +257,27 @@ export function parseCalendar(text, {year} = {}) {
   };
   let unknown = 0;
   let last = null;
-  for (let i = 0; i < tokens.length; i++) {
-    const tk = tokens[i];
-    if (tk.rangeEnd) continue;
+  const ctx = tokens.map((tk, i) => {
+    if (tk.rangeEnd) return null;
     const next = tokens.slice(i + 1).find((x) => !x.rangeEnd);
     const prev = tokens[i - 1];
     const afterEnd = Math.min(next ? next.start : t.length, tk.end + 60);
     const after = t.slice(tk.end, afterEnd).split('\n')[0];
     const beforeStart = Math.max(prev ? prev.end : 0, tk.start - 40);
     const before = t.slice(beforeStart, tk.start).split('\n').at(-1);
-    let c = classify(before, after);
+    // 次の日付まで「、」だけで同じ行に続くなら、言葉はその後ろ（「4/29、7/20、10/12 は通常授業を行います」）
+    const listed = !!next && /^[\s、,・/]*$/.test(t.slice(tk.end, next.start)) && !tk.until;
+    return {next, prev, after, before, listed, c: classify(listed ? '' : before, listed ? '' : after)};
+  });
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const x = ctx[i];
+    if (x && !x.c && x.listed) x.c = ctx[tokens.indexOf(x.next)]?.c ?? null;
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    const tk = tokens[i];
+    if (tk.rangeEnd) continue;
+    const {prev, after, before} = ctx[i];
+    let c = ctx[i].c;
     // 授業回の印（範囲の日付には付けない）
     const line = lineInfo(tk);
     const r = tk.until ? null : roundOf(line.before ? before.match(ROUND_END_RE) : after.match(ROUND_RE));
@@ -215,23 +316,31 @@ export function parseCalendar(text, {year} = {}) {
       if (!had || (had.kind === 'holiday' && entry.kind === 'swap')) byDate.set(d, entry);
     }
   }
+  // ます目の授業回：丸数字の日はその曜日の第 N 回。祝日の回はその日に授業を行う
+  for (const {date, mark} of grid.cells) {
+    const n = circledNumber(mark);
+    if (!n) continue;
+    rounds.push({date, weekday: WD[weekdayOf(date)], n});
+    const had = byDate.get(date);
+    if (holidaysBetween(date, date).size && had?.kind !== 'swap')
+      byDate.set(date, {kind: 'swap', date, weekday: WD[weekdayOf(date)], label: '授業を行う'});
+  }
   const all = [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
-  // 同じ曜日の同じ回・同じ日は、先に書いてあるほう
+  // 同じ曜日の同じ日は、先に書いてあるほう。曜日・日付の順（春と秋のように回が 1 から始まり直してよい）
   const seen = new Set();
   const outRounds = rounds
     .filter((x) => {
-      const k1 = `${x.weekday}${x.n}`,
-        k2 = `${x.weekday}${x.date}`;
-      if (seen.has(k1) || seen.has(k2)) return false;
-      seen.add(k1).add(k2);
+      const k = `${x.weekday}${x.date}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
       return true;
     })
-    .sort((a, b) => WD.indexOf(a.weekday) - WD.indexOf(b.weekday) || a.n - b.n);
+    .sort((a, b) => WD.indexOf(a.weekday) - WD.indexOf(b.weekday) || (a.date < b.date ? -1 : 1));
   return {
     holidays: all.filter((e) => e.kind === 'holiday').map(({date, label}) => ({date, label})),
     swaps: all.filter((e) => e.kind === 'swap').map(({date, weekday, label}) => ({date, weekday, label})),
     rounds: outRounds,
-    dates: tokens.filter((x) => !x.rangeEnd).length,
+    dates: tokens.filter((x) => !x.rangeEnd).length + grid.cells.length,
     unknown
   };
 }
