@@ -2,6 +2,14 @@
 
 版ごとの変更。新しい版が上。公開のときに Release の本文へその版の節が入る（`.github/workflows/release.yml`）。
 
+## 0.10.5
+
+評価の「段階 4」の後半：main と PDF の編集画面の分割。動きは変えない。
+
+- `src/main/ipc.js`（1,194 行）を `src/main/ipc/` の 10 のサービス（state・connections・terms・skins・stationery・materials・pdf・quiz・settings・app）と `common.js`（検査の補助）・`index.js`（handle の包みと登録）に分けた。各ファイルは使う依存だけを import する
+- PDF の編集画面の `views/viewer.js`（3,033 行）を、本体（起動・終了・四隅の道具）と 12 の関心ごと（しおり・ページの描画と拡大・注釈・保存と取り消し・道具と筆箱・貼りもの・ポインタ・ペンと消しゴム・文字隠しと赤シート・メモの手書き・書き出し・キーボード）に分けた。`viewer/shared.js` に定数と小さな補助。メソッドは `Object.assign(Viewer.prototype, …)` で足す（this は Viewer のまま）
+- `tests/ipc-channels.test.js` は `ipc/*.js` 全体を見る。画面の写し 13 枚と、編集画面の通し（文字入れ・メモ・取り消し／やり直し・ペン・消しゴム・しおり・再読込・書き出しの窓・キー）で分割前と同じ動きを確かめた
+
 ## 0.10.4
 
 評価の「段階 4」の前半：設計の整理と、AI を使わない穴埋め。

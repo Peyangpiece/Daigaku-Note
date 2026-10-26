@@ -21,7 +21,7 @@ Daigaku-Note/
 ├── src/
 │   ├── main/                     メインプロセス（Node）。ファイル・LMS・DB・秘密はここだけ
 │   │   ├── main.js               Electron の入口：常駐・トレイ・窓・起動手順（§3）
-│   │   ├── ipc.js                レンダラとの通信の窓口（§4）
+│   │   ├── ipc/                  レンダラとの通信の窓口（§4）。index.js が handle を包み、関心ごとの state・connections・terms・skins・stationery・materials・pdf・quiz・settings・app を順に register。common.js は検査の補助
 │   │   ├── jobs.js               ジョブの待ち行列（SPEC §13.6）
 │   │   ├── scheduler.js          毎日の同期・授業開始の同期・定期の確認（§6）
 │   │   ├── secrets.js            safeStorage の薄い包み（§7）
@@ -60,7 +60,8 @@ Daigaku-Note/
 │       ├── app.js                画面の土台・経路（ホーム／授業／設定／セットアップ）
 │       ├── ui-kit.js             DOM の部品（エスケープ・窓・トースト・入力中の判定）。画面はこれと store.js を読む（app.js は読まない）
 │       ├── store.js              状態（state）・経路（navigate）・読み直し（reload）
-│       └── views/*.js            画面ごと
+│       ├── views/*.js            画面ごと
+│       └── views/viewer/*.js     PDF の編集画面の関心ごと（しおり・ページ・注釈・保存・道具・貼りもの・ポインタ・ペン・文字隠し・メモ・書き出し・キー）。shared.js に定数。viewer.js が prototype に足す
 ├── recipes/                      画面操作型レシピ（JSON）。同梱分
 │   ├── schema.json               レシピの JSON Schema
 │   └── manabo.json               M0 の 1 本目（実物で確かめるまで `"verified": false`）

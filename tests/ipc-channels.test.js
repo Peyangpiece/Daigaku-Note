@@ -1,10 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync, readdirSync} from 'node:fs';
 
 // main の IPC の窓口（ipc.js の handle）と preload の許可一覧（INVOKE）がそろっているか。
 // 窓口があるのに許可にないと、レンダラから呼んだとき TypeError になる（v0.9.0 の term.readCalendar）
-const ipc = readFileSync(new URL('../src/main/ipc.js', import.meta.url), 'utf8');
+// 窓口は src/main/ipc/*.js に分かれている（index.js が順に register する）
+const ipcDir = new URL('../src/main/ipc/', import.meta.url);
+const ipc = readdirSync(ipcDir)
+  .filter((f) => f.endsWith('.js'))
+  .map((f) => readFileSync(new URL(f, ipcDir), 'utf8'))
+  .join('\n');
 const preload = readFileSync(new URL('../src/preload/preload.js', import.meta.url), 'utf8');
 const handles = [...ipc.matchAll(/handle\('([a-zA-Z.]+)'/g)].map((m) => m[1]);
 const invoke = preload.slice(preload.indexOf('INVOKE'), preload.indexOf('ON ='));
