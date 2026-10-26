@@ -784,3 +784,44 @@
   font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- 押したまま広げて大きさを決める図（表）：画面の上の薄い層・広げている四角・ます／目盛りの数 ---- */
+.grow-draw {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  cursor: crosshair;
+  background: color-mix(in srgb, var(--paper-ink) 6%, transparent);
+  touch-action: none;
+}
+.grow-draw__hint {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-ink);
+  color: #fff;
+  font-size: var(--fs-small);
+  pointer-events: none;
+}
+.grow-draw__box {
+  position: fixed;
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--c4);
+  pointer-events: none;
+}
+.grow-tip {
+  position: fixed;
+  z-index: 61;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-ink);
+  color: #fff;
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}

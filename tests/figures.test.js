@@ -7,7 +7,12 @@ import {
   cleanParams,
   defaultLabels,
   figureOf,
+  figureSize,
   figureSvg,
+  fitFigure,
+  growLabel,
+  growsWithSize,
+  moveLabels,
   formulaOf,
   graphY
 } from '../src/shared/figures.js';
@@ -56,11 +61,11 @@ test('素材：決め事を整える（範囲・候補・使う項目）。前�
   const coord = figureOf('fig-coord');
   assert.deepEqual(
     activeParams(coord, {fn: 'quad'}).map((s) => s.key),
-    ['fn', 'a', 'p', 'q', 'dom', 'region']
+    ['fn', 'xr', 'yr', 'a', 'p', 'q', 'dom', 'region']
   );
   assert.deepEqual(
     activeParams(coord, {fn: 'linear', dom: 'on'}).map((s) => s.key),
-    ['fn', 'a', 'b', 'dom', 'x1', 'inc1', 'x2', 'inc2', 'range', 'region']
+    ['fn', 'xr', 'yr', 'a', 'b', 'dom', 'x1', 'inc1', 'x2', 'inc2', 'range', 'region']
   );
   assert.equal(figureOf('fig-pentagon').id, 'fig-polygon');
   assert.equal(cleanParams('fig-pentagon', {}).n, 5);
@@ -104,4 +109,33 @@ test('素材：定義域・値域・領域（不等式）', async () => {
   assert.match(svg, /stroke-dasharray="6 4"/, '境界を含まない領域は点線');
   assert.match(svg, /fill="#fff" stroke="#d6336c"/, '含まない端は白い丸');
   assert.match(svg, /値域：0 ≦ y &lt; 4/);
+});
+
+test('伸びる図：表・数直線・座標平面は、伸ばした大きさに合わせてます・目盛りの数が増える', () => {
+  // 表：ます 1 つは 56×28。前の版の 3×3・4×5 は「表」の決め事に読み替える
+  assert.deepEqual(figureSize('fig-table', null), {w: 172, h: 88});
+  assert.deepEqual(figureSize('fig-table-4x5', null), {w: 228, h: 144});
+  assert.deepEqual(fitFigure('fig-table', {cols: 3, rows: 3}, 290, 120), {cols: 5, rows: 4});
+  assert.deepEqual(fitFigure('fig-table', {}, 5, 5), {cols: 1, rows: 1}, '小さくても 1 ます');
+  assert.equal(growLabel('fig-table', {cols: 4, rows: 2}), '横 4 × 縦 2');
+  // 数直線：右へ伸ばすと目盛りが増える（左の端の数はそのまま）
+  assert.deepEqual(figureSize('fig-numline', null), {w: 260, h: 64}, 'はじめは前の版と同じ大きさ');
+  const nl = fitFigure('fig-numline', {lo: -2}, 500, 64);
+  assert.equal(nl.n, 12);
+  assert.equal(defaultLabels('fig-numline', nl).at(-1).t, '9');
+  // 座標平面：横に伸ばすと x の、縦に伸ばすと y の目盛りが増える（原点は真ん中）
+  assert.deepEqual(figureSize('fig-coord', null), {w: 240, h: 240}, 'はじめは前の版と同じ大きさ');
+  const c = fitFigure('fig-coord', {fn: 'none'}, 400, 200);
+  assert.deepEqual([c.xr, c.yr], [20, 10]);
+  assert.deepEqual(figureSize('fig-coord', c), {w: 400, h: 200});
+  assert.match(figureSvg('fig-coord', c), /viewBox="0 0 400 200"/);
+  assert.match(figureSvg('fig-coord', c), />15</, '横に伸ばすと 15 の目盛りの数も出る');
+  assert.ok(growsWithSize('fig-table') && growsWithSize('fig-coord') && !growsWithSize('fig-circle'));
+  // 書き換えた文字は、図の中の同じ所に残す（座標平面は真ん中から）
+  assert.deepEqual(moveLabels('fig-table', [{x: 0.5, y: 0.5, t: 'a'}], {w: 100, h: 100}, {w: 200, h: 50}), [
+    {x: 0.25, y: 1, t: 'a'}
+  ]);
+  assert.deepEqual(moveLabels('fig-coord', [{x: 0.5, y: 0.5, t: 'O'}], {w: 240, h: 240}, {w: 400, h: 200}), [
+    {x: 0.5, y: 0.5, t: 'O'}
+  ]);
 });

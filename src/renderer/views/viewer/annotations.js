@@ -380,6 +380,15 @@ export const methods = {
         a.style = st;
         this.scheduleSave(a);
       },
+      // ます・目盛りの数を変えたら、貼った大きさも同じ割合で（1 ますの大きさは変えない。ページからははみ出さない）
+      onResize: (kx, ky) => {
+        const p = this.pages[a.page - 1];
+        const b = this.toScreen(a.page, a.rect);
+        const width = Math.min(b.width * kx, p.viewport.width - b.left),
+          height = Math.min(b.height * ky, p.viewport.height - b.top);
+        a.rect = this.fromScreen(a.page, {left: b.left, top: b.top, width, height});
+        this.place(a);
+      },
       onClose: (st) => {
         this.figEditor = null;
         if (a.removed) return;

@@ -5,7 +5,8 @@ import {esc, toast} from './ui-kit.js';
 import {state} from './store.js';
 import {MEMO_COLOR, MEMO_SIZE} from '../shared/annotation.js';
 import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, builtinStickerUrl, isBuiltinSticker} from '../shared/stickers.js';
-import {FIGURES, FIGURE_PT_PER_UNIT, FIGURE_SUBJECTS, figureOf, figureUrl} from '../shared/figures.js';
+import {FIGURES, FIGURE_PT_PER_UNIT, FIGURE_SUBJECTS, figureOf, figureUrl, growLabel} from '../shared/figures.js';
+import {growFigure, renderFigure} from './figure-view.js';
 import {evaluate, formatNumber} from '../shared/calc.js';
 import {
   TIMER_PRESETS,
@@ -292,7 +293,13 @@ export class DeskTools {
     for (const name of ['seal', 'sozai'])
       this.on(this.root.querySelector(`[data-corner="${name}"]`), 'pointerdown', (e) => {
         const item = e.target.closest('[data-seal], [data-figure]');
-        if (item) this.startCarry(e, this.itemSpec(item));
+        if (!item) return;
+        // 表は、押したまま広げて縦・横のますの数を決めて貼る
+        if (item.dataset.figure === 'fig-table' && e.button === 0) {
+          e.preventDefault();
+          return this.startGrowDraw(this.itemSpec(item));
+        }
+        this.startCarry(e, this.itemSpec(item));
       });
   }
 
@@ -339,6 +346,96 @@ export class DeskTools {
           `<button type="button" class="corner__item" data-figure="${f.id}" title="${esc(f.name)}"><img src="${figureUrl(f.id)}" alt="" draggable="false" /><span>${esc(f.name)}</span></button>`
       )
       .join('');
+  }
+
+  /**
+   * 押したまま広げて大きさを決める図（表）。画面の上に薄い層を出し、押した所から離した所までの四角に、
+   * ます（1 つ 56×28）がいくつ入るかで縦・横の数を決めて、離した所に貼る。広げている間は数を見せる。Esc か押さずに離すとやめる
+   */
+  startGrowDraw(spec) {
+    if (this.growDraw) return;
+    this.openCorner(null);
+    const layer = document.createElement('div');
+    layer.className = 'grow-draw';
+    layer.innerHTML =
+      '<p class="grow-draw__hint">貼りたい所を押したまま広げると、縦・横のますの数が決まります（Esc でやめる）</p><div class="grow-draw__box" hidden><div class="fig"></div></div>';
+    this.root.append(layer);
+    const box = layer.querySelector('.grow-draw__box');
+    const unit = this.stampScale() * FIGURE_PT_PER_UNIT; // viewBox の 1 単位の px
+    let start = null,
+      g = null;
+    const end = () => {
+      layer.remove();
+      this.showGrowTip(null);
+      window.removeEventListener('keydown', key, true);
+      this.growDraw = null;
+    };
+    const key = (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      end();
+    };
+    const update = (e) => {
+      g = growFigure(
+        {type: 'figure', ref: spec.ref},
+        unit,
+        Math.abs(e.clientX - start.x),
+        Math.abs(e.clientY - start.y)
+      );
+      // 押した点を角にして、広げた向きへ
+      const left = e.clientX < start.x ? start.x - g.w : start.x,
+        top = e.clientY < start.y ? start.y - g.h : start.y;
+      Object.assign(box.style, {left: `${left}px`, top: `${top}px`, width: `${g.w}px`, height: `${g.h}px`});
+      box.hidden = false;
+      renderFigure(box.firstElementChild, g.style);
+      this.showGrowTip(box, g.style);
+    };
+    layer.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      layer.setPointerCapture(e.pointerId);
+      start = {x: e.clientX, y: e.clientY, pointer: e.pointerId};
+      update(e);
+    });
+    layer.addEventListener('pointermove', (e) => start?.pointer === e.pointerId && update(e));
+    layer.addEventListener('pointerup', (e) => {
+      if (start?.pointer !== e.pointerId) return;
+      const r = box.getBoundingClientRect();
+      const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6;
+      end();
+      if (!moved || !g) return; // 押しただけならやめる
+      const scale = this.stampScale();
+      const placed = this.dropStamp(
+        {...spec, params: g.style.params, w: r.width / scale, h: r.height / scale},
+        r.left + r.width / 2,
+        r.top + r.height / 2,
+        r.left + r.width / 2,
+        r.top + r.height / 2
+      );
+      if (!placed) toast('ページの上で広げてください');
+    });
+    layer.addEventListener('pointercancel', end);
+    window.addEventListener('keydown', key, true);
+    this.growDraw = {end};
+  }
+
+  /** 伸びる図を広げている間、ます・目盛りの数を図の右下に見せる（el が null なら消す） */
+  showGrowTip(el, style) {
+    if (!el) {
+      this.growTip?.remove();
+      this.growTip = null;
+      return;
+    }
+    if (!this.growTip) {
+      this.growTip = document.createElement('div');
+      this.growTip.className = 'grow-tip';
+      this.growTip.setAttribute('role', 'status');
+    }
+    if (!this.growTip.isConnected) this.root.append(this.growTip);
+    this.growTip.textContent = growLabel(style.ref, style.params);
+    const r = el.getBoundingClientRect();
+    this.growTip.style.left = `${Math.round(r.right + 8)}px`;
+    this.growTip.style.top = `${Math.round(r.bottom - 14)}px`;
   }
 
   /** シール帳・素材の 1 つから、貼るものの中身と大きさ（pt）を作る */
