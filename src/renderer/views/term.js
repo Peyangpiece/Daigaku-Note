@@ -47,7 +47,7 @@ function calendarSection(term, focus) {
           <div class="cal-add"><input type="date" class="input" id="tm-swap-date" aria-label="振替授業日"><select class="input" id="tm-swap-wd" aria-label="行う授業の曜日">${[...'月火水木金土'].map((w) => `<option>${w}</option>`).join('')}</select><span>曜日の授業</span><button type="button" class="btn btn--small" id="tm-swap-add">足す</button></div>
         </div>
       </div>
-      <p class="muted">学期の期間の外の日は数えません。保存すると、その学期の授業の回の日付を計算し直します（LMS から来た日付はそのままです）。</p>
+      <p class="muted">学期の期間の外の日は数えません。保存すると、その学期の授業の回の日付をこの設定（授業回・休講日・振替授業日）にそろえます。</p>
       <div class="actions"><button type="button" class="btn btn--primary" data-tm-save>保存</button></div>
     </section>`;
 }

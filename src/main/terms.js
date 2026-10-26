@@ -83,22 +83,24 @@ export async function saveTerm({repo, rootDir}, input) {
 }
 
 /**
- * 学期を保存したあと、その学期の授業の回の日付を計算し直す（学年暦・期間・回数が変わったとき）。
- * LMS から日付が来た回（前の設定での計算と違う日付を持つ回）はそのまま。戻りは変えた回の数
+ * 授業の回の日付を、学期の設定（学年暦の授業回・休講日・振替授業日・期間）にそろえる（shared/term.js の termRoundDates）。
+ * 回の日付は LMS から来ない（どのコネクタも返さない）ので、いつもアプリの計算どおりにする。
+ * 学期を保存したとき・授業の曜日を変えたとき・起動したときに呼ぶ。termId を省けば全学期。戻りは変えた回の数
  */
-export function recomputeRoundDates(repo, before, after) {
+export function syncRoundDates(repo, termId = null) {
   let changed = 0;
-  for (const course of repo.listCourses({termId: after.id})) {
-    if (!course.weekday) continue;
-    const old = before ? termRoundDates(before, course.weekday) : [];
-    const now = termRoundDates(after, course.weekday);
-    for (const r of repo.listRounds(course.id)) {
-      if (r.number < 1) continue;
-      if (r.date && r.date !== old[r.number - 1]) continue;
-      const next = now[r.number - 1] ?? null;
-      if (r.date === next) continue;
-      repo.updateRound(r.id, {date: next});
-      changed++;
+  for (const term of repo.listTerms()) {
+    if (termId && term.id !== termId) continue;
+    for (const course of repo.listCourses({termId: term.id})) {
+      if (!course.weekday) continue;
+      const dates = termRoundDates(term, course.weekday);
+      for (const r of repo.listRounds(course.id)) {
+        if (r.number < 1) continue;
+        const next = dates[r.number - 1] ?? null;
+        if (r.date === next) continue;
+        repo.updateRound(r.id, {date: next});
+        changed++;
+      }
     }
   }
   return changed;
