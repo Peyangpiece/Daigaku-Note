@@ -20,6 +20,7 @@ import {
   box,
   range
 } from './figure-parts.js';
+import {skeletonDef} from './figure-skeleton.js';
 
 const NUM = '#495057'; // 目盛りの数
 const RED = '#d6336c';
@@ -863,6 +864,8 @@ export const HS_DEFS = [
     },
     labels: () => ['間期', '前期', '中期', '後期', '終期'].map((t, i) => J(36 + i * 66, 96, t, 10))
   },
+
+  skeletonDef,
 
   // ======== 地学 ========
   {
