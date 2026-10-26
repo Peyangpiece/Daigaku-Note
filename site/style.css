@@ -289,6 +289,51 @@ details p {
   margin: 4px 0;
 }
 
+/* 利用規約・プライバシーポリシー */
+.doc {
+  max-width: 820px;
+  padding-top: 32px;
+  padding-bottom: 32px;
+}
+.doc h1 {
+  margin: 0 0 4px;
+  font-size: 32px;
+}
+.doc h2 {
+  margin: 40px 0 8px;
+  font-size: 22px;
+}
+.doc h3 {
+  margin: 24px 0 4px;
+  font-size: 17px;
+}
+.doc p,
+.doc li {
+  margin: 0 0 8px;
+}
+.doc ol,
+.doc ul {
+  padding: 16px 24px 16px 40px;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 2px 6px rgba(43, 43, 43, 0.08);
+}
+.callout {
+  margin: 16px 0;
+  padding: 4px 0 0;
+}
+.callout ul {
+  background: #fff8e1;
+}
+.two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.two h3 {
+  margin-top: 8px;
+}
+
 @media (max-width: 640px) {
   body {
     background-image: repeating-linear-gradient(to bottom, transparent 0 31px, var(--rule) 31px 32px);

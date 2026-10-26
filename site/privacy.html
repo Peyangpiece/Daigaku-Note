@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>プライバシーポリシー — 大学ノート</title>
+    <link rel="icon" href="favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="./"><img src="icon.png" alt="" width="36" height="36" />大学ノート</a>
+      <nav aria-label="ほかのページ">
+        <a href="./">ホーム</a><a href="terms.html">利用規約</a><a href="privacy.html">プライバシーポリシー</a>
+      </nav>
+    </header>
+    <main class="doc">
+      <h1>プライバシーポリシー</h1>
+      <p class="muted">版：2026-10-26（アプリの「設定 → 情報 → 利用規約とプライバシーポリシー」と同じ文章です）</p>
+      <h2>アプリ（大学ノート）が扱うデータ</h2>
+      <ol>
+        <li>
+          保存する場所：授業・回・資料の一覧、書き込み（注釈）、クイズ、設定、ポイントは、このパソコンのアプリ用フォルダ（設定
+          →「情報」→「データの場所を開く」）に保存します。資料のファイルは、設定した保存先（既定はデスクトップの「大学ノート」）に保存します。開発者のサーバーには送りません。
+        </li>
+        <li>
+          大学のアカウント：LMS の ID・パスワード・Cookie・トークンは、OS の鍵（Mac はキーチェーン、Windows は
+          DPAPI）で暗号化して、このパソコンの中だけに保存します。ログやバックアップには入れません。
+        </li>
+        <li>
+          AI（クイズ）：自分の Claude API キーを登録し同意したときだけ、その回の資料の本文（学籍番号などの
+          ID・メール・電話番号は消してから）、授業名、回のタイトル、回のメモ、資料のファイル名を Anthropic の API
+          に送ります。大学のアカウント、資料のファイルそのもの、ほかの回の資料、成績は送りません。API キーは OS
+          の鍵で暗号化して保存します。
+        </li>
+        <li>
+          通信：アプリは、設定した LMS、Anthropic の API（同意したときだけ）、新しい版の確認と取得のための
+          GitHub、初回の Chromium の取り込みのための Playwright
+          の配布サーバーにだけ通信します。利用状況の収集（テレメトリ）や広告はありません。
+        </li>
+        <li>
+          ログ：不具合を調べるために、動作の記録を 7 日分このパソコンに残します（パスワードや Cookie は書きません）。LMS
+          の読み取りに失敗したときは、画面の骨組み（文字の多くを伏せたもの）を残します。これらは自動では送らず、本人が報告のために開発者へ送るときだけ使います。
+        </li>
+        <li>
+          バックアップ：毎日、データベースの写しを 7
+          日分アプリ用フォルダに残します（大学のアカウントの情報は含みません）。
+        </li>
+        <li>
+          削除：アプリを消しても、アプリ用フォルダと保存先の資料は残ります。全部消すには、その 2
+          つのフォルダを消してください。LMS の接続を削除すると、その接続のアカウントの情報も消えます。
+        </li>
+        <li>問い合わせ：GitHub の Peyangpiece/Daigaku-Note の Issues で受け付けます。</li>
+      </ol>
+      <h2>AI でクイズを作るとき</h2>
+      <p>自分の Claude API キーを登録して同意したときだけ、Anthropic の API に送ります。</p>
+      <div class="two">
+        <div>
+          <h3>送るもの</h3>
+          <ul>
+            <li>その回の資料の本文（学籍番号などの ID・メール・電話番号は消してから）</li>
+            <li>授業名、回のタイトル、その回のメモ、資料のファイル名</li>
+          </ul>
+        </div>
+        <div>
+          <h3>送らないもの</h3>
+          <ul>
+            <li>大学のアカウント・パスワード・Cookie</li>
+            <li>資料のファイルそのもの、ほかの回の資料、成績、LMS の URL</li>
+          </ul>
+        </div>
+      </div>
+      <h2>このホームページ</h2>
+      <ul>
+        <li>このホームページは、アクセス解析・広告・Cookie を使いません。</li>
+        <li>
+          ページを表示するときに、文字の形（フォント）を Google Fonts から、最新版のファイルの一覧を GitHub
+          から読み込みます。このとき、見ている人の IP アドレスなどがそれぞれのサービスに送られます。
+        </li>
+        <li>
+          このホームページは GitHub Pages で公開し、アプリのファイルは GitHub（Releases）から配っています。GitHub
+          は、そのサービスの決まりに沿ってアクセスの記録を残すことがあります。
+        </li>
+      </ul>
+      <p><a href="terms.html">利用規約</a>もあわせてお読みください。</p>
+    </main>
+    <footer class="foot">
+      <p>
+        <a href="terms.html">利用規約</a> ・ <a href="privacy.html">プライバシーポリシー</a> ・
+        <a href="https://github.com/Peyangpiece/Daigaku-Note">GitHub</a>
+      </p>
+      <p>© 2026 大学ノート</p>
+    </footer>
+  </body>
+</html>

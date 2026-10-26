@@ -69,6 +69,7 @@ Node 22.13 以降（SQLite は `node:sqlite` を使う）。
 - `site/` の静的なページ（HTML・CSS・JS だけ。組み立ての手順はない）。ダウンロードのボタンは、開いたときに GitHub の最新版のファイルへつなぐ（`site/download.js`）
 - `site/` を変えたコミットが既定のブランチに入ると、`.github/workflows/pages.yml` が GitHub Pages に公開する。独自ドメインは `site/CNAME`
 - はじめに 1 回だけ：リポジトリの Settings → Pages の「Source」を「GitHub Actions」にし、「Custom domain」に `daigakunote.com` を入れる。ドメインの DNS に、GitHub Pages の A レコード（`185.199.108.153`・`185.199.109.153`・`185.199.110.153`・`185.199.111.153`）と、`www` の CNAME（`peyangpiece.github.io`）を足す。証明書ができたら「Enforce HTTPS」に印を付ける
+- 利用規約（`site/terms.html`）とプライバシーポリシー（`site/privacy.html`）は、アプリの文章（`src/shared/policy.js`・`src/shared/lms-terms.js`）から `node scripts/site-policy.mjs && npm run format` で作る。文章がずれると `tests/site.test.js` が失敗する
 - 手元で見るには `site/index.html` をブラウザで開く
 
 ## Mac に入れて Dock から開く
