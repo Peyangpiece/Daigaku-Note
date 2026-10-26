@@ -551,7 +551,9 @@ test(
     const secrets = memSecrets();
     const session = createBrowserSession({secrets, playwright: wrapped, executablePath});
     t.after(() => session.shutdown());
-    const connector = createRecipeExecutor(recipeBase, {session, secrets});
+    // 保存した ID・パスワードを入れるのは、LMS と同じ組織のドメインか、レシピの allowedHosts に書いたホストだけ
+    // （v0.5.15 の credentialUrlAllowed。模擬の統合認証は localhost、LMS は 127.0.0.1 なので、レシピに書いておく）
+    const connector = createRecipeExecutor({...recipeBase, allowedHosts: ['localhost']}, {session, secrets});
     await secrets.set('conn:v1:password', {user: 'stu', password: 'pw'});
     const ctx = await connector.createContext({
       id: 'v1',
