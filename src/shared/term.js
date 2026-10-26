@@ -59,7 +59,8 @@ export function termId(year, label) {
 /**
  * 第 N 回の日付：開始日以降で、その曜日の授業を行う N 番目の日。祝日（includeNationalHolidays）と休講日（holidays）を飛ばし、
  * 振替授業日（swaps：{date, weekday}。その日に別の曜日の授業を行う。祝日に授業を行う日も含む）を数える（shared/calendar.js の classWeekday）。
- * weekday は '月'〜'日'。戻りは rounds 個の 'YYYY-MM-DD'（期間を超えた分は含めない）
+ * weekday は '月'〜'日'。戻りは rounds 個の 'YYYY-MM-DD'（期間を超えた分は含めない）。
+ * 学年暦の授業回（classDates：{月: [第 1 回の日, 第 2 回の日, …]}）にその曜日があれば、計算せずにそれをそのまま使う（SaBoRo と同じ）
  */
 export function roundDates({
   start,
@@ -68,8 +69,10 @@ export function roundDates({
   rounds = 15,
   holidays = [],
   swaps = [],
+  classDates = {},
   includeNationalHolidays = true
 }) {
+  if (classDates[weekday]?.length) return [...classDates[weekday]];
   if (!WEEKDAYS.includes(weekday) || !start || !end || start > end) return [];
   const cal = {holidays, swaps, national: includeNationalHolidays ? holidaysBetween(start, end) : false};
   const out = [];
@@ -139,17 +142,14 @@ export function autoTerm(today) {
 }
 
 /**
- * 学年暦の授業回（listed：[{date, weekday, n}]。shared/calendar.js の parseCalendar が読む）と、学期の設定から計算した回の日付を比べる。
+ * 読み取った学年暦の授業回（listed：[{date, weekday, n}]。shared/calendar.js の parseCalendar）から、この学期の分を曜日ごとに選ぶ。
  * 1 つの学年暦に春と秋の回があるので、曜日ごとに回が 1 から始まり直すところで分け、学期の期間にいちばん多く入る並びを使う。
- * 戻り：{rows: 曜日ごとの {weekday, listed: 回の数, last: いちばん大きい回, complete: 第 1 回から抜けなくそろっているか,
- *   mismatches: [{n, listed: 学年暦の日付, computed: 計算した日付（なければ null）}]},
- *   start / end：合わせるときの開始日・終了日（変えないなら null。開始日は学年暦の第 1 回のいちばん早い日、終了日は最後の回より前なら延ばす）,
- *   fix: {holidays: [{date, label}], swaps: [{date, weekday, label}]}（その開始日・終了日で、足すと計算が学年暦に合う日。そろっている曜日だけ）}
- * fix は、学年暦の回の日なのに計算ではその曜日の授業がない日を振替授業日に、開始日から学年暦の最後の回までで
- * 計算ではその曜日の授業があるのに学年暦の回にない日を休講日にする（ほかの曜日の振替授業日になっている日は動かさない）
+ * 戻り：{classDates: {月: [日付…]}（第 N 回は N 番目）, rows: 曜日ごとの {weekday, count, first, last, missing: 読み取れなかった回},
+ *   start / end：学年暦の授業回が期間からはみ出すなら、含むように広げた開始日・終了日（はみ出さなければ null）}
  */
-export function checkRounds({start, end, rounds = 15, holidays = [], swaps = [], listed = []}) {
-  const picked = [];
+export function classDatesFor(listed = [], {start, end} = {}) {
+  const classDates = {};
+  const rows = [];
   for (const weekday of WEEKDAYS) {
     const runs = [];
     for (const x of listed.filter((y) => y.weekday === weekday).sort((a, b) => (a.date < b.date ? -1 : 1))) {
@@ -159,43 +159,23 @@ export function checkRounds({start, end, rounds = 15, holidays = [], swaps = [],
     }
     const inside = (run) => run.filter((x) => x.date >= start && x.date <= end).length;
     const best = runs.filter((r) => inside(r) > 0).sort((a, b) => inside(b) - inside(a))[0];
-    if (best) picked.push({weekday, mine: best});
-  }
-  const rows = picked.map(({weekday, mine}) => {
-    const last = mine.at(-1).n;
-    const computed = roundDates({start, end, weekday, rounds: Math.max(rounds, last), holidays, swaps});
-    return {
+    if (!best) continue;
+    const have = new Set(best.map((x) => x.n));
+    const last = best.at(-1).n;
+    classDates[weekday] = best.map((x) => x.date);
+    rows.push({
       weekday,
-      listed: mine.length,
-      last,
-      complete: mine.length === last, // 1..last が 1 つずつ（回は増える順に分けてある）
-      mismatches: mine
-        .filter((x) => computed[x.n - 1] !== x.date)
-        .map((x) => ({n: x.n, listed: x.date, computed: computed[x.n - 1] ?? null}))
-    };
-  });
-  const fix = {holidays: [], swaps: []};
-  if (!rows.some((r) => r.mismatches.length) || !start || !end) return {rows, start: null, end: null, fix};
-  const all = picked.flatMap((p) => p.mine);
-  const firsts = all.filter((x) => x.n === 1).map((x) => x.date);
-  const first = (firsts.length ? firsts : all.map((x) => x.date)).sort()[0];
-  const lastDate = all
-    .map((x) => x.date)
-    .sort()
-    .at(-1);
-  const s0 = first,
-    e0 = lastDate > end ? lastDate : end;
-  const cal = {holidays, swaps, national: holidaysBetween(s0, e0)};
-  const swapDates = new Set(swaps.map((x) => x.date));
-  for (const [i, {weekday, mine}] of picked.entries()) {
-    if (!rows[i].complete) continue;
-    const dates = new Set(mine.map((x) => x.date));
-    for (const x of mine)
-      if (classWeekday(cal, x.date) !== weekday)
-        fix.swaps.push({date: x.date, weekday, label: `${weekday}曜日の第${x.n}回`});
-    for (let d = s0; d <= mine.at(-1).date; d = addDays(d, 1))
-      if (!dates.has(d) && !swapDates.has(d) && classWeekday(cal, d) === weekday)
-        fix.holidays.push({date: d, label: `学年暦の${weekday}曜日の回にない日`});
+      count: best.length,
+      first: best[0],
+      last: best.at(-1),
+      missing: Array.from({length: last}, (_, i) => i + 1).filter((n) => !have.has(n))
+    });
   }
-  return {rows, start: s0 !== start ? s0 : null, end: e0 !== end ? e0 : null, fix};
+  const all = Object.values(classDates).flat().sort();
+  return {
+    classDates,
+    rows,
+    start: all.length && all[0] < start ? all[0] : null,
+    end: all.length && all.at(-1) > end ? all.at(-1) : null
+  };
 }

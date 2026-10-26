@@ -165,7 +165,7 @@
 .cal-add .input {
   width: auto;
 }
-/* 授業回の確かめ（学年暦の「第○回」と、回の日付の計算を比べる） */
+/* 学年暦の授業回（曜日ごとの第 1 回〜最終回） */
 .cal-check {
   margin-top: var(--space-3);
 }
@@ -179,12 +179,7 @@
 .cal-check__list > li {
   padding: 3px 0;
 }
-.cal-check__list > li.is-off {
+.cal-check .is-off {
   color: var(--paper-ink);
   font-weight: 600;
-}
-.cal-check__list > li.is-off ul {
-  font-weight: 400;
-  margin: 2px 0 0;
-  padding-left: 1.2em;
 }
