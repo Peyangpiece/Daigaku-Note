@@ -4,22 +4,34 @@
   display: none;
 }
 .desk-scratch {
+  /* 大きさ 0 の目印。線・貼りものはここから文書の座標ではみ出して描く（文書の高さを変えないので、紙の下に余白ができない） */
   position: absolute;
   top: 0;
   left: 0;
   z-index: 18;
+  width: 0;
+  height: 0;
+  overflow: visible;
   pointer-events: none;
 }
-.desk.is-holding .desk-scratch {
-  pointer-events: auto;
+/* ペンを持っている間だけ、窓いっぱいで指・マウスを受ける */
+.desk-catch {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  display: none;
   cursor: crosshair;
   touch-action: none;
 }
+.desk.is-holding .desk-catch {
+  display: block;
+}
 .desk-scratch__ink {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
   overflow: visible;
   pointer-events: none;
 }
