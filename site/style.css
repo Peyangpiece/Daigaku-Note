@@ -1,0 +1,315 @@
+/* 大学ノートのホームページ。色はアプリのデザイントークン（src/renderer/styles/tokens.css）と同じ */
+:root {
+  --paper: #fbf8f1;
+  --paper-ink: #2b2b2b;
+  --paper-ink-weak: #5f636a;
+  --rule: #cfe0ea;
+  --rule-margin: #e88b8b;
+  --card: #ffffff;
+  --pop1: #ffe14d;
+  --pop2: #ff9ec4;
+  --pop3: #6fe3b8;
+  --pop4: #7cccff;
+  --pop5: #ffad5c;
+  --pop6: #c3a6ff;
+  --c1: #f6c445;
+  --c2: #f28b82;
+  --c4: #8ab4f8;
+  --font-body: 'Noto Sans JP', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-head: 'Zen Maru Gothic', 'Noto Sans JP', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  margin: 0;
+  color: var(--paper-ink);
+  font: 16px/1.8 var(--font-body);
+  /* 罫線ノート：横の罫線と、左の赤い余白の線 */
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(to right, transparent 63px, var(--rule-margin) 63px, var(--rule-margin) 65px, transparent 65px),
+    repeating-linear-gradient(to bottom, transparent 0 31px, var(--rule) 31px 32px);
+}
+a {
+  color: inherit;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--font-head);
+  line-height: 1.4;
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px max(16px, calc((100% - 1040px) / 2));
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(6px);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 700 20px var(--font-head);
+  text-decoration: none;
+}
+.brand img {
+  border-radius: 8px;
+}
+.top nav {
+  display: flex;
+  gap: 18px;
+  font-size: 14px;
+}
+.top nav a {
+  text-decoration: none;
+}
+.top nav a:hover {
+  text-decoration: underline;
+}
+
+main {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 16px 0 80px;
+}
+
+.hero {
+  position: relative;
+  padding: 56px 0 40px;
+}
+.badge {
+  display: inline-block;
+  margin: 0;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--pop1);
+  font: 700 13px/26px var(--font-head);
+}
+.hero h1 {
+  margin: 12px 0 8px;
+  font-size: clamp(34px, 6vw, 56px);
+}
+.lead {
+  max-width: 34em;
+  margin: 0 0 24px;
+  font-size: 17px;
+}
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.muted {
+  color: var(--paper-ink-weak);
+}
+.small {
+  font-size: 14px;
+}
+
+.btn {
+  display: inline-block;
+  padding: 10px 22px;
+  border: 2px solid var(--paper-ink);
+  border-radius: 999px;
+  background: var(--card);
+  font: 700 15px var(--font-head);
+  text-decoration: none;
+  transition: transform 0.12s;
+}
+.btn:hover {
+  transform: translateY(-2px);
+}
+.btn--primary {
+  background: var(--paper-ink);
+  color: #fff;
+}
+.btn:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--c4);
+  outline-offset: 2px;
+}
+
+/* マスキングテープで貼った授業フォルダ（アプリのホームと同じ見た目） */
+.hero-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  margin-top: 40px;
+}
+.folder {
+  position: relative;
+  width: 190px;
+  padding: 26px 18px 18px;
+  border-radius: 6px;
+  background: var(--card);
+  box-shadow: 0 6px 14px rgba(43, 43, 43, 0.12);
+  font: 700 17px var(--font-head);
+}
+.folder small {
+  display: block;
+  margin-top: 6px;
+  color: var(--paper-ink-weak);
+  font: 500 13px var(--font-body);
+}
+.folder--1 {
+  transform: rotate(-2deg);
+}
+.folder--2 {
+  transform: rotate(1.5deg);
+}
+.folder--3 {
+  transform: rotate(-0.8deg);
+}
+.tape {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 84px;
+  height: 22px;
+  translate: -50% 0;
+  opacity: 0.8;
+}
+.folder--1 .tape {
+  background: var(--c2);
+}
+.folder--2 .tape {
+  background: repeating-linear-gradient(45deg, var(--c1) 0 6px, #fff3 6px 12px);
+}
+.folder--3 .tape {
+  background: var(--c4);
+}
+
+.section {
+  padding: 48px 0;
+}
+.section h2 {
+  margin: 0 0 24px;
+  font-size: 28px;
+}
+
+/* 回の付箋の色で並べた「できること」 */
+.notes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+}
+.note {
+  position: relative;
+  padding: 20px 22px 24px;
+  box-shadow: 0 6px 14px rgba(43, 43, 43, 0.1);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%);
+}
+.note h3 {
+  margin: 0 0 8px;
+  font-size: 19px;
+}
+.note p {
+  margin: 0 0 8px;
+}
+.note--1 {
+  background: var(--pop1);
+}
+.note--2 {
+  background: var(--pop2);
+}
+.note--3 {
+  background: var(--pop3);
+}
+.note--4 {
+  background: var(--pop4);
+}
+.note--5 {
+  background: var(--pop5);
+}
+.note--6 {
+  background: var(--pop6);
+}
+
+.downloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+  margin: 16px 0;
+}
+.dl {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 22px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 2px 6px rgba(43, 43, 43, 0.08);
+}
+.dl h3 {
+  margin: 0;
+  font-size: 22px;
+}
+.dl p {
+  margin: 0;
+}
+
+details {
+  max-width: 46em;
+  margin-bottom: 12px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 2px 6px rgba(43, 43, 43, 0.08);
+}
+summary {
+  font: 700 16px var(--font-head);
+  cursor: pointer;
+}
+details p {
+  margin: 8px 0 4px;
+}
+
+.foot {
+  padding: 32px 16px 48px 80px;
+  text-align: center;
+  color: var(--paper-ink-weak);
+  font-size: 14px;
+}
+.foot p {
+  margin: 4px 0;
+}
+
+@media (max-width: 640px) {
+  body {
+    background-image: repeating-linear-gradient(to bottom, transparent 0 31px, var(--rule) 31px 32px);
+  }
+  main,
+  .foot {
+    padding-left: 16px;
+  }
+  .top nav {
+    display: none;
+  }
+  .folder {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .btn {
+    transition: none;
+  }
+}

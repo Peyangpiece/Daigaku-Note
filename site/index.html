@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>大学ノート — 授業資料を、回ごとのノートに</title>
+    <meta
+      name="description"
+      content="大学の LMS の授業資料を授業ごと・回ごとのフォルダにそろえ、PDF にそのまま書き込み、資料から作ったクイズで復習できる、大学生のための電子ノートアプリ（Mac・Windows）。"
+    />
+    <meta property="og:title" content="大学ノート" />
+    <meta
+      property="og:description"
+      content="授業資料を、授業ごと・回ごとのノートに。大学生のための電子ノートアプリ（Mac・Windows）"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://daigakunote.com/" />
+    <meta property="og:image" content="https://daigakunote.com/icon.png" />
+    <link rel="icon" href="favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="./"><img src="icon.png" alt="" width="36" height="36" />大学ノート</a>
+      <nav aria-label="ページの中">
+        <a href="#features">できること</a>
+        <a href="#download">ダウンロード</a>
+        <a href="#faq">よくある質問</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="badge">α 版</p>
+        <h1>授業資料を、<br />回ごとのノートに。</h1>
+        <p class="lead">
+          大学の LMS に上がった授業資料を、授業ごと・回ごとのフォルダにそろえ、PDF
+          にそのまま書き込み、資料から作ったクイズで復習できる、大学生のための電子ノートアプリです。
+        </p>
+        <div class="cta">
+          <a class="btn btn--primary" href="#download" data-dl-main>ダウンロード</a>
+          <span class="muted" data-version>Mac・Windows</span>
+        </div>
+        <div class="hero-notes" aria-hidden="true">
+          <div class="folder folder--1"><span class="tape"></span>経営学入門<small>月 2限</small></div>
+          <div class="folder folder--2"><span class="tape"></span>経済原論 II<small>金 3限</small></div>
+          <div class="folder folder--3"><span class="tape"></span>統計学<small>水 1限</small></div>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <h2>できること</h2>
+        <div class="notes">
+          <article class="note note--1">
+            <h3>資料が勝手にそろう</h3>
+            <p>
+              大学のアカウントでつなぐと、新しい資料を自動でダウンロードし、デスクトップの「大学ノート → 学期 → 授業 →
+              回」のフォルダに入れます。
+            </p>
+            <p class="small">
+              いま自動でつなげるのは Moodle です（manabo は試験中）。ほかの LMS
+              でも、ファイルをドラッグすれば同じように回ごとに整理できます。
+            </p>
+          </article>
+          <article class="note note--2">
+            <h3>PDF にそのまま書き込む</h3>
+            <p>
+              文字入れ・付箋・ペン・定規、それに赤シートで隠れる「文字隠し」。元のファイルは変えずに書き込みを残し、書き込み付きの
+              PDF にも書き出せます。
+            </p>
+          </article>
+          <article class="note note--3">
+            <h3>回ごとのクイズで復習</h3>
+            <p>
+              その回の資料からクイズを作り、まちがえた問題を間隔をあけて出します。文字隠しにした語からは、AI
+              を使わずに穴埋め問題も作れます。
+            </p>
+            <p class="small">AI のクイズ作りは、自分の Claude API キーで使います。</p>
+          </article>
+          <article class="note note--4">
+            <h3>学年暦どおりの日付</h3>
+            <p>
+              大学の学年暦（PDF
+              など）から授業回（①〜⑮）と休講日を読み取り、「第○回」の日付と「今日の授業」を大学の予定にそろえます。
+            </p>
+          </article>
+          <article class="note note--5">
+            <h3>自分好みに着せ替え</h3>
+            <p>
+              ノートの紙・フォルダ・マスキングテープ・ファイルの絵・付箋・しおりの見た目を変えられます。シールを貼って、自分だけのノートに。
+            </p>
+          </article>
+          <article class="note note--6">
+            <h3>データは自分のパソコンに</h3>
+            <p>
+              資料と書き込みはパソコンの中に保存します。大学のパスワードは OS の仕組み（Mac はキーチェーン、Windows は
+              DPAPI）で暗号化して、パソコンの外に送りません。
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="download" class="section">
+        <h2>ダウンロード</h2>
+        <p class="muted" data-release-line>最新版は GitHub の Releases から配っています。</p>
+        <div class="downloads">
+          <div class="dl">
+            <h3>Mac</h3>
+            <a
+              class="btn btn--primary"
+              data-dl="mac-arm64"
+              href="https://github.com/Peyangpiece/Daigaku-Note/releases/latest"
+              >Apple シリコン（M1 以降）</a
+            >
+            <a class="btn" data-dl="mac-x64" href="https://github.com/Peyangpiece/Daigaku-Note/releases/latest"
+              >Intel</a
+            >
+            <p class="small">
+              はじめて開くときに止められたら、「システム設定 →
+              プライバシーとセキュリティ」の「このまま開く」を押してください（Apple の証明書で署名していないためです）。
+            </p>
+          </div>
+          <div class="dl">
+            <h3>Windows</h3>
+            <a
+              class="btn btn--primary"
+              data-dl="win-x64"
+              href="https://github.com/Peyangpiece/Daigaku-Note/releases/latest"
+              >Windows（64 ビット）</a
+            >
+            <p class="small">
+              「Windows によって PC が保護されました」と出たら、「詳細情報 → 実行」を押してください（Microsoft
+              の証明書で署名していないためです）。
+            </p>
+          </div>
+        </div>
+        <p class="small muted">入れたあとは、起動したときと 1 時間ごとに新しい版を確かめて、自動で更新します。</p>
+      </section>
+
+      <section id="faq" class="section">
+        <h2>よくある質問</h2>
+        <details>
+          <summary>お金はかかりますか？</summary>
+          <p>
+            アプリそのものの料金はありません。クイズを AI で作るときだけ、自分の Claude API
+            キーの利用料がかかります（アプリの中で 1 日・1 か月の上限を決められます）。AI
+            を使わなくても、資料の整理・書き込み・穴埋め問題は使えます。
+          </p>
+        </details>
+        <details>
+          <summary>どの大学で使えますか？</summary>
+          <p>
+            大学は問いません。資料の自動ダウンロードは、いまは Moodle に対応しています（manabo は試験中）。ほかの LMS
+            にも順に対応していきます。それまでは、ダウンロードした資料を授業の画面にドラッグすれば、回ごとに整理して書き込めます。
+          </p>
+        </details>
+        <details>
+          <summary>授業資料をほかの人に送ったりしませんか？</summary>
+          <p>
+            しません。資料を共有・公開する機能はありません。AI
+            でクイズを作るときだけ、その回の資料の本文（学籍番号・メール・電話番号を除いたもの）を Anthropic の Claude
+            API に送ります。送る前に、何を送るかを確かめて同意してもらいます。
+          </p>
+        </details>
+        <details>
+          <summary>大学の規約で自動ダウンロードが禁止されていたら？</summary>
+          <p>
+            はじめの設定で、自分の大学の規約を確かめたかどうかを聞きます。自動の同期を使わず、手で取り込むだけでも使えます。
+          </p>
+        </details>
+        <details>
+          <summary>「α 版」とは？</summary>
+          <p>
+            正式な公開の前の試しの版です。機能や見た目が変わることがあります。困ったことがあれば、GitHub の Issues
+            で知らせてください。
+          </p>
+        </details>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p>© 2026 大学ノート</p>
+      <p>
+        <a href="https://github.com/Peyangpiece/Daigaku-Note">GitHub</a> ・
+        <a href="https://github.com/Peyangpiece/Daigaku-Note/releases">Releases</a>
+      </p>
+    </footer>
+    <script src="download.js" defer></script>
+  </body>
+</html>
