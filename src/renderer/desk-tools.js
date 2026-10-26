@@ -33,6 +33,9 @@ export const CSS_UNITS = 96 / 72; // 拡大率 100% で紙の実寸（1pt = 4/3 
 const IS_MAC = /Mac/i.test(navigator.platform);
 const MOD = IS_MAC ? '⌘' : 'Ctrl';
 const key = (...parts) => (IS_MAC ? parts.join('') : parts.join('+'));
+/** ⌘（Windows・Linux は Ctrl）＋ k だけ（Shift・Alt なし）か */
+export const isModKey = (e, k) =>
+  (IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === k;
 const STICKER_PT = 72; // シール帳のシールを貼るときの幅（pt）
 const MEMO_PT = 150; // メモ帳からちぎった紙の一辺（pt。100% 表示でメモ帳の紙と同じくらい）
 const MEMO_COLORS = [MEMO_COLOR, '#fff3bf', '#ffe3ec', '#e3f2ff', '#e6f6e6'];
@@ -114,7 +117,7 @@ export const cornersHtml = ({index = false} = {}) => `
     <div class="corner__head"><strong>ポーチ</strong></div>
     <div class="pouch__items">
       <button type="button" class="pouch__item" data-v="sheet" aria-pressed="false" title="赤シートを出す・しまう（${key(MOD, 'R')}）。赤い字が消え、マーカーのところが黒く隠れます">${POUCH_ART.sheet}<span>赤シート</span></button>
-      <button type="button" class="pouch__item" data-v="calc" aria-pressed="false" title="電卓を出す・しまう">${POUCH_ART.calc}<span>電卓</span></button>
+      <button type="button" class="pouch__item" data-v="calc" aria-pressed="false" title="電卓を出す・しまう（${key(MOD, 'D')}）">${POUCH_ART.calc}<span>電卓</span></button>
       <button type="button" class="pouch__item" data-v="memo" aria-pressed="false" title="メモ帳を出す・しまう。書いてちぎると、ページに貼れます">${POUCH_ART.memo}<span>メモ帳</span></button>
       <button type="button" class="pouch__item" data-v="ruler" aria-pressed="false" title="定規を出す・しまう。ふちのすぐ外からボールペンで書くと、まっすぐな線になります">${POUCH_ART.ruler}<span>定規</span></button>
 ${index ? `<button type="button" class="pouch__item" data-v="index" aria-pressed="false" title="付箋を出す・しまう。ページの端に貼る色の目印です">${POUCH_ART.index}<span>付箋</span></button>` : ''}
@@ -607,6 +610,10 @@ export class DeskTools {
         if (e.key === 'Enter' && !e.isComposing) {
           e.preventDefault();
           run();
+        } else if (isModKey(e, 'd')) {
+          // 式を打っている間も ⌘D でしまえる（ほかのショートカットは文字を打っている間は効かない）
+          e.preventDefault();
+          this.toggleCalc(false);
         }
       });
       this.calc = el;

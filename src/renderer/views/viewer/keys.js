@@ -29,13 +29,15 @@ export const methods = {
       else if (k === 's' && !shift) this.saveFile({manual: true});
       else if (k === 't' && !shift) this.setTool('text');
       else if (k === 'm' && !shift) this.setTool('note');
-      else if (k === 'h' && shift) this.useHider();
+      else if ((k === 'k' && !shift) || (k === 'h' && shift))
+        this.useHider(); // ⌘K（前の ⇧⌘H も）
       else if (k === 'b' && !shift) {
         // 太字：文字入れを選んでいる（または文字入れの道具）のときだけ
         if (this.selected?.kind === 'text' || this.tool === 'text')
           this.setTextStyle({bold: !(this.selected?.kind === 'text' ? this.selected.style : this.textStyle).bold});
         else return;
-      } else if (k === 'd' && !shift) this.addBookmark();
+      } else if (k === 'd' && !shift) this.toggleCalc();
+      else if (k === 'd' && shift) this.addBookmark();
       else if (k === 'r' && !shift) this.toggleSheet();
       else if (k === '/' || e.key === '?') this.openHelp(this.$('help-panel').hidden);
       else if (/^[1-6]$/.test(e.key) && !shift) this.useSlot(Number(e.key) - 1);

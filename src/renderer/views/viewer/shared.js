@@ -124,11 +124,11 @@ export const BAR = `
     </div>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
-      <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="しおり（${key(MOD, 'D')} で今の場所にしおりを足す）">しおり</button>
+      <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="しおり（${key(SHIFT, MOD, 'D')} で今の場所にしおりを足す）">しおり</button>
       <div class="bookmark-panel" data-v="bookmark-panel" hidden>
         <div class="bookmark-panel__head">
           <strong>しおり</strong>
-          <button type="button" class="btn btn--small" data-v="bookmark-add" title="いま見ている場所にしおりを足す（${key(MOD, 'D')}）">＋ ここにしおり</button>
+          <button type="button" class="btn btn--small" data-v="bookmark-add" title="いま見ている場所にしおりを足す（${key(SHIFT, MOD, 'D')}）">＋ ここにしおり</button>
         </div>
         <ul class="bookmark-panel__list" data-v="bookmark-list"></ul>
       </div>
@@ -173,9 +173,10 @@ export const BAR = `
         <dl>
           <dt>${key(MOD, 'T')}・${key(MOD, 'M')}</dt><dd>文字入れ・メモ</dd>
           <dt>${key(MOD, '1')}〜${key(MOD, '6')}</dt><dd>筆箱の 1〜6 本目のペン（多機能ペンは、もう一度押すと次の芯に回る）</dd>
-          <dt>${key(SHIFT, MOD, 'H')}・${key(MOD, 'E')}</dt><dd>文字隠しペン・消しゴム</dd>
+          <dt>${key(MOD, 'K')}・${key(MOD, 'E')}</dt><dd>文字隠しペン・消しゴム</dd>
           <dt>${key(MOD, 'B')}</dt><dd>太字（文字入れを選んでいるとき）</dd>
-          <dt>${key(MOD, 'D')}</dt><dd>今の場所にしおり</dd>
+          <dt>${key(MOD, 'D')}</dt><dd>電卓（ポーチの中）を出す・しまう</dd>
+          <dt>${key(SHIFT, MOD, 'D')}</dt><dd>今の場所にしおり</dd>
           <dt>${key(MOD, 'R')}</dt><dd>赤シート（ポーチの中）を出す・しまう</dd>
           <dt>Tab・Enter</dt><dd>注釈を順に選ぶ・選んだ文字を直す／メモを開く</dd>
           <dt>Delete</dt><dd>選んだ注釈を消す</dd>

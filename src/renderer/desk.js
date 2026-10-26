@@ -8,15 +8,14 @@
 // - 赤シート（ポーチ・⌘R）：赤を乗算で重ねる。赤い字は消え、文字隠しペンの線は黒くなる
 import {isTyping} from './ui-kit.js';
 import {state} from './store.js';
-import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, tearClip} from './desk-tools.js';
-import {TYPE_LABEL, heldPen, itemOf, stationeryState, toolArt} from '../shared/stationery.js';
+import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, isModKey, tearClip} from './desk-tools.js';
+import {DEFAULT_HIDER, TYPE_LABEL, heldPen, itemOf, stationeryState, toolArt} from '../shared/stationery.js';
 import {createCapture, strokePath, touchesStroke} from '../shared/ink.js';
 import {growFigure, openFigureEditor, renderFigure} from './figure-view.js';
 import {figureSize, growsWithSize} from '../shared/figures.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ERASER_PX = 12;
-const IS_MAC = /Mac/i.test(navigator.platform);
 /** 下書きでの線の太さ（px）と重ね方。マーカー・文字隠しペンは太く、乗算で重ねる（下の字が読める） */
 const strokeLook = (item) =>
   item.type === 'pen'
@@ -98,10 +97,15 @@ class Desk extends DeskTools {
     this.on(this.catcher, 'pointerdown', (e) => this.onDown(e));
     this.on(document, 'keydown', (e) => {
       if (isTyping(e)) return;
-      const mod = IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'r') {
+      if (isModKey(e, 'r')) {
         e.preventDefault();
         this.toggleSheet();
+      } else if (isModKey(e, 'd')) {
+        e.preventDefault();
+        this.toggleCalc();
+      } else if (isModKey(e, 'k')) {
+        e.preventDefault();
+        this.holdHider();
       } else if (e.key === 'Escape' && (this.held || this.corner)) {
         this.hold(null);
         this.openCorner(null);
@@ -133,6 +137,18 @@ class Desk extends DeskTools {
         return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${it.name}（${TYPE_LABEL[it.type]}）" aria-pressed="false" style="--ink: ${held.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
       })
       .join('');
+  }
+  /** 文字隠しペン（⌘K）：筆箱の中の最初の文字隠しペン。なければ水色。持っていれば置く */
+  holdHider() {
+    if (this.held?.item?.type === 'hider') return this.hold(null);
+    const i = this.st.slots.findIndex((id) => itemOf(id)?.type === 'hider');
+    if (i >= 0) return this.hold(i);
+    this.hold(null);
+    this.held = {item: heldPen(itemOf(DEFAULT_HIDER)), i: -1};
+    this.root.classList.add('is-holding');
+    this.$('side').style.setProperty('--current', this.held.item.color);
+    this.$('holding').hidden = false;
+    this.$('holding-name').textContent = `${this.held.item.name}で下書きしています`;
   }
   /** 道具を持つ：i 本目のペン、'eraser'（消しゴム）、null（置く） */
   hold(what) {

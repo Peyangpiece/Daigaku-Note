@@ -72,7 +72,7 @@ export const methods = {
     if (state.data) state.data.stationery = r.stationery;
   },
 
-  /** 文字隠しペン（⇧⌘H）：筆箱の中の最初の文字隠しペン。なければ水色 */
+  /** 文字隠しペン（⌘K。前の ⇧⌘H も）：筆箱の中の最初の文字隠しペン。なければ水色 */
   useHider() {
     const i = this.st.slots.findIndex((id) => itemOf(id)?.type === 'hider');
     if (i >= 0) this.useSlot(i);
