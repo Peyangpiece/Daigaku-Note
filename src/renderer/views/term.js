@@ -2,14 +2,14 @@
 // 学期名は候補から選ぶか、自由に入力する（大学によって「1学期」「Fall」などがあるため）
 import {confirmDialog, esc, toast} from '../ui-kit.js';
 import {navigate, refresh, reload} from '../store.js';
-import {TERM_LABELS, checkRounds, defaultTermDates, overlapping} from '../../shared/term.js';
+import {TERM_LABELS, classDatesFor, defaultTermDates, overlapping} from '../../shared/term.js';
 import {WD, cleanCalendar, termCalendar} from '../../shared/calendar.js';
 
 const api = window.daigaku;
 const ROUNDS = [15, 14, 8, 7];
 let editingId; // undefined = いちばん新しい学期、null = 新しい学期を追加
 // 学年暦（休講日・振替授業日）の下書き。学期を選び直すと、その学期の値から作り直す。保存は「保存」で（readTermForm が返す）
-// cal.rounds：学年暦から読み取った授業回（確かめるためだけに使い、保存しない）
+// cal.rounds：学年暦の授業回（[{date, weekday, n}]）。保存のとき、学期の期間に入る並びを曜日ごとに選んで class_dates_json に入れる
 let cal = null;
 let calFor;
 
@@ -31,9 +31,10 @@ function calendarSection(term, focus) {
   const li = (kind, e) =>
     `<li${inTerm(e.date) ? '' : ' class="muted" title="学期の期間の外の日（数えません）"'}><span>${fmt(e.date)}</span>${kind === 'swap' ? `<span>→ ${esc(e.weekday)}曜日の授業</span>` : ''}${e.label ? `<span class="muted">${esc(e.label)}</span>` : ''}<button type="button" class="cal-remove" data-cal-remove="${kind}" data-date="${esc(e.date)}" aria-label="${fmt(e.date)} を消す" title="消す">×</button></li>`;
   return `<section class="card" style="max-width: 760px" id="tm-calendar"${focus ? ' data-scroll-into-view' : ''}>
-      <h3>学年暦（休講日・振替授業日・授業回）</h3>
-      <p class="muted">大学の学年暦を入れると、休講日を飛ばし、振替授業日（例：5/7（水）は月曜日の授業）を数えて、回の日付と「今日の授業」が大学の予定どおりになります。祝日は自動で休みにします（祝日に授業を行う日は、その日の曜日で振替授業日に足してください）。</p>
-      <div class="actions"><button type="button" class="btn btn--primary" id="tm-cal-read">学年暦のファイルから読み取る…</button><span class="muted">PDF・Word・テキスト。日付と「休講・休業・試験・○曜日の授業」などの言葉、「第○回」「①」などの授業回から読み取り、ここで確かめてから保存します（AI には送りません）</span></div>
+      <h3>学年暦（授業回・休講日・振替授業日）</h3>
+      <p class="muted">大学の学年暦を入れると、回の日付と「今日の授業」が大学の予定どおりになります。学年暦に授業回（①〜⑮ や「第○回」）があれば、その日をそのまま第○回の日付にします。なければ、休講日を飛ばし、振替授業日（例：5/7（水）は月曜日の授業）を数えて計算します。祝日は自動で休みにします（祝日に授業を行う日は、その日の曜日で振替授業日に足してください）。</p>
+      <div class="actions"><button type="button" class="btn btn--primary" id="tm-cal-read">学年暦のファイルから読み取る…</button><span class="muted">PDF・Word・テキスト。授業回の丸数字・灰色のます目（休講）・「休講・休業・試験・○曜日の授業」などの言葉から読み取り、ここで確かめてから保存します（AI には送りません）</span></div>
+      ${cal.rounds?.length ? '<div class="cal-check" id="tm-round-check" aria-live="polite"></div>' : ''}
       <div class="cal-cols">
         <div>
           <h4>休講日 <span class="muted">${cal.holidays.length} 日</span></h4>
@@ -46,7 +47,6 @@ function calendarSection(term, focus) {
           <div class="cal-add"><input type="date" class="input" id="tm-swap-date" aria-label="振替授業日"><select class="input" id="tm-swap-wd" aria-label="行う授業の曜日">${[...'月火水木金土'].map((w) => `<option>${w}</option>`).join('')}</select><span>曜日の授業</span><button type="button" class="btn btn--small" id="tm-swap-add">足す</button></div>
         </div>
       </div>
-      ${cal.rounds?.length ? '<div class="cal-check" id="tm-round-check" aria-live="polite"></div>' : ''}
       <p class="muted">学期の期間の外の日は数えません。保存すると、その学期の授業の回の日付を計算し直します（LMS から来た日付はそのままです）。</p>
       <div class="actions"><button type="button" class="btn btn--primary" data-tm-save>保存</button></div>
     </section>`;
@@ -90,7 +90,8 @@ export function readTermForm(term) {
     preset,
     periods: !preset && term?.periods_json ? JSON.parse(term.periods_json) : undefined,
     holidays: cal ? cal.holidays.map((h) => h.date) : termCalendar(term).holidays,
-    swaps: cal ? cal.swaps.map(({date, weekday}) => ({date, weekday})) : termCalendar(term).swaps
+    swaps: cal ? cal.swaps.map(({date, weekday}) => ({date, weekday})) : termCalendar(term).swaps,
+    classDates: cal ? termClassDates().classDates : termCalendar(term).classDates
   };
 }
 
@@ -101,7 +102,11 @@ export function renderTerm({data}, route = '/settings/term') {
   const term = terms.find((t) => t.id === editingId) ?? null;
   if (!cal || calFor !== editingId) {
     const c = termCalendar(term);
-    cal = {holidays: c.holidays.map((date) => ({date})), swaps: c.swaps.map((s) => ({...s}))};
+    cal = {
+      holidays: c.holidays.map((date) => ({date})),
+      swaps: c.swaps.map((s) => ({...s})),
+      rounds: Object.entries(c.classDates).flatMap(([weekday, ds]) => ds.map((date, i) => ({date, weekday, n: i + 1})))
+    };
     calFor = editingId;
   }
   const focusCal = /[?&]calendar=1/.test(route); // ホームの「学年暦を入れる」から来たときは学年暦の区画へ
@@ -129,59 +134,47 @@ export function renderTerm({data}, route = '/settings/term') {
     ${calendarSection(term, focusCal)}`;
 }
 
-/** 学年暦の授業回と、いまの入力（期間・回数・休講日・振替授業日）から計算した回の日付を比べて見せる */
+/** 下書きの授業回から、いまの入力の期間に入る並びを曜日ごとに選ぶ（shared/term.js の classDatesFor） */
+function termClassDates() {
+  const $ = (id) => document.getElementById(id);
+  const def = defaultTermDates($('tm-label')?.value, Number($('tm-year')?.value));
+  return classDatesFor(cal?.rounds ?? [], {
+    start: $('tm-start')?.value || def.start,
+    end: $('tm-end')?.value || def.end
+  });
+}
+
+/** 学年暦の授業回：曜日ごとに第 1 回〜最終回の日を見せる。回の日付はこれをそのまま使う */
 function renderRoundCheck() {
   const box = document.getElementById('tm-round-check');
   if (!box || !cal.rounds?.length) return;
   const $ = (id) => document.getElementById(id);
-  const def = defaultTermDates($('tm-label').value, Number($('tm-year').value));
-  const rounds = Number($('tm-rounds').value) || 15;
-  const res = checkRounds({
-    start: $('tm-start').value || def.start,
-    end: $('tm-end').value || def.end,
-    rounds,
-    holidays: cal.holidays.map((h) => h.date),
-    swaps: cal.swaps.map(({date, weekday}) => ({date, weekday})),
-    listed: cal.rounds
-  });
-  const li = (r) => {
-    const notes = [];
-    if (!r.complete) notes.push('読み取れなかった回があるので、休講日・振替授業日は足しません');
-    else if (r.last !== rounds) notes.push(`学年暦は ${r.last} 回、学期の回数は ${rounds} 回です`);
-    const head = `<strong>${r.weekday}曜日</strong> 第 1〜${r.last} 回`;
-    const note = notes.length ? `<span class="muted">（${notes.join('。')}）</span>` : '';
-    if (!r.mismatches.length) return `<li class="is-ok">${head}：計算と同じ日付です${note}</li>`;
-    const SHOW = 3; // 違う回が多いとき（開始日のずれなど）は初めの 3 回だけ
-    const rows =
-      r.mismatches
-        .slice(0, SHOW)
-        .map(
-          (m) =>
-            `<li>第 ${m.n} 回：学年暦 ${fmt(m.listed)} ／ 計算 ${m.computed ? fmt(m.computed) : '期間内にありません'}</li>`
-        )
-        .join('') + (r.mismatches.length > SHOW ? `<li class="muted">ほか ${r.mismatches.length - SHOW} 回</li>` : '');
-    return `<li class="is-off">${head}：${r.mismatches.length} 回の日付が違います${note}<ul>${rows}</ul></li>`;
-  };
-  const {fix} = res;
-  const parts = [
-    res.start && `開始日を ${fmt(res.start)}に`,
-    res.end && `終了日を ${fmt(res.end)}に`,
-    fix.holidays.length && `休講日を ${fix.holidays.length} 日足す`,
-    fix.swaps.length && `振替授業日を ${fix.swaps.length} 日足す`
-  ].filter(Boolean);
+  const res = termClassDates();
+  const li = (r) =>
+    `<li><strong>${r.weekday}曜日</strong> 第 1 回 ${fmt(r.first.date)} 〜 第 ${r.last.n} 回 ${fmt(r.last.date)}（${r.count} 回）${
+      r.missing.length ? `<span class="is-off">　第 ${r.missing.join('・')} 回が読み取れませんでした</span>` : ''
+    }</li>`;
+  const parts = [res.start && `開始日を ${fmt(res.start)}に`, res.end && `終了日を ${fmt(res.end)}に`].filter(Boolean);
   box.innerHTML = res.rows.length
-    ? `<h4>授業回の確かめ <span class="muted">学年暦の「第○回」「①」などと、回の日付の計算を比べます</span></h4>
+    ? `<h4>授業回 <span class="muted">学年暦の丸数字の日を、そのまま第○回の日付にします（第 N 回 ＝ その曜日の N 番目の丸数字の日）</span></h4>
     <ul class="cal-check__list">${res.rows.map(li).join('')}</ul>
-    ${parts.length ? `<div class="actions"><button type="button" class="btn btn--small" id="tm-round-fix">学年暦の授業回に合わせる（${parts.join('・')}）</button></div>` : ''}`
-    : '<h4>授業回の確かめ</h4><p class="muted">学年暦の授業回に、この学期の期間の日がありません。開始日・終了日を確かめてください。</p>';
+    ${parts.length ? `<p class="muted">学年暦の授業回が学期の期間からはみ出しています。</p><div class="actions"><button type="button" class="btn btn--small" id="tm-round-fix">期間を学年暦に合わせる（${parts.join('・')}）</button></div>` : ''}
+    <div class="actions"><button type="button" class="btn btn--small btn--quiet" id="tm-round-clear">授業回を使わない（休講日・振替授業日から計算する）</button></div>`
+    : `<h4>授業回</h4><p class="muted">読み取った授業回に、この学期の期間の日がありません。開始日・終了日を確かめてください。</p>
+    <div class="actions"><button type="button" class="btn btn--small btn--quiet" id="tm-round-clear">授業回を使わない</button></div>`;
   const b = $('tm-round-fix');
   if (b)
     b.onclick = () => {
       if (res.start) $('tm-start').value = res.start;
       if (res.end) $('tm-end').value = res.end;
-      addToCal(fix);
       refresh();
-      toast(`学年暦の授業回に合わせました（${parts.join('・')}）。内容を確かめて「保存」を押してください`);
+      toast(`期間を学年暦に合わせました（${parts.join('・')}）。内容を確かめて「保存」を押してください`);
+    };
+  const c = $('tm-round-clear');
+  if (c)
+    c.onclick = () => {
+      cal.rounds = [];
+      refresh();
     };
 }
 
@@ -209,7 +202,7 @@ function bindCalendar(term) {
       if (!r.dates)
         return toast(`${r.file}：日付が見つかりませんでした。文字の入った PDF かテキストにしてください`, {error: true});
       addToCal(r);
-      if (r.rounds?.length) cal.rounds = r.rounds; // 新しく読んだ学年暦の授業回で確かめ直す
+      if (r.rounds?.length) cal.rounds = r.rounds; // 新しく読んだ学年暦の授業回にする
       const inTerm = (d) => !term || (d >= term.start_date && d <= term.end_date);
       const n = r.holidays.filter((e) => inTerm(e.date)).length + r.swaps.filter((e) => inTerm(e.date)).length;
       toast(

@@ -1,7 +1,8 @@
 // 学年暦（SPEC §6.14）：大学の学年暦の文字から休講日・振替授業日・授業回（第 N 回の日付）を読み取る。副作用なし。
 // 読み取りはアプリの中の決まりで行う（AI には送らない）。日付と、その近くの言葉（休講・休業・試験・○曜日の授業…）の組で判断し、
 // 本人が画面で確かめて保存したときだけ使う。
-// classWeekday：その日に行う授業の曜日（休講日・祝日なら null、振替授業日ならその曜日）。回の日付・今日の授業・授業開始の同期で使う
+// classWeekday：その日に行う授業の曜日（休講日・祝日なら null、振替授業日ならその曜日）。回の日付・今日の授業・授業開始の同期で使う。
+// 学期に学年暦の授業回（classDates：曜日ごとの第 1 回〜最終回の日。SaBoRo と同じ形）があれば、それを先に見る
 import {addDays, holidaysBetween, weekdayOf} from './holidays.js';
 
 export const WD = '日月火水木金土';
@@ -19,17 +20,43 @@ export function termCalendar(term) {
       return [];
     }
   };
+  let classDates = {};
+  try {
+    classDates = cleanClassDates(JSON.parse(term?.class_dates_json ?? '{}'));
+  } catch {}
   return {
     holidays: parse(term?.holidays_json).filter((d) => typeof d === 'string' && DATE.test(d)),
-    swaps: parse(term?.swaps_json).filter((s) => s && DATE.test(s.date) && WD.includes(s.weekday) && s.weekday)
+    swaps: parse(term?.swaps_json).filter((s) => s && DATE.test(s.date) && WD.includes(s.weekday) && s.weekday),
+    classDates
   };
 }
 
+/** 学年暦の授業回（{月: [日付…]}）を整える：月〜土、日付の形のものを重ねずに古い順、1 曜日 30 回まで。空の曜日は除く */
+export function cleanClassDates(v) {
+  const out = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const w of '月火水木金土') {
+    const list = Array.isArray(v[w]) ? v[w].filter((d) => typeof d === 'string' && DATE.test(d)) : [];
+    const dates = [...new Set(list)].sort().slice(0, 30);
+    if (dates.length) out[w] = dates;
+  }
+  return out;
+}
+
 /**
- * その日に行う授業の曜日。振替授業日ならその曜日（祝日でも）、休講日・祝日なら null、ふだんはその日の曜日。
+ * その日に行う授業の曜日。学年暦の授業回にあればその曜日、その曜日の授業回の期間で載っていなければ null。
+ * ほかは、振替授業日ならその曜日（祝日でも）、休講日・祝日なら null、ふだんはその日の曜日。
  * national：祝日を休みにするか。true なら計算、Set ならその中の日、false なら祝日を見ない
  */
-export function classWeekday({holidays = [], swaps = [], national = true} = {}, date) {
+export function classWeekday({holidays = [], swaps = [], national = true, classDates = {}} = {}, date) {
+  // 学年暦の授業回：その日が載っている曜日の授業。載っていなくても、その曜日の第 1 回〜最終回のあいだなら授業はない（休講）
+  const lists = Object.entries(classDates);
+  if (lists.length) {
+    const hit = lists.find(([, ds]) => ds.includes(date));
+    if (hit) return hit[0];
+    const own = classDates[WD[weekdayOf(date)]];
+    if (own?.length && own[0] <= date && date <= own.at(-1)) return null;
+  }
   const swap = swaps.find((s) => s.date === date);
   if (swap) return swap.weekday;
   if (holidays.includes(date)) return null;
@@ -87,9 +114,10 @@ function classify(before, after) {
 
 // 月ごとのます目の学年暦：1 週が 1 行で「13 ① 14 ② 15 ② 16 ② 17 ② 18 補 19 ×」のように日と印が並ぶ（PDF の文字の取り出し）。
 // 行に月がない（「9月 21 × 22 …」のように行の頭にあることもある）ので、続いた行の並びと月の長さから日付を決める
+// 日の数字の後ろの「▦」は、灰色のます目（main/calendar-pdf.js が PDF の塗りから付ける）。灰色は休講
 const MARK = String.raw`[\u2460-\u2473\u3251-\u325a]|補|[×✕]`;
-const GRID_LINE_RE = new RegExp(String.raw`^ ?(?:(\d{1,2}) ?月 )?((?:\d{1,2} ?(?:${MARK})? ?){4,7})$`);
-const GRID_CELL_RE = new RegExp(String.raw`(\d{1,2}) ?(${MARK})?`, 'g');
+const GRID_LINE_RE = new RegExp(String.raw`^ ?(?:(\d{1,2}) ?月 )?((?:\d{1,2}▦? ?(?:${MARK})? ?){4,7})$`);
+const GRID_CELL_RE = new RegExp(String.raw`(\d{1,2})(▦)? ?(${MARK})?`, 'g');
 const circledNumber = (c) => {
   const x = c?.charCodeAt(0) ?? 0;
   if (x >= 0x2460 && x <= 0x2473) return x - 0x2460 + 1;
@@ -97,14 +125,14 @@ const circledNumber = (c) => {
   return 0;
 };
 
-/** ます目の行を探して日付を付ける。戻り：{lines: [[行の始め, 終わり]], cells: [{date, mark}]}。日付の決まらない並びは捨てる */
+/** ます目の行を探して日付を付ける。戻り：{lines: [[行の始め, 終わり]], cells: [{date, mark, gray}]}。日付の決まらない並びは捨てる */
 function parseGrid(t, year) {
   const rows = [];
   let pos = 0;
   for (const line of t.split('\n')) {
     const m = line.match(GRID_LINE_RE);
     if (m) {
-      const cells = [...m[2].matchAll(GRID_CELL_RE)].map((c) => ({day: Number(c[1]), mark: c[2] ?? ''}));
+      const cells = [...m[2].matchAll(GRID_CELL_RE)].map((c) => ({day: Number(c[1]), gray: !!c[2], mark: c[3] ?? ''}));
       // 日は 1 つずつ（抜けは 2 つまで）増え、月の終わりで 1〜3 日に戻る
       const ok = cells.every((c, i) => {
         if (c.day < 1 || c.day > 31) return false;
@@ -154,7 +182,7 @@ function parseGrid(t, year) {
             ok = false;
             break;
           }
-          dates.push({date: d, mark: c.mark});
+          dates.push({date: d, mark: c.mark, gray: c.gray});
           from = hit + 1;
         }
       }
@@ -324,6 +352,14 @@ export function parseCalendar(text, {year} = {}) {
     const had = byDate.get(date);
     if (holidaysBetween(date, date).size && had?.kind !== 'swap')
       byDate.set(date, {kind: 'swap', date, weekday: WD[weekdayOf(date)], label: '授業を行う'});
+  }
+  // 灰色のます目は休講：その曜日の続いた 2 つの回（第 N 回と第 N+1 回）のあいだにある日だけ（週末・学期の外の灰色は数えない）
+  for (const {date, gray} of grid.cells) {
+    if (!gray || byDate.get(date)?.kind === 'swap') continue;
+    const mine = rounds.filter((x) => x.weekday === WD[weekdayOf(date)]);
+    const prev = mine.filter((x) => x.date < date).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    const next = mine.filter((x) => x.date > date).sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+    if (prev && next && next.n === prev.n + 1) byDate.set(date, {kind: 'holiday', date, label: '休講（学年暦の灰色）'});
   }
   const all = [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
   // 同じ曜日の同じ日は、先に書いてあるほう。曜日・日付の順（春と秋のように回が 1 から始まり直してよい）

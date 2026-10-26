@@ -36,6 +36,7 @@ export const COLUMNS = {
     'rounds',
     'holidays_json',
     'swaps_json',
+    'class_dates_json',
     'periods_json',
     'source'
   ],

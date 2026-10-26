@@ -5,7 +5,7 @@ import path from 'node:path';
 import {renameCourse} from '../folders.js';
 import {mergeAutoTerms, recomputeRoundDates, removeTerm, saveTerm} from '../terms.js';
 import {parseCalendar} from '../../shared/calendar.js';
-import {extractPages} from '../quiz/extract.js';
+import {calendarText} from '../calendar-pdf.js';
 import {str, id, bad} from './common.js';
 
 export function register({handle, ctx, repo, files, getWindow}) {
@@ -21,7 +21,7 @@ export function register({handle, ctx, repo, files, getWindow}) {
     return {ok: true, term: row, redated};
   });
 
-  // 学年暦のファイル（PDF・Word・テキスト）から休講日・振替授業日を読み取る（shared/calendar.js の決まり。AI には送らない）。
+  // 学年暦のファイル（PDF・Word・テキスト）から休講日・振替授業日・授業回を読み取る（shared/calendar.js の決まり。AI には送らない）。
   // 保存はしない：画面で確かめてから term.save で入れる
   handle('term.readCalendar', async ({year}) => {
     const win = getWindow();
@@ -35,13 +35,12 @@ export function register({handle, ctx, repo, files, getWindow}) {
     const file = r.filePaths[0];
     const stat = await fsp.stat(file);
     if (stat.size > 50 * 1024 * 1024) bad('ファイルが大きすぎます（50MB まで）');
-    let pages;
+    let text;
     try {
-      ({pages} = await extractPages(file));
+      text = await calendarText(file); // PDF は灰色のます目（休講）に印を付ける
     } catch (e) {
       bad(`ファイルから文字を取れませんでした：${String(e?.message ?? e).slice(0, 120)}`);
     }
-    const text = pages.map((p) => p.text).join('\n');
     if (!text.trim())
       bad('文字のないファイルです（画像だけの PDF は読めません。文字の入った PDF か、テキストにしてください）');
     const y = Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : null;

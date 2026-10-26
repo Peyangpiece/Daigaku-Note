@@ -5,7 +5,7 @@
 import path from 'node:path';
 import {promises as fsp} from 'node:fs';
 import {defaultTermDates, termFolder, termId, termRoundDates} from '../shared/term.js';
-import {cleanCalendar} from '../shared/calendar.js';
+import {cleanCalendar, cleanClassDates} from '../shared/calendar.js';
 import {PERIOD_PRESETS} from '../shared/schedule.js';
 
 export const ROUNDS = [15, 14, 8, 7];
@@ -51,6 +51,8 @@ export async function saveTerm({repo, rootDir}, input) {
         : null;
   // 学年暦：休講日（日付の配列）と振替授業日（{date, weekday}）。形の悪いものは捨てる
   const {holidays, swaps} = cleanCalendar({holidays: input.holidays, swaps: input.swaps});
+  // 学年暦の授業回（曜日ごとの第 1 回〜最終回の日）。あれば回の日付はこれをそのまま使う
+  const classDates = cleanClassDates(input.classDates);
 
   const terms = repo.listTerms();
   const folder = termFolder(year, label);
@@ -74,6 +76,7 @@ export async function saveTerm({repo, rootDir}, input) {
     rounds,
     holidays_json: JSON.stringify(holidays),
     swaps_json: JSON.stringify(swaps),
+    class_dates_json: Object.keys(classDates).length ? JSON.stringify(classDates) : null,
     periods_json: periods ? JSON.stringify(periods) : null,
     source: 'user'
   });

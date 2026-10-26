@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {classWeekday, cleanCalendar, parseCalendar, termCalendar} from '../src/shared/calendar.js';
-import {checkRounds, roundDates} from '../src/shared/term.js';
+import {classDatesFor, roundDates, termRoundDates} from '../src/shared/term.js';
 
 const SAMPLE = `2026年度 秋学期 学年暦
 9月21日(月) 秋学期 授業開始
@@ -82,9 +82,10 @@ test('入力の整理と DB の行からの取り出し', () => {
   assert.deepEqual(c, {holidays: ['2026-11-06', '2026-11-07'], swaps: [{date: '2026-11-24', weekday: '月'}]});
   assert.deepEqual(termCalendar({holidays_json: '["2026-11-06"]', swaps_json: null}), {
     holidays: ['2026-11-06'],
-    swaps: []
+    swaps: [],
+    classDates: {}
   });
-  assert.deepEqual(termCalendar({holidays_json: 'oops'}), {holidays: [], swaps: []});
+  assert.deepEqual(termCalendar({holidays_json: 'oops'}), {holidays: [], swaps: [], classDates: {}});
 });
 
 test('学年暦の授業回：日付の後ろ・前の印、曜日の行、振替の回', () => {
@@ -124,47 +125,54 @@ test('学年暦の授業回：日付の後ろ・前の印、曜日の行、振�
   assert.equal(r.unknown, 0, '回の印のある日付は分かった日付');
 });
 
-test('授業回の確かめ：計算と比べ、合わせるための開始日・休講日・振替授業日を出す', () => {
+test('授業回：学期の期間に入る並びを曜日ごとに選び、回の日付はそのまま使う', () => {
   const listed = [
     {date: '2026-04-15', weekday: '水', n: 1},
     {date: '2026-04-29', weekday: '水', n: 2},
     {date: '2026-05-13', weekday: '水', n: 3},
-    {date: '2026-09-30', weekday: '水', n: 1}, // 秋学期の回（春学期の確かめでは使わない）
-    {date: '2026-10-07', weekday: '水', n: 2}
+    {date: '2026-09-30', weekday: '水', n: 1}, // 秋学期の回（春学期では使わない）
+    {date: '2026-10-07', weekday: '水', n: 2},
+    {date: '2026-04-13', weekday: '月', n: 1},
+    {date: '2026-04-27', weekday: '月', n: 3} // 第 2 回が読み取れなかった
   ];
-  const base = {start: '2026-04-08', end: '2026-07-31', rounds: 15};
-  const res = checkRounds({...base, listed});
-  const [w] = res.rows;
-  assert.equal(w.weekday, '水');
-  assert.equal(w.complete, true);
-  assert.equal(w.last, 3, '期間にいちばん多く入る並び（春学期）');
-  assert.deepEqual(w.mismatches[0], {n: 1, listed: '2026-04-15', computed: '2026-04-08'});
-  assert.equal(res.start, '2026-04-15', '開始日を学年暦の第 1 回に');
-  assert.equal(res.end, null);
+  const r = classDatesFor(listed, {start: '2026-04-08', end: '2026-07-31'});
+  assert.deepEqual(r.classDates, {月: ['2026-04-13', '2026-04-27'], 水: ['2026-04-15', '2026-04-29', '2026-05-13']});
   assert.deepEqual(
-    res.fix.swaps.map((s) => [s.date, s.weekday]),
-    [['2026-04-29', '水']],
-    '祝日の回は振替授業日に'
+    r.rows.map((x) => [x.weekday, x.count, x.missing]),
+    [
+      ['月', 2, [2]],
+      ['水', 3, []]
+    ]
   );
+  assert.equal(r.start, null);
+  const fall = classDatesFor(listed, {start: '2026-10-01', end: '2027-03-31'});
+  assert.deepEqual(fall.classDates, {水: ['2026-09-30', '2026-10-07']});
+  assert.equal(fall.start, '2026-09-30', '授業回が期間からはみ出すなら開始日を広げる');
+  // 回の日付：授業回があれば計算せずにそのまま（祝日 4/29 も）
+  const base = {start: '2026-04-08', end: '2026-07-31', rounds: 15, classDates: r.classDates};
+  assert.deepEqual(roundDates({...base, weekday: '水'}), ['2026-04-15', '2026-04-29', '2026-05-13']);
+  assert.equal(roundDates({...base, weekday: '木'})[0], '2026-04-09', '授業回のない曜日は今までどおり計算');
+  // 学期の行（DB）の授業回からも同じ
+  const term = {
+    start_date: '2026-04-08',
+    end_date: '2026-07-31',
+    rounds: 15,
+    class_dates_json: JSON.stringify(r.classDates)
+  };
+  assert.deepEqual(termRoundDates(term, '月'), ['2026-04-13', '2026-04-27']);
+});
+
+test('その日の授業の曜日：授業回があればそれで決める', () => {
+  const cal = {classDates: {月: ['2026-04-13', '2026-04-20', '2026-05-07'], 木: ['2026-04-16', '2026-05-14']}};
+  assert.equal(classWeekday(cal, '2026-05-07'), '月', '木曜に月曜の授業（月曜の授業回にある）');
+  assert.equal(classWeekday(cal, '2026-04-27'), null, '月曜の授業回の期間で、載っていない月曜は休講');
+  assert.equal(classWeekday(cal, '2026-04-30'), null, '木曜の授業回の期間で、載っていない木曜は休講');
+  assert.equal(classWeekday(cal, '2026-04-15'), '水', '授業回のない曜日は今までどおり');
+  assert.equal(classWeekday(cal, '2026-06-01'), '月', '授業回の期間の外は今までどおり');
   assert.deepEqual(
-    res.fix.holidays.map((h) => h.date),
-    ['2026-04-22'],
-    '学年暦の回にない水曜は休講日に（5/6 は振替休日でもともと休みなので足さない）'
+    termCalendar({class_dates_json: '{"月":["2026-04-20","bad","2026-04-13"],"日":["2026-04-12"],"x":1}'}).classDates,
+    {月: ['2026-04-13', '2026-04-20']}
   );
-  // 合わせると計算が学年暦に合う
-  const again = checkRounds({
-    ...base,
-    start: res.start,
-    holidays: res.fix.holidays.map((h) => h.date),
-    swaps: res.fix.swaps.map(({date, weekday}) => ({date, weekday})),
-    listed
-  });
-  assert.deepEqual(again.rows[0].mismatches, []);
-  assert.equal(again.start, null);
-  // 抜けのある曜日は合わせない
-  const g = checkRounds({...base, listed: [listed[0], listed[2]]});
-  assert.equal(g.rows[0].complete, false);
-  assert.deepEqual(g.fix, {holidays: [], swaps: []});
 });
 
 // 月ごとのます目の学年暦（PDF から取り出した文字。1 週が 1 行、月〜日の順、①〜⑮ が授業回、× は閉室日）
@@ -195,18 +203,18 @@ test('学年暦の授業回：月ごとのます目から日付と回を読む',
     '「4/29、7/20 は…通常授業を行います」は、並んだ日付すべてに'
   );
   assert.equal(r.unknown, 0, '「1.4/29」の「1.4」・「４月\n５月」は日付にしない');
-  // 春学期（既定の 4/1〜）を学年暦に合わせる：開始日 4/7、休講日 4/30・5/1
-  const res = checkRounds({
-    start: '2026-04-01',
-    end: '2026-09-30',
-    rounds: 15,
-    holidays: [],
-    swaps: r.swaps,
-    listed: r.rounds
-  });
-  assert.equal(res.start, '2026-04-07');
-  assert.deepEqual(
-    res.fix.holidays.map((h) => h.date),
-    ['2026-04-30', '2026-05-01']
+  // 灰色のます目（▦）は休講：その曜日の続いた回のあいだの日だけ（週末・学期の外は数えない）
+  const g = parseCalendar(
+    GRID.replace('27 ③ 28 ④ 29 ④ 30 1 2 × 3 ×', '27 ③ 28 ④ 29 ④ 30▦ 1▦ 2▦ × 3▦ ×').replace(
+      '4 × 5 × 6 ×',
+      '4▦ × 5▦ × 6▦ ×'
+    ),
+    {year: 2026}
   );
+  assert.deepEqual(
+    g.holidays.filter((h) => h.label === '休講（学年暦の灰色）').map((h) => h.date),
+    ['2026-04-30', '2026-05-01', '2026-05-04', '2026-05-05', '2026-05-06'],
+    '土日（授業回のない曜日）の灰色は数えない'
+  );
+  assert.deepEqual(g.rounds, r.rounds, '印があっても授業回は同じ');
 });
