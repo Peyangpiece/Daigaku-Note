@@ -1,5 +1,5 @@
 // PDF の編集画面：ペンの線・マーカー・消しゴム。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
-import {snapRange} from '../text-snap.js';
+import {snapRange} from '../../../shared/text-snap.js';
 import {boundsOf, createCapture, encodePoints, speedPressure, strokePath, touchesStroke} from '../../../shared/ink.js';
 import {lineOf, ERASER_PX, SVG_NS} from './shared.js';
 

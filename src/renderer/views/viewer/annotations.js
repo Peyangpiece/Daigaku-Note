@@ -8,6 +8,7 @@ import {figureOf} from '../../../shared/figures.js';
 import {openFigureEditor, renderFigure} from '../../figure-view.js';
 import {MEMO_DEPTH, MEMO_LINE, MEMO_PAD, MEMO_TOOTH, MEMO_TOP, tearClip} from '../../desk-tools.js';
 import {cleanRuns, fromSegments, paintRuns, textSegments} from '../../../shared/text-runs.js';
+import {MOBILE_KINDS} from '../../../shared/mobile-kinds.js';
 import {api, LINE_HEIGHT, MASK_HEX, INDEX_OVER, SVG_NS} from './shared.js';
 
 // ---- 文字入れの中身（部分の色）：画面では色の切れ目ごとに span（.anno-text__run）。色を変えた所は data-c に色 ----
@@ -514,6 +515,36 @@ export const methods = {
         await api['annotation.remove']({materialId: this.materialId, annotationId: a.id});
       });
     this.updateBar();
+  },
+
+  /**
+   * スマホで書き込んだ（メモ・マーカー・文字隠し）あと、DB の注釈と画面をそろえる。消えたものは消し、増えたものは足し、
+   * 変わったものは直す。取り消しの履歴には積まない（スマホでの操作なので）。そのあとファイルを上書き保存する
+   */
+  async syncFromPhone() {
+    const r = await api['annotation.list']({materialId: this.materialId});
+    if (this.destroyed || r?.error) return;
+    const rows = new Map(r.annotations.filter((x) => MOBILE_KINDS.includes(x.kind)).map((x) => [x.id, x]));
+    for (const a of [...this.annos.values()]) {
+      if (!a.id || !MOBILE_KINDS.includes(a.kind) || a.timer) continue; // 保存待ちのものは画面のほうが新しい
+      const row = rows.get(a.id);
+      rows.delete(a.id);
+      if (!row) {
+        a.removedOnServer = true; // もう DB にない（スマホで消した）
+        this.removeAnno(a, false);
+      } else if (
+        JSON.stringify([row.page, row.rect, row.body, row.style]) !== JSON.stringify([a.page, a.rect, a.body, a.style])
+      ) {
+        if (a.page !== row.page) this.mountAnno(a, this.pages[row.page - 1]);
+        Object.assign(a, {page: row.page, rect: row.rect, body: row.body, style: row.style});
+        if (a.kind === 'note') a.el.querySelector('textarea').value = a.body;
+        this.applyStyle(a);
+        this.place(a);
+      }
+    }
+    for (const row of rows.values())
+      if (row.page >= 1 && row.page <= this.pages.length) this.addAnno({...row, key: `k${this.seq++}`});
+    this.markDirty();
   },
 
   annoOf(target) {

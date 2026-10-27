@@ -1,6 +1,6 @@
 // PDF の編集画面：文字隠し（文字への吸着）と赤シート。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 import * as pdfjs from '../../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
-import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from '../text-snap.js';
+import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from '../../../shared/text-snap.js';
 import {DEFAULT_SIZE} from '../../../shared/annotation.js';
 import {lineOf, isFlat, MASK_HEX} from './shared.js';
 

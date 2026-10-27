@@ -10,11 +10,16 @@ import * as pdfIpc from './pdf.js';
 import * as quizIpc from './quiz.js';
 import * as settingsIpc from './settings.js';
 import * as appIpc from './app.js';
+import * as mobileIpc from './mobile.js';
 
 export function registerIpc(ctx, {getWindow = () => null} = {}) {
   const {repo, registry, jobs, files, secrets, log, folders} = ctx;
-  const handle = (channel, fn) =>
-    ipcMain.handle(channel, async (_e, arg) => {
+  // 窓口の中身はスマホ連携（mobile/api.js）からも呼ぶので、名前で引けるように持っておく
+  const handlers = new Map();
+  ctx.handlers = handlers;
+  const handle = (channel, fn) => {
+    handlers.set(channel, fn);
+    return ipcMain.handle(channel, async (_e, arg) => {
       try {
         return await fn(arg ?? {});
       } catch (e) {
@@ -22,6 +27,7 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
         return {error: e.message};
       }
     });
+  };
   const c = {handle, ctx, repo, registry, jobs, files, secrets, log, folders, getWindow, quiz: ctx.quiz};
   for (const m of [
     stateIpc,
@@ -33,7 +39,8 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
     pdfIpc,
     quizIpc,
     settingsIpc,
-    appIpc
+    appIpc,
+    mobileIpc
   ])
     m.register(c);
 }

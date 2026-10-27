@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="大学ノート" />
+    <meta name="theme-color" content="#fbf8f1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>大学ノート</title>
+    <link rel="apple-touch-icon" href="/m/app/icon.png" />
+    <link rel="icon" href="/m/app/icon.png" />
+    <link rel="stylesheet" href="/m/app/mobile.css" />
+    <!-- 暗号化（@noble/ciphers）は、パソコンが配る node_modules の写しから読む（docs/MOBILE.md §3） -->
+    <script type="importmap">
+      {"imports": {"@noble/ciphers/": "/m/vendor/noble/"}}
+    </script>
+    <script type="module" src="/m/app/app.js"></script>
+  </head>
+  <body>
+    <div id="app" class="m-app"><p class="m-empty">読み込み中…</p></div>
+  </body>
+</html>
