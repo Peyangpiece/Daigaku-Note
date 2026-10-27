@@ -362,7 +362,8 @@ export const methods = {
     this.on(el, 'pointermove', (e) => this.onPointerMove(e));
     this.on(el, 'pointerup', (e) => this.onPointerUp(e));
     this.on(el, 'pointercancel', (e) => {
-      if ([this.drawing, this.drag, this.tap, this.pan].some((t) => t?.pointer === e.pointerId)) this.cancelPointer();
+      if ([this.drawing, this.drag, this.tap, this.pan, this.textHold].some((t) => t?.pointer === e.pointerId))
+        this.cancelPointer();
     });
     // 画面に触れている指（ページの外で離したときも数え落とさないよう window で受ける）
     this.touchIds = new Set();
@@ -375,8 +376,8 @@ export const methods = {
     this.on(el, 'touchcancel', (e) => this.onTouchEnd(e));
     this.on(el, 'dblclick', (e) => {
       const a = this.annoOf(e.target);
-      if (a?.kind === 'text' && (this.tool === 'select' || this.tool === 'text')) this.edit(a);
-      else if (a?.kind === 'stamp' && a.style.type === 'figure' && !this.figEditor) this.editFigure(a);
+      // 文字入れはダブルクリックでは打ち始めない（文字入れの道具では 1 回押すと打てる。選択の道具では動かすだけ）
+      if (a?.kind === 'stamp' && a.style.type === 'figure' && !this.figEditor) this.editFigure(a);
     });
     // 図を右クリック：書き換える（座標平面は、描く式の種類から選ぶ）
     this.on(el, 'contextmenu', (e) => {

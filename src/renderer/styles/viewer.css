@@ -288,6 +288,7 @@
 /* 文字入れ：フォントはヒラギノ角ゴのみ（太字は W6）。ヒラギノのない OS では OS のゴシックで代わりに出る */
 .anno-text {
   position: absolute;
+  z-index: 0; /* ふちの当たり判定（::before）を文字の後ろ・箱の中に収める */
   min-width: 1em;
   padding: 0 1px;
   font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif;
@@ -301,6 +302,25 @@
 }
 .viewer-pages[data-tool='text'] .anno-text {
   cursor: text;
+}
+/* 文字入れの道具：箱のふちの外側 8px は「つかむ所」。長押しで動かす（文字の上は打つ・範囲選択） */
+.viewer-pages[data-tool='text'] .anno-text::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  border-radius: 4px;
+  cursor: move;
+}
+.viewer-pages[data-tool='text'] .anno-text:hover::before {
+  outline: 1px dashed color-mix(in srgb, var(--c4) 70%, transparent);
+  outline-offset: -4px;
+}
+.anno-text.is-lifted {
+  box-shadow:
+    0 0 0 1.5px var(--c4),
+    0 6px 16px rgba(0, 0, 0, 0.18);
+  cursor: grabbing;
 }
 /* ペン・マーカー・消しゴム・文字隠し・メモのときは、文字入れを素通しにする（上から線を引ける。動かしたり選んだりしない） */
 .viewer-pages:is([data-tool='ink'], [data-tool='line'], [data-tool='eraser'], [data-tool='mask'], [data-tool='note'])
