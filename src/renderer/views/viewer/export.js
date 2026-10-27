@@ -108,7 +108,7 @@ export const methods = {
       }
       out.push({
         a,
-        lines: this.textLines(a.el),
+        lines: this.textLineSegs(a.el),
         box: this.toScreen(a.page, a.rect),
         scale: p.viewport.scale,
         style: {...a.style}
@@ -200,7 +200,10 @@ export const methods = {
     return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
   },
 
-  /** 画面に出ている行の区切りのまま、文字入れを PNG にする（ヒラギノで描く。フォントは PDF に埋め込まない） */
+  /**
+   * 画面に出ている行の区切りのまま、文字入れを PNG にする（ヒラギノで描く。フォントは PDF に埋め込まない）。
+   * 行ごとに揃え（左・中央・右）を当て、色の切れ目ごとにその色で描く（部分の色）
+   */
   async textToPng({lines, box, scale, style}) {
     const k = EXPORT_PX_PER_PT;
     const canvas = document.createElement('canvas');
@@ -210,31 +213,54 @@ export const methods = {
     const font = `${style.bold ? 700 : 400} ${style.size * k}px ${FONT}`;
     await document.fonts.load(font).catch(() => {});
     ctx.font = font;
-    ctx.fillStyle = style.color;
     const m = ctx.measureText('あ');
     const lh = style.size * LINE_HEIGHT * k;
     const base = (lh - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 + m.fontBoundingBoxAscent;
-    const pad = k / scale; // .anno-text の左の余白 1px
-    lines.forEach((line, i) => ctx.fillText(line, pad, i * lh + base));
+    const pad = k / scale; // .anno-text の左右の余白 1px
+    lines.forEach((segs, i) => {
+      const width = segs.reduce((w, sg) => w + ctx.measureText(sg.t).width, 0);
+      let x =
+        style.align === 'center'
+          ? (canvas.width - width) / 2
+          : style.align === 'right'
+            ? canvas.width - pad - width
+            : pad;
+      for (const sg of segs) {
+        ctx.fillStyle = sg.c ?? style.color;
+        ctx.fillText(sg.t, x, i * lh + base);
+        x += ctx.measureText(sg.t).width;
+      }
+    });
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
     return new Uint8Array(await blob.arrayBuffer());
   },
 
   /** 箱の中の文字を、画面で折り返されている行ごとに分ける */
   textLines(el) {
+    return this.textLineSegs(el).map((segs) => segs.map((sg) => sg.t).join(''));
+  },
+
+  /** 箱の中の文字を、画面で折り返されている行ごと・色の切れ目ごとに分ける：[[{t, c}]]（c は部分の色。箱の色なら null） */
+  textLineSegs(el) {
     const lines = [];
-    let cur = '',
+    let cur = [],
       lastTop = null;
+    const add = (ch, c) => {
+      const last = cur.at(-1);
+      if (last && last.c === c) last.t += ch;
+      else cur.push({t: ch, c});
+    };
     const range = document.createRange();
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       const t = n.data;
+      const c = n.parentElement?.closest('[data-c]')?.dataset.c ?? null;
       for (let i = 0; i < t.length; ) {
         const len = t.codePointAt(i) > 0xffff ? 2 : 1;
         const ch = t.slice(i, i + len);
         if (ch === '\n') {
           lines.push(cur);
-          cur = '';
+          cur = [];
           lastTop = null;
         } else {
           range.setStart(n, i);
@@ -243,11 +269,11 @@ export const methods = {
           if (r) {
             if (lastTop !== null && r.top > lastTop + r.height * 0.5) {
               lines.push(cur);
-              cur = '';
+              cur = [];
             }
             lastTop = r.top;
           }
-          cur += ch;
+          add(ch, c);
         }
         i += len;
       }

@@ -26,6 +26,7 @@ import {state} from '../store.js';
 import {skinOf} from '../skin.js';
 import {stationeryState} from '../../shared/stationery.js';
 import {DEFAULT_SIZE} from '../../shared/annotation.js';
+import {cleanAlign} from '../../shared/text-runs.js';
 import {CSS_UNITS, DeskTools} from '../desk-tools.js';
 import {methods as bookmarksMethods} from './viewer/bookmarks.js';
 import {methods as pagesMethods} from './viewer/pages.js';
@@ -111,7 +112,12 @@ class Viewer extends DeskTools {
         return {};
       }
     })();
-    this.textStyle = {size: clampSize(fontDefault.size ?? DEFAULT_SIZE), bold: false, color: TEXT_COLORS[0]};
+    this.textStyle = {
+      size: clampSize(fontDefault.size ?? DEFAULT_SIZE),
+      bold: false,
+      color: TEXT_COLORS[0],
+      align: 'left'
+    };
     // 着せ替え（SPEC-KISEKAE）：付箋の色の候補・しおりのリボンの色と形・リボンの先のシール
     this.skin = skinOf(state.data, course ?? null);
     this.noteColors = this.skin.sticky.round === 'default' ? NOTE_COLORS : this.skin.sticky.round;
@@ -132,7 +138,7 @@ class Viewer extends DeskTools {
 
   // ---- 四隅の道具（desk-tools.js）に、PDF のページの場合を教える ----
   busy() {
-    return !!(this.drawing || this.drag || this.carry);
+    return !!(this.drawing || this.drag || this.carry || this.editing); // 文字を打っている間は、端へ寄せても四隅を出さない
   }
   keepCorner() {
     return !this.$('case-panel').hidden; // ペンの入れ替えを開いている間はしまわない
@@ -181,7 +187,8 @@ class Viewer extends DeskTools {
       this.textStyle = {
         size: clampSize(r.textStyle.size, this.textStyle.size),
         bold: r.textStyle.bold === true,
-        color: /^#[0-9a-f]{6}$/i.test(r.textStyle.color ?? '') ? r.textStyle.color.toLowerCase() : this.textStyle.color
+        color: /^#[0-9a-f]{6}$/i.test(r.textStyle.color ?? '') ? r.textStyle.color.toLowerCase() : this.textStyle.color,
+        align: cleanAlign(r.textStyle.align) ?? 'left'
       };
     document.title = `${r.material.name} — 大学ノート`;
     try {

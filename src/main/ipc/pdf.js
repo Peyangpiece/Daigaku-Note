@@ -7,6 +7,7 @@ import {exportAnnotatedPdf, isPng} from '../pdf-export.js';
 import {annoKey, overwritePdf, readBase} from '../pdf-save.js';
 import {annotationToClient, normalizeAnnotation, clampSize} from '../../shared/annotation.js';
 import {normalizeBookmark} from '../../shared/bookmark.js';
+import {cleanAlign} from '../../shared/text-runs.js';
 import {str, id, PDFJS_DIR, PDFJS_ASSET, bad} from './common.js';
 
 export function register({handle, repo, log, getWindow}) {
@@ -35,7 +36,7 @@ export function register({handle, repo, log, getWindow}) {
       bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
       annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient),
       bookmarks: repo.listBookmarks(annoKey(m)).map(bookmarkToClient),
-      // 文字入れの書式（サイズ・太字・色）：この PDF で最後に使ったもの。初めて開く PDF では同じ授業（フォルダ）で最後に使ったもの
+      // 文字入れの書式（サイズ・太字・色・揃え）：この PDF で最後に使ったもの。初めて開く PDF では同じ授業（フォルダ）で最後に使ったもの
       textStyle:
         repo.getSetting(`viewer.text.${m.id}`, null) ?? repo.getSetting(`viewer.text.course.${m.course_id}`, null)
     };
@@ -48,7 +49,8 @@ export function register({handle, repo, log, getWindow}) {
     const clean = {
       size: clampSize(s.size),
       bold: s.bold === true,
-      color: typeof s.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color.toLowerCase() : '#2b2b2b'
+      color: typeof s.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color.toLowerCase() : '#2b2b2b',
+      align: cleanAlign(s.align) ?? 'left'
     };
     repo.setSetting(`viewer.text.${m.id}`, clean);
     repo.setSetting(`viewer.text.course.${m.course_id}`, clean);

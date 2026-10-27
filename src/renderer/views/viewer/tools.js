@@ -156,12 +156,21 @@ export const methods = {
     });
   },
 
-  /** 選んだ注釈に書式を当てる。何も選んでいなければ次に置く注釈の書式にする */
+  /**
+   * 選んだ注釈に書式を当てる。何も選んでいなければ次に置く注釈の書式にする。
+   * 色：打っている途中で文字を選んでいれば、その文字だけ（箱の色は変えない）。箱を選んでいるときは箱ごと（部分の色も消す）
+   */
   setTextStyle(patch, record = true) {
     const a = this.selected;
+    if (a?.kind === 'text' && 'color' in patch && this.editing === a && this.paintSelection(a, patch.color))
+      return this.updateBar();
     if (a?.kind === 'text') {
       const before = this.snap(a);
-      Object.assign(a.style, patch);
+      a.style = {...a.style, ...patch};
+      if ('color' in patch && this.editing !== a && a.style.runs) {
+        delete a.style.runs;
+        this.renderText(a);
+      }
       this.applyStyle(a);
       this.place(a);
       if (this.editing !== a) {
@@ -206,6 +215,8 @@ export const methods = {
     const size = this.$('size');
     if (document.activeElement !== size) size.value = String(ts.size);
     this.$('bold').setAttribute('aria-pressed', String(ts.bold));
+    for (const b of this.root.querySelectorAll('[data-align]'))
+      b.setAttribute('aria-pressed', String(b.dataset.align === (ts.align ?? 'left')));
     for (const b of this.root.querySelectorAll('[data-text-color]'))
       b.setAttribute('aria-pressed', String(b.dataset.textColor === ts.color));
     this.$('text-custom').value = ts.color;
@@ -270,6 +281,7 @@ export const methods = {
       else if (t.dataset.noteColor) this.setNoteColor(t.dataset.noteColor);
       else if (t.dataset.v === 'bold')
         this.setTextStyle({bold: !(this.selected?.kind === 'text' ? this.selected.style : this.textStyle).bold});
+      else if (t.dataset.align) this.setTextStyle({align: t.dataset.align});
       else if (t.dataset.v === 'delete' && this.selected) this.removeAnno(this.selected);
       else if (t.dataset.v === 'zoom-in') this.zoomStep('in');
       else if (t.dataset.v === 'zoom-out') this.zoomStep('out');
@@ -310,7 +322,9 @@ export const methods = {
       const v = clampSize(size.value);
       size.value = String(v);
       this.setTextStyle({size: v});
+      this.refocusText();
     });
+    this.on(size, 'keydown', (e) => e.key === 'Escape' && this.refocusText());
     // 色の選び皿は動かしている間ずっと input が来るので、選び終わり（change）で 1 手にまとめる
     const pickStart = () => {
       if (!this.pick && this.selected && this.editing !== this.selected)
@@ -320,6 +334,7 @@ export const methods = {
       const pk = this.pick;
       this.pick = null;
       if (pk) this.record(pk.key, pk.before, this.snap(this.annos.get(pk.key)));
+      this.refocusText(); // 打っている途中なら、箱へ戻って続けて打てる
     };
     this.on(this.$('text-custom'), 'input', (e) => {
       pickStart();
@@ -360,7 +375,7 @@ export const methods = {
     this.on(el, 'touchcancel', (e) => this.onTouchEnd(e));
     this.on(el, 'dblclick', (e) => {
       const a = this.annoOf(e.target);
-      if (a?.kind === 'text') this.edit(a);
+      if (a?.kind === 'text' && (this.tool === 'select' || this.tool === 'text')) this.edit(a);
       else if (a?.kind === 'stamp' && a.style.type === 'figure' && !this.figEditor) this.editFigure(a);
     });
     // 図を右クリック：書き換える（座標平面は、描く式の種類から選ぶ）

@@ -15,6 +15,18 @@ export const methods = {
       this.penSeen = true;
       this.pagesEl.dataset.pen = 'seen';
     }
+    // 文字を打っている間は、ほかの操作をしない：箱の中はカーソル・範囲選択、箱のすぐそば（少しはみ出した所）は打つのを続け、
+    // それより外を押したら打ち終わるだけ（線・新しい文字入れ・選択などは始めない）
+    if (this.editing) {
+      const ed = this.editing.el;
+      if (ed.contains(e.target)) return;
+      e.preventDefault();
+      const r = ed.getBoundingClientRect();
+      const near =
+        e.clientX > r.left - 12 && e.clientX < r.right + 12 && e.clientY > r.top - 8 && e.clientY < r.bottom + 8;
+      if (near) return void ed.focus();
+      return void this.finishEdit();
+    }
     if (e.target.closest('.bookmark-ribbon')) return; // しおりのリボンは押しても書き込まない
     // 画面の左右の端（指・ペン）は四隅を出すなでる操作の始まり。書き始めない
     if (e.pointerType !== 'mouse' && (e.clientX >= document.documentElement.clientWidth - 24 || e.clientX <= 24))
@@ -27,7 +39,8 @@ export const methods = {
     let a = this.annoOf(e.target);
     // 貼りもの（図・シール・紙）は下敷き：選択の道具のときだけ選んで動かす。ほかの道具では上に文字・メモ・文字隠しを置く
     if (a?.kind === 'stamp' && this.tool !== 'select') a = null;
-    if (this.editing && this.editing !== a) this.finishEdit();
+    // 文字入れは、選択の道具と文字入れの道具のときだけ選んで動かす（文字隠し・メモのときは上に重ねて置ける）
+    if (a?.kind === 'text' && this.tool !== 'select' && this.tool !== 'text') a = null;
     if (a) {
       if (this.editing === a) return; // 編集中の文字はカーソル移動・範囲選択
       e.preventDefault();
