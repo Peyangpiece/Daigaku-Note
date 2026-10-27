@@ -3,6 +3,13 @@ import {DRAW_TOOLS} from './shared.js';
 import {figureSize, growsWithSize} from '../../../shared/figures.js';
 import {growFigure, renderFigure} from '../../figure-view.js';
 
+const HOLD_MS = 350; // 文字入れのふちを長押しして動かせるようになるまで
+/** 点が要素の箱（ふちの外側の当たり判定は含まない）の中か */
+const inBox = (el, e) => {
+  const r = el.getBoundingClientRect();
+  return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+};
+
 export const methods = {
   onPointerDown(e) {
     if (e.pointerType === 'touch') {
@@ -19,8 +26,15 @@ export const methods = {
     // それより外を押したら打ち終わるだけ（線・新しい文字入れ・選択などは始めない）
     if (this.editing) {
       const ed = this.editing.el;
-      if (ed.contains(e.target)) return;
+      if (ed.contains(e.target) && inBox(ed, e)) return;
       e.preventDefault();
+      // 箱のふち（外側の当たり判定）を長押し：打ち終わって動かす
+      if (ed.contains(e.target)) {
+        const a = this.editing;
+        this.finishEdit();
+        if (!a.removed) this.holdText(e, a);
+        return;
+      }
       const r = ed.getBoundingClientRect();
       const near =
         e.clientX > r.left - 12 && e.clientX < r.right + 12 && e.clientY > r.top - 8 && e.clientY < r.bottom + 8;
@@ -41,8 +55,18 @@ export const methods = {
     if (a?.kind === 'stamp' && this.tool !== 'select') a = null;
     // 文字入れは、選択の道具と文字入れの道具のときだけ選んで動かす（文字隠し・メモのときは上に重ねて置ける）
     if (a?.kind === 'text' && this.tool !== 'select' && this.tool !== 'text') a = null;
+    // 文字入れの道具で文字入れを押したとき：文字の上なら、そのまま打つ（押した所にカーソル。なぞると範囲選択）。
+    // ふち（箱の外側の当たり判定）なら、長押しで動かす。選択の道具では、押してそのまま動かす（打たない）
+    if (a?.kind === 'text' && this.tool === 'text') {
+      if (inBox(a.el, e)) {
+        this.select(a);
+        this.edit(a); // カーソルはブラウザが押した所に置く（preventDefault しない）
+        return;
+      }
+      e.preventDefault();
+      return this.holdText(e, a);
+    }
     if (a) {
-      if (this.editing === a) return; // 編集中の文字はカーソル移動・範囲選択
       e.preventDefault();
       const wasSelected = this.selected === a;
       this.select(a);
@@ -78,7 +102,47 @@ export const methods = {
     this.createAt(this.tool, p, e.clientX - box.left, e.clientY - box.top);
   },
 
+  /** 文字入れのふちを押した：長押し（HOLD_MS）で持ち上げ、そこから動かせる。その前に動いたらやめる */
+  holdText(e, a) {
+    this.select(a);
+    const hold = {a, pointer: e.pointerId, x: e.clientX, y: e.clientY};
+    hold.timer = setTimeout(() => {
+      if (this.textHold !== hold || a.removed) return;
+      this.textHold = null;
+      a.el.classList.add('is-lifted');
+      this.drag = {
+        a,
+        before: this.snap(a),
+        x: hold.x,
+        y: hold.y,
+        left: parseFloat(a.el.style.left),
+        top: parseFloat(a.el.style.top),
+        width: a.el.offsetWidth,
+        height: a.el.offsetHeight,
+        style: a.style,
+        moved: false,
+        lifted: true, // 離しても打ち始めない
+        pointer: hold.pointer
+      };
+    }, HOLD_MS);
+    this.textHold = hold;
+    try {
+      this.pagesEl.setPointerCapture(e.pointerId);
+    } catch {
+      // 指がもう離れていた
+    }
+  },
+
+  /** 長押しを待っている間にやめる（動いた・離した・指が増えた） */
+  dropTextHold() {
+    if (!this.textHold) return;
+    clearTimeout(this.textHold.timer);
+    this.textHold = null;
+  },
+
   onPointerMove(e) {
+    const th = this.textHold;
+    if (th?.pointer === e.pointerId && Math.hypot(e.clientX - th.x, e.clientY - th.y) > 6) this.dropTextHold();
     if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);
     const pan = this.pan;
     if (pan?.pointer === e.pointerId) {
@@ -141,6 +205,7 @@ export const methods = {
 
   onPointerUp(e) {
     if (this.pan?.pointer === e.pointerId) this.pan = null;
+    if (this.textHold?.pointer === e.pointerId) return void this.dropTextHold(); // 長押しの前に離した：選ぶだけ
     const dr = this.drawing;
     if (dr?.pointer === e.pointerId && dr.kind === 'ink') return void this.finishInk(e);
     if (dr?.pointer === e.pointerId && dr.kind === 'line') return void this.finishLine();
@@ -161,7 +226,7 @@ export const methods = {
     if (!d || d.pointer !== e.pointerId) return;
     this.drag = null;
     const a = d.a;
-    a.el.classList.remove('is-dragging');
+    a.el.classList.remove('is-dragging', 'is-lifted');
     this.showGrowTip(null);
     if (d.moved) {
       const p = this.pages[a.page - 1];
@@ -184,7 +249,7 @@ export const methods = {
       this.record(a.key, d.before, this.snap(a));
       this.scheduleSave(a, 0);
     } else if (a.kind === 'note') this.openNote(a, a.el.querySelector('.anno-note__pop').hidden);
-    else if (a.kind === 'text' && this.tool === 'text') this.edit(a);
+    else if (a.kind === 'text' && this.tool === 'text' && !d.lifted) this.edit(a);
     else if (a.kind === 'stamp' && a.style.type === 'figure' && (d.wasSelected || d.curve) && !d.resize)
       this.editFigure(a, d.curve ? 'formula' : null);
   }

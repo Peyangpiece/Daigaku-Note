@@ -142,6 +142,7 @@ export const methods = {
 
   /** 1 本目の指で始めたこと（なぞり中のマーカー・動かし中の注釈・置く前の文字入れや付箋）を取りやめる。2 本目の指が来たときなど */
   cancelPointer() {
+    this.dropTextHold();
     this.tap = null;
     this.pan = null;
     const dr = this.drawing;
@@ -156,7 +157,7 @@ export const methods = {
     const d = this.drag;
     if (d) {
       this.drag = null;
-      d.a.el.classList.remove('is-dragging');
+      d.a.el.classList.remove('is-dragging', 'is-lifted');
       d.a.el.style.left = `${d.left}px`;
       d.a.el.style.top = `${d.top}px`;
       if (d.a.kind === 'mask') this.syncCovers();
