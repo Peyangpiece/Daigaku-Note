@@ -72,8 +72,9 @@ export const methods = {
     if (state.data) state.data.stationery = r.stationery;
   },
 
-  /** 文字隠しペン（⌘K。前の ⇧⌘H も）：筆箱の中の最初の文字隠しペン。なければ水色 */
+  /** 文字隠しペン（⌘K。前の ⇧⌘H も）：筆箱の中の最初の文字隠しペン。なければ水色。持っていればしまう */
   useHider() {
+    if (this.tool === 'mask') return this.setTool('select'); // 持っているときにもう一度押すと、しまう（選択の道具に戻る）
     const i = this.st.slots.findIndex((id) => itemOf(id)?.type === 'hider');
     if (i >= 0) this.useSlot(i);
     else this.usePen(itemOf(DEFAULT_HIDER));
