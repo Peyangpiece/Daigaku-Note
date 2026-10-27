@@ -10,6 +10,9 @@ import {Repo} from './db/repo.js';
 import {createSecrets} from './secrets.js';
 import {createLogger} from './log.js';
 import {registerIpc} from './ipc/index.js';
+import {createDevices} from './mobile/devices.js';
+import {createMobileApi} from './mobile/api.js';
+import {createMobileServer} from './mobile/server.js';
 import {JobRunner} from './jobs.js';
 import {Scheduler} from './scheduler.js';
 import {FileManager} from './sync/files.js';
@@ -345,6 +348,15 @@ app.whenReady().then(async () => {
     ctx.scheduler = new Scheduler(ctx);
     ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify});
     registerIpc(ctx, {getWindow: () => win});
+    // スマホ連携（docs/MOBILE.md）。オンにしてあれば、同じ Wi-Fi のスマホに向けて始める
+    {
+      const devices = createDevices({repo, secrets: ctx.secrets});
+      const api = createMobileApi({handlers: ctx.handlers, repo, getWindow: () => win});
+      const server = createMobileServer({devices, api, log: (m) => log.info(m)});
+      ctx.mobile = {devices, api, server};
+      if (repo.getSetting('mobile.enabled', false))
+        server.start().catch((e) => log.warn(`スマホ連携を始められませんでした：${e.message}`));
+    }
     buildAppMenu();
     buildTray();
     // アプリの自動更新（SPEC §14.5）。更新のために終了するときは「処理中ですが終了しますか」を出さない
@@ -435,6 +447,7 @@ app.on('before-quit', (e) => {
   ctx.updater?.stop();
   ctx.jobs?.stop();
   ctx.session?.shutdown();
+  ctx.mobile?.server.stop();
 });
 
 export const __test = {existsSync};

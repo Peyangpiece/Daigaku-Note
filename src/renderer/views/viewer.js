@@ -245,6 +245,11 @@ class Viewer extends DeskTools {
     this.bookmarks = (r.bookmarks ?? []).filter((b) => b.page >= 1 && b.page <= this.pages.length);
     this.renderBookmarks();
     this.updateBar();
+    // スマホ連携（docs/MOBILE.md §6）：スマホで書き込んだら、この画面にも出す。まだファイルに描き込んでいなければ上書き保存する
+    this.offPhone = api.on('annotations.changed', ({materialId}) => {
+      if (materialId === this.materialId && !this.destroyed) this.syncFromPhone().catch(() => {});
+    });
+    if (r.stale) this.markDirty();
   }
 
   openHelp(open) {
@@ -274,6 +279,7 @@ class Viewer extends DeskTools {
     this.saveFile();
     this.flushAll();
     this.destroyed = true;
+    this.offPhone?.();
     clearTimeout(this.pinchTimer);
     for (const off of this.listeners) off();
     this.observer?.disconnect();

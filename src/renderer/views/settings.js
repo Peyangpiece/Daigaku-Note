@@ -117,6 +117,7 @@ export function renderSettings({data}, route = '/settings') {
       </section>`
           : ''
       }
+      <section class="card" id="st-mobile"><h3>スマホとつなぐ</h3><div data-v="mobile">読み込み中…</div></section>
       <section class="card" id="st-data"><h3>データ</h3>
         <p class="muted">授業・回・資料の記録、書き込み、クイズ、設定をまとめた 1 つのファイル（.sqlite）です。大学のアカウントの情報と資料のファイルは含みません。毎日の写しは 7 日分、自動で取っています。</p>
         <div class="about__row"><button type="button" class="btn btn--small" data-backup="export">バックアップを書き出す</button><button type="button" class="btn btn--small" data-backup="import">バックアップを読み込む…</button><button type="button" class="btn btn--small btn--quiet" data-backup="dir">自動バックアップのフォルダを開く</button></div>
@@ -212,8 +213,95 @@ function consentLine(c) {
     : `送る内容の説明が ${esc(c.version)} 版から変わりました。キーを削除して、同意し直してください。`;
 }
 
+/**
+ * スマホ連携（docs/MOBILE.md §2）：入れる・切る、スマホを追加（QR）、つないだスマホの一覧。
+ * QR は 10 分・1 回だけ使える。人に見せない（読んだ人がこのパソコンの資料を見られる）
+ */
+async function renderMobile(box, st = null, pair = null) {
+  if (!box?.isConnected) return;
+  const s = st ?? (await api['mobile.status']());
+  if (s?.error) return void (box.textContent = s.error);
+  const addr =
+    s.enabled && s.hosts.length ? s.hosts.map((h) => `<code>http://${esc(h)}:${s.port}/m/</code>`).join('　') : '';
+  const devices = s.devices.length
+    ? `<ul class="mobile-devices">${s.devices
+        .map(
+          (d) =>
+            `<li><strong>${esc(d.name)}</strong> <span class="muted">つないだ日 ${esc(fmtDate(d.created))}・最後に使った日 ${esc(fmtDate(d.lastSeen))}</span> <button type="button" class="btn btn--small btn--quiet" data-mobile-rename="${esc(d.id)}" data-name="${esc(d.name)}">名前</button><button type="button" class="btn btn--small btn--quiet" data-mobile-remove="${esc(d.id)}">外す</button></li>`
+        )
+        .join('')}</ul>`
+    : '<p class="muted">つないだスマホはまだありません。</p>';
+  box.innerHTML = `
+    <p class="muted">同じ Wi-Fi のスマホのブラウザで、今日の復習・資料と書き込みを見る・メモやマーカーを書く・写真を回のフォルダへ送る、ができます。資料はこのパソコンの中にだけあり、インターネットには送りません。</p>
+    <label style="display:block"><input type="checkbox" data-mobile-on ${s.enabled ? 'checked' : ''}> スマホとつなぐ（大学ノートを開いている間だけ）</label>
+    ${
+      s.enabled
+        ? `${addr ? `<p class="muted">アドレス：${addr}</p>` : '<p class="muted">Wi-Fi などのネットワークにつながっていません。</p>'}
+      <div class="about__row"><button type="button" class="btn btn--small" data-mobile-pair ${s.hosts.length ? '' : 'disabled'}>スマホを追加</button></div>
+      ${
+        pair
+          ? `<div class="mobile-qr"><div class="mobile-qr__code">${pair.svg}</div><p>スマホのカメラでこの QR を読んでください。ブラウザで開いて、そのままつながります（10 分間・1 回だけ使えます）。<br><strong>QR は人に見せないでください</strong>（読んだ人がこのパソコンの資料を見られます）。</p></div>`
+          : ''
+      }
+      ${devices}
+      <p class="muted">つながらないとき：パソコンとスマホが同じ Wi-Fi にあるか確かめてください。大学の Wi-Fi は端末どうしがつながらない設定のことが多く、家の Wi-Fi で使うのがおすすめです。</p>`
+        : devices
+    }`;
+  box.querySelector('[data-mobile-on]').onchange = async (e) => {
+    const r = await api['mobile.enable']({on: e.target.checked});
+    if (r?.error) toast(r.error, {error: true});
+    renderMobile(box, r?.error ? null : r);
+  };
+  const pairBtn = box.querySelector('[data-mobile-pair]');
+  if (pairBtn)
+    pairBtn.onclick = async () => {
+      const r = await api['mobile.pair']({host: s.hosts[0]});
+      if (r?.error) return toast(r.error, {error: true});
+      renderMobile(box, s, r);
+      // 10 分たったら QR を消す。つながったら一覧に出す（開いている間、ときどき確かめる）
+      const until = Date.now() + r.expiresIn;
+      const before = s.devices.length;
+      const tick = setInterval(async () => {
+        if (!box.isConnected) return clearInterval(tick);
+        const now = await api['mobile.status']();
+        if (now?.error) return;
+        if (now.devices.length > before || Date.now() > until) {
+          clearInterval(tick);
+          if (now.devices.length > before) toast(`${now.devices.at(-1).name} とつながりました`);
+          renderMobile(box, now);
+        }
+      }, 2000);
+    };
+  for (const b of box.querySelectorAll('[data-mobile-remove]'))
+    b.onclick = async () => {
+      const ok = await confirmDialog(
+        'このスマホを外しますか？ 外したスマホからは何もできなくなります。もう一度使うときは QR を読み直します。',
+        {ok: '外す', danger: true}
+      );
+      if (!ok) return;
+      const r = await api['mobile.remove']({deviceId: b.dataset.mobileRemove});
+      if (r?.error) return toast(r.error, {error: true});
+      renderMobile(box, r);
+    };
+  for (const b of box.querySelectorAll('[data-mobile-rename]'))
+    b.onclick = async () => {
+      const li = b.closest('li');
+      li.innerHTML = `<input class="input" maxlength="40" value="${esc(b.dataset.name)}" aria-label="スマホの名前"> <button type="button" class="btn btn--small">決める</button>`;
+      const input = li.querySelector('input');
+      input.focus();
+      const done = async () => {
+        const r = await api['mobile.rename']({deviceId: b.dataset.mobileRename, name: input.value});
+        if (r?.error) return toast(r.error, {error: true});
+        renderMobile(box, r);
+      };
+      li.querySelector('button').onclick = done;
+      input.onkeydown = (e) => e.key === 'Enter' && done();
+    };
+}
+
 function bind() {
   const $ = (id) => document.getElementById(id);
+  renderMobile(document.querySelector('[data-v="mobile"]'));
   for (const b of document.querySelectorAll('[data-backup]'))
     b.onclick = async () => {
       const what = b.dataset.backup;

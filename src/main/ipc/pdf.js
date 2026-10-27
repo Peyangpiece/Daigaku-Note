@@ -38,7 +38,9 @@ export function register({handle, repo, log, getWindow}) {
       bookmarks: repo.listBookmarks(annoKey(m)).map(bookmarkToClient),
       // 文字入れの書式（サイズ・太字・色・揃え）：この PDF で最後に使ったもの。初めて開く PDF では同じ授業（フォルダ）で最後に使ったもの
       textStyle:
-        repo.getSetting(`viewer.text.${m.id}`, null) ?? repo.getSetting(`viewer.text.course.${m.course_id}`, null)
+        repo.getSetting(`viewer.text.${m.id}`, null) ?? repo.getSetting(`viewer.text.course.${m.course_id}`, null),
+      // スマホで書き込んだあと、まだファイルに描き込んでいない（開いたら上書き保存する。docs/MOBILE.md §6）
+      stale: repo.getSetting('pdf.stale', []).includes(m.id)
     };
   });
 
@@ -87,6 +89,12 @@ export function register({handle, repo, log, getWindow}) {
     return {annotation: annotationToClient(row)};
   });
 
+  // 注釈の一覧（スマホで書き込んだあと、開いている PDF の画面が取り直す）
+  handle('annotation.list', ({materialId}) => {
+    const m = pdfMaterial(materialId);
+    return {annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient)};
+  });
+
   handle('annotation.remove', ({materialId, annotationId}) => {
     const m = pdfMaterial(materialId);
     repo.removeAnnotation(annoKey(m), id(annotationId) ?? bad('注釈が不正です'));
@@ -121,6 +129,12 @@ export function register({handle, repo, log, getWindow}) {
       originalsDir: originalsDir()
     });
     if (r.changed) getWindow()?.webContents.send('state.changed', {});
+    const stale = repo.getSetting('pdf.stale', []);
+    if (stale.includes(m.id))
+      repo.setSetting(
+        'pdf.stale',
+        stale.filter((x) => x !== m.id)
+      );
     return {ok: true, changed: r.changed, name: m.name};
   });
 

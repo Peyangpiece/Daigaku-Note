@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {charEdges, snapRange, textIn, wordAt, words, fitToInk, inkFromImage} from '../src/renderer/views/text-snap.js';
+import {charEdges, snapRange, textIn, wordAt, words, fitToInk, inkFromImage} from '../src/shared/text-snap.js';
 
 // 全角は 2、半角は 1 の幅とみなす
 const measure = (c) => (/[\x20-\x7e]/.test(c) ? 1 : 2);

@@ -74,7 +74,13 @@ const INVOKE = [
   'skin.import',
   'stationery.purchase',
   'stationery.arrange',
-  'stationery.model'
+  'stationery.model',
+  'mobile.status',
+  'mobile.enable',
+  'mobile.pair',
+  'mobile.rename',
+  'mobile.remove',
+  'annotation.list'
 ];
 const ON = [
   'quiz.progress',
@@ -84,7 +90,8 @@ const ON = [
   'sync.finished',
   'login.required',
   'route',
-  'zoom'
+  'zoom',
+  'annotations.changed'
 ];
 
 const api = {};
