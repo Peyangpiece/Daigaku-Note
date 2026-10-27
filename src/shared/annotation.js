@@ -1,6 +1,7 @@
 // PDF の注釈（SPEC §9.3）の形と検査。副作用なし。レンダラから来た値はここを通してから DB に入れる。
 // 座標は PDF のユーザー空間（左下原点、pt）。rect の (x, y) は箱の左下、w・h は幅と高さ。
-// 文字入れ：フォントはヒラギノ角ゴのみ（選べない）。変えられるのはサイズ・太字・色。
+// 文字入れ：フォントはヒラギノ角ゴのみ（選べない）。変えられるのはサイズ・太字・色・揃え（align）。
+//   一部の文字だけ色を変えたところは style.runs（shared/text-runs.js）。
 // 文字隠し（mask）：マーカー。色は赤の成分が 0 の色だけ（既定は水色）。body にはマーカーの下の文字（hiddenText）を入れる。
 // ボールペン（ink）：手で書いた線。body に点の並び（shared/ink.js の encodePoints）、style に色と太さ。rect は点を囲む四角。
 // アンダーライン（line）：文字の下に引くマーカーの線（乗算で重ねる四角）。style に色と太さ。
@@ -12,6 +13,7 @@ import {WIDTH_MAX, WIDTH_MIN, boundsOf, decodePoints, encodePoints} from './ink.
 import {hiderColorOk} from './stationery.js';
 import {isBuiltinSticker} from './stickers.js';
 import {cleanLabels, cleanParams, isFigure} from './figures.js';
+import {cleanAlign, cleanRuns} from './text-runs.js';
 
 export const KINDS = ['text', 'note', 'mask', 'ink', 'line', 'stamp'];
 export const STAMP_TYPES = ['sticker', 'figure', 'memo', 'index'];
@@ -173,6 +175,10 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
       bold: s.bold === true,
       color: isHex(s.color) ? s.color.toLowerCase() : DEFAULT_TEXT_COLOR
     };
+    const align = cleanAlign(s.align);
+    if (align) cleanStyle.align = align;
+    const runs = cleanRuns(s.runs, text.length, cleanStyle.color);
+    if (runs.length) cleanStyle.runs = runs;
   } else if (kind === 'note') {
     // メモ：色のほかに、吹き出しの大きさ（w・h。画面 px）と中の手書き（ink：線ごとに点・色・太さ）
     cleanStyle = {color: isHex(s.color) ? s.color.toLowerCase() : DEFAULT_NOTE_COLOR};

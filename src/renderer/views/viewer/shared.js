@@ -63,6 +63,17 @@ export const INDEX_COLORS = ['#f28b82', '#fbbc04', '#fff475', '#ccff90', '#a7ffe
 export const ERASER_PX = 9;
 // 消しゴムの半径（画面の px）
 export const SVG_NS = 'http://www.w3.org/2000/svg';
+/** 文字入れの揃え（左・中央・右）のボタン。線の長さで揃え方を見せる */
+const ALIGN_BUTTONS = [
+  ['left', '左揃え', [2, 2, 2], [12, 8, 10]],
+  ['center', '中央揃え', [2, 4, 3], [12, 8, 10]],
+  ['right', '右揃え', [2, 6, 4], [12, 8, 10]]
+]
+  .map(
+    ([v, label, xs, ws]) =>
+      `<button type="button" data-align="${v}" aria-pressed="false" title="${label}" aria-label="${label}"><svg viewBox="0 0 16 14" aria-hidden="true"><path d="${xs.map((x, i) => `M${x} ${3 + i * 4}h${ws[i]}`).join('')}" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`
+  )
+  .join('');
 export const DRAW_TOOLS = ['ink', 'line', 'eraser'];
 // なぞって書く道具（注釈の上でも書く。動かさない）
 export const TEXT_COLORS = ['#2b2b2b', '#d93025', '#1a73e8', '#188038', '#e37400', '#9334e6', '#c2185b', '#ffffff'];
@@ -142,7 +153,8 @@ export const BAR = `
       <span class="viewer-bar__font" title="文字入れのフォントは${IS_MAC ? 'ヒラギノ角ゴ' : 'この OS の標準のゴシック体'}です（変えられません）">${FONT_LABEL}</span>
       <label class="viewer-bar__size">サイズ<input type="number" data-v="size" min="${SIZE_MIN}" max="${SIZE_MAX}" step="0.5" />pt</label>
       <button type="button" class="viewer-bar__bold" data-v="bold" aria-pressed="false" title="太字（${key(MOD, 'B')}）">B</button>
-      <span class="swatches">${swatches(TEXT_COLORS, 'text-color')}</span>
+      <span class="viewer-bar__align" role="group" aria-label="揃え">${ALIGN_BUTTONS}</span>
+      <span class="swatches" title="打っている途中で文字を選んでから色を押すと、その文字だけ色が変わります">${swatches(TEXT_COLORS, 'text-color')}</span>
       <input type="color" data-v="text-custom" title="ほかの色" aria-label="文字のほかの色" />
     </div>
     <div class="viewer-bar__group" data-group="note" hidden>

@@ -238,21 +238,28 @@ export const methods = {
    * 全体の四角から、シートと重なる四角を穴にした clip-path（evenodd）をかける。文字入れは画面 px、ペンの線は PDF の座標（path の座標系）で
    */
   hideRed(a, sr) {
-    const el = a.el;
-    const r = el.getBoundingClientRect();
-    const over = sr && sr.left < r.right && sr.right > r.left && sr.top < r.bottom && sr.bottom > r.top;
-    if (!over) {
-      el.style.clipPath = '';
-      return;
-    }
     const poly = (x0, y0, x1, y1, hx0, hy0, hx1, hy1) =>
       `polygon(evenodd, ${x0}px ${y0}px, ${x1}px ${y0}px, ${x1}px ${y1}px, ${x0}px ${y1}px, ${x0}px ${y0}px, ${hx0}px ${hy0}px, ${hx1}px ${hy0}px, ${hx1}px ${hy1}px, ${hx0}px ${hy1}px, ${hx0}px ${hy0}px)`;
+    const overOf = (r) => sr && sr.left < r.right && sr.right > r.left && sr.top < r.bottom && sr.bottom > r.top;
     if (a.kind === 'text') {
-      const hx0 = Math.max(sr.left, r.left) - r.left,
-        hy0 = Math.max(sr.top, r.top) - r.top,
-        hx1 = Math.min(sr.right, r.right) - r.left,
-        hy1 = Math.min(sr.bottom, r.bottom) - r.top;
-      el.style.clipPath = poly(-4, -4, r.width + 4, r.height + 4, hx0, hy0, hx1, hy1);
+      // 文字入れ：赤い色の所（色の切れ目ごとの span）だけ。ほかの色の文字は見えたまま
+      for (const s of a.el.querySelectorAll('.anno-text__run')) {
+        const r = s.getBoundingClientRect();
+        if (!s.dataset.red || !overOf(r)) {
+          s.style.clipPath = '';
+          continue;
+        }
+        const hx0 = Math.max(sr.left, r.left) - r.left,
+          hy0 = Math.max(sr.top, r.top) - r.top,
+          hx1 = Math.min(sr.right, r.right) - r.left,
+          hy1 = Math.min(sr.bottom, r.bottom) - r.top;
+        s.style.clipPath = poly(-4, -4, r.width + 4, r.height + 4, hx0, hy0, hx1, hy1);
+      }
+      return;
+    }
+    const el = a.el;
+    if (!overOf(el.getBoundingClientRect())) {
+      el.style.clipPath = '';
       return;
     }
     // ペンの線：clip-path の座標は path の座標系（PDF の pt。基準の箱は線の囲み）
@@ -273,7 +280,10 @@ export const methods = {
     if (!on) {
       this.sheet?.remove();
       this.sheet = null;
-      for (const a of this.annos.values()) if (a.el.dataset?.red) a.el.style.clipPath = '';
+      for (const a of this.annos.values()) {
+        if (a.el.dataset?.red) a.el.style.clipPath = '';
+        if (a.kind === 'text') for (const r of a.el.querySelectorAll('[data-red]')) r.style.clipPath = '';
+      }
     } else if (!this.sheet) {
       const el = document.createElement('div');
       el.className = 'red-sheet';

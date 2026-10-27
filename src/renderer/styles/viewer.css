@@ -86,6 +86,16 @@
 .viewer-bar__bold {
   font-weight: 800 !important;
 }
+/* 文字入れの揃え（左・中央・右） */
+.viewer-bar__align {
+  display: inline-flex;
+  gap: 2px;
+}
+.viewer-bar__align svg {
+  display: block;
+  width: 16px;
+  height: 14px;
+}
 /* 多機能ペンの芯の切り替え（持っているときだけ出る） */
 .viewer-bar__refills {
   gap: 4px;
@@ -291,6 +301,11 @@
 }
 .viewer-pages[data-tool='text'] .anno-text {
   cursor: text;
+}
+/* ペン・マーカー・消しゴム・文字隠し・メモのときは、文字入れを素通しにする（上から線を引ける。動かしたり選んだりしない） */
+.viewer-pages:is([data-tool='ink'], [data-tool='line'], [data-tool='eraser'], [data-tool='mask'], [data-tool='note'])
+  .anno-text:not(.is-editing) {
+  pointer-events: none;
 }
 .anno-text.is-selected {
   box-shadow: 0 0 0 1px var(--c4);

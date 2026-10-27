@@ -118,7 +118,7 @@ export const methods = {
     else {
       if (a.page !== data.page) this.mountAnno(a, this.pages[data.page - 1]);
       Object.assign(a, data);
-      if (a.kind === 'text') a.el.textContent = a.body;
+      if (a.kind === 'text') this.renderText(a);
       else if (a.kind === 'note') a.el.querySelector('textarea').value = a.body;
       this.applyStyle(a);
       this.place(a);

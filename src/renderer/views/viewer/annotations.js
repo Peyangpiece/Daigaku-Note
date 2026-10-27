@@ -7,7 +7,52 @@ import {BUILTIN_STICKERS, isBuiltinSticker} from '../../../shared/stickers.js';
 import {figureOf} from '../../../shared/figures.js';
 import {openFigureEditor, renderFigure} from '../../figure-view.js';
 import {MEMO_DEPTH, MEMO_LINE, MEMO_PAD, MEMO_TOOTH, MEMO_TOP, tearClip} from '../../desk-tools.js';
+import {cleanRuns, fromSegments, paintRuns, textSegments} from '../../../shared/text-runs.js';
 import {api, LINE_HEIGHT, MASK_HEX, INDEX_OVER, SVG_NS} from './shared.js';
+
+// ---- 文字入れの中身（部分の色）：画面では色の切れ目ごとに span（.anno-text__run）。色を変えた所は data-c に色 ----
+/** 箱の中の文字を、色の切れ目ごとに読む（打っている間にできた改行・div も本文の改行として数える） */
+function readSegments(root) {
+  const segs = [];
+  let all = '';
+  const push = (t, c) => {
+    if (!t) return;
+    all += t;
+    const last = segs.at(-1);
+    if (last && last.c === c) last.t += t;
+    else segs.push({t, c});
+  };
+  const walk = (node, c) => {
+    for (const n of node.childNodes) {
+      if (n.nodeType === Node.TEXT_NODE) push(n.data, c);
+      else if (n.nodeName === 'BR') push('\n', c);
+      else if (n.nodeType === Node.ELEMENT_NODE) {
+        if ((n.nodeName === 'DIV' || n.nodeName === 'P') && all && !all.endsWith('\n')) push('\n', c);
+        walk(n, n.dataset?.c ?? c);
+      }
+    }
+  };
+  walk(root, null);
+  return segs;
+}
+/** 箱の頭から (node, offset) までの文字数（readSegments と同じ数え方） */
+function offsetIn(el, node, offset) {
+  const r = document.createRange();
+  r.setStart(el, 0);
+  r.setEnd(node, offset);
+  return readSegments(r.cloneContents()).reduce((n, s) => n + s.t.length, 0);
+}
+/** i 文字目の位置（描き直した箱の中の文字のノードと位置） */
+function pointAt(el, i) {
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let last = null;
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    if (i <= n.data.length) return [n, i];
+    i -= n.data.length;
+    last = n;
+  }
+  return last ? [last, last.data.length] : [el, el.childNodes.length];
+}
 
 export const methods = {
   // ---- 注釈 ----
@@ -30,7 +75,6 @@ export const methods = {
       el.title = 'マーカー';
     } else if (a.kind === 'text') {
       el.className = 'anno-text';
-      el.textContent = a.body;
     } else if (a.kind === 'stamp') {
       // 貼りもの：シール・素材の図は画像、ちぎった紙は文字。右下のつまみで大きさを変える（選んでいるときだけ見える）
       el.className = `anno-stamp anno-stamp--${a.style.type}`;
@@ -78,6 +122,7 @@ export const methods = {
       if (a.kind === 'text') el.setAttribute('aria-label', `文字入れ：${a.body.slice(0, 40)}`);
     }
     a.el = el;
+    if (a.kind === 'text') this.renderText(a);
     this.mountAnno(a, p);
     this.annos.set(a.key, a);
     this.applyStyle(a);
@@ -85,11 +130,99 @@ export const methods = {
     return a;
   },
 
-  /** 注釈の要素をページに入れる。貼りものはペンの線の下（線を上に書き込める）、ほかは上 */
+  /**
+   * 注釈の要素をページに入れる。貼りもの・文字入れはペンの線の下（上から線を書き込める。文字入れは貼りものの上）、ほかは上
+   */
   mountAnno(a, p) {
+    const svg = p.ink.ownerSVGElement;
     if (a.kind === 'ink') p.ink.append(a.el);
-    else if (a.kind === 'stamp') p.layer.insertBefore(a.el, p.ink.ownerSVGElement);
+    else if (a.kind === 'stamp') p.layer.insertBefore(a.el, p.layer.querySelector(':scope > .anno-text') ?? svg);
+    else if (a.kind === 'text') p.layer.insertBefore(a.el, svg);
     else p.layer.append(a.el);
+  },
+
+  /** 文字入れの中身を描き直す（本文と部分の色から）。色の切れ目ごとに span。赤シートで消える色の所は data-red */
+  renderText(a) {
+    const frag = document.createDocumentFragment();
+    for (const {t, c} of textSegments(a.body, a.style.runs)) {
+      const s = document.createElement('span');
+      s.className = 'anno-text__run';
+      if (c) {
+        s.dataset.c = c;
+        s.style.color = c;
+      }
+      s.textContent = t;
+      frag.append(s);
+    }
+    a.el.replaceChildren(frag);
+    this.markRed(a);
+  },
+
+  /** 赤く見える色の所（箱の色・部分の色）に印。赤シートの下に入ると見えなくする（syncCovers） */
+  markRed(a) {
+    const baseRed = hidesUnderRedSheet(a.style.color);
+    let any = false;
+    for (const s of a.el.querySelectorAll('.anno-text__run')) {
+      const red = s.dataset.c ? hidesUnderRedSheet(s.dataset.c) : baseRed;
+      if (red) s.dataset.red = '1';
+      else {
+        delete s.dataset.red;
+        s.style.clipPath = '';
+      }
+      any ||= red;
+    }
+    return any || baseRed;
+  },
+
+  /** 編集中の箱の中で選んでいる範囲（文字の位置 {s, e}）。箱の外なら null */
+  textSel(a) {
+    const sel = window.getSelection();
+    if (!sel?.rangeCount) return null;
+    const r = sel.getRangeAt(0);
+    if (!a.el.contains(r.startContainer) || !a.el.contains(r.endContainer)) return null;
+    return {s: offsetIn(a.el, r.startContainer, r.startOffset), e: offsetIn(a.el, r.endContainer, r.endOffset)};
+  },
+
+  /** 箱の中の範囲を選び直す（描き直したあと） */
+  setTextSel(a, {s, e}) {
+    const sel = window.getSelection();
+    const r = document.createRange();
+    r.setStart(...pointAt(a.el, s));
+    r.setEnd(...pointAt(a.el, e));
+    sel.removeAllRanges();
+    sel.addRange(r);
+  },
+
+  /** 打っている箱の中身を本文と部分の色に読み直す（末尾の改行は残す。位置がずれないように） */
+  readEditing(a) {
+    const {body, runs} = fromSegments(readSegments(a.el), a.style.color);
+    a.body = body;
+    a.style = {...a.style, runs};
+    if (!runs.length) delete a.style.runs;
+  },
+
+  /** 編集中に選んだ文字だけ色を変える。選んでいなければ false（箱ごとの色にする） */
+  paintSelection(a, color) {
+    const sel = this.textSel(a) ?? a.sel;
+    if (!sel || sel.s === sel.e) return false;
+    const [s, e] = [Math.min(sel.s, sel.e), Math.max(sel.s, sel.e)];
+    this.readEditing(a);
+    const runs = paintRuns(a.style.runs, s, e, color, a.style.color, a.body.length);
+    a.style = {...a.style, runs};
+    if (!runs.length) delete a.style.runs;
+    this.renderText(a);
+    this.applyStyle(a);
+    a.sel = {s, e};
+    if (document.activeElement === a.el) this.setTextSel(a, a.sel);
+    return true;
+  },
+
+  /** 書式の欄（サイズ・色の選び皿）から、打っていた箱へ戻る（選んでいた範囲もそのまま） */
+  refocusText() {
+    const a = this.editing;
+    if (!a || document.activeElement === a.el) return;
+    a.el.focus();
+    if (a.sel) this.setTextSel(a, a.sel);
   },
 
   applyStyle(a) {
@@ -102,6 +235,7 @@ export const methods = {
     else if (a.kind === 'text') {
       a.el.style.fontWeight = a.style.bold ? '700' : '400';
       a.el.style.color = a.style.color;
+      a.el.style.textAlign = a.style.align ?? '';
     } else if (a.kind === 'note') {
       a.el.style.setProperty('--note', a.style.color);
       this.noteTitle(a);
@@ -109,7 +243,7 @@ export const methods = {
     } else if (a.kind === 'stamp') this.applyStamp(a);
     // 赤く見える色の文字入れ・ペンの線は、赤シートの下に入ると見えなくなる（本物の赤シートと同じ）。syncCovers が隠す
     if (a.kind === 'text' || a.kind === 'ink') {
-      const red = hidesUnderRedSheet(a.style.color);
+      const red = a.kind === 'text' ? this.markRed(a) : hidesUnderRedSheet(a.style.color);
       if (red) a.el.dataset.red = '1';
       else {
         delete a.el.dataset.red;
@@ -302,15 +436,28 @@ export const methods = {
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
-    a.onBlur = () => this.finishEdit();
+    a.sel = null;
+    // 打ち終わるのは、箱の外を押したとき・Esc・ほかの道具に替えたときだけ。窓がほかのアプリに移った・書式の欄（サイズ・色の選び皿）を
+    // 使ったときにフォーカスが外れても、打っている途中のまま（戻ると続けて打てる）
+    a.onBlur = (e) => {
+      if (!document.hasFocus() || e.relatedTarget?.closest?.('[data-group="text"]')) return;
+      this.finishEdit();
+    };
     a.onKey = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        this.finishEdit();
         el.blur();
       }
     };
+    // 選んでいる範囲を覚えておく（色の選び皿を開くと、箱の中の選択が見えなくなるため）
+    a.onSel = () => {
+      const r = this.textSel(a);
+      if (r) a.sel = r;
+    };
     el.addEventListener('blur', a.onBlur);
     el.addEventListener('keydown', a.onKey);
+    document.addEventListener('selectionchange', a.onSel);
   },
 
   finishEdit() {
@@ -320,15 +467,22 @@ export const methods = {
     const el = a.el;
     el.removeEventListener('blur', a.onBlur);
     el.removeEventListener('keydown', a.onKey);
+    document.removeEventListener('selectionchange', a.onSel);
+    a.sel = null;
     el.contentEditable = 'false';
     el.classList.remove('is-editing');
-    const body = el.innerText.replace(/\n+$/, '').slice(0, 2000);
+    this.readEditing(a);
+    const body = a.body.replace(/\n+$/, '').slice(0, 2000);
     if (!body.trim()) {
       this.removeAnno(a, false);
       return this.record(a.key, a.editBefore, null);
     }
-    if (body !== el.innerText) el.textContent = body;
     a.body = body;
+    const runs = cleanRuns(a.style.runs, body.length, a.style.color);
+    a.style = {...a.style, runs};
+    if (!runs.length) delete a.style.runs;
+    this.renderText(a);
+    this.applyStyle(a);
     this.measure(a);
     this.record(a.key, a.editBefore, this.snap(a));
     this.scheduleSave(a, 0);
