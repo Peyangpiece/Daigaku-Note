@@ -362,8 +362,7 @@ export const methods = {
     this.on(el, 'pointermove', (e) => this.onPointerMove(e));
     this.on(el, 'pointerup', (e) => this.onPointerUp(e));
     this.on(el, 'pointercancel', (e) => {
-      if ([this.drawing, this.drag, this.tap, this.pan, this.textHold].some((t) => t?.pointer === e.pointerId))
-        this.cancelPointer();
+      if ([this.drawing, this.drag, this.tap, this.pan].some((t) => t?.pointer === e.pointerId)) this.cancelPointer();
     });
     // 画面に触れている指（ページの外で離したときも数え落とさないよう window で受ける）
     this.touchIds = new Set();
