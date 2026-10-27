@@ -130,7 +130,7 @@ export const BAR = `
     <span class="viewer-bar__name" data-v="name"></span>
     <div class="seg" role="group" aria-label="ツール">
       <button type="button" data-tool="select" title="選択・移動（Esc）：押してそのまま動かす">選択</button>
-      <button type="button" data-tool="text" title="文字入れ（${key(MOD, 'T')}）：文字の上を押すと打つ・なぞると範囲を選ぶ。箱のふちを長押しすると動かせる">文字</button>
+      <button type="button" data-tool="text" title="文字入れ（${key(MOD, 'T')}）：文字の上を押すと打つ・なぞると範囲を選ぶ。箱のふち（すぐ外側）を押して動かす">文字</button>
       <button type="button" data-tool="note" title="メモ（${key(MOD, 'M')}）">メモ</button>
     </div>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">

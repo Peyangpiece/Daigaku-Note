@@ -303,7 +303,7 @@
 .viewer-pages[data-tool='text'] .anno-text {
   cursor: text;
 }
-/* 文字入れの道具：箱のふちの外側 8px は「つかむ所」。長押しで動かす（文字の上は打つ・範囲選択） */
+/* 文字入れの道具：箱のふちの外側 8px は「つかむ所」。押して動かす（文字の上は打つ・範囲選択） */
 .viewer-pages[data-tool='text'] .anno-text::before {
   content: '';
   position: absolute;
