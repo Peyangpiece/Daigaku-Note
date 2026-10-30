@@ -352,7 +352,19 @@ app.whenReady().then(async () => {
     {
       const devices = createDevices({repo, secrets: ctx.secrets});
       const api = createMobileApi({handlers: ctx.handlers, repo, getWindow: () => win});
-      const server = createMobileServer({devices, api, log: (m) => log.info(m)});
+      const server = createMobileServer({
+        devices,
+        api,
+        log: (m) => log.info(m),
+        // 前と違う所・ブラウザからつながった：本人でなければ鍵を盗まれたおそれがあるので知らせる（段階 1 の暫定の見張り）
+        onMoved: (d) =>
+          notifier.show({
+            title: 'スマホが前と違う所からつながりました',
+            body: `${d.name}：${d.uaChanged ? 'ブラウザが変わりました' : `${d.from} → ${d.to}`}。心当たりがなければ、設定 → スマホとつなぐ で外してください`,
+            route: '/settings',
+            oncePerDay: `mobile-moved:${d.id}:${d.to}`
+          })
+      });
       ctx.mobile = {devices, api, server};
       if (repo.getSetting('mobile.enabled', false))
         server.start().catch((e) => log.warn(`スマホ連携を始められませんでした：${e.message}`));

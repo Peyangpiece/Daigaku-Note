@@ -79,9 +79,10 @@ export function lanAddresses(ifaces = os.networkInterfaces()) {
 }
 
 /**
- * @param {{devices, api, log, now?}} deps devices は devices.js、api は api.js の窓口
+ * @param {{devices, api, log, now?, onMoved?}} deps devices は devices.js、api は api.js の窓口。
+ *   onMoved：つないだスマホが前と違う所・ブラウザからつながったとき（パソコンで知らせる）
  */
-export function createMobileServer({devices, api, log = () => {}, now = () => Date.now()}) {
+export function createMobileServer({devices, api, log = () => {}, now = () => Date.now(), onMoved = () => {}}) {
   let server = null;
   let port = null;
   let inflight = 0;
@@ -193,7 +194,11 @@ export function createMobileServer({devices, api, log = () => {}, now = () => Da
       const fresh = await devices.activate(deviceId, req.headers['user-agent']);
       return send(res, 200, Buffer.from(seal(key, {key: fresh})), 'application/octet-stream');
     }
-    devices.seen(deviceId);
+    const moved = devices.seen(deviceId, {ip: req.socket.remoteAddress, ua: req.headers['user-agent']});
+    if (moved) {
+      log(`mobile: ${moved.name} が前と違う所（${moved.from} → ${moved.to}）からつながりました`);
+      onMoved(moved);
+    }
     if (ch === 'hello') result = {ok: true};
     else if (!Object.hasOwn(api, ch)) result = {error: 'この操作はスマホからはできません'};
     else
