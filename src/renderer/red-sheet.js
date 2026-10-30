@@ -1,10 +1,9 @@
 // 赤シート（PDF の編集画面・机）：画面の上に赤を乗算で重ねる下敷き（白い紙 → 赤、黒い文字 → 黒、水色のマーカー → 黒）。
-// ドラッグで動かし、四隅とふちのつまみで大きさを変える（ペン・指・マウスどれでも。CSS の resize はマウスでしか使えず、つまみも見えないため）。
+// ドラッグで動かし、右下の角のつまみで大きさを変える（ペン・指・マウスどれでも。CSS の resize はマウスでしか使えず、つまみも見えないため）。
 // 矢印キーで動かし、Shift＋矢印キーで大きさを変える。大きさは次に出すときのために覚える（このパソコンの中だけ）
 
 const MIN_W = 120;
 const MIN_H = 60;
-const GRIPS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const KEY = 'redSheet.size';
 
 function savedSize() {
@@ -33,12 +32,10 @@ export function createRedSheet({left, top, width, height}, {onChange = () => {}}
   el.setAttribute('role', 'region');
   el.setAttribute(
     'aria-label',
-    '赤シート（ドラッグで動かす。ふちと角で大きさを変える。矢印キーで動かし、Shift＋矢印キーで大きさを変える）'
+    '赤シート（ドラッグで動かす。右下の角で大きさを変える。矢印キーで動かし、Shift＋矢印キーで大きさを変える）'
   );
   el.tabIndex = 0;
-  el.innerHTML = `<span class="red-sheet__label">赤シート</span>${GRIPS.map(
-    (g) => `<span class="red-sheet__grip red-sheet__grip--${g}" data-grip="${g}" aria-hidden="true"></span>`
-  ).join('')}`;
+  el.innerHTML = '<span class="red-sheet__grip" data-grip="se" aria-hidden="true"></span>';
   const size = savedSize();
   const w = Math.max(MIN_W, Math.min(size?.width ?? width, window.innerWidth));
   const h = Math.max(MIN_H, Math.min(size?.height ?? height, window.innerHeight));
@@ -53,7 +50,7 @@ export function createRedSheet({left, top, width, height}, {onChange = () => {}}
   };
   place({left, top: Math.min(top, window.innerHeight - h - 8), width: w, height: h});
 
-  /** つまみ（n・s・e・w とその組み合わせ）で、反対側のふちを動かさずに大きさを変える。つまみがなければ動かす */
+  /** 右下のつまみ（se）で、左上を動かさずに大きさを変える。つまみがなければ動かす（n・w も扱えるが、つまみは右下だけ） */
   const resized = (r, grip, dx, dy) => {
     if (!grip) return {...r, left: r.left + dx, top: r.top + dy};
     let {left: l, top: t, width: wd, height: ht} = r;
