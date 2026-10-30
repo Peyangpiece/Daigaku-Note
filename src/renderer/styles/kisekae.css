@@ -324,6 +324,12 @@
   padding: 0 0 2px;
   font-weight: 700;
 }
+.skin-picker__note {
+  margin: -6px 0 0;
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
 .skin-picker__new {
   display: flex;
   align-items: center;

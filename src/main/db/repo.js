@@ -1,6 +1,6 @@
 // 表ごとの読み書き（DESIGN-M0 §5）。SQL はこのファイルの外に出さない。列名は表ごとの一覧で縛る。
 import {ulid} from '../../shared/ids.js';
-import {normalizeTemplate, rotationFor} from '../../shared/skin.js';
+import {CLASSIC_ID, normalizeTemplate, rotationFor} from '../../shared/skin.js';
 
 /** 行を列の値ごとにまとめる（{値: [行…]}） */
 function groupBy(rows, key) {
@@ -64,6 +64,7 @@ export const COLUMNS = {
     'dir',
     'scope',
     'skin_template_id',
+    'skin_auto',
     'sticker_mode',
     'created_at',
     'updated_at'
@@ -484,11 +485,16 @@ export class Repo {
       .prepare('SELECT COALESCE(MAX(sort_order), 0) m FROM course WHERE term_id = ?')
       .get(row.term_id).m;
     const count = this.db.prepare('SELECT COUNT(*) c FROM course WHERE term_id = ?').get(row.term_id).c;
-    // 新しい授業には、はじめからあるテンプレートを順に割り当てる（となり同士が同じ見た目にならないように。SPEC-KISEKAE §4.4）
+    // 新しい授業には、はじめからあるテンプレートを順に割り当てる（となり同士が同じ見た目にならないように。SPEC-KISEKAE §4.4）。
+    // 自動で付けた印（skin_auto）を残し、全体のテンプレートを当てたときにはそれに合わせる。
+    // 本人が全体のテンプレートを選んだあと（クラシックでない）は、新しい授業も全体に合わせる（順の割り当てはしない）
+    const global = this.getSetting('skin.global', null);
+    const rotate = !global || global === CLASSIC_ID;
     return this.insert('course', {
       id: ulid(),
       color: (count % 8) + 1,
-      skin_template_id: rotationFor(count),
+      skin_template_id: rotate ? rotationFor(count) : null,
+      skin_auto: rotate ? 1 : 0,
       sort_order: maxOrder + 1,
       created_at: t,
       updated_at: t,

@@ -18,6 +18,7 @@ import {
   STICKERS_PER_PLACE,
   TAPE_PATTERNS,
   TAPE_PATTERN_LABEL,
+  templateIdOf,
   isBuiltin,
   normalizeTemplate,
   usage,
@@ -714,6 +715,12 @@ const setPath = (obj, key, value) => {
   const [a, b] = key.split('.');
   obj[a][b] = value;
 };
+/** すべての授業に当てたとき：本人が授業ごとに選んだ着せ替えはそのまま残ったことを添える */
+function keptText(data, course) {
+  if (course) return '';
+  const own = data.courses.filter((c) => c.skin_template_id && !c.hidden).length;
+  return own ? `（授業ごとに選んだ ${own} つはそのまま）` : '';
+}
 async function applyTemplate(data, templateId) {
   const course = targetCourse(data);
   const prev = currentId(data);
@@ -723,11 +730,11 @@ async function applyTemplate(data, templateId) {
   const name = templateId
     ? (allTemplates(state.data).find((t) => t.id === templateId)?.name ?? '')
     : 'すべての授業と同じ';
-  toast(`${course ? `「${course.name}」` : 'すべての授業'}を「${name}」にしました`, {
+  toast(`${course ? `「${course.name}」` : 'すべての授業'}を「${name}」にしました${keptText(state.data, course)}`, {
     action: {
       label: '元に戻す',
       run: async () => {
-        await api['skin.apply']({courseId: course?.id, templateId: prev});
+        await api['skin.apply']({courseId: course?.id, templateId: prev, restore: course ? undefined : r.followed});
         reload();
       }
     }
@@ -773,7 +780,7 @@ async function save({asNew = false, forCourse = false, confirmed = false} = {}) 
   ui.confirm = null;
   navigate(galleryRoute());
   await reload();
-  toast(`「${r.template.name}」を保存して使い始めました`);
+  toast(`「${r.template.name}」を保存して使い始めました${keptText(state.data, course)}`);
 }
 
 /** 画像をシールの素にする：長辺 512px 以内の PNG に描き直す（画像の中の付加情報を落とす）。透明な所があれば形どおり、なければ白いふち付き */
@@ -1397,7 +1404,9 @@ export function openSkinPicker(course, card, x, y) {
           <label class="ks-sw ks-sw--pick" title="ほかの色">＋<input type="color" data-look-custom="${part}" value="${cur ?? colors[0]}" aria-label="${label}：ほかの色" /></label>
         </div></div>`;
     };
+    const tname = allTemplates(state.data).find((t) => t.id === templateIdOf(globalId(state.data), c))?.name ?? '';
     el.innerHTML = `<div class="skin-picker__head">${esc(c.name)} の着せ替え</div>
+      <p class="skin-picker__note">「${esc(tname)}」のときの色です。ほかのテンプレートに替えると、そのテンプレートの色になります</p>
       ${PICKER_ROWS.map(row).join('')}
       ${Object.keys(over).length ? '<button type="button" class="skin-picker__new" data-look-reset>すべて標準に戻す</button>' : ''}`;
   };

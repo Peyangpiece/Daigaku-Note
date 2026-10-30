@@ -1,6 +1,6 @@
 // IPC の窓口：設定・ブラウザ・外部（settings.*・browser.install・shell.*）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
 import {dialog, shell, app} from 'electron';
-import {isHex} from '../../shared/skin.js';
+import {CLASSIC_ID, isHex, templateIdOf} from '../../shared/skin.js';
 import {checkDownloadDir} from '../../shared/paths.js';
 import {cleanUses, isRole} from '../../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
@@ -46,8 +46,11 @@ export function register({handle, ctx, repo}) {
     if (patch.folderLook && typeof patch.folderLook === 'object') {
       const {courseId: fcid, part, color: c, reset} = patch.folderLook;
       const cid = id(fcid) ?? bad('このフォルダは見つかりませんでした');
+      const course = repo.get('course', cid) ?? bad('このフォルダは見つかりませんでした');
       const map = {...repo.getSetting('skin.folderLooks', {})};
-      const look = {...(map[cid] ?? {})};
+      // 色は今のテンプレートで選んだものとして覚える。前のテンプレートで選んだ色は持ち越さない
+      const tid = templateIdOf(repo.getSetting('skin.global', CLASSIC_ID), course);
+      const look = map[cid]?.tid === tid ? {...map[cid]} : {tid};
       if (reset === true) Object.keys(look).forEach((k) => delete look[k]);
       else {
         if (!FOLDER_LOOK_PARTS.includes(part)) bad('変える場所が不正です');
@@ -55,7 +58,7 @@ export function register({handle, ctx, repo}) {
         else if (isHex(c)) look[part] = c.toLowerCase();
         else bad('色が不正です');
       }
-      if (Object.keys(look).length) map[cid] = look;
+      if (Object.keys(look).some((k) => k !== 'tid')) map[cid] = look;
       else delete map[cid];
       repo.setSetting('skin.folderLooks', map);
     }
