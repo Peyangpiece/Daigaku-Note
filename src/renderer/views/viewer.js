@@ -23,6 +23,7 @@
 // Electron の Chromium の版によっては動かない
 import * as pdfjs from '../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
 import {state} from '../store.js';
+import {toast} from '../ui-kit.js';
 import {skinOf} from '../skin.js';
 import {stationeryState} from '../../shared/stationery.js';
 import {DEFAULT_SIZE} from '../../shared/annotation.js';
@@ -245,6 +246,11 @@ class Viewer extends DeskTools {
       if (materialId === this.materialId && !this.destroyed) this.syncFromPhone().catch(() => {});
     });
     if (r.stale) this.markDirty();
+    if (r.rebased)
+      toast(
+        'この PDF の元の写しが見つからないため（別のパソコンへ移したときなど）、前の書き込みは PDF に描き込まれた形で残しました。アプリでは動かせません',
+        {error: true}
+      );
   }
 
   openHelp(open) {

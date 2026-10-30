@@ -114,3 +114,53 @@ test('ほかのアプリで変えられた PDF・元の写しがないときは�
   assert.equal((await readBase(repo.get('material', m.id), originalsDir)).pristine, false);
   assert.ok((await stat(file)).size > 0);
 });
+
+test('上書き保存の途中で落ちた（ファイルを置き換えたあと、記録を直す前）：次の上書き保存で記録を直して続ける（衝突にしない）', async (t) => {
+  const {file, bytes, repo, m, originalsDir} = await setup(t);
+  // 記録を直すところで落ちる
+  const crashing = Object.create(repo);
+  crashing.updateMaterial = () => {
+    throw new Error('落ちた');
+  };
+  await assert.rejects(overwritePdf({repo: crashing, material: m, annotations: [mask('a1')], originalsDir}), /落ちた/);
+  const replaced = await readFile(file);
+  assert.notEqual(sha256(replaced), sha256(bytes), 'ファイルは置き換わっている');
+  assert.equal(repo.get('material', m.id).sha256, sha256(bytes), '記録は古いまま');
+  // 次の上書き保存：ほかのアプリでの変更とは扱わず、記録を直して続ける
+  const r = await overwritePdf({
+    repo,
+    material: repo.get('material', m.id),
+    annotations: [mask('a1'), mask('a2', 2)],
+    originalsDir
+  });
+  assert.equal(r.changed, true);
+  const after = repo.get('material', m.id);
+  assert.equal(after.sha256, sha256(await readFile(file)));
+  assert.equal(after.base_sha256, sha256(bytes));
+  assert.deepEqual(repo.getSetting('pdf.saving', {}), {}, '途中の記録は残さない');
+});
+
+test('置き換える前に失敗したら（書き込めない）、一時ファイルも途中の記録も残さず、ファイルはそのまま', async (t) => {
+  const {dir, file, bytes, repo, m, originalsDir} = await setup(t);
+  if (process.getuid?.() === 0) return t.skip('root では書き込み禁止にならない');
+  const {chmod} = await import('node:fs/promises');
+  // 元の写しを先に作っておく（フォルダを書き込み禁止にする前に）
+  await overwritePdf({repo, material: m, annotations: [mask('a1')], originalsDir});
+  const before = await readFile(file);
+  await chmod(dir, 0o555);
+  try {
+    await assert.rejects(
+      overwritePdf({repo, material: repo.get('material', m.id), annotations: [mask('a1'), mask('a2', 2)], originalsDir})
+    );
+  } finally {
+    await chmod(dir, 0o755);
+  }
+  assert.deepEqual(await readFile(file), before);
+  assert.deepEqual(
+    (await readdir(dir)).filter((n) => n.startsWith('.daigaku-tmp')),
+    []
+  );
+  assert.equal(repo.get('material', m.id).sha256, sha256(before));
+  assert.deepEqual(repo.getSetting('pdf.saving', {}), {}, '途中の記録は残さない');
+  void bytes;
+});

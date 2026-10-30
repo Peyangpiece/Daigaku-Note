@@ -23,12 +23,19 @@ export function register({handle, repo, log, getWindow}) {
   const originalsDir = () => path.join(app.getPath('userData'), 'originals');
 
   handle('pdf.open', async ({materialId}) => {
-    const m = pdfMaterial(materialId);
+    let m = pdfMaterial(materialId);
     // 上書き保存したことがあれば、注釈を描き込む前の写しを開く（描き込み済みの上に注釈を重ねて 2 重にしない）
     const base = await readBase(m, originalsDir()).catch(() =>
       bad('ファイルを読めませんでした（移動または削除された可能性があります）')
     );
-    if (!base.pristine) log.warn(`元の PDF の写しがありません：${m.name}（描き込み済みのファイルを開きます）`);
+    // 元の写しがない（別のパソコンへ移した・バックアップから戻したなど）：描き込み済みのファイルを新しい元にする。
+    // 前の書き込みはファイルに描き込まれた形で残り、アプリでは動かせなくなる（重ねて 2 重に出さない・上書き保存が止まらない）
+    let rebased = false;
+    if (!base.pristine && m.base_sha256) {
+      log.warn(`元の PDF の写しがありません：${m.name}（描き込み済みのファイルを新しい元にします）`);
+      m = repo.updateMaterial(m.id, {base_sha256: null});
+      rebased = true;
+    }
     const bytes = base.bytes;
     repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
     return {
@@ -36,6 +43,7 @@ export function register({handle, repo, log, getWindow}) {
       bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
       annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient),
       bookmarks: repo.listBookmarks(annoKey(m)).map(bookmarkToClient),
+      rebased,
       // 文字入れの書式（サイズ・太字・色・揃え）：この PDF で最後に使ったもの。初めて開く PDF では同じ授業（フォルダ）で最後に使ったもの
       textStyle:
         repo.getSetting(`viewer.text.${m.id}`, null) ?? repo.getSetting(`viewer.text.course.${m.course_id}`, null),

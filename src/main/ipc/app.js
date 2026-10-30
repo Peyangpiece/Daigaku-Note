@@ -4,6 +4,7 @@ import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {todayJst} from '../../shared/schedule.js';
 import {exportBackup, stageRestore} from '../backup.js';
+import {latestVersion} from '../db/db.js';
 
 export function register({handle, ctx, log}) {
   // 設定の「情報」：第三者のライセンスの一覧（配布物の THIRD-PARTY-NOTICES.md）、データとログの場所を開く
@@ -43,7 +44,8 @@ export function register({handle, ctx, log}) {
     const staged = stageRestore({
       userData: app.getPath('userData'),
       src: r.filePaths[0],
-      open: (f) => new DatabaseSync(f, {readOnly: true})
+      open: (f) => new DatabaseSync(f, {readOnly: true}),
+      maxVersion: latestVersion()
     });
     log.info(`バックアップの読み込みを予約しました: ${r.filePaths[0]}（版 ${staged.version}）。次の起動で入れ替えます`);
     return {ok: true, version: staged.version};

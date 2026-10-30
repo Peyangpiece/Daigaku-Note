@@ -12,15 +12,26 @@ const err = (code, message) => Object.assign(new Error(message), {code});
 export const annoKey = (m) => m.base_sha256 || m.sha256;
 export const originalPath = (dir, hash) => path.join(dir, `${hash}.pdf`);
 
-/** 一時ファイルに書いてから置き換える（途中で落ちても壊れたファイルを残さない）。元のファイルの権限は保つ */
-async function replaceFile(file, data) {
+const JOURNAL = 'pdf.saving'; // 置き換えている途中の記録（設定）：{資料 id: {to, base}}
+
+/**
+ * 一時ファイルに書いて、ディスクへ書き切ってから（fsync）置き換える。途中で落ちても壊れたファイルを残さず、
+ * 失敗したら一時ファイルも消す。元のファイルの権限は保つ
+ */
+export async function replaceFile(file, data) {
   const tmp = path.join(path.dirname(file), `.daigaku-tmp-${process.pid}-${Date.now()}`);
   const mode = (await fsp.stat(file).catch(() => null))?.mode;
-  await fsp.writeFile(tmp, data, mode ? {mode} : undefined);
   try {
+    const fh = await fsp.open(tmp, 'wx', mode ?? 0o644);
+    try {
+      await fh.writeFile(data);
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
     await fsp.rename(tmp, file);
   } catch (e) {
-    await fsp.rm(tmp, {force: true});
+    await fsp.rm(tmp, {force: true}).catch(() => {});
     throw e;
   }
 }
@@ -42,10 +53,20 @@ export async function readBase(m, originalsDir) {
  * 上書き保存。annotations は annotationToClient の形、images は文字入れの PNG（id → bytes）。
  * 注釈がひとつもなければ元の PDF に戻す。戻り：{changed, sha256, size}
  */
-export async function overwritePdf({repo, material: m, annotations, images = new Map(), originalsDir}) {
+export async function overwritePdf({repo, material, annotations, images = new Map(), originalsDir}) {
+  let m = material;
   const cur = await fsp.readFile(m.path).catch(() => {
     throw err('missing', 'PDF を読めませんでした（移動または削除された可能性があります）');
   });
+  // 前の上書き保存が、ファイルを置き換えたあと記録を直す前に止まっていた（アプリが落ちたなど）：記録を直して続ける。
+  // 置き換える前に止まっていたなら、置き換えの記録を捨てるだけ
+  const pending = repo.getSetting(JOURNAL, {})?.[m.id];
+  if (pending) {
+    if (sha256(cur) === pending.to) {
+      m = repo.updateMaterial(m.id, {sha256: pending.to, size: cur.length, base_sha256: pending.base});
+    }
+    journal(repo, m.id, null);
+  }
   // 大学ノートの外（プレビューなど）で変えられていたら上書きしない（その変更を消さないため）
   if (sha256(cur) !== m.sha256)
     throw err(
@@ -61,17 +82,29 @@ export async function overwritePdf({repo, material: m, annotations, images = new
     src = cur;
     await fsp.mkdir(originalsDir, {recursive: true});
     const keep = originalPath(originalsDir, base);
-    if (!(await fsp.stat(keep).catch(() => null))) {
-      await fsp.writeFile(`${keep}.tmp`, src);
-      await fsp.rename(`${keep}.tmp`, keep);
-    }
+    if (!(await fsp.stat(keep).catch(() => null))) await replaceFile(keep, src);
   }
   const out = annotations.length
     ? Buffer.from(await exportAnnotatedPdf(src, annotations, {images, markers: 'blue', notes: true}))
     : src;
   const h = sha256(out);
   if (h === m.sha256) return {changed: false, sha256: h, size: out.length};
-  await replaceFile(m.path, out);
-  repo.updateMaterial(m.id, {sha256: h, size: out.length, base_sha256: annotations.length ? base : null});
+  const next = annotations.length ? base : null;
+  journal(repo, m.id, {to: h, base: next}); // 置き換えてから記録を直すまでに落ちても、次に直せるように
+  try {
+    await replaceFile(m.path, out);
+  } catch (e) {
+    journal(repo, m.id, null); // 置き換えられなかった：ファイルは前のまま
+    throw e;
+  }
+  repo.updateMaterial(m.id, {sha256: h, size: out.length, base_sha256: next});
+  journal(repo, m.id, null);
   return {changed: true, sha256: h, size: out.length};
+}
+
+function journal(repo, id, entry) {
+  const all = {...repo.getSetting(JOURNAL, {})};
+  if (entry) all[id] = entry;
+  else delete all[id];
+  repo.setSetting(JOURNAL, all);
 }

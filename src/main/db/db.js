@@ -26,6 +26,16 @@ export async function openDatabase(file = ':memory:', {migrationsDir = MIGRATION
   return {db, applied};
 }
 
+/** このアプリが知っているいちばん新しい版（migrations の番号）。それより新しい版のバックアップは読み込まない */
+export function latestVersion(dir = MIGRATIONS_DIR) {
+  return Math.max(
+    0,
+    ...readdirSync(dir)
+      .filter((f) => /^\d{4}_.+\.sql$/.test(f))
+      .map((f) => Number(f.slice(0, 4)))
+  );
+}
+
 /** migrations/NNNN_name.sql を番号順に当てる。当てた版は schema_migrations に残す。戻りは今回当てた版の一覧 */
 export function migrate(db, dir = MIGRATIONS_DIR) {
   db.exec(
