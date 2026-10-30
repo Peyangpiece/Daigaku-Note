@@ -40,7 +40,6 @@ export const methods = {
       if (near) return void ed.focus();
       return void this.finishEdit();
     }
-    if (e.target.closest('.bookmark-ribbon')) return; // しおりのリボンは押しても書き込まない
     // 画面の左右の端（指・ペン）は四隅を出すなでる操作の始まり。書き始めない
     if (e.pointerType !== 'mouse' && (e.clientX >= document.documentElement.clientWidth - 24 || e.clientX <= 24))
       return;

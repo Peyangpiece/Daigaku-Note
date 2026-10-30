@@ -102,16 +102,14 @@ const POUCH_ART = {
   memo: '<svg viewBox="0 0 56 40" aria-hidden="true"><rect x="11" y="6" width="34" height="31" rx="1.5" fill="#fffdf6" stroke="#c9c6bd"/><rect x="11" y="4" width="34" height="6" rx="1.5" fill="#8b6f47"/><path d="M15 17H41M15 23H41M15 29H41" stroke="#bcd3ea" stroke-width="1.2"/></svg>',
   ruler:
     '<svg viewBox="0 0 56 40" aria-hidden="true"><g transform="rotate(-18 28 20)"><rect x="2" y="13" width="52" height="14" rx="2" fill="#dbeefa" stroke="#7aa7c7"/><path d="M6 13v5M11 13v3M16 13v5M21 13v3M26 13v5M31 13v3M36 13v5M41 13v3M46 13v5M51 13v3" stroke="#2f4f66" stroke-width="1"/></g></svg>',
-  index:
-    '<svg viewBox="0 0 56 40" aria-hidden="true"><rect x="8" y="5" width="30" height="30" rx="1" fill="#fff" stroke="#c9c6bd"/><rect x="26" y="8" width="22" height="7" rx="1.5" fill="#f28b82"/><rect x="26" y="17" width="22" height="7" rx="1.5" fill="#aecbfa"/><rect x="26" y="26" width="22" height="7" rx="1.5" fill="#ccff90"/></svg>',
   timer:
     '<svg viewBox="0 0 56 40" aria-hidden="true"><circle cx="28" cy="22" r="14" fill="#fff" stroke="#3b4252" stroke-width="2.5"/><rect x="25" y="3" width="6" height="4" rx="1" fill="#3b4252"/><path d="M28 22V13" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/><path d="M28 22L34 26" stroke="#3b4252" stroke-width="2" stroke-linecap="round"/></svg>'
 };
 
 /**
- * 四隅のうち、ポーチ・シール帳・素材の HTML（筆箱は使う側が作る）。index：ポーチに付箋（インデックス）を入れるか（PDF のページだけ）
+ * 四隅のうち、ポーチ・シール帳・素材の HTML（筆箱は使う側が作る）
  */
-export const cornersHtml = ({index = false} = {}) => `
+export const cornersHtml = () => `
   <aside class="corner corner--pouch is-tucked" data-corner="pouch" aria-label="ポーチ">
     <button type="button" class="corner__tab" data-corner-tab="pouch" aria-expanded="false" title="ポーチを出す（マウスを画面の右下の端へ・右端から左へなでる）" aria-label="ポーチを出す"><span>ポーチ</span></button>
     <div class="corner__head"><strong>ポーチ</strong></div>
@@ -120,7 +118,6 @@ export const cornersHtml = ({index = false} = {}) => `
       <button type="button" class="pouch__item" data-v="calc" aria-pressed="false" title="電卓を出す・しまう（${key(MOD, 'D')}）">${POUCH_ART.calc}<span>電卓</span></button>
       <button type="button" class="pouch__item" data-v="memo" aria-pressed="false" title="メモ帳を出す・しまう。書いてちぎると、ページに貼れます">${POUCH_ART.memo}<span>メモ帳</span></button>
       <button type="button" class="pouch__item" data-v="ruler" aria-pressed="false" title="定規を出す・しまう。ふちのすぐ外からボールペンで書くと、まっすぐな線になります">${POUCH_ART.ruler}<span>定規</span></button>
-${index ? `<button type="button" class="pouch__item" data-v="index" aria-pressed="false" title="付箋を出す・しまう。ページの端に貼る色の目印です">${POUCH_ART.index}<span>付箋</span></button>` : ''}
       <button type="button" class="pouch__item" data-v="timer" aria-pressed="false" title="タイマーを出す・しまう">${POUCH_ART.timer}<span>タイマー</span><small class="pouch__badge" data-v="timer-badge" hidden></small></button>
     </div>
   </aside>

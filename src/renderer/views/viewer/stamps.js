@@ -1,8 +1,7 @@
 // PDF の編集画面：貼りもの（シール・素材・メモ）と付箋インデックス。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
-import {esc} from '../../ui-kit.js';
 import {MEMO_COLOR, MEMO_SIZE} from '../../../shared/annotation.js';
 import {MEMO_PAD} from '../../desk-tools.js';
-import {INDEX_W, INDEX_H, INDEX_OVER, INDEX_GAP, INDEX_COLORS} from './shared.js';
+import {INDEX_W, INDEX_H, INDEX_OVER, INDEX_GAP} from './shared.js';
 
 export const methods = {
   /** 画面の点の下のページ（なければ null） */
@@ -78,60 +77,7 @@ export const methods = {
     return a;
   },
 
-  // ---- 付箋（インデックス）：色を押すと、見ているページの右の端の空いている所に貼る。ドラッグすると離した高さに ----
-  toggleIndexPad(on = !this.indexPad) {
-    if (!on) {
-      this.indexPad?.remove();
-      this.indexPad = null;
-    } else if (!this.indexPad) {
-      this.indexColor ??= INDEX_COLORS[0];
-      const colors = INDEX_COLORS.map(
-        (c) =>
-          `<button type="button" class="index-pad__color" data-index-color="${c}" style="--index: ${c}" title="この色の付箋を貼る（ドラッグすると好きな高さに）" aria-label="付箋を貼る ${c}"></button>`
-      ).join('');
-      const el = this.floatTool(
-        'index-pad',
-        '付箋',
-        `<label class="index-pad__label">書く言葉（なくても可）<input type="text" maxlength="12" data-index-label placeholder="例：第3章・試験範囲" /></label>
-        <div class="index-pad__colors">${colors}</div>
-        <p class="index-pad__hint">色を押すと、見ているページの右の端に貼れます。貼った付箋は上下に動かせます</p>
-        <div class="index-pad__list" data-index-list></div>`,
-        {right: 580, top: 72}, // 付箋：メモ帳の左
-        () => this.toggleIndexPad(false)
-      );
-      el.addEventListener('pointerdown', (e) => {
-        const b = e.target.closest('[data-index-color]');
-        if (b)
-          this.startCarry(e, this.indexSpec(b.dataset.indexColor), {
-            ghost: () => this.indexGhost(b.dataset.indexColor)
-          });
-      });
-      el.addEventListener('click', (e) => {
-        const b = e.target.closest('[data-index-color]');
-        if (b && e.detail === 0) this.placeStamp(this.indexSpec(b.dataset.indexColor)); // キーボード
-        const go = e.target.closest('[data-index-go]');
-        if (go) {
-          const a = this.annos.get(go.dataset.indexGo);
-          if (a) {
-            this.jumpTo({
-              page: a.page,
-              y: Math.max(0, parseFloat(a.el.style.top) / this.pages[a.page - 1].el.offsetHeight - 0.1)
-            });
-            this.select(a);
-          }
-        }
-      });
-      this.indexPad = el;
-      this.renderIndexList();
-    }
-    this.$('index').setAttribute('aria-pressed', String(!!this.indexPad));
-  },
-
-  indexSpec(color) {
-    const label = (this.indexPad?.querySelector('[data-index-label]').value ?? '').trim().slice(0, 12);
-    return {type: 'index', color, body: label, w: INDEX_W, h: INDEX_H};
-  },
-
+  // ---- 付箋（インデックス）：ページの右の端から出る目印。貼る・一覧は bookmarks.js ----
   indexGhost(color) {
     const scale = this.pages[0]?.viewport?.scale ?? 1;
     const g = document.createElement('div');
@@ -151,20 +97,5 @@ export const methods = {
       .map((a) => parseFloat(a.el.style.top));
     for (let y = 36 * s; y + h <= p.viewport.height; y += step) if (!taken.some((t) => Math.abs(t - y) < h)) return y;
     return 36 * s;
-  },
-
-  /** 貼った付箋の一覧（押すとその場所へ） */
-  renderIndexList() {
-    const list = [...this.annos.values()]
-      .filter((a) => a.kind === 'stamp' && a.style.type === 'index' && !a.removed)
-      .sort((a, b) => a.page - b.page || parseFloat(a.el.style.top) - parseFloat(b.el.style.top));
-    this.indexPad.querySelector('[data-index-list]').innerHTML = list.length
-      ? `<strong>貼った付箋</strong>${list
-          .map(
-            (a) =>
-              `<button type="button" class="index-pad__item" data-index-go="${a.key}"><span class="index-pad__chip" style="--index: ${a.style.color}"></span>${esc(a.body || '（言葉なし）')}<span class="muted">${a.page} ページ</span></button>`
-          )
-          .join('')}`
-      : '';
   }
 };

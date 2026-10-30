@@ -179,7 +179,7 @@ export function noteInkStamp(doc, a, page) {
     Rect: [x0, y0, x0 + W, y0 + H],
     F: 4,
     T: PDFHexString.fromText('大学ノート'),
-    Contents: PDFHexString.fromText('メモの手書き'),
+    Contents: PDFHexString.fromText('コメントの手書き'),
     M: PDFString.fromDate(new Date()),
     AP: {N: doc.context.register(form)}
   });

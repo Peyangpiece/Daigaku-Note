@@ -175,7 +175,7 @@ test('書き出し：ボールペンの線は塗りつぶした図形、マー�
   assert.match(p1.text, /0 0\.7882\d* 0\.5529\d* rg/); // #00c98d の文字隠し
 });
 
-test('書き出し：メモの手書きは、アイコンの右にスタンプ注釈として入る（線を塗りつぶした見た目）', async () => {
+test('書き出し：コメントの手書きは、アイコンの右にスタンプ注釈として入る（線を塗りつぶした見た目）', async () => {
   const {encodePoints} = await import('../src/shared/ink.js');
   const ink = [
     {p: encodePoints(Array.from({length: 8}, (_, i) => [10 + i * 10, 20 + (i % 2) * 6, 0.5])), c: '#d93025', w: 1.1},
@@ -222,7 +222,7 @@ test('書き出し：メモの手書きは、アイコンの右にスタンプ�
   assert.match(text, /0\.8509\d* 0\.1882\d* 0\.1450\d* rg/, '赤い線');
   assert.match(text, /0\.75 0 0 0\.75 0 0 cm|0\.75 0 0 -0\.75/, 'px を pt に縮める');
   assert.match(text, /\nf\n/, '塗りつぶし');
-  assert.equal(annots[1].lookup(PDFName.of('Contents'), PDFHexString).decodeText(), 'メモの手書き');
+  assert.equal(annots[1].lookup(PDFName.of('Contents'), PDFHexString).decodeText(), 'コメントの手書き');
   // notes: false なら、メモも手書きも入れない
   const none = await exportAnnotatedPdf(await source(1), list, {notes: false});
   const q = await contentOf(none, 0);

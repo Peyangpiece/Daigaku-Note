@@ -94,10 +94,10 @@ export const methods = {
       el.innerHTML = '<span class="anno-mask__cover"></span>';
     } else {
       el.className = 'anno-note';
-      el.innerHTML = `<button type="button" class="anno-note__icon" aria-label="メモ"></button>
+      el.innerHTML = `<button type="button" class="anno-note__icon" aria-label="コメント"></button>
         <div class="anno-note__pop" data-mode="text" hidden>
           <div class="anno-note__body">
-            <textarea maxlength="5000" placeholder="メモを書く（筆箱のペンを持てば手書き）" aria-label="メモの本文"></textarea>
+            <textarea maxlength="5000" placeholder="コメントを書く（筆箱のペンを持てば手書き）" aria-label="コメントの本文"></textarea>
             <svg class="anno-note__ink" aria-label="手書き"></svg>
           </div>
           <div class="anno-note__foot">
@@ -266,7 +266,7 @@ export const methods = {
       a.el.style.setProperty('--index-ink', inkOn(a.style.color));
       a.el.querySelector('.anno-stamp__tab').textContent = a.body;
       a.el.setAttribute('aria-label', `付箋：${a.body || '（言葉なし）'}`);
-      queueMicrotask(() => this.indexPad && this.renderIndexList()); // 位置（place）が決まってから並べる
+      queueMicrotask(() => this.renderBookmarks()); // 位置（place）が決まってから並べる
       return;
     }
     if (type === 'memo') {
@@ -315,7 +315,7 @@ export const methods = {
     const head = a.body.trim().slice(0, 80);
     a.el.querySelector('.anno-note__icon').title = head
       ? head + (a.body.trim().length > 80 ? '…' : '')
-      : 'メモ（押すと開きます）';
+      : 'コメント（押すと開きます）';
   },
 
   /**
@@ -513,7 +513,7 @@ export const methods = {
     this.annos.delete(a.key);
     if (this.selected === a) this.select(null);
     if (this.editing === a) this.editing = null;
-    if (a.kind === 'stamp' && a.style.type === 'index' && this.indexPad) this.renderIndexList();
+    if (a.kind === 'stamp' && a.style.type === 'index') this.renderBookmarks();
     // 同じ注釈の保存と消去は 1 本の鎖で順に行う。保存中に消されたときは flush の末尾が先に消すので、removedOnServer で 2 回送らない
     if (a.id || a.chain)
       this.track(a, async () => {
