@@ -112,6 +112,36 @@ test(
       const about = await win.evaluate(() => document.querySelector('#st-about').textContent);
       assert.match(about, /α 版/);
       assert.ok(await win.evaluate(() => !!document.querySelector('[data-backup="export"]')), 'データの節がある');
+      // 裏で状態が変わって描き直しても、打っている欄のカーソルは動かず、日本語の変換中は欄を作り直さない
+      await win.evaluate(() => (location.hash = '#/folder-new'));
+      await win.waitForSelector('#fn-name');
+      await win.fill('#fn-name', '原価計算ゼミ');
+      await win.evaluate(() => document.getElementById('fn-name').setSelectionRange(2, 2));
+      const changed = async () => {
+        await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].webContents.send('state.changed', {}));
+        await win.waitForTimeout(600);
+      };
+      await changed();
+      assert.deepEqual(
+        await win.evaluate(() => [document.activeElement?.id, document.getElementById('fn-name').selectionStart]),
+        ['fn-name', 2],
+        'カーソルの位置を保つ'
+      );
+      await win.evaluate(() => {
+        const el = document.getElementById('fn-name');
+        el.dataset.mark = '1';
+        el.dispatchEvent(new CompositionEvent('compositionstart', {bubbles: true}));
+      });
+      await changed();
+      assert.equal(
+        await win.evaluate(() => document.getElementById('fn-name').dataset.mark),
+        '1',
+        '変換中は作り直さない'
+      );
+      await win.evaluate(() =>
+        document.getElementById('fn-name').dispatchEvent(new CompositionEvent('compositionend', {bubbles: true}))
+      );
+      await win.waitForFunction(() => document.getElementById('fn-name')?.dataset.mark !== '1', null, {timeout: 5000});
       assert.deepEqual(errors, [], '画面の例外なし');
     } finally {
       await app.close();
