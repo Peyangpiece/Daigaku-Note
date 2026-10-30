@@ -785,22 +785,36 @@
   border-radius: var(--radius-s);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   cursor: grab;
-  resize: both;
-  overflow: hidden;
   touch-action: none;
 }
 .red-sheet:active {
   cursor: grabbing;
 }
-.red-sheet__label {
+.red-sheet:focus-visible {
+  outline: 2px solid #7a0000;
+  outline-offset: 2px;
+}
+/* 大きさを変えるつまみ：右下の角。シートは乗算で重ねるので、白い印は見えない。暗い色の斜線で描く */
+.red-sheet__grip {
   position: absolute;
-  top: 4px;
-  left: 10px;
-  color: #fff;
-  font-size: var(--fs-small);
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  pointer-events: none;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(
+    135deg,
+    transparent 46%,
+    rgba(70, 0, 0, 0.7) 46% 52%,
+    transparent 52% 64%,
+    rgba(70, 0, 0, 0.7) 64% 70%,
+    transparent 70% 82%,
+    rgba(70, 0, 0, 0.7) 82% 88%,
+    transparent 88%
+  );
+  border-bottom-right-radius: var(--radius-s);
 }
 .viewer-bar__history {
   display: inline-flex;

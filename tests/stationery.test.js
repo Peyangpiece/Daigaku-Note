@@ -279,3 +279,19 @@ test('試し書きの赤シート：文字隠しペンと、赤シートで消�
   assert.ok(needsRedSheet(itemOf('maker-craftlab-004')), '多機能ペンは赤の芯があれば置く');
   assert.ok(!needsRedSheet(null));
 });
+
+test('筆圧なしのペン：ショップに 1 枚の札（黒・赤・青）、ポイントで買える', async () => {
+  const {shopSeries} = await import('../src/shared/stationery.js');
+  const even = CATALOG.filter((it) => it.even);
+  assert.deepEqual(
+    even.map((it) => it.id),
+    ['pen-even-black-05', 'pen-even-red-05', 'pen-even-blue-05']
+  );
+  for (const it of even) {
+    assert.equal(it.type, 'pen');
+    assert.ok(it.points > 0, 'はじめから持っている品ではない');
+  }
+  const s = shopSeries().find((x) => x.id === 'pen-even');
+  assert.equal(s.name, '筆圧なしペン 0.5');
+  assert.equal(s.items.length, 3);
+});

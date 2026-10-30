@@ -4,9 +4,13 @@ import {
   boundsOf,
   createCapture,
   decodePoints,
+  drawMode,
+  inkMode,
+  modeStyle,
   encodePoints,
   outlinePath,
   speedPressure,
+  strokeOptions,
   strokeOutline,
   strokePath,
   touchesStroke
@@ -86,4 +90,30 @@ test('消しゴム：線に触れたか（太さの半分も含める）・囲�
   assert.ok(!touchesStroke(pts, 1, 110, 205, 2));
   assert.ok(touchesStroke([[0, 0, 0.5]], 2, 2, 0, 1.1));
   assert.deepEqual(boundsOf(pts, 2), {x: 99, y: 199, w: 40, h: 2});
+});
+
+test('筆圧なしのペン：どこも同じ太さ（筆圧・書き始め・書き終わりで細くならない）', () => {
+  assert.deepEqual(strokeOptions(2, {pressure: 'even'}), {size: 2, thinning: 0, taperStart: 0, taperEnd: 0});
+  const pts = Array.from({length: 30}, (_, i) => [i * 2, 0, i % 2 ? 0.1 : 1]);
+  const out = strokeOutline(pts, strokeOptions(2, {pressure: 'even'}));
+  // 途中の輪郭の点は、線（y = 0）からどれも半分の太さ（1）だけ離れる
+  const mids = out.filter(([x]) => x > 4 && x < 54);
+  assert.ok(mids.length > 10);
+  for (const [, y] of mids) assert.ok(Math.abs(Math.abs(y) - 1) < 1e-9, `太さが一定でない: ${y}`);
+  // 筆圧のあるペンは太さが変わる
+  const varied = strokeOutline(pts, strokeOptions(2)).filter(([x]) => x > 4 && x < 54);
+  assert.ok(varied.some(([, y]) => Math.abs(Math.abs(y) - 1) > 0.1));
+});
+
+test('書き味の受け渡し：保存した style → 描き方、ペン → 書き味 → style', () => {
+  assert.equal(inkMode({}), true);
+  assert.equal(inkMode({pressure: false}), false);
+  assert.equal(inkMode({pressure: 'even'}), 'even');
+  assert.equal(inkMode(undefined), true);
+  assert.equal(drawMode({even: true}, 'pen'), 'even');
+  assert.equal(drawMode({}, 'pen'), true);
+  assert.equal(drawMode({}, 'mouse'), false);
+  assert.deepEqual(modeStyle(true), {});
+  assert.deepEqual(modeStyle(false), {pressure: false});
+  assert.deepEqual(modeStyle('even'), {pressure: 'even'});
 });

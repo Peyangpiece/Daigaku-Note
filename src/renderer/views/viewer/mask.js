@@ -3,6 +3,7 @@ import * as pdfjs from '../../../../node_modules/pdfjs-dist/legacy/build/pdf.min
 import {charEdges, fitToInk, inkFromImage, snapRange, textIn, wordAt} from '../../../shared/text-snap.js';
 import {DEFAULT_SIZE} from '../../../shared/annotation.js';
 import {lineOf, isFlat, MASK_HEX} from './shared.js';
+import {createRedSheet} from '../../red-sheet.js';
 
 export const methods = {
   // ---- 文字隠し：文字の上をなぞって水色のマーカーを引く。文字の行に高さを合わせる ----
@@ -275,7 +276,7 @@ export const methods = {
     el.style.clipPath = poly(-8, -8, box.width + 8, box.height + 8, hx0, hy0, hx1, hy1);
   },
 
-  // ---- 赤シート：画面の上に置く赤い下敷き。ドラッグで動かし、右下の角で大きさを変える ----
+  // ---- 赤シート：画面の上に置く赤い下敷き。ドラッグで動かし、四隅とふちのつまみで大きさを変える（renderer/red-sheet.js） ----
   toggleSheet(on = !this.sheet) {
     if (!on) {
       this.sheet?.remove();
@@ -285,40 +286,16 @@ export const methods = {
         if (a.kind === 'text') for (const r of a.el.querySelectorAll('[data-red]')) r.style.clipPath = '';
       }
     } else if (!this.sheet) {
-      const el = document.createElement('div');
-      el.className = 'red-sheet';
-      el.setAttribute('role', 'region');
-      el.setAttribute('aria-label', '赤シート');
-      el.innerHTML = '<span class="red-sheet__label">赤シート</span>';
       const first = this.pages[0]?.el.getBoundingClientRect();
-      const width = Math.min(first?.width ?? 600, window.innerWidth - 40);
-      Object.assign(el.style, {
-        left: `${Math.max(20, first?.left ?? 20)}px`,
-        top: `${Math.round(window.innerHeight * 0.45)}px`,
-        width: `${width}px`,
-        height: '200px'
-      });
-      el.addEventListener('pointerdown', (e) => {
-        const r = el.getBoundingClientRect();
-        if (e.button !== 0 || (e.clientX > r.right - 20 && e.clientY > r.bottom - 20)) return; // 右下は大きさ変え
-        e.preventDefault();
-        el.setPointerCapture(e.pointerId);
-        const sx = e.clientX - r.left,
-          sy = e.clientY - r.top;
-        const move = (ev) => {
-          el.style.left = `${ev.clientX - sx}px`;
-          el.style.top = `${ev.clientY - sy}px`;
-          this.syncCovers();
-        };
-        const up = () => {
-          el.removeEventListener('pointermove', move);
-          el.removeEventListener('pointerup', up);
-          el.removeEventListener('pointercancel', up);
-        };
-        el.addEventListener('pointermove', move);
-        el.addEventListener('pointerup', up);
-        el.addEventListener('pointercancel', up);
-      });
+      const el = createRedSheet(
+        {
+          left: Math.max(20, first?.left ?? 20),
+          top: Math.round(window.innerHeight * 0.45),
+          width: Math.min(first?.width ?? 600, window.innerWidth - 40),
+          height: 200
+        },
+        {onChange: () => this.sheet && this.syncCovers()}
+      );
       this.root.append(el);
       this.sheet = el;
       this.sheetResize = new ResizeObserver(() => this.syncCovers());

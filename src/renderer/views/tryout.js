@@ -10,7 +10,7 @@
 //   色の計算（フィルタ）だけで見え方を作ると、線のふちや色によって字や線がうっすら透けるため、描き分けて確実に隠す
 // 付箋の右下はめくれていて、押すか左上へ引くと、はがれて下の新しい紙になる。書いた線はこの画面を開いている間だけ覚える（保存しない）
 import {esc} from '../ui-kit.js';
-import {createCapture, strokePath} from '../../shared/ink.js';
+import {createCapture, drawMode, strokePath} from '../../shared/ink.js';
 import {TOOL_TYPES, fadesUnderRedSheet, itemOf, needsRedSheet} from '../../shared/stationery.js';
 
 const SIZE = 300; // 付箋の座標（75mm 角の付箋を 1 = 0.25mm で）
@@ -170,13 +170,13 @@ function startInk(e, svg) {
     ink,
     el: group.lastElementChild,
     rect: svg.getBoundingClientRect(),
-    pressure: e.pointerType === 'pen',
+    pressure: drawMode(item, e.pointerType), // 筆圧を使わないペンは 'even'
     cap: createCapture({minGap: 0.4, streamline: e.pointerType === 'pen' ? 0.2 : 0.4}),
     frame: 0
   };
   const add = (ev) => {
     const [x, y] = toPaper(ev, d.rect);
-    d.cap.add(x, y, d.pressure ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
+    d.cap.add(x, y, d.pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
   };
   const draw = () => {
     d.frame = 0;
@@ -199,7 +199,7 @@ function startInk(e, svg) {
     svg.removeEventListener('pointercancel', end);
     cancelAnimationFrame(d.frame);
     const [x, y] = toPaper(ev, d.rect);
-    const points = d.cap.finish(x, y, d.pressure ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
+    const points = d.cap.finish(x, y, d.pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
     const html = strokeSvg(d.ink, points, d.pressure);
     const seen = seenSvg(d.ink, points, d.pressure);
     d.el.outerHTML = html;

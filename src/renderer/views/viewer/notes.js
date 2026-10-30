@@ -3,7 +3,15 @@
 // 手書きは文字の上に重なる
 
 const NOTE_ERASE_R = 8; // 消しゴムの大きさ（吹き出しの px）
-import {createCapture, decodePoints, encodePoints, strokePath, touchesStroke} from '../../../shared/ink.js';
+import {
+  createCapture,
+  decodePoints,
+  drawMode,
+  encodePoints,
+  modeStyle,
+  strokePath,
+  touchesStroke
+} from '../../../shared/ink.js';
 import {NOTE_INK_SCALE} from '../../../shared/annotation.js';
 import {NOTE_DEFAULT_PEN, SVG_NS} from './shared.js';
 
@@ -25,7 +33,7 @@ export const methods = {
     const point = (ev, box, pressure) => [
       ev.clientX - box.left,
       ev.clientY - box.top,
-      pressure ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5
+      pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5
     ];
     const draw = () => {
       if (!d) return;
@@ -66,7 +74,7 @@ export const methods = {
         pointer: e.pointerId,
         pen,
         path,
-        pressure: e.pointerType === 'pen',
+        pressure: drawMode(pen, e.pointerType),
         box: svg.getBoundingClientRect(),
         cap: createCapture({minGap: 0.3, streamline: e.pointerType === 'pen' ? 0.2 : 0.4})
       };
@@ -108,7 +116,7 @@ export const methods = {
       d = null;
       if (!points.length) return;
       const before = this.snap(a);
-      const stroke = {p: encodePoints(points), c: pen.color, w: pen.width, ...(pressure ? {} : {pressure: false})};
+      const stroke = {p: encodePoints(points), c: pen.color, w: pen.width, ...modeStyle(pressure)};
       a.style = {...a.style, ink: [...(a.style.ink ?? []), stroke]};
       this.applyNotePop(a);
       this.record(a.key, before, this.snap(a));
