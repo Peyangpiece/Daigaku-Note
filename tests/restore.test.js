@@ -90,3 +90,21 @@ test('古い版のデータベースを上げられる：0001 だけのデータ
   assert.equal(db.prepare("SELECT label FROM term WHERE id = 't'").get().label, '春', 'データは残る');
   db.close();
 });
+
+test('読み込みの準備：この版より新しい版のアプリで作ったバックアップは断る（表の形が分からない）', async () => {
+  const {latestVersion} = await import('../src/main/db/db.js');
+  const dir = tmp();
+  const {db} = await openDatabase(path.join(dir, 'live.sqlite'));
+  exportBackup(db, path.join(dir, 'now.sqlite'));
+  db.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (9999, 'future', '2030-01-01')").run();
+  exportBackup(db, path.join(dir, 'future.sqlite'));
+  db.close();
+  const open = (f) => new DatabaseSync(f, {readOnly: true});
+  const maxVersion = latestVersion();
+  assert.ok(maxVersion >= 8);
+  assert.equal(stageRestore({userData: dir, src: path.join(dir, 'now.sqlite'), open, maxVersion}).version, maxVersion);
+  assert.throws(
+    () => stageRestore({userData: dir, src: path.join(dir, 'future.sqlite'), open, maxVersion}),
+    /新しい版/
+  );
+});

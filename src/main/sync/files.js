@@ -89,14 +89,19 @@ export class FileManager {
   /** 一時ファイルに書いてから rename（途中で落ちても壊れたファイルを残さない） */
   async writeAtomic(file, data) {
     const tmp = path.join(path.dirname(file), `.daigaku-tmp-${ulid()}`);
-    const fh = await fsp.open(tmp, 'wx');
     try {
-      await fh.writeFile(data);
-      await fh.sync();
-    } finally {
-      await fh.close();
+      const fh = await fsp.open(tmp, 'wx');
+      try {
+        await fh.writeFile(data);
+        await fh.sync();
+      } finally {
+        await fh.close();
+      }
+      await fsp.rename(tmp, file);
+    } catch (e) {
+      await fsp.rm(tmp, {force: true}).catch(() => {}); // 書きかけの一時ファイルを残さない
+      throw e;
     }
-    await fsp.rename(tmp, file);
   }
 
   /**

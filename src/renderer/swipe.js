@@ -16,7 +16,8 @@ const IN_MS = 220; // 新しいページがスライドして入ってくる時�
 let endTimer = 0;
 let lastWheel = 0; // いちばん新しい wheel を受けた時刻
 let busy = false; // スライドして切り替わるまで（その間の wheel は無視）
-const SHOTS_MAX = 12; // 取っておく写しの数（古いものから捨てる）
+const SHOTS_MAX = 5; // 取っておく写しの数（古いものから捨てる）
+const SHOTS_NEAR = 2; // 今の項目から前後いくつまでの写しを取っておくか（スワイプで行けるのは隣だけ。少し余裕を持つ）
 const shots = new Map(); // 履歴の項目の key → {node, x, y, w, viewer}
 let under = null; // いま並べている行き先の写し {el, dir, shot}
 
@@ -70,6 +71,18 @@ function shoot() {
     w: app.offsetWidth,
     viewer: document.documentElement.classList.contains('paper-canvas')
   });
+  // 遠い履歴の写しは捨てる（画面全体の複製で、PDF の絵も含むためメモリを使う）
+  const nav = window.navigation;
+  const i = nav?.currentEntry?.index ?? -1;
+  if (i >= 0) {
+    const near = new Set(
+      nav
+        .entries()
+        .slice(Math.max(0, i - SHOTS_NEAR), i + SHOTS_NEAR + 1)
+        .map((e) => e.key)
+    );
+    for (const k of [...shots.keys()]) if (!near.has(k)) shots.delete(k);
+  }
   while (shots.size > SHOTS_MAX) shots.delete(shots.keys().next().value);
 }
 window.navigation?.addEventListener('navigate', shoot);

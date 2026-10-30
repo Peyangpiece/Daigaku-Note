@@ -59,9 +59,10 @@ export const RESTORE_FILE = 'daigaku-note.restore.sqlite';
 
 /**
  * 手動の読み込み（復元）の準備：大学ノートのバックアップか確かめて userData に写す。入れ替えは次の起動（applyStagedRestore）。
- * open：ファイルを読み取り専用で開く関数（DatabaseSync）。大学ノートの表（schema_migrations・course）がなければ Error
+ * open：ファイルを読み取り専用で開く関数（DatabaseSync）。大学ノートの表（schema_migrations・course）がなければ Error。
+ * maxVersion：このアプリが知っている版。それより新しい版のバックアップは Error
  */
-export function stageRestore({userData, src, open}) {
+export function stageRestore({userData, src, open, maxVersion = Infinity}) {
   let db;
   try {
     db = open(src);
@@ -90,6 +91,9 @@ export function stageRestore({userData, src, open}) {
         .all()
         .map((r) => Number(r.version))
     );
+    // 新しい版のアプリで作ったバックアップは、この版では表の形が分からない（読み込むと壊れる）
+    if (version > maxVersion)
+      throw new Error('新しい版の大学ノートで作ったバックアップです。大学ノートを最新の版にしてから読み込んでください');
     const staged = path.join(userData, RESTORE_FILE);
     copyFileSync(src, staged);
     return {staged, version};

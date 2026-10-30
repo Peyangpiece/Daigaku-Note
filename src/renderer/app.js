@@ -112,7 +112,15 @@ function snapshot(view) {
   ]);
   const radios = [...view.querySelectorAll('input[type=radio]:checked')].map((el) => [el.name, el.value]);
   const active = view.contains(document.activeElement) ? document.activeElement : null;
-  return {fields, radios, focus: active && keyOf(active), scroll: window.scrollY};
+  // 打っている欄のカーソルの位置（選んでいる範囲）も覚える。描き直したあと末尾に飛ばないように
+  let sel = null;
+  try {
+    if (active && typeof active.selectionStart === 'number')
+      sel = [active.selectionStart, active.selectionEnd, active.selectionDirection];
+  } catch {
+    sel = null; // 選択を持たない種類の input（number など）
+  }
+  return {fields, radios, focus: active && keyOf(active), sel, scroll: window.scrollY};
 }
 function restore(view, snap) {
   for (const [id, v, f] of snap.fields) {
@@ -124,12 +132,33 @@ function restore(view, snap) {
   }
   for (const [name, value] of snap.radios)
     [...view.querySelectorAll('input[type=radio]')].find((el) => el.name === name && el.value === value)?.click();
-  if (snap.focus)
-    [...view.querySelectorAll('[id], [data-action]')]
-      .find((el) => keyOf(el) === snap.focus)
-      ?.focus({preventScroll: true});
+  if (snap.focus) {
+    const el = [...view.querySelectorAll('[id], [data-action]')].find((x) => keyOf(x) === snap.focus);
+    el?.focus({preventScroll: true});
+    if (el && snap.sel)
+      try {
+        el.setSelectionRange(...snap.sel);
+      } catch {
+        // 選択を持たない欄
+      }
+  }
   window.scrollTo(0, snap.scroll);
 }
+
+// 日本語の変換中（IME）に画面を描き直すと、変換が切れる（欄ごと作り直すため）。
+// 変換中は、同じ画面の描き直し（クイズを作る進み具合・同期の知らせなど）を変換が終わるまで待たせる
+let composing = false;
+let deferred = false;
+document.addEventListener('compositionstart', () => (composing = true), true);
+document.addEventListener(
+  'compositionend',
+  () => {
+    composing = false;
+    // compositionend のあとに確定した文字の input が来るので、そのあとで描き直す
+    if (deferred) setTimeout(() => deferred && !composing && render());
+  },
+  true
+);
 
 let lastRoute = null;
 function render() {
@@ -196,6 +225,11 @@ function render() {
   viewer?.unmount();
   viewer = null;
   const same = route === lastRoute;
+  if (same && composing) {
+    deferred = true;
+    return;
+  }
+  deferred = false;
   if (!same && lastRoute !== null) dismissNavigateToasts();
   const snap = same ? snapshot(view) : null;
   if (route === '/setup' && !same) resetSetup('first');
