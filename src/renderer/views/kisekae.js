@@ -11,7 +11,6 @@ import {
   NOTE_GAP_LABEL,
   NOTE_TYPES,
   NOTE_TYPE_LABEL,
-  GLOBAL_ONLY_PLACES,
   PLACE_LABEL,
   SHAPES,
   SHAPE_LABEL,
@@ -21,7 +20,6 @@ import {
   templateIdOf,
   isBuiltin,
   normalizeTemplate,
-  usage,
   BOOKMARK_SHAPES,
   BOOKMARK_SHAPE_LABEL,
   FILE_KINDS,
@@ -71,9 +69,8 @@ const SAMPLE = [
 ];
 
 // 画面の状態（描き直しても残す）。draft は直している途中のテンプレート（baseId は元のテンプレート）。
-// 対象・名前などは ui が決めるので、描き直しのときに前の値へ戻さない（data-keep="off"）
+// 名前などは ui が決めるので、描き直しのときに前の値へ戻さない（data-keep="off"）
 const ui = {
-  target: '',
   part: 'note',
   scene: 'home',
   history: [],
@@ -83,26 +80,19 @@ const ui = {
   book: 'mark',
   draft: null,
   selected: null,
-  confirm: null,
   route: null
 };
 
 const courses = (data) => data.courses.filter((c) => !c.hidden);
-const targetCourse = (data) => (ui.target ? (data.courses.find((c) => c.id === ui.target) ?? null) : null);
-const samples = (data, course) => {
+const samples = (data) => {
   const list = courses(data);
-  const first = course ?? list[0] ?? SAMPLE[0];
+  const first = list[0] ?? SAMPLE[0];
   const second = list.find((c) => c.id !== first.id) ?? SAMPLE[1];
   return [first, second].map((c) => ({...c, name: SAMPLE_NAME}));
 };
-/** 今その対象に当たっているテンプレートの id（授業で「全体と同じ」なら null） */
-const currentId = (data) => {
-  const c = targetCourse(data);
-  return c ? (c.skin_template_id ?? null) : globalId(data);
-};
 
 function startDraft(data, template, {asNew = false, name = null} = {}) {
-  const t = template ?? skinOf(data, targetCourse(data)).template;
+  const t = template ?? skinOf(data).template;
   const n = (data.skin?.templates ?? []).length + 1;
   ui.draft = {
     baseId: asNew || isBuiltin(t.id) ? null : t.id,
@@ -114,7 +104,6 @@ function startDraft(data, template, {asNew = false, name = null} = {}) {
   };
   ui.selected = null;
   ui.art = null;
-  ui.confirm = null;
   ui.history = [];
   ui.future = [];
 }
@@ -136,27 +125,18 @@ function travel(from, to) {
   ui.selected = null;
 }
 
-/** 見本に当てる見た目：直している途中のテンプレートを、その授業に当たっているものとして扱う */
-function draftSkin(data, course) {
+/** 見本に当てる見た目：直している途中のテンプレート */
+function draftSkin() {
   const d = ui.draft;
-  const target = targetCourse(data);
-  const note = target ? skinOf(data, course).note : d.parts.note;
-  // 授業が対象のときは、全体のシールも貼り方（sticker_mode）のとおりに見せる。
-  // 「全体のシールだけ」のまま授業のシールを貼ったら「両方」として見せる（保存すると「両方」になる）
-  const mode = target ? stickerModeFor(target) : 'course';
-  const global = target && mode !== 'course' ? skinOf(data).stickers.map((s) => ({...s, z: s.z - 100})) : [];
-  const own = d.stickers.map((s, i) => ({...s, index: i}));
-  return {template: null, own: true, ...d.parts, note, stickers: [...global, ...own].sort((a, b) => a.z - b.z)};
+  const stickers = d.stickers.map((s, i) => ({...s, index: i})).sort((a, b) => a.z - b.z);
+  return {template: null, own: true, ...d.parts, stickers};
 }
-const stickerModeFor = (course) =>
-  course.sticker_mode === 'global' && ui.draft?.stickers.length ? 'both' : course.sticker_mode || 'global';
 /** テンプレートの見た目（一覧の見本） */
-function templateSkin(data, t) {
+function templateSkin(t) {
   return {
     template: t,
     own: true,
     ...t.parts,
-    note: targetCourse(data) ? skinOf(data).note : t.parts.note,
     stickers: t.stickers
   };
 }
@@ -182,18 +162,9 @@ function noteSwatch(note, cls, inner = '') {
   return `<div class="note-swatch ${cls}" ${attrsOf(attrs)} style="${styleOf(vars)}">${inner}</div>`;
 }
 
-function usageText(data, t) {
-  if (isBuiltin(t.id)) return '';
-  const u = usage(t.id, data.courses, globalId(data));
-  const parts = [];
-  if (u.global) parts.push('すべての授業');
-  if (u.courses) parts.push(`${u.courses} つの授業`);
-  return parts.length ? `${parts.join('・')}で使用中` : '';
-}
-
 function galleryCard(data, t, course, current) {
   const on = current === t.id;
-  const skin = templateSkin(data, t);
+  const skin = templateSkin(t);
   return `<div class="ks-card${on ? ' is-current' : ''}">
     <button type="button" class="ks-card__pick" data-ks="apply" data-id="${esc(t.id)}" aria-pressed="${on}">
       ${noteSwatch(skin.note, 'ks-card__paper', `<div class="ks-card__folder">${folderCard(course, {data, skin, edit: {still: true}})}</div>`)}
@@ -230,8 +201,6 @@ const choice = (key, value, list, labels, {swatch = null} = {}) =>
     .join('')}</div>`;
 
 function noteControls(data) {
-  if (targetCourse(data))
-    return `<p class="muted">ノートの紙は、すべての授業で共通です（「使う授業」を「すべての授業」にすると変えられます）。</p>`;
   const n = ui.draft.parts.note;
   const recent = data.skin?.recent ?? [];
   const rules = data.settings?.rules ?? 'normal';
@@ -311,19 +280,8 @@ function stickerControls(data) {
   const book = data.skin?.stickers ?? [];
   const d = ui.draft;
   const sel = ui.selected != null ? d.stickers[ui.selected] : null;
-  const course = targetCourse(data);
   const shape = sel ? (book.find((b) => b.id === sel.asset)?.shape ?? 'cut') : null;
-  const mode = course
-    ? `<label class="ks-field">この授業に出すシール<select class="input" data-ks-mode>
-        ${[
-          ['global', 'すべての授業用のシールだけ'],
-          ['course', 'この授業用のシールだけ'],
-          ['both', '両方とも出す']
-        ]
-          .map(([v, l]) => `<option value="${v}" ${course.sticker_mode === v ? 'selected' : ''}>${l}</option>`)
-          .join('')}</select></label>`
-    : '';
-  if (!sel) return mode;
+  if (!sel) return '';
   return `
     <label class="ks-range">大きさ<input type="range" min="20" max="200" step="5" value="${Math.round(sel.scale * 100)}" data-ks-range="scale" /><output>${Math.round(sel.scale * 100)}%</output></label>
     <label class="ks-range">傾き<input type="range" min="-180" max="180" step="1" value="${sel.rotate}" data-ks-range="rotate" /><output>${sel.rotate}°</output></label>
@@ -332,8 +290,7 @@ function stickerControls(data) {
       ${FIXED_PLACES.includes(sel.place) ? (sel.moved ? '<button type="button" class="btn btn--small" data-ks="unmove">位置を戻す</button>' : '') : '<button type="button" class="btn btn--small" data-ks="z" data-dir="1">手前へ</button><button type="button" class="btn btn--small" data-ks="z" data-dir="-1">奥へ</button>'}
       <button type="button" class="btn btn--small" data-ks="straight">傾きを戻す</button>
       <button type="button" class="btn btn--small btn--danger" data-ks="peel">はがす</button>
-    </div>
-    ${mode}`;
+    </div>`;
 }
 
 const PARTS = [
@@ -446,13 +403,12 @@ const isOn = (part, kind = null) =>
   ui.part === part && (kind == null || ui.fileKind === kind) && ui.selected == null ? ' is-editing' : '';
 
 function homeScene(data, {first, second, note, skin1, skin2}) {
-  const course = targetCourse(data);
   const render = (st) => stageSticker(data, st, {base: STICKER_BASE.folder});
   return noteSwatch(
     note,
     `ks-stage ks-stage--home${isOn('note')}`,
     `
-    <div class="ks-place" ${course ? '' : 'data-drop-place="home"'} ${editAttr('note', 'ノート（紙と線）')}>${stageLayer(data, skin1.stickers, 'home')}</div>
+    <div class="ks-place" data-drop-place="home" ${editAttr('note', 'ノート（紙と線）')}>${stageLayer(data, skin1.stickers, 'home')}</div>
     <div class="folders ks-stage__folders">
       <div class="ks-target${isOn('folder')}">${folderCard(first, {data, skin: skin1, edit: {render}})}</div>
       ${folderCard(second, {data, skin: skin2, edit: {still: true}})}
@@ -598,12 +554,10 @@ function inspector(data) {
 }
 
 function editor(data) {
-  const course = targetCourse(data);
-  const [first, second] = samples(data, course);
-  const note = course ? skinOf(data, course).note : ui.draft.parts.note;
-  const skin1 = draftSkin(data, first);
-  const skin2 = course ? skinOf(data, second) : draftSkin(data, second);
-  const c = ui.confirm;
+  const [first, second] = samples(data);
+  const note = ui.draft.parts.note;
+  const skin1 = draftSkin();
+  const skin2 = skin1;
   return `
     <div class="ks-studio">
       <div class="ks-stagecol">
@@ -614,7 +568,7 @@ function editor(data) {
             <button type="button" class="ks-chipbtn" data-ks="redo" ${ui.future.length ? '' : 'disabled'} title="やり直す（⇧⌘Z / Ctrl+Y）" aria-label="やり直す">↷</button>
           </span>
         </div>
-        <div class="ks-stagewrap" tabindex="0" aria-label="見本。部分を押すと右で変えられます。シールは矢印キーで動かし、Delete ではがせます">${stage(data, {course, first, second, note, skin1, skin2})}</div>
+        <div class="ks-stagewrap" tabindex="0" aria-label="見本。部分を押すと右で変えられます。シールは矢印キーで動かし、Delete ではがせます">${stage(data, {first, second, note, skin1, skin2})}</div>
         ${tray(data)}
         <div class="ks-save">
           <label>名前<input class="input" id="ks-name" data-keep="off" maxlength="40" value="${esc(ui.draft.name)}" /></label>
@@ -623,48 +577,37 @@ function editor(data) {
           ${ui.draft.baseId ? '<button type="button" class="btn" data-ks="save-new">別の名前で保存</button>' : ''}
           <button type="button" class="btn" data-ks="discard">やめる</button>
         </div>
-        ${
-          c
-            ? `<div class="ks-confirm sticky" role="alertdialog" aria-labelledby="ks-confirm-text"><p id="ks-confirm-text">この着せ替えは${esc(c.text)}でも使っています。保存すると、そちらの見た目も変わります。</p>
-            <div class="actions"><button type="button" class="btn btn--primary" data-ks="save-confirm">変わってよいので保存</button>${course ? '<button type="button" class="btn" data-ks="save-course">この授業用に別に保存</button>' : ''}<button type="button" class="btn" data-ks="confirm-cancel">やめる</button></div></div>`
-            : ''
-        }
       </div>
       ${inspector(data)}
     </div>`;
 }
 
-/** ページの行き先。target は授業の id（空ならすべての授業） */
+/** ページの行き先 */
 const query = (params) => {
   const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v));
   return q.size ? `?${q}` : '';
 };
-const galleryRoute = () => `/kisekae${query({course: ui.target})}`;
-const editRoute = (extra = {}) => `/kisekae/edit${query({course: ui.target, ...extra})}`;
+const galleryRoute = () => '/kisekae';
+const editRoute = (extra = {}) => `/kisekae/edit${query(extra)}`;
 
-/** 着せ替えページ（#/kisekae?course=<id>）と、細かい編集のページ（#/kisekae/edit?course=<id>&id=<テンプレート>、new=1 なら新しく作成） */
+/** 着せ替えページ（#/kisekae）と、細かい編集のページ（#/kisekae/edit?id=<テンプレート>、new=1 なら新しく作成）。テンプレートはアプリ全体で 1 つ */
 export function renderKisekae({data}, route) {
   const editing = route.split('?')[0] === '/kisekae/edit';
   if (route !== ui.route) {
     ui.route = route;
     const q = new URLSearchParams(route.split('?')[1] ?? '');
-    const cid = q.get('course');
-    ui.target = cid && data.courses.some((c) => c.id === cid) ? cid : '';
     ui.draft = null;
     if (editing && q.get('new') === '1') {
-      const c = targetCourse(data);
-      startDraft(data, null, {asNew: true, name: c ? `${c.name} 用` : null});
+      startDraft(data, null, {asNew: true});
       ui.part = 'folder';
     } else if (editing) startDraft(data, allTemplates(data).find((t) => t.id === q.get('id')) ?? null);
   }
-  const course = targetCourse(data);
-  if (ui.target && !course) ui.target = '';
   if (editing) {
     if (!ui.draft) startDraft(data, null);
-    return editPage(data, course);
+    return editPage(data);
   }
-  const current = currentId(data);
-  const [first] = samples(data, course);
+  const current = globalId(data);
+  const [first] = samples(data);
   const templates = allTemplates(data);
   const builtins = templates.filter((t) => isBuiltin(t.id));
   const mine = templates.filter((t) => !isBuiltin(t.id));
@@ -672,12 +615,6 @@ export function renderKisekae({data}, route) {
     <div class="kisekae">
       <div class="ks-head">
         <h2>着せ替え</h2>
-        <label class="ks-target">使う授業<select class="input" id="ks-target" data-keep="off">
-          <option value="" ${!course ? 'selected' : ''}>すべての授業</option>
-          ${courses(data)
-            .map((c) => `<option value="${esc(c.id)}" ${course?.id === c.id ? 'selected' : ''}>${esc(c.name)}</option>`)
-            .join('')}
-        </select></label>
       </div>
       <section class="ks-mine" aria-labelledby="ks-mine-title">
         <div class="ks-sechead"><h3 id="ks-mine-title">マイノート</h3>
@@ -691,13 +628,6 @@ export function renderKisekae({data}, route) {
       <section aria-labelledby="ks-gallery-title">
         <div class="ks-sechead"><h3 id="ks-gallery-title">おすすめ</h3></div>
         <div class="ks-gallery">
-          ${
-            course
-              ? `<div class="ks-card${current === null ? ' is-current' : ''}"><button type="button" class="ks-card__pick ks-card__pick--global" data-ks="apply" data-id="" aria-pressed="${current === null}">
-              ${noteSwatch(skinOf(data).note, 'ks-card__paper', `<div class="ks-card__folder">${folderCard({...first, skin_template_id: null}, {data, edit: {still: true}})}</div>`)}
-              <span class="ks-card__name">${current === null ? '✓ ' : ''}すべての授業と同じ</span></button></div>`
-              : ''
-          }
           ${builtins.map((t) => galleryCard(data, t, first, current)).join('')}
         </div>
       </section>
@@ -705,13 +635,13 @@ export function renderKisekae({data}, route) {
 }
 
 /** 細かい編集のページ */
-function editPage(data, course) {
+function editPage(data) {
   return `
     <div class="kisekae kisekae--edit">
       <div class="ks-editbar">
         <button type="button" class="btn" data-ks="back">← 着せ替えへ</button>
         <h2>着せ替えを作る</h2>${ui.history.length ? '<span class="ks-dirty" title="保存していない変更があります">● 未保存</span>' : ''}
-        <span class="muted">${ui.draft.baseId ? `「${esc(ui.draft.from)}」を編集中` : `「${esc(ui.draft.from)}」をもとに作成中`}（${course ? `「${esc(course.name)}」用` : 'すべての授業用'}）</span>
+        <span class="muted">${ui.draft.baseId ? `「${esc(ui.draft.from)}」を編集中` : `「${esc(ui.draft.from)}」をもとに作成中`}</span>
       </div>
       ${editor(data)}
     </div>`;
@@ -722,51 +652,29 @@ const setPath = (obj, key, value) => {
   const [a, b] = key.split('.');
   obj[a][b] = value;
 };
-/** すべての授業に当てたとき：本人が授業ごとに選んだ着せ替えはそのまま残ったことを添える */
-function keptText(data, course) {
-  if (course) return '';
-  const own = data.courses.filter((c) => c.skin_template_id && !c.hidden).length;
-  return own ? `（授業ごとに選んだ ${own} つはそのまま）` : '';
-}
 async function applyTemplate(data, templateId) {
-  const course = targetCourse(data);
-  const prev = currentId(data);
-  const r = await api['skin.apply']({courseId: course?.id, templateId: templateId || null});
+  const prev = globalId(data);
+  const r = await api['skin.apply']({templateId: templateId || null});
   if (r?.error) return toast(r.error, {error: true});
   await reload();
-  const name = templateId
-    ? (allTemplates(state.data).find((t) => t.id === templateId)?.name ?? '')
-    : 'すべての授業と同じ';
-  toast(`${course ? `「${course.name}」` : 'すべての授業'}を「${name}」にしました${keptText(state.data, course)}`, {
+  const name = allTemplates(state.data).find((t) => t.id === templateId)?.name ?? '';
+  toast(`着せ替えを「${name}」にしました`, {
     action: {
       label: '元に戻す',
       run: async () => {
-        await api['skin.apply']({courseId: course?.id, templateId: prev, restore: course ? undefined : r.followed});
+        await api['skin.apply']({templateId: prev});
         reload();
       }
     }
   });
 }
 
-async function save({asNew = false, forCourse = false, confirmed = false} = {}) {
-  const data = state.data;
+async function save({asNew = false} = {}) {
   const d = ui.draft;
-  const course = targetCourse(data);
   d.name = document.getElementById('ks-name')?.value.trim() || d.name;
   d.license = document.getElementById('ks-license')?.value || d.license;
-  const baseId = asNew || forCourse ? null : d.baseId;
-  if (baseId && !confirmed) {
-    // ほかの授業（と全体）でも使っていれば、保存の前に知らせる（SPEC-KISEKAE §3.2）
-    const others = data.courses.filter((c) => c.skin_template_id === baseId && c.id !== course?.id).length;
-    const global = globalId(data) === baseId && !!course;
-    if (others || global) {
-      ui.confirm = {
-        text: [global ? 'すべての授業' : '', others ? `ほかの ${others} つの授業` : ''].filter(Boolean).join('と')
-      };
-      return refresh();
-    }
-  }
-  const name = forCourse ? `${course.name} 用` : asNew && d.baseId ? `${d.name} のコピー` : d.name;
+  const baseId = asNew ? null : d.baseId;
+  const name = asNew && d.baseId ? `${d.name} のコピー` : d.name;
   const template = normalizeTemplate({
     id: baseId ?? undefined,
     name,
@@ -777,17 +685,12 @@ async function save({asNew = false, forCourse = false, confirmed = false} = {}) 
   });
   const r = await api['skin.save']({template: {...template, id: baseId ?? undefined}});
   if (r?.error) return toast(r.error, {error: true});
-  const a = await api['skin.apply']({
-    courseId: course?.id,
-    templateId: r.template.id,
-    stickerMode: course ? stickerModeFor(course) : undefined
-  });
+  const a = await api['skin.apply']({templateId: r.template.id});
   if (a?.error) return toast(a.error, {error: true});
   ui.draft = null;
-  ui.confirm = null;
   navigate(galleryRoute());
   await reload();
-  toast(`「${r.template.name}」を保存して使い始めました${keptText(state.data, course)}`);
+  toast(`「${r.template.name}」を保存して使い始めました`);
 }
 
 /** 画像をシールの素にする：長辺 512px 以内の PNG に描き直す（画像の中の付加情報を落とす）。透明な所があれば形どおり、なければ白いふち付き */
@@ -822,7 +725,6 @@ async function importSticker(file) {
 const START = {folder: [0.72, 0.62], home: [0.9, 0.85], heading: [0.85, 0.5], viewer: [0.03, 0.9]};
 function addSticker(asset, place = SCENE_PLACE[ui.scene], at = START[place] ?? [0.5, 0.5], fileKind = ui.fileKind) {
   const d = ui.draft;
-  if (targetCourse(state.data) && GLOBAL_ONLY_PLACES.includes(place)) place = 'folder';
   remember();
   // 決まった位置の場所（回の付箋の角・資料のイラスト・しおり）は 1 枚だけ。貼り直すと入れ替える
   if (FIXED_PLACES.includes(place)) {
@@ -886,10 +788,10 @@ document.addEventListener('click', async (e) => {
     }
     if (ks === 'remove') {
       const t = allTemplates(data).find((x) => x.id === el.dataset.id);
-      const u = usageText(data, t);
+      const using = globalId(data) === t.id;
       if (
         !(await confirmDialog(
-          `「${t.name}」を消しますか？${u ? `\n${u}です。使っていた授業は「すべての授業と同じ」に戻ります。` : ''}`,
+          `「${t.name}」を消しますか？${using ? '\n今使っている着せ替えです。消すと「クラシック」に戻ります。' : ''}`,
           {ok: '消す', danger: true}
         ))
       )
@@ -990,9 +892,6 @@ document.addEventListener('click', async (e) => {
     } else if (ks === 'peel' && ui.selected != null) peel();
     else if (ks === 'save') return await save();
     else if (ks === 'save-new') return await save({asNew: true});
-    else if (ks === 'save-confirm') return await save({confirmed: true});
-    else if (ks === 'save-course') return await save({forCourse: true});
-    else if (ks === 'confirm-cancel') ui.confirm = null;
     refresh();
   } catch (err) {
     toast(err.message, {error: true});
@@ -1002,10 +901,6 @@ document.addEventListener('click', async (e) => {
 document.addEventListener('change', async (e) => {
   const el = e.target;
   if (!inKisekae(el)) return;
-  if (el.id === 'ks-target') {
-    ui.target = el.value;
-    return navigate(galleryRoute());
-  }
   if (!ui.draft) return;
   if (el.id === 'ks-name') ui.draft.name = el.value;
   else if (el.id === 'ks-license') ui.draft.license = el.value;
@@ -1022,10 +917,6 @@ document.addEventListener('change', async (e) => {
     remember();
     setPath(ui.draft.parts, el.dataset.ksCheck, el.checked);
     refresh();
-  } else if ('ksMode' in el.dataset) {
-    const r = await api['skin.apply']({courseId: ui.target, stickerMode: el.value});
-    if (r?.error) return toast(r.error, {error: true});
-    reload();
   } else if (el.dataset.ksShape) {
     const r = await api['sticker.update']({id: el.dataset.ksShape, shape: el.value});
     if (r?.error) return toast(r.error, {error: true});

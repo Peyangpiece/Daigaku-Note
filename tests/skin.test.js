@@ -4,16 +4,13 @@ import {
   BUILTIN_TEMPLATES,
   CLASSIC_ID,
   FORMAT,
-  ROTATION,
   roundColorIndex,
   contrast,
   darken,
   inkOn,
   luminance,
   normalizeTemplate,
-  resolveSkin,
-  rotationFor,
-  usage
+  resolveSkin
 } from '../src/shared/skin.js';
 import {BUILTIN_STICKERS, builtinStickerUrl} from '../src/shared/stickers.js';
 
@@ -67,58 +64,36 @@ test('シールは 1 か所 5 枚まで', () => {
   assert.equal(t.stickers.length, 5);
 });
 
-test('どのテンプレートが当たるか：授業のテンプレート > 全体。ノートは全体だけ。シールは sticker_mode で', () => {
+test('どのテンプレートが当たるか：アプリ全体で 1 つ。授業に前の版のテンプレートが残っていても使わない', () => {
   const mine = normalizeTemplate(
     {parts: {folder: {card: '#111111'}, note: {type: 'grid'}}, stickers: [{place: 'folder', asset: SHA, z: 1}]},
     {id: 'M'}
   );
   const glob = normalizeTemplate(
     {
-      parts: {folder: {card: '#eeeeee'}, note: {type: 'dot'}},
+      parts: {
+        folder: {card: '#eeeeee'},
+        note: {type: 'dot'},
+        bookmark: {color: '#7fd1ae', shape: 'round'}
+      },
       stickers: [{place: 'folder', asset: 'b'.repeat(64), z: 0}]
     },
     {id: 'G'}
   );
   const all = [...BUILTIN_TEMPLATES, mine, glob];
-  const plain = resolveSkin(all, 'G', {skin_template_id: null});
-  assert.equal(plain.folder.card, '#eeeeee');
-  assert.equal(plain.own, false);
-  const own = resolveSkin(all, 'G', {skin_template_id: 'M', sticker_mode: 'global'});
-  assert.equal(own.folder.card, '#111111');
-  assert.equal(own.note.type, 'dot', 'ノートは全体のテンプレートから');
-  assert.deepEqual(
-    own.stickers.map((s) => s.asset[0]),
-    ['b']
-  );
-  assert.deepEqual(
-    resolveSkin(all, 'G', {skin_template_id: 'M', sticker_mode: 'course'}).stickers.map((s) => s.asset[0]),
-    ['a']
-  );
-  assert.deepEqual(
-    resolveSkin(all, 'G', {skin_template_id: 'M', sticker_mode: 'both'}).stickers.map((s) => s.asset[0]),
-    ['b', 'a']
-  );
-  // テンプレートどうしは混ざらない：全体のテンプレートの付箋・しおりの色は、授業が別のテンプレートなら当たらない（v0.12.8）
-  const g2 = normalizeTemplate(
-    {
-      parts: {
-        bookmark: {color: '#7fd1ae', shape: 'round'},
-        sticky: {round: ['#111111', '#222222', '#333333', '#444444', '#555555']}
-      }
-    },
-    {id: 'G2'}
-  );
-  const lemon = resolveSkin([...all, g2], 'G2', {skin_template_id: 'builtin-lemon'});
-  assert.deepEqual(lemon.bookmark, {color: 'default', shape: 'tag'}, 'レモンのしおりのまま');
-  assert.equal(lemon.sticky.round, 'default', 'レモンの付箋のまま');
-  assert.equal(lemon.folder.tab, '#ffe7a3');
-  const follows = resolveSkin([...all, g2], 'G2', {skin_template_id: null});
-  assert.deepEqual(follows.bookmark, {color: '#7fd1ae', shape: 'round'}, '全体に合わせた授業には全体の色');
-  assert.equal(
-    resolveSkin(all, 'gone', {skin_template_id: 'gone'}).template.id,
-    CLASSIC_ID,
-    '消えたテンプレートはクラシックに'
-  );
+  for (const course of [null, {skin_template_id: null}, {skin_template_id: 'M', sticker_mode: 'both'}]) {
+    const sk = resolveSkin(all, 'G', course);
+    assert.equal(sk.template.id, 'G');
+    assert.equal(sk.own, false);
+    assert.equal(sk.folder.card, '#eeeeee');
+    assert.equal(sk.note.type, 'dot');
+    assert.deepEqual(sk.bookmark, {color: '#7fd1ae', shape: 'round'});
+    assert.deepEqual(
+      sk.stickers.map((s) => s.asset[0]),
+      ['b']
+    );
+  }
+  assert.equal(resolveSkin(all, 'gone').template.id, CLASSIC_ID, '消えたテンプレートはクラシックに');
 });
 
 test('クラシックは今の見た目のまま（テーマの色・授業ごとのテープ）', () => {
@@ -126,18 +101,6 @@ test('クラシックは今の見た目のまま（テーマの色・授業ご�
   assert.deepEqual(c.parts.folder, {card: 'default', tab: 'default'});
   assert.deepEqual(c.parts.tape, {color: 'course', pattern: 'course', image: null});
   assert.equal(c.parts.note.paper, 'default');
-});
-
-test('新しい授業への割り当て：クラシック以外を順に、となり同士は違うもの', () => {
-  assert.equal(ROTATION.includes(CLASSIC_ID), false);
-  for (let i = 0; i < 20; i++) assert.notEqual(rotationFor(i), rotationFor(i + 1));
-  assert.equal(rotationFor(-1), ROTATION.at(-1));
-});
-
-test('使っている数', () => {
-  const cs = [{skin_template_id: 'M'}, {skin_template_id: 'M'}, {skin_template_id: null}];
-  assert.deepEqual(usage('M', cs, 'G'), {courses: 2, global: false});
-  assert.deepEqual(usage('G', cs, 'G'), {courses: 0, global: true});
 });
 
 test('文字の色：背景に対してコントラストの高いほう', () => {
@@ -308,53 +271,44 @@ test('回の付箋の色：第 1 回から順に 5 色。6 回目からはまた
 test('フォルダごとの色は、選んだときのテンプレートでだけ当たる（ほかのテンプレートに替えたら持ち越さない）', async () => {
   const {folderLookFor, templateIdOf} = await import('../src/shared/skin.js');
   const looks = {c1: {tid: 'builtin-lemon', tape: '#ff0000', tab: '#00ff00'}};
-  assert.equal(templateIdOf('G', {skin_template_id: null}), 'G');
-  assert.equal(templateIdOf(null, {skin_template_id: null}), CLASSIC_ID);
-  assert.deepEqual(folderLookFor(looks, 'G', {id: 'c1', skin_template_id: 'builtin-lemon'}), {
-    tape: '#ff0000',
-    tab: '#00ff00'
-  });
-  assert.deepEqual(
-    folderLookFor(looks, 'G', {id: 'c1', skin_template_id: 'builtin-mint'}),
-    {},
-    'ミントに替えたら当てない'
-  );
-  assert.deepEqual(folderLookFor(looks, 'builtin-lemon', {id: 'c1', skin_template_id: null}), {
-    tape: '#ff0000',
-    tab: '#00ff00'
-  });
-  assert.deepEqual(folderLookFor(looks, 'G', {id: 'c2', skin_template_id: null}), {});
+  assert.equal(templateIdOf('G', {skin_template_id: 'M'}), 'G', '授業に前の版のテンプレートが残っていても全体');
+  assert.equal(templateIdOf(null), CLASSIC_ID);
+  assert.deepEqual(folderLookFor(looks, 'builtin-lemon', {id: 'c1'}), {tape: '#ff0000', tab: '#00ff00'});
+  assert.deepEqual(folderLookFor(looks, 'builtin-mint', {id: 'c1'}), {}, 'ミントに替えたら当てない');
+  assert.deepEqual(folderLookFor(looks, 'builtin-lemon', {id: 'c2'}), {});
 });
 
-test('0010：今ある授業のうち、順の割り当てに使うテンプレートの授業を「自動で付いた」とみなす', async () => {
+test('0011：授業ごとのテンプレートを外し、アプリ全体の 1 つにする（テンプレートそのものは残す）', async () => {
   const {mkdtempSync, readdirSync, copyFileSync} = await import('node:fs');
   const {tmpdir} = await import('node:os');
   const path = await import('node:path');
   const {openDatabase, migrate} = await import('../src/main/db/db.js');
   const src = path.resolve('src/main/db/migrations');
-  const upTo9 = mkdtempSync(path.join(tmpdir(), 'dn-mig-'));
-  for (const f of readdirSync(src).filter((f) => f < '0010')) copyFileSync(path.join(src, f), path.join(upTo9, f));
-  const {db} = await openDatabase(':memory:', {migrationsDir: upTo9});
+  const upTo10 = mkdtempSync(path.join(tmpdir(), 'dn-mig-'));
+  for (const f of readdirSync(src).filter((f) => f < '0011')) copyFileSync(path.join(src, f), path.join(upTo10, f));
+  const {db} = await openDatabase(':memory:', {migrationsDir: upTo10});
   db.prepare(
     "INSERT INTO term (id, label, year, folder, start_date, end_date) VALUES ('t', '秋', 2026, 't', '2026-10-01', '2027-01-31')"
   ).run();
-  const add = (id, at, tid) =>
+  db.prepare(
+    "INSERT INTO skin_template (id, json, created_at, updated_at) VALUES ('mine', '{}', '2026-10-01', '2026-10-01')"
+  ).run();
+  const add = (id, tid, auto, mode) =>
     db
       .prepare(
-        "INSERT INTO course (id, term_id, name, folder_name, color, sort_order, created_at, updated_at, skin_template_id) VALUES (?, 't', ?, ?, 1, 1, ?, ?, ?)"
+        "INSERT INTO course (id, term_id, name, folder_name, color, sort_order, created_at, updated_at, skin_template_id, skin_auto, sticker_mode) VALUES (?, 't', ?, ?, 1, 1, '2026-10-01', '2026-10-01', ?, ?, ?)"
       )
-      .run(id, id, id, at, at, tid);
-  add('a', '2026-10-01T00:00:01Z', 'builtin-lemon'); // 順の割り当て → 自動
-  add('b', '2026-10-01T00:00:02Z', 'builtin-navy'); // 順はずれていても、順の割り当てに使うもの → 自動
-  add('c', '2026-10-01T00:00:03Z', 'builtin-classic'); // クラシックは順の割り当てに使わない → 本人が選んだ
-  add('d', '2026-10-01T00:00:04Z', null); // 全体と同じ
-  add('e', '2026-10-01T00:00:05Z', 'mine'); // 自分で作ったテンプレート → 本人が選んだ
+      .run(id, id, id, tid, auto, mode);
+  add('a', 'builtin-lemon', 1, 'global');
+  add('b', 'mine', 0, 'both');
+  add('c', null, 0, 'global');
   migrate(db);
-  const auto = Object.fromEntries(
+  assert.deepEqual(
     db
-      .prepare('SELECT id, skin_auto FROM course')
+      .prepare('SELECT id, skin_template_id, skin_auto, sticker_mode FROM course ORDER BY id')
       .all()
-      .map((r) => [r.id, r.skin_auto])
+      .map((r) => ({...r})),
+    ['a', 'b', 'c'].map((id) => ({id, skin_template_id: null, skin_auto: 0, sticker_mode: 'global'}))
   );
-  assert.deepEqual(auto, {a: 1, b: 1, c: 0, d: 0, e: 0});
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM skin_template').get().n, 1, '自作のテンプレートは残す');
 });

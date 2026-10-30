@@ -5,16 +5,6 @@
   gap: var(--space-3);
   max-width: 1080px;
 }
-.ks-target {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-weight: 600;
-}
-.ks-target .input {
-  width: auto;
-  min-width: 220px;
-}
 .ks-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
@@ -280,11 +270,6 @@
 .ks-save label {
   display: grid;
   gap: 4px;
-}
-.ks-confirm {
-  max-width: 520px;
-  margin-top: var(--space-2);
-  --sticky-color: var(--c1);
 }
 
 /* ---- フォルダの右クリック →「着せ替え…」の選択パネル（SPEC-KISEKAE §3.3） ---- */
