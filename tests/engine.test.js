@@ -558,3 +558,30 @@ test('同期の途中でログインの画面に戻されたら、1 回だけロ
   );
   assert.ok(r.materials > 0);
 });
+
+test('時間切れ：切れたあとは touch() が投げ、裏で続いていた処理は次の一歩で止まる', async () => {
+  const {withIdleTimeout} = await import('../src/main/sync/engine.js');
+  let steps = 0;
+  let stopped = null;
+  const job = withIdleTimeout(
+    async (touch) => {
+      try {
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 30));
+          if (steps === 2) await new Promise((r) => setTimeout(r, 200)); // ここで止まって時間切れになる
+          touch();
+          steps++;
+        }
+      } catch (e) {
+        stopped = e;
+      }
+    },
+    80,
+    '時間切れ',
+    10
+  );
+  await assert.rejects(job, /時間切れ/);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.ok(stopped, '裏の処理も止まった');
+  assert.equal(steps, 2);
+});

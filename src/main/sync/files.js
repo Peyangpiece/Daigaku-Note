@@ -132,7 +132,11 @@ export class FileManager {
     // 3. ハッシュ
     const h = sha256(body);
     const same = this.repo.findMaterialByHash(course.id, h);
-    if (same && here(same)) return {result: 'dup', material: same};
+    if (same && here(same)) {
+      // 更新日時だけ進んで中身は同じだった：その日時を覚える（覚えないと、次の同期のたびに取り直す）
+      if (prev && fileRef.modified != null) this.repo.updateMaterial(prev.id, {lms_modified: String(fileRef.modified)});
+      return {result: 'dup', material: same};
+    }
     // 同じ中身の記録が別の保存先（保存先を変える前の場所）にある：記録を新しい保存先へ付け替える（授業ごとに同じ中身の記録は 1 つ）。
     // 回は LMS が言うとおりにし、本人が動かした回（round_from = 'user'）は保つ
     const relink = same ?? null;
@@ -165,6 +169,10 @@ export class FileManager {
         url: fileRef.url ?? relink.url ?? null,
         name: path.basename(file),
         path: file,
+        // 記録の中身を新しい場所のファイルにそろえる。上書き保存した資料（base_sha256 で見つかった）は、
+        // 新しい場所には元の中身を置いたので、元の中身が今のファイルになる（注釈の鍵は変わらない）
+        sha256: h,
+        ...(relink.base_sha256 === h ? {base_sha256: null} : {}),
         size: body.length,
         lms_modified: fileRef.modified != null ? String(fileRef.modified) : relink.lms_modified,
         status: 'ok'
@@ -172,7 +180,26 @@ export class FileManager {
       this.log(`[files] 別の保存先にあった記録を付け替えました: ${material.name}`);
       return {result: 'saved', material};
     }
-    const material = this.repo.createMaterial({
+    // 同じ中身を同時に取り込んでいた（別の同期が先に記録した）ときは、先の記録を使う（UNIQUE(course_id, sha256)）
+    const raced = () => {
+      const m = this.repo.findMaterialByHash(course.id, h);
+      return m ? {result: 'dup', material: m} : null;
+    };
+    let material;
+    try {
+      material = this.createLmsMaterial({course, round, roundFrom, fileRef, file, h, body, res, name, prev, source});
+    } catch (e) {
+      const won = /UNIQUE/i.test(e.message) && raced();
+      if (!won) throw e;
+      // 負けたほうが別の名前で書いたファイルは消す（記録のないファイルを残さない）
+      if (!existed && won.material.path !== file) await fsp.rm(file, {force: true}).catch(() => {});
+      return won;
+    }
+    return {result: prev ? 'updated' : 'saved', material};
+  }
+
+  createLmsMaterial({course, round, roundFrom, fileRef, file, h, body, res, name, prev, source}) {
+    return this.repo.createMaterial({
       course_id: course.id,
       round_id: round.id,
       round_from: roundFrom,
@@ -188,7 +215,6 @@ export class FileManager {
       source,
       status: 'ok'
     });
-    return {result: prev ? 'updated' : 'saved', material};
   }
 
   /**
