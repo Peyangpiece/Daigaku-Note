@@ -3,10 +3,10 @@ import {dialog, app, nativeImage} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {isUlid, ulid} from '../../shared/ids.js';
-import {CLASSIC_ID, FORMAT, SHAPES, STICKER_MODES, isBuiltin, isHex, normalizeTemplate} from '../../shared/skin.js';
+import {CLASSIC_ID, FORMAT, SHAPES, isBuiltin, isHex, normalizeTemplate} from '../../shared/skin.js';
 import {sha256} from '../sync/files.js';
 import {isPng} from '../pdf-export.js';
-import {id, bad} from './common.js';
+import {bad} from './common.js';
 
 export function register({handle, repo, getWindow}) {
   // ---- 着せ替え（SPEC-KISEKAE.md）：テンプレートは値だけを持つ。保存のたびに normalizeTemplate を通す ----
@@ -32,37 +32,11 @@ export function register({handle, repo, getWindow}) {
     return {ok: true};
   });
 
-  // 当てる：courseId があればその授業（templateId が null なら「全体と同じ」）、なければ全体
-  // 全体に当てると、自動で付いたテンプレート（skin_auto）の授業も全体に合わせる（本人が選んだ授業はそのまま）。
-  // 戻り（全体）の followed は合わせた授業と前のテンプレート（取り消しで restore に渡す）
-  handle('skin.apply', ({courseId, templateId, stickerMode, restore}) => {
+  // 当てる：テンプレートはアプリ全体で 1 つ（SPEC-KISEKAE §4.1）
+  handle('skin.apply', ({templateId}) => {
     if (templateId != null && !templateExists(templateId)) bad('テンプレートが見つかりません');
-    if (courseId) {
-      const cid = id(courseId) ?? bad('この授業は見つかりませんでした');
-      const patch = {};
-      if (templateId !== undefined) {
-        patch.skin_template_id = templateId ?? null;
-        patch.skin_auto = 0; // 本人が選んだ
-      }
-      if (STICKER_MODES.includes(stickerMode)) patch.sticker_mode = stickerMode;
-      return {course: repo.updateCourse(cid, patch)};
-    }
     repo.setSetting('skin.global', templateId ?? CLASSIC_ID);
-    // 取り消し：合わせた授業を前のテンプレートに戻す（自動の印も戻す）
-    if (Array.isArray(restore)) {
-      for (const r of restore.slice(0, 1000)) {
-        const cid = id(r?.courseId);
-        if (cid && repo.get('course', cid) && (r.templateId == null || templateExists(r.templateId)))
-          repo.updateCourse(cid, {skin_template_id: r.templateId ?? null, skin_auto: 1});
-      }
-      return {ok: true, followed: []};
-    }
-    const followed = repo.db
-      .prepare('SELECT id, skin_template_id FROM course WHERE skin_auto = 1 AND skin_template_id IS NOT NULL')
-      .all()
-      .map((r) => ({courseId: r.id, templateId: r.skin_template_id}));
-    for (const f of followed) repo.updateCourse(f.courseId, {skin_template_id: null});
-    return {ok: true, followed};
+    return {ok: true};
   });
 
   handle('skin.recentColor', ({color}) => {

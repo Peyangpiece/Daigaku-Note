@@ -31,8 +31,7 @@ export const LICENSE_LABEL = {
   share: 'そのまま配ってよい',
   remix: '手を加えて配ってよい'
 };
-export const STICKER_MODES = ['global', 'course', 'both'];
-// シールを貼れる場所（SPEC-KISEKAE §5）。home（ホームの余白）は全体のテンプレートだけから貼る。
+// シールを貼れる場所（SPEC-KISEKAE §5）。
 // round（回の付箋の角）・file（資料のイラスト。種類 kind ごと）・bookmark（授業のページの、付箋のある資料の目印の先）は 1 枚ずつで、貼る位置は決まっている
 export const STICKER_PLACES = ['folder', 'home', 'heading', 'viewer', 'round', 'file', 'bookmark'];
 export const PLACE_LABEL = {
@@ -44,7 +43,6 @@ export const PLACE_LABEL = {
   file: '資料のイラスト',
   bookmark: '付箋の目印の先（授業のページ）'
 };
-export const GLOBAL_ONLY_PLACES = ['home'];
 export const FIXED_PLACES = ['round', 'file', 'bookmark'];
 export const STICKERS_PER_PLACE = 5;
 export const placeMax = (place) => (FIXED_PLACES.includes(place) ? 1 : STICKERS_PER_PLACE);
@@ -269,42 +267,23 @@ export const BUILTIN_TEMPLATES = [
 const BUILTIN_IDS = new Set(BUILTIN_TEMPLATES.map((t) => t.id));
 export const isBuiltin = (id) => BUILTIN_IDS.has(id);
 
-/** 新しい授業に順に割り当てるテンプレート（となり同士が同じにならないように。クラシックは除く） */
-export const ROTATION = BUILTIN_TEMPLATES.filter((t) => t.id !== CLASSIC_ID).map((t) => t.id);
-export const rotationFor = (index) => ROTATION[((index % ROTATION.length) + ROTATION.length) % ROTATION.length];
-
 /**
- * 授業に当たる見た目。授業にテンプレートがあればそれ、なければ全体のテンプレート（SPEC-KISEKAE §4.1）。
- * ノートは全体のテンプレートだけから決まる。シールは授業の sticker_mode で、全体・授業・両方から集める（§4.3）
+ * 授業に当たる見た目。テンプレートはアプリ全体で 1 つ（SPEC-KISEKAE §4.1。v0.12.12 で授業ごとのテンプレートをやめた）。
+ * course は受け取るが、見た目は変えない（フォルダごとの色は folderLookFor で重ねる）
  */
-export function resolveSkin(templates, globalId, course = null) {
+export function resolveSkin(templates, globalId, _course = null) {
   const byId = (id) => templates.find((t) => t.id === id) ?? null;
   const global = byId(globalId) ?? byId(CLASSIC_ID) ?? BUILTIN_TEMPLATES[0];
-  const own = course?.skin_template_id ? byId(course.skin_template_id) : null;
-  const mode = STICKER_MODES.includes(course?.sticker_mode) ? course.sticker_mode : 'global';
-  const stickers =
-    mode === 'course'
-      ? (own?.stickers ?? [])
-      : mode === 'both'
-        ? [...global.stickers, ...(own?.stickers ?? [])]
-        : global.stickers;
   return {
-    template: own ?? global,
-    own: !!own,
-    note: global.parts.note,
-    folder: (own ?? global).parts.folder,
-    tape: (own ?? global).parts.tape,
-    file: (own ?? global).parts.file,
-    fileBody: (own ?? global).parts.fileBody,
-    fileArt: (own ?? global).parts.fileArt,
-    sticky: (own ?? global).parts.sticky,
-    bookmark: (own ?? global).parts.bookmark,
-    stickers: stickers.slice().sort((a, b) => a.z - b.z)
+    template: global,
+    own: false,
+    ...global.parts,
+    stickers: global.stickers.slice().sort((a, b) => a.z - b.z)
   };
 }
 
-/** 授業に今当たっているテンプレートの id（授業のテンプレートがなければ全体） */
-export const templateIdOf = (globalId, course) => course?.skin_template_id || globalId || CLASSIC_ID;
+/** 今当たっているテンプレートの id（アプリ全体で 1 つ） */
+export const templateIdOf = (globalId, _course = null) => globalId || CLASSIC_ID;
 
 /**
  * フォルダごとの色（ホームの右クリック →「着せ替え…」）。選んだときのテンプレート（tid）でだけ当てる：
@@ -316,11 +295,6 @@ export const folderLookFor = (looks, globalId, course) => {
   const {tid: _tid, ...colors} = look;
   return colors;
 };
-
-/** テンプレートを使っている授業の数（全体で使っていれば all も true） */
-export function usage(templateId, courses, globalId) {
-  return {courses: courses.filter((c) => c.skin_template_id === templateId).length, global: globalId === templateId};
-}
 
 // ---- 色の計算 ----
 export function hexToRgb(hex) {
