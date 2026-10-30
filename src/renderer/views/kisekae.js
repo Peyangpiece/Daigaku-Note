@@ -191,12 +191,6 @@ function usageText(data, t) {
   return parts.length ? `${parts.join('・')}で使用中` : '';
 }
 
-/** 一覧のカードの使用中の知らせ：授業ごとに使っている数だけ（すべての授業で使っていることは ✓ でわかる） */
-function cardUsage(data, t) {
-  const n = usage(t.id, data.courses, globalId(data)).courses;
-  return n ? `${n} つの授業で使用中` : '';
-}
-
 function galleryCard(data, t, course, current) {
   const on = current === t.id;
   const skin = templateSkin(data, t);
@@ -204,7 +198,6 @@ function galleryCard(data, t, course, current) {
     <button type="button" class="ks-card__pick" data-ks="apply" data-id="${esc(t.id)}" aria-pressed="${on}">
       ${noteSwatch(skin.note, 'ks-card__paper', `<div class="ks-card__folder">${folderCard(course, {data, skin, edit: {still: true}})}</div>`)}
       <span class="ks-card__name">${on ? '✓ ' : ''}${esc(t.name)}</span>
-      ${isBuiltin(t.id) || !cardUsage(data, t) ? '' : `<span class="ks-card__meta muted">${esc(cardUsage(data, t))}</span>`}
     </button>
     <div class="ks-card__tools">
       <button type="button" class="btn btn--small" data-ks="edit" data-id="${esc(t.id)}">${isBuiltin(t.id) ? 'これをもとに作る' : '直す'}</button>
