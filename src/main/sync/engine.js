@@ -39,18 +39,24 @@ export async function parallel(items, n, f) {
 
 /**
  * 1 授業の処理に時間切れを付ける。ms の間なにも進まなかったら切る（進むたびに touch() で延びる）。
- * 全部の回を確かめる初回は授業 1 つに数分かかるので、合計ではなく「止まっている時間」で判断する
+ * 全部の回を確かめる初回は授業 1 つに数分かかるので、合計ではなく「止まっている時間」で判断する。
+ * 時間切れのあとは touch() が投げる：裏で続いていた処理は次の一歩で止まる（次の同期と同じ資料を取り合わない）
  */
-const withIdleTimeout = (start, ms, msg) =>
+export const withIdleTimeout = (start, ms, msg, tick = 1000) =>
   new Promise((resolve, reject) => {
     let last = Date.now();
-    const touch = () => (last = Date.now());
+    let dead = false;
+    const touch = () => {
+      if (dead) throw new SyncError('timeout', msg);
+      last = Date.now();
+    };
     const t = setInterval(() => {
       if (Date.now() - last > ms) {
         clearInterval(t);
+        dead = true;
         reject(new SyncError('timeout', msg));
       }
-    }, 1000);
+    }, tick);
     start(touch)
       .then(resolve, reject)
       .finally(() => clearInterval(t));
@@ -481,6 +487,7 @@ export class SyncEngine {
     let saved = 0;
     let failed = 0;
     for (const ref of preferLayout(refs, (r) => r.name ?? '')) {
+      touch(); // 時間切れのあとなら、ここで止まる（取りかけない）
       const r = await this.files.ingest({
         term,
         course,

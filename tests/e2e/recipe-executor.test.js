@@ -82,6 +82,15 @@ function mockLms({logout = '<a id="button-logout" href="/logout">ログアウト
           };
         </script>`);
     }
+    // 転送：同じホストの中へ（取ってよい）・ほかのホストへ（取ってはいけない。localhost は 127.0.0.1 と別のホスト名）
+    if (url.pathname === '/redir-in') {
+      res.writeHead(302, {Location: '/file/9/'});
+      return res.end();
+    }
+    if (url.pathname === '/redir-out') {
+      res.writeHead(302, {Location: `http://localhost:${req.socket.localPort}/file/secret/`});
+      return res.end();
+    }
     if (url.pathname.startsWith('/file/')) {
       res.writeHead(200, {
         'Content-Type': 'application/pdf',
@@ -194,6 +203,10 @@ test(
       assert.match(got.disposition, /filename\*=UTF-8/);
 
       await assert.rejects(connector.fetchFile(ctx, {url: 'https://evil.example.com/x.pdf'}), /許可していない/);
+      // LMS の転送も、転送先のホストを確かめてから取る（Playwright の request は context.route() の遮断を通らないため）
+      const inside = await connector.fetchFile(ctx, {url: base + '/redir-in'});
+      assert.equal(inside.body.toString(), '%PDF-/file/9/');
+      await assert.rejects(connector.fetchFile(ctx, {url: base + '/redir-out'}), /許可していない/);
     } finally {
       await connector.releaseContext(ctx);
     }

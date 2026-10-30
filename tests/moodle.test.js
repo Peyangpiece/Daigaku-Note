@@ -77,6 +77,15 @@ function mockMoodle({flaky = 0} = {}) {
       }
       return json({exception: 'x', errorcode: 'invalidrecord', message: 'unknown function'});
     }
+    // 転送：サイトの中（取ってよい）・外（取ってはいけない）
+    if (url.pathname === '/redir-in') {
+      res.writeHead(302, {Location: `/pluginfile.php/1/x/intro.pdf?token=${url.searchParams.get('token')}`});
+      return res.end();
+    }
+    if (url.pathname === '/redir-out') {
+      res.writeHead(302, {Location: 'https://evil.example.com/x.pdf'});
+      return res.end();
+    }
     if (url.pathname.startsWith('/pluginfile.php/')) {
       if (url.searchParams.get('token') !== 'TOK') {
         res.writeHead(200, {'Content-Type': 'text/html'});
@@ -175,6 +184,9 @@ test('Moodle：判定・ログイン・授業・回・ファイル・取得', as
   assert.equal(got.ok, true);
   assert.equal(got.contentType, 'application/pdf');
   assert.equal(got.body.toString(), '%PDF-fake');
+  // 転送はサイトの中だけたどる（外へ転送されたら取らない）
+  assert.equal((await moodle.fetchFile(ctx2, {url: base + '/redir-in'})).body.toString(), '%PDF-fake');
+  await assert.rejects(moodle.fetchFile(ctx2, {url: base + '/redir-out'}), /LMS の外/);
   assert.equal(moodle.openUrl({lms_url: course.lms_url}, {number: 2}), course.lms_url + '#section-2');
 });
 

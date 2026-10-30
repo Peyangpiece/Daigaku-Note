@@ -2,7 +2,14 @@
 // レシピにコードはない。この実行器がセレクタ・属性・正規表現・URL の差し込みだけを解釈する。
 import path from 'node:path';
 import {readdir, unlink, writeFile} from 'node:fs/promises';
-import {applyRegex, applyUniversityOverride, fillTemplate, parseFieldList, resolveHref} from '../../shared/recipe.js';
+import {
+  applyRegex,
+  applyUniversityOverride,
+  fillTemplate,
+  hostAllowed,
+  parseFieldList,
+  resolveHref
+} from '../../shared/recipe.js';
 import {parseRound} from '../../shared/rounds.js';
 import {parseSlot} from './slot.js';
 import {credentialUrlAllowed, markLoginForm, noAutofillHost} from '../browser/login-form.js';
@@ -12,6 +19,7 @@ const FILE_LINK =
   /\.(pdf|pptx?|docx?|xlsx?|csv|txt|zip|png|jpe?g|gif|mp4|mp3|m4a|mov)(\?|#|$)|\/file[s]?\/|\/download|forcedownload|pluginfile|attachment/i;
 
 const err = (code, message) => Object.assign(new Error(message), {code});
+const MAX_REDIRECTS = 5; // ファイルを取るときにたどる転送の数
 const LOGOUT_RE = /ログアウト|log\s*out|sign\s*out|サインアウト/i;
 const DEBUG_KEEP = 20; // debug フォルダに残す画面の数
 
@@ -766,21 +774,32 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       return out;
     },
 
+    /**
+     * ファイルを取る。Playwright の request は context.route() の遮断を通らないので、転送（3xx）は自分でたどり、
+     * 転送先のホストも毎回確かめる（LMS が外のホストへ転送しても、許していないホストからは取らない）
+     */
     async fetchFile(ctx, ref) {
       ctx.context ??= await session.open(ctx.connection, {allowedHosts: ctx.allowedHosts});
-      if (
-        ctx.allowedHosts.length &&
-        !ctx.allowedHosts.some((h) => safeHost(ref.url) === h || safeHost(ref.url).endsWith('.' + h))
-      )
-        throw err('blocked-navigation', '許可していないホストのファイルです');
-      const res = await ctx.context.request.get(ref.url, {maxRedirects: 5, timeout: 60000});
-      return {
-        ok: res.ok(),
-        status: res.status(),
-        contentType: res.headers()['content-type'] ?? '',
-        disposition: res.headers()['content-disposition'] ?? '',
-        body: await res.body()
-      };
+      const allowed = (url) => !ctx.allowedHosts.length || hostAllowed(url, ctx.allowedHosts);
+      let url = ref.url;
+      for (let hop = 0; ; hop++) {
+        if (!allowed(url)) throw err('blocked-navigation', '許可していないホストのファイルです');
+        const res = await ctx.context.request.get(url, {maxRedirects: 0, timeout: 60000});
+        const location = res.headers().location;
+        if (res.status() >= 300 && res.status() < 400 && location) {
+          await res.dispose().catch(() => {});
+          if (hop >= MAX_REDIRECTS) throw err('download', '転送が多すぎます');
+          url = new URL(location, url).href;
+          continue;
+        }
+        return {
+          ok: res.ok(),
+          status: res.status(),
+          contentType: res.headers()['content-type'] ?? '',
+          disposition: res.headers()['content-disposition'] ?? '',
+          body: await res.body()
+        };
+      }
     },
 
     openUrl(course) {

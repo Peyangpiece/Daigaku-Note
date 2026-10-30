@@ -208,8 +208,18 @@ export function createMoodleConnector({
       const site = new URL(ctx.base).origin;
       const target = new URL(ref.url);
       if (target.origin !== site) throw new Error(`資料の URL が LMS の外（${target.host}）を指しているので読みません`);
-      const url = ref.url + (ref.url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(ctx.token);
-      const res = await fetchImpl(url);
+      let url = ref.url + (ref.url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(ctx.token);
+      // 転送は自分でたどり、LMS のサイトの中だけにする（外へ転送されたら取らない）
+      let res;
+      for (let hop = 0; ; hop++) {
+        res = await fetchImpl(url, {redirect: 'manual'});
+        const location = res.headers.get('location');
+        if (!(res.status >= 300 && res.status < 400 && location)) break;
+        if (hop >= 5) throw new Error('資料の転送が多すぎます');
+        const next = new URL(location, url);
+        if (next.origin !== site) throw new Error(`資料の URL が LMS の外（${next.host}）へ転送されたので読みません`);
+        url = next.href;
+      }
       const body = Buffer.from(await res.arrayBuffer());
       return {
         ok: res.ok,

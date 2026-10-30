@@ -356,3 +356,72 @@ test('自分のファイル：自分の付箋に置く・回へ移す・戻す�
   assert.equal(again.result, 'saved');
   assert.equal(repo.get('material', back.id), null);
 });
+
+test('取り込み：更新日時だけ進んで中身が同じ資料は、日時を覚えて次からは取り直さない', async (t) => {
+  const {repo, term, course, r2, files} = await setup(t);
+  let fetched = 0;
+  const fetchFile = async () => {
+    fetched++;
+    return {ok: true, status: 200, contentType: 'application/pdf', disposition: '', body: Buffer.from('same body')};
+  };
+  const ref = (modified) => ({url: 'https://lms/file/9', name: 'a.pdf', modified});
+  assert.equal((await files.ingest({term, course, round: r2, fileRef: ref('100'), fetchFile})).result, 'saved');
+  assert.equal((await files.ingest({term, course, round: r2, fileRef: ref('200'), fetchFile})).result, 'dup');
+  assert.equal(fetched, 2);
+  assert.equal(repo.findMaterialsByUrl('https://lms/file/9')[0].lms_modified, '200');
+  assert.equal((await files.ingest({term, course, round: r2, fileRef: ref('200'), fetchFile})).result, 'skip');
+  assert.equal(fetched, 2, '3 回目は取りに行かない');
+});
+
+test('取り込み：同じ中身を 2 つの同期が同時に取り込んでも、2 つ目は先の記録を使う（UNIQUE で落ちない）', async (t) => {
+  const {repo, term, course, r2, files} = await setup(t);
+  let release;
+  const gate = new Promise((r) => (release = r));
+  const fetchFile = async () => {
+    await gate;
+    return {ok: true, status: 200, contentType: 'application/pdf', disposition: '', body: Buffer.from('raced body')};
+  };
+  const a = files.ingest({term, course, round: r2, fileRef: {url: 'https://lms/a', name: 'a.pdf'}, fetchFile});
+  const b = files.ingest({term, course, round: r2, fileRef: {url: 'https://lms/b', name: 'b.pdf'}, fetchFile});
+  release();
+  const results = (await Promise.all([a, b])).map((r) => r.result).sort();
+  assert.deepEqual(results, ['dup', 'saved']);
+  assert.equal(repo.listMaterials(course.id).length, 1);
+  const dir = path.dirname(repo.listMaterials(course.id)[0].path);
+  assert.deepEqual(
+    await readdir(dir),
+    [path.basename(repo.listMaterials(course.id)[0].path)],
+    '記録のないファイルを残さない'
+  );
+});
+
+test('保存先を変えたあとの付け替え：上書き保存した資料（元の中身で見つかる）は、記録の中身を新しい場所のファイルにそろえる', async (t) => {
+  const {root, repo, term, course, r2, files} = await setup(t);
+  const orig = Buffer.from('original pdf');
+  // 前の保存先にあり、注釈を描き込んで上書きした資料（sha256 は描き込み後、base_sha256 は元の中身）
+  const old = repo.createMaterial({
+    course_id: course.id,
+    round_id: r2.id,
+    url: 'https://lms/file/old',
+    name: 'a.pdf',
+    path: path.join(root, '前の保存先', 'a.pdf'),
+    sha256: sha256(Buffer.from('annotated pdf')),
+    base_sha256: sha256(orig),
+    size: 13,
+    source: 'lms',
+    status: 'ok'
+  });
+  const fetchFile = async () => ({ok: true, status: 200, contentType: 'application/pdf', disposition: '', body: orig});
+  const r = await files.ingest({
+    term,
+    course,
+    round: r2,
+    fileRef: {url: 'https://lms/file/new', name: 'a.pdf'},
+    fetchFile
+  });
+  assert.equal(r.result, 'saved');
+  const m = repo.get('material', old.id);
+  assert.equal(m.sha256, sha256(orig), '記録の中身が新しい場所のファイルと合う（次の上書き保存が衝突にならない）');
+  assert.equal(m.base_sha256, null);
+  assert.deepEqual(await readFile(m.path), orig);
+});
