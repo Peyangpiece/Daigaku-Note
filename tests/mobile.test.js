@@ -2,6 +2,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import http from 'node:http';
 import {
   KEY_BYTES,
   fromB64,
@@ -243,7 +244,7 @@ test('lanAddresses：家庭・大学の内向きの番号だけ、Wi-Fi を先�
 });
 
 // ---- 窓口の通し ----
-async function startServer() {
+async function startServer({slow = null} = {}) {
   const repo = fakeRepo();
   const secrets = fakeSecrets();
   const devices = createDevices({repo, secrets});
@@ -253,6 +254,10 @@ async function startServer() {
     },
     async boom() {
       throw new Error('だめでした');
+    },
+    async slow() {
+      await slow;
+      return {ok: true};
     }
   };
   const server = createMobileServer({devices, api});
@@ -333,6 +338,72 @@ test('サーバー：画面のファイルを配り、外のファイルは 404'
     assert.equal(res.status, 302);
     res = await fetch(`${base}/m/app/app.js`, {method: 'PUT'});
     assert.equal(res.status, 405);
+  } finally {
+    await server.stop();
+  }
+});
+
+/** 生の要求：Content-Length を言うだけ言って、本文は少しだけ送る（送り切らない）。戻りは {status}（つながりが切れたら status: 0） */
+function rawPost(port, {length, chunk = Buffer.alloc(0), end = false}) {
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port,
+        path: '/m/api',
+        method: 'POST',
+        headers: length == null ? {} : {'Content-Length': length}
+      },
+      (res) => {
+        res.resume();
+        resolve({status: res.statusCode});
+        req.destroy();
+      }
+    );
+    req.on('error', () => resolve({status: 0}));
+    req.write(chunk);
+    if (end) req.end();
+  });
+}
+
+test('サーバー：大きすぎる本文は読まずに 413。知らない端末は本文を読む前に 403。待ちの端末の大きな本文は 413', async () => {
+  const {server, devices} = await startServer();
+  try {
+    const port = server.port;
+    // 100MB と言う要求：1 バイトも読まずに断る
+    assert.equal((await rawPost(port, {length: 100 * 1024 * 1024})).status, 413);
+    // 知らない端末が 40MB 送ると言う：先頭 26 バイトだけで断る（残りを待たない）
+    const t0 = Date.now();
+    const r = await rawPost(port, {length: 40 * 1024 * 1024, chunk: Buffer.from(ULID + 'x'.repeat(100))});
+    assert.equal(r.status, 403);
+    assert.ok(Date.now() - t0 < 2000, '残りの本文を待たない');
+    // QR を読んだだけの端末：あいさつより大きな本文は断る
+    const {id} = await devices.create();
+    assert.equal((await rawPost(port, {length: 1024 * 1024, chunk: Buffer.from(id + 'x'.repeat(100))})).status, 413);
+    // 長さを言わない（chunked）・短すぎる
+    assert.equal((await rawPost(port, {length: null, chunk: Buffer.from('abc'), end: true})).status, 400);
+    assert.equal((await rawPost(port, {length: 10, chunk: Buffer.from('0123456789'), end: true})).status, 400);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('サーバー：同時に受ける要求は 4 件まで。それより多ければ 503', async () => {
+  let release;
+  const slow = new Promise((r) => (release = r));
+  const {server, devices, post} = await startServer({slow});
+  try {
+    const {id, key} = await devices.create();
+    const hi = await post(id, key, {ch: 'hello', t: Date.now()});
+    const fresh = open(key, hi.body).value.key;
+    const waiting = [1, 2, 3, 4].map(() => post(id, fresh, {ch: 'slow', t: Date.now()}));
+    await new Promise((r) => setTimeout(r, 200));
+    const r = await post(id, fresh, {ch: 'echo', t: Date.now()});
+    assert.equal(r.status, 503);
+    release();
+    for (const w of await Promise.all(waiting)) assert.equal(w.status, 200);
+    const after = await post(id, fresh, {ch: 'echo', arg: {a: 1}, t: Date.now()});
+    assert.equal(after.status, 200, '終わればまた受ける');
   } finally {
     await server.stop();
   }

@@ -194,7 +194,7 @@ export const methods = {
       if (p.renderTask !== task || this.destroyed) return;
       p.canvas.replaceWith(canvas); // 描き終わってから差し替える（ちらつかない）
       p.canvas = canvas;
-      this.renderText(p, vp).catch((e) => console.warn('文字の層を作れませんでした', e));
+      this.renderTextLayer(p, vp).catch((e) => console.warn('文字の層を作れませんでした', e));
     } catch (e) {
       if (e?.name !== 'RenderingCancelledException' && p.renderTask === task) p.rendered = false;
     }
@@ -204,7 +204,7 @@ export const methods = {
    * 文字の層（pdf.js の TextLayer）：絵の上に透明な文字を同じ位置に重ねる。選択の道具のときだけマウスが届き、
    * ドラッグで選んでコピーできる。読み上げは常に文字を読める。拡大率が変わるたびに作り直す（絵と同じ）
    */
-  async renderText(p, vp) {
+  async renderTextLayer(p, vp) {
     if (!pdfjs.TextLayer) return;
     p.textContent ??= await p.page.getTextContent();
     if (this.destroyed || p.viewport !== vp) return;

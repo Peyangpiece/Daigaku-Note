@@ -652,6 +652,10 @@ function folderScanText(r) {
   const parts = [];
   if (r.added) parts.push(`${r.added} 件のファイルが増えました`);
   if (r.removed) parts.push(`${r.removed} 件のファイルがなくなりました`);
+  if (r.rebased)
+    parts.push(
+      `ほかのアプリで変えた PDF が ${r.rebased} 件ありました。その変更を残すため、前の書き込みは PDF に描き込まれた形で残し、アプリでは動かせなくなります`
+    );
   if (r.truncated) parts.push('ファイルが多いため、一部だけを表示しています（2000 件まで）');
   return parts.join('。');
 }
@@ -663,8 +667,8 @@ document.getElementById('view').addEventListener('rendered', async (e) => {
   if (course?.kind !== 'folder') return;
   const r = await api['folder.scan']({courseId: course.id});
   if (r?.error) return toast(r.error, {error: true});
-  if (r.missing || r.truncated) toast(folderScanText(r), {error: true});
-  if (r.added || r.removed) reload();
+  if (r.missing || r.truncated || r.rebased) toast(folderScanText(r), {error: r.missing || r.truncated});
+  if (r.added || r.removed || r.rebased) reload();
 });
 function uploaded(r) {
   const parts = [];

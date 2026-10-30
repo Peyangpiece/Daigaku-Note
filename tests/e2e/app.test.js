@@ -100,6 +100,12 @@ test(
       await win.waitForFunction(() => [...document.querySelectorAll('canvas')].some((c) => c.width > 300), null, {
         timeout: 60000
       });
+      // 文字の層（選択・コピー・読み上げ）：PDF の文字が透明な文字として重なる（v0.12.2 まで名前の重なりで描かれなかった）
+      await win.waitForFunction(
+        () => document.querySelector('.pdf-page__text')?.textContent.includes('Sample p.1'),
+        null,
+        {timeout: 30000}
+      );
       // 設定：情報の節と版
       await win.evaluate(() => (location.hash = '#/settings'));
       await win.waitForSelector('#st-about', {timeout: 30000});

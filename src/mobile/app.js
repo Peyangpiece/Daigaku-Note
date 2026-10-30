@@ -179,7 +179,10 @@ async function renderPhoto(params) {
       try {
         if (f.size > 30 * 1024 * 1024) throw new Error(`${f.name} は大きすぎます（30MB まで）`);
         const data = new Uint8Array(await f.arrayBuffer());
-        await call('photo.upload', {courseId: sel.value, roundId: rsel.value || null, files: [{data}]});
+        const r = await call('photo.upload', {courseId: sel.value, roundId: rsel.value || null, files: [{data}]});
+        // パソコンで書き込めなかった・同じ写真がもうある：送れたことにしない
+        if (r?.failed?.length) throw new Error(`パソコンに保存できませんでした（${r.failed[0].message}）`);
+        if (r?.dup?.length) throw new Error(`同じ写真がもう${r.dup[0].where}にあります`);
         done++;
       } catch (e) {
         toast(e.message, {error: true});
