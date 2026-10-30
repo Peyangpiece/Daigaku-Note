@@ -55,7 +55,7 @@ export function noteVars(note, dark = isDark()) {
   return {attrs: {'data-note': note.type, 'data-margin': note.margin ? 'on' : 'off', 'data-surface': surface}, vars};
 }
 
-const NOTE_PROPS = [
+export const NOTE_PROPS = [
   '--rule-gap',
   '--paper',
   '--paper-ink',
