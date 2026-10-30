@@ -68,9 +68,6 @@
 .ks-card__name {
   font-weight: 700;
 }
-.ks-card__meta {
-  min-height: 1.4em;
-}
 .ks-card__tools {
   display: flex;
   flex-wrap: wrap;
