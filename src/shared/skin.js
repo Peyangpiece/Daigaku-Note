@@ -288,17 +288,21 @@ export function resolveSkin(templates, globalId, course = null) {
       : mode === 'both'
         ? [...global.stickers, ...(own?.stickers ?? [])]
         : global.stickers;
+  // 資料のイラスト・付箋・しおりは、授業のテンプレートで変えていなければ（はじめのまま）全体のものを使う。
+  // はじめからあるテンプレートはこれらを持たないので、授業に自動で当たったテンプレートが全体の設定を隠さないように
+  const inherit = (k) =>
+    own && JSON.stringify(own.parts[k]) !== JSON.stringify(DEFAULT_PARTS[k]) ? own.parts[k] : global.parts[k];
   return {
     template: own ?? global,
     own: !!own,
     note: global.parts.note,
     folder: (own ?? global).parts.folder,
     tape: (own ?? global).parts.tape,
-    file: (own ?? global).parts.file,
-    fileBody: (own ?? global).parts.fileBody,
-    fileArt: (own ?? global).parts.fileArt,
-    sticky: (own ?? global).parts.sticky,
-    bookmark: (own ?? global).parts.bookmark,
+    file: inherit('file'),
+    fileBody: inherit('fileBody'),
+    fileArt: inherit('fileArt'),
+    sticky: inherit('sticky'),
+    bookmark: inherit('bookmark'),
     stickers: stickers.slice().sort((a, b) => a.z - b.z)
   };
 }

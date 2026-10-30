@@ -98,6 +98,26 @@ test('どのテンプレートが当たるか：授業のテンプレート > �
     resolveSkin(all, 'G', {skin_template_id: 'M', sticker_mode: 'both'}).stickers.map((s) => s.asset[0]),
     ['b', 'a']
   );
+  // しおり・付箋・資料のイラストは、授業のテンプレートで変えていなければ全体のもの（自動で当たったはじめからのテンプレートでも）
+  const g2 = normalizeTemplate(
+    {
+      parts: {
+        bookmark: {color: '#7fd1ae', shape: 'round'},
+        sticky: {round: ['#111111', '#222222', '#333333', '#444444', '#555555']}
+      }
+    },
+    {id: 'G2'}
+  );
+  const lemon = resolveSkin([...all, g2], 'G2', {skin_template_id: 'builtin-lemon'});
+  assert.deepEqual(lemon.bookmark, {color: '#7fd1ae', shape: 'round'});
+  assert.equal(lemon.sticky.round[0], '#111111');
+  assert.equal(lemon.folder.tab, '#ffe7a3', 'フォルダは授業のテンプレートのまま');
+  const mineBm = normalizeTemplate({parts: {bookmark: {color: '#123456', shape: 'tag'}}}, {id: 'M2'});
+  assert.equal(
+    resolveSkin([...all, g2, mineBm], 'G2', {skin_template_id: 'M2'}).bookmark.color,
+    '#123456',
+    '授業で変えたしおりはそのまま'
+  );
   assert.equal(
     resolveSkin(all, 'gone', {skin_template_id: 'gone'}).template.id,
     CLASSIC_ID,

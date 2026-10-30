@@ -44,11 +44,22 @@ export const methods = {
     // 画面の左右の端（指・ペン）は四隅を出すなでる操作の始まり。書き始めない
     if (e.pointerType !== 'mouse' && (e.clientX >= document.documentElement.clientWidth - 24 || e.clientX <= 24))
       return;
+    // メモの吹き出しの中は、吹き出しが受ける（手書き・消しゴムは中の欄で。ページには線を引かない）
+    if (e.target.closest('.anno-note__pop')) return;
+    // ペン・消しゴムを持っていても、メモのアイコンを押せば開く・閉じる（持ったまま中に手書きできる）
+    const icon = e.target.closest('.anno-note__icon');
+    if (icon && e.button === 0 && DRAW_TOOLS.includes(this.tool)) {
+      const a = this.annoOf(icon);
+      if (a) {
+        e.preventDefault();
+        this.openNote(a, a.el.querySelector('.anno-note__pop').hidden);
+        return;
+      }
+    }
     // ペンの消しゴムの側（スタイラスの後ろ・消しゴムのボタン）は、どの道具のときも消しゴム
     const penEraser = e.pointerType === 'pen' && (e.button === 5 || (e.buttons & 32) !== 0);
     if (penEraser || DRAW_TOOLS.includes(this.tool)) return this.startDraw(e, penEraser);
     if (e.button !== 0) return;
-    if (e.target.closest('.anno-note__pop')) return; // メモの本文は普通に打てる
     let a = this.annoOf(e.target);
     // 貼りもの（図・シール・紙）は下敷き：選択の道具のときだけ選んで動かす。ほかの道具では上に文字・メモ・文字隠しを置く
     if (a?.kind === 'stamp' && this.tool !== 'select') a = null;

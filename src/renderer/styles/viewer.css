@@ -384,7 +384,7 @@
   position: absolute;
   top: 0;
   left: calc(var(--note-size, 26px) + 8px);
-  width: 240px;
+  width: 260px;
   min-width: 160px;
   min-height: 160px;
   max-width: 900px;
@@ -406,41 +406,62 @@
 .anno-note__pop[hidden] {
   display: none;
 }
+/* メモの本文の欄：文字と手書きを同じ欄に重ねる（筆箱のペンを持てば手書き、消しゴムなら線を消す）。罫線は文字の行にそろえる。
+   吹き出しを広げると欄も広がる */
+.anno-note__body {
+  position: relative;
+  flex: 1 1 120px;
+  min-height: 120px;
+  --note-lh: 22px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(var(--note-lh) - 1px),
+    rgba(0, 0, 0, 0.12) calc(var(--note-lh) - 1px) var(--note-lh)
+  );
+  border-radius: 3px;
+}
 .anno-note__pop textarea {
+  display: block;
   width: 100%;
-  min-height: 70px;
-  flex: 0 0 auto;
-  resize: vertical;
+  height: 100%;
+  min-height: 120px;
+  margin: 0;
+  padding: 0 2px;
+  resize: none;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   font-size: var(--fs-small);
-  line-height: 1.6;
+  line-height: var(--note-lh);
   outline: none;
+}
+.anno-note__ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none; /* 文字のときは下の欄で打つ */
+  touch-action: none;
+}
+.anno-note__pop:is([data-mode='pen'], [data-mode='erase']) .anno-note__ink {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+.anno-note__pop[data-mode='erase'] .anno-note__ink {
+  cursor: cell;
+}
+.anno-note__pop:is([data-mode='pen'], [data-mode='erase']) textarea {
+  caret-color: transparent;
 }
 .anno-note__foot {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-}
-/* メモの中の手書き：本文の下の罫線入りの欄。筆箱のボールペンで書く（指・マウスでも）。吹き出しを広げると欄も広がる */
-.anno-note__draw {
-  flex: 1 1 80px;
-  min-height: 80px;
-  border-top: 1px dashed rgba(0, 0, 0, 0.3);
-  padding-top: 4px;
-}
-.anno-note__ink {
-  display: block;
-  width: 100%;
-  height: 100%;
-  min-height: 76px;
-  touch-action: none;
-  cursor: crosshair;
-  background: repeating-linear-gradient(to bottom, transparent 0 23px, rgba(0, 0, 0, 0.12) 23px 24px);
-  border-radius: 3px;
 }
 .anno-note__foot .btn {
   border-color: #2b2b2b;
