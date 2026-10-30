@@ -286,14 +286,23 @@ export function resolveSkin(templates, globalId, _course = null) {
 export const templateIdOf = (globalId, _course = null) => globalId || CLASSIC_ID;
 
 /**
- * フォルダごとの色（ホームの右クリック →「着せ替え…」）。選んだときのテンプレート（tid）でだけ当てる：
- * ほかのテンプレートに替えたら、そのテンプレートの色のまま（前のテンプレートで選んだ色を持ち越さない）
+ * フォルダごとの色の記録（設定 skin.folderLooks の 1 件）を、テンプレートごとの色 {テンプレートの id: {card, tab, tape, badge}} にする。
+ * v0.12.12 までの形（{tid, card…}。tid がなければ fallbackTid で選んだもの）も読む
+ */
+export function lookByTemplate(entry, fallbackTid) {
+  if (!entry || typeof entry !== 'object') return {};
+  if (entry.byTemplate && typeof entry.byTemplate === 'object') return entry.byTemplate;
+  const {tid, ...colors} = entry;
+  return Object.keys(colors).length ? {[typeof tid === 'string' ? tid : fallbackTid]: colors} : {};
+}
+
+/**
+ * フォルダごとの色（ホームの右クリック →「着せ替え…」）。テンプレートごとに覚え、今のテンプレートで選んだ色だけを当てる：
+ * ほかのテンプレートに替えたら、そのテンプレートの色（前のテンプレートで選んだ色は持ち越さない。戻すとまた当たる）
  */
 export const folderLookFor = (looks, globalId, course) => {
-  const look = looks?.[course.id];
-  if (!look || look.tid !== templateIdOf(globalId, course)) return {};
-  const {tid: _tid, ...colors} = look;
-  return colors;
+  const tid = templateIdOf(globalId);
+  return {...(lookByTemplate(looks?.[course.id], tid)[tid] ?? {})};
 };
 
 // ---- 色の計算 ----

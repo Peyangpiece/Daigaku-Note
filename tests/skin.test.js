@@ -268,14 +268,22 @@ test('回の付箋の色：第 1 回から順に 5 色。6 回目からはまた
   );
 });
 
-test('フォルダごとの色は、選んだときのテンプレートでだけ当たる（ほかのテンプレートに替えたら持ち越さない）', async () => {
-  const {folderLookFor, templateIdOf} = await import('../src/shared/skin.js');
-  const looks = {c1: {tid: 'builtin-lemon', tape: '#ff0000', tab: '#00ff00'}};
+test('フォルダごとの色は、テンプレートごとに覚えて、今のテンプレートの色だけを当てる', async () => {
+  const {folderLookFor, lookByTemplate, templateIdOf} = await import('../src/shared/skin.js');
   assert.equal(templateIdOf('G', {skin_template_id: 'M'}), 'G', '授業に前の版のテンプレートが残っていても全体');
   assert.equal(templateIdOf(null), CLASSIC_ID);
-  assert.deepEqual(folderLookFor(looks, 'builtin-lemon', {id: 'c1'}), {tape: '#ff0000', tab: '#00ff00'});
-  assert.deepEqual(folderLookFor(looks, 'builtin-mint', {id: 'c1'}), {}, 'ミントに替えたら当てない');
+  const looks = {
+    c1: {byTemplate: {'builtin-lemon': {tape: '#ff0000'}, 'builtin-mint': {tab: '#00ff00'}}}
+  };
+  assert.deepEqual(folderLookFor(looks, 'builtin-lemon', {id: 'c1'}), {tape: '#ff0000'});
+  assert.deepEqual(folderLookFor(looks, 'builtin-mint', {id: 'c1'}), {tab: '#00ff00'}, 'ミントではミントで選んだ色');
+  assert.deepEqual(folderLookFor(looks, 'builtin-sky', {id: 'c1'}), {}, '選んでいないテンプレートでは当てない');
   assert.deepEqual(folderLookFor(looks, 'builtin-lemon', {id: 'c2'}), {});
+  // 前の版の形も読む
+  assert.deepEqual(lookByTemplate({tid: 'builtin-lemon', tape: '#ff0000'}, 'G'), {'builtin-lemon': {tape: '#ff0000'}});
+  assert.deepEqual(lookByTemplate({tape: '#ff0000'}, 'G'), {G: {tape: '#ff0000'}}, '印がなければ今のテンプレート');
+  assert.deepEqual(lookByTemplate({tid: 'G'}, 'G'), {});
+  assert.deepEqual(folderLookFor({c1: {tid: 'G', tab: '#123456'}}, 'G', {id: 'c1'}), {tab: '#123456'});
 });
 
 test('0011：授業ごとのテンプレートを外し、アプリ全体の 1 つにする（テンプレートそのものは残す）', async () => {
