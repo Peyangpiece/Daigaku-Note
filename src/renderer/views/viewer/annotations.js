@@ -95,10 +95,14 @@ export const methods = {
     } else {
       el.className = 'anno-note';
       el.innerHTML = `<button type="button" class="anno-note__icon" aria-label="メモ"></button>
-        <div class="anno-note__pop" hidden>
-          <textarea maxlength="5000" placeholder="メモを書く"></textarea>
-          <div class="anno-note__draw" title="筆箱のボールペンで手書きできます（ペンを持っていなければ黒の 0.5）"><svg class="anno-note__ink" aria-label="手書き"></svg></div>
-          <div class="anno-note__foot"><button type="button" class="btn btn--small" data-note="clear-ink" hidden>手書きを消す</button><button type="button" class="btn btn--small" data-note="delete">削除</button><button type="button" class="btn btn--small" data-note="close">閉じる</button></div>
+        <div class="anno-note__pop" data-mode="text" hidden>
+          <div class="anno-note__body">
+            <textarea maxlength="5000" placeholder="メモを書く（筆箱のペンを持てば手書き）" aria-label="メモの本文"></textarea>
+            <svg class="anno-note__ink" aria-label="手書き"></svg>
+          </div>
+          <div class="anno-note__foot">
+            <button type="button" class="btn btn--small" data-note="delete">削除</button><button type="button" class="btn btn--small" data-note="close">閉じる</button>
+          </div>
         </div>`;
       this.bindNoteInk(a, el.querySelector('.anno-note__ink'));
       this.watchNoteSize(a, el.querySelector('.anno-note__pop'));
@@ -305,7 +309,6 @@ export const methods = {
       path.setAttribute('d', strokePath(points, s.w * NOTE_INK_SCALE, {pressure: s.pressure !== false}));
       svg.append(path);
     }
-    pop.querySelector('[data-note="clear-ink"]').hidden = !strokes.length;
   },
 
   noteTitle(a) {
@@ -493,7 +496,11 @@ export const methods = {
     const pop = a.el.querySelector('.anno-note__pop');
     pop.hidden = !open;
     a.el.classList.toggle('is-open', open);
-    if (open) pop.querySelector('textarea').focus();
+    // 書き方は持っている道具で決まる（筆箱のペンなら手書き、消しゴムなら手書きを消す、ほかは文字を打つ）
+    if (open) {
+      this.setNoteMode(a);
+      if (a.el.querySelector('.anno-note__pop').dataset.mode === 'text') pop.querySelector('textarea').focus();
+    }
   },
 
   /** 注釈を消す。record が真なら取り消しの履歴に積む */

@@ -31,6 +31,9 @@ export const methods = {
     // しまった筆箱のつまみに、今持っているペンの色を出す
     const pen = ['ink', 'line', 'mask'].includes(tool) ? this.penItem?.color : tool === 'eraser' ? '#2f6fb5' : null;
     this.$('side')?.style.setProperty('--current', pen ?? 'transparent');
+    // 開いているメモの書き方も、持った道具に合わせる
+    for (const a of this.annos.values())
+      if (a.kind === 'note' && a.el.classList.contains('is-open')) this.setNoteMode(a);
     this.updateBar();
   },
 
@@ -392,14 +395,7 @@ export const methods = {
       const a = btn && this.annoOf(btn);
       if (!a) return;
       if (btn.dataset.note === 'delete') this.removeAnno(a);
-      else if (btn.dataset.note === 'clear-ink') {
-        const before = this.snap(a);
-        a.style = {...a.style};
-        delete a.style.ink;
-        this.applyNotePop(a);
-        this.record(a.key, before, this.snap(a));
-        this.scheduleSave(a, 0);
-      } else this.openNote(a, false);
+      else this.openNote(a, false);
     });
     this.on(document, 'keydown', (e) => this.onKey(e));
     // Tab で注釈にフォーカスが来たら、押したときと同じく選ぶ（メモは中のアイコンのボタンに来る）
