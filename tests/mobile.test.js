@@ -408,3 +408,48 @@ test('サーバー：同時に受ける要求は 4 件まで。それより多�
     await server.stop();
   }
 });
+
+test('端末：前と違う所（IP）・違うブラウザからつながったら知らせる値を返す（最初の 1 回・同じ所では返さない）', async () => {
+  let t = Date.parse('2026-10-27T00:00:00Z');
+  const devices = createDevices({repo: fakeRepo(), secrets: fakeSecrets(), now: () => t});
+  const {id} = await devices.create();
+  await devices.activate(id, 'Mozilla/5.0 (iPhone)');
+  assert.equal(devices.seen(id, {ip: '::ffff:192.168.1.20', ua: 'UA-1'}), null, '最初は覚えるだけ');
+  assert.equal((await devices.list())[0].ip, '192.168.1.20');
+  t += 1000;
+  assert.equal(devices.seen(id, {ip: '192.168.1.20', ua: 'UA-1'}), null, '同じ所');
+  const moved = devices.seen(id, {ip: '192.168.1.99', ua: 'UA-1'});
+  assert.deepEqual(
+    {from: moved.from, to: moved.to, ua: moved.uaChanged, name: moved.name},
+    {from: '192.168.1.20', to: '192.168.1.99', ua: false, name: 'iPhone'}
+  );
+  assert.equal(devices.seen(id, {ip: '192.168.1.99', ua: 'UA-1'}), null, '新しい所を覚えた');
+  assert.equal(devices.seen(id, {ip: '192.168.1.99', ua: 'UA-2'}).uaChanged, true);
+});
+
+test('サーバー：つないだスマホが前と違う所からつながったら onMoved を呼ぶ', async () => {
+  const repo = fakeRepo();
+  const devices = createDevices({repo, secrets: fakeSecrets()});
+  const movedList = [];
+  const server = createMobileServer({devices, api: {}, onMoved: (d) => movedList.push(d)});
+  const port = await server.start(0);
+  try {
+    const {id, key} = await devices.create();
+    const send = async (k, msg, ua) => {
+      const res = await fetch(`http://127.0.0.1:${port}/m/api`, {
+        method: 'POST',
+        headers: {'User-Agent': ua},
+        body: Buffer.concat([Buffer.from(id, 'ascii'), Buffer.from(seal(k, msg))])
+      });
+      return new Uint8Array(await res.arrayBuffer());
+    };
+    const fresh = open(key, await send(key, {ch: 'hello', t: Date.now()}, 'UA-1')).value.key;
+    await send(fresh, {ch: 'hello', t: Date.now()}, 'UA-1');
+    assert.equal(movedList.length, 0);
+    await send(fresh, {ch: 'hello', t: Date.now()}, 'UA-other');
+    assert.equal(movedList.length, 1);
+    assert.equal(movedList[0].uaChanged, true);
+  } finally {
+    await server.stop();
+  }
+});

@@ -42,7 +42,7 @@ export function createDevices({repo, secrets, now = () => Date.now()}) {
     async list() {
       return (await prune())
         .filter((d) => !d.pending)
-        .map(({id, name, created, lastSeen}) => ({id, name, created, lastSeen}));
+        .map(({id, name, created, lastSeen, ip}) => ({id, name, created, lastSeen, ip: ip ?? null}));
     },
     /** 新しい端末（待ち）を作り、鍵を返す。QR に入れる */
     async create() {
@@ -93,15 +93,28 @@ export function createDevices({repo, secrets, now = () => Date.now()}) {
       write(list);
       return key;
     },
-    /** 使った（最後に使った日を残す。1 分に 1 回まで書く） */
-    seen(id) {
+    /**
+     * 使った（最後に使った日・つないできた所と種類を残す。日は 1 分に 1 回まで書く）。
+     * 前と違う所（IP）・違うブラウザ（User-Agent）からつながったら {name, from, to} を返す（段階 1 の暫定の見張り。docs/MOBILE.md §3）
+     */
+    seen(id, {ip = null, ua = null} = {}) {
       const list = read();
       const d = list.find((x) => x.id === id);
-      if (!d) return;
+      if (!d || d.pending) return null;
       const t = now();
-      if (d.pending || (d.lastSeen && t - Date.parse(d.lastSeen) < 60_000)) return;
+      const addr = ip ? String(ip).replace(/^::ffff:/, '') : null;
+      const agent = ua ? String(ua).slice(0, 200) : null;
+      const moved =
+        (addr && d.ip && d.ip !== addr) || (agent && d.ua && d.ua !== agent)
+          ? {id, name: d.name, from: d.ip, to: addr ?? d.ip, uaChanged: !!(agent && d.ua && d.ua !== agent)}
+          : null;
+      const fresh = !d.lastSeen || t - Date.parse(d.lastSeen) >= 60_000;
+      if (!fresh && !moved && (d.ip || !addr)) return null;
       d.lastSeen = new Date(t).toISOString();
+      if (addr) d.ip = addr;
+      if (agent) d.ua = agent;
       write(list);
+      return moved;
     },
     rename(id, name) {
       const clean = String(name ?? '')

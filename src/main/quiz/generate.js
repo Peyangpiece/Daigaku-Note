@@ -300,6 +300,13 @@ export async function generateQuiz(deps, opts) {
     }
   }
 
+  // 問題が足りない理由も、保存する前に notes に入れる（クイズの記録 source_json に残す）
+  if (kept.length < count)
+    notes.push(
+      dropped
+        ? `資料に合わない問題 ${dropped} 問を除いたため ${kept.length} 問です`
+        : `資料が短いため ${kept.length} 問です`
+    );
   // 保存：同じ回にクイズがあれば版を上げる
   const prev = repo.latestQuiz(round.id);
   const quizId = ulid();
@@ -336,12 +343,6 @@ export async function generateQuiz(deps, opts) {
       })
     );
   });
-  if (kept.length < count)
-    notes.push(
-      dropped
-        ? `資料に合わない問題 ${dropped} 問を除いたため ${kept.length} 問です`
-        : `資料が短いため ${kept.length} 問です`
-    );
   return {quizId, count: kept.length, dropped, flagged: mismatched.size, notes};
 }
 

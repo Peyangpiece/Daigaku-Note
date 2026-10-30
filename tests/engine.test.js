@@ -585,3 +585,31 @@ test('時間切れ：切れたあとは touch() が投げ、裏で続いてい�
   assert.ok(stopped, '裏の処理も止まった');
   assert.equal(steps, 2);
 });
+
+test('学期をまたぐ授業（通年科目）：新しい学期の LMS にも出てきたら新しい学期へ移す。前の学期を同期しても戻さない', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  const spring = repo.upsertTerm({
+    id: '2026-spring',
+    label: '春学期',
+    year: 2026,
+    folder: '2026_春学期',
+    start_date: '2026-04-01',
+    end_date: '2026-07-31',
+    rounds: 15,
+    holidays_json: '[]'
+  });
+  const old = repo.createCourse({
+    term_id: spring.id,
+    connection_id: connection.id,
+    lms_id: '77',
+    name: '経営学（通年）',
+    folder_name: '経営学（通年）'
+  });
+  const [row] = await engine.reconcileCourses(connection, term, [{lmsId: '77', name: '経営学（通年）'}], {
+    markMissing: false
+  });
+  assert.equal(row.id, old.id, '同じ授業のまま（資料・注釈・クイズはそのまま）');
+  assert.equal(repo.get('course', old.id).term_id, term.id, '秋学期へ移る');
+  await engine.reconcileCourses(connection, spring, [{lmsId: '77', name: '経営学（通年）'}], {markMissing: false});
+  assert.equal(repo.get('course', old.id).term_id, term.id, '春学期を同期しても戻らない');
+});

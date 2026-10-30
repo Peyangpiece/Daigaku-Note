@@ -227,7 +227,7 @@ async function renderMobile(box, st = null, pair = null) {
     ? `<ul class="mobile-devices">${s.devices
         .map(
           (d) =>
-            `<li><strong>${esc(d.name)}</strong> <span class="muted">つないだ日 ${esc(fmtDate(d.created))}・最後に使った日 ${esc(fmtDate(d.lastSeen))}</span> <button type="button" class="btn btn--small btn--quiet" data-mobile-rename="${esc(d.id)}" data-name="${esc(d.name)}">名前</button><button type="button" class="btn btn--small btn--quiet" data-mobile-remove="${esc(d.id)}">外す</button></li>`
+            `<li><strong>${esc(d.name)}</strong> <span class="muted">つないだ日 ${esc(fmtDate(d.created))}・最後に使った日 ${esc(fmtDate(d.lastSeen))}${d.ip ? `（${esc(d.ip)} から）` : ''}</span> <button type="button" class="btn btn--small btn--quiet" data-mobile-rename="${esc(d.id)}" data-name="${esc(d.name)}">名前</button><button type="button" class="btn btn--small btn--quiet" data-mobile-remove="${esc(d.id)}">外す</button></li>`
         )
         .join('')}</ul>`
     : '<p class="muted">つないだスマホはまだありません。</p>';

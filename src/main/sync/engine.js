@@ -248,6 +248,17 @@ export class SyncEngine {
           hidden: excluded.has(lmsId) ? 1 : 0
         });
       } else {
+        // 通年科目など、前の学期の授業が新しい学期の LMS にも出てきた：新しい学期へ移す（ホームに出す）。
+        // 授業フォルダは新しい学期の中に作り直し、前の学期に保存した資料のファイルはその場に置いたまま（記録はこの授業のまま）。
+        // 戻す方向（前の学期を同期したとき）には動かさない
+        if (row.term_id !== term.id) {
+          const from = this.repo.get('term', row.term_id);
+          if (!from || String(term.start_date) > String(from.start_date)) {
+            const folder = this.uniqueCourseFolder(term.id, c.name || row.name);
+            row = this.repo.updateCourse(row.id, {term_id: term.id, folder_name: folder, name: c.name || row.name});
+            this.log(`[sync] 学期をまたぐ授業を ${term.label ?? term.id} へ移しました: ${row.name}`);
+          }
+        }
         const patch = {};
         if (c.name && c.name !== row.name) {
           const folder = this.uniqueCourseFolder(term.id, c.name, row.folder_name);

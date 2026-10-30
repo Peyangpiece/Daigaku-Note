@@ -258,6 +258,12 @@ test('生成：構造化出力・根拠のない問題は捨てる・検算の�
   assert.equal(r.count, 4);
   assert.equal(r.dropped, 1, '資料にない引用の問題を捨てる');
   assert.equal(r.flagged, 1);
+  // 問題が足りない理由は、クイズの記録にも残る（あとで見返せる）
+  const saved = JSON.parse(repo.get('quiz', r.quizId).source_json);
+  assert.ok(
+    saved.notes.some((n) => /資料に合わない問題 1 問を除いた/.test(n)),
+    '除いた理由を記録に残す'
+  );
   const first = client.calls[0];
   assert.equal(first.model, 'claude-sonnet-5-5');
   assert.deepEqual(first.output_config.format, {type: 'json_schema', schema: SCHEMA});
