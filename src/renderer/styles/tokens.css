@@ -1,17 +1,31 @@
 /* 大学ノート デザイントークン（SPEC §8.0.2）。色はここだけで決める */
 :root {
-  --paper: #fbf8f1;
-  --paper-ink: #2b2b2b;
-  --paper-ink-weak: #6b6f76;
-  --rule: #cfe0ea;
+  /* ノートの色はテーマの値（--theme-*）を通して使う。着せ替えはこれらを html に直に当て、
+     見本の紙で「標準」のときは --theme-* に戻す（今当たっているテンプレートの色を受け継がないように。views/kisekae.js の noteSwatch） */
+  --paper: var(--theme-paper);
+  --paper-ink: var(--theme-paper-ink);
+  --paper-ink-weak: var(--theme-paper-ink-weak);
+  --rule: var(--theme-rule);
+  --card: var(--theme-card);
+  --card-shadow: var(--theme-card-shadow);
+  --card-shadow-hover: var(--theme-card-shadow-hover);
+  --tape-alpha: var(--theme-tape-alpha);
+  --note-weak: var(--theme-note-weak);
+  --focus: var(--theme-focus);
+  --note-mix: var(--theme-note-mix); /* 明るい表示ではなし（使う所の代わりの値になる） */
+  --note-ink-weak: var(--theme-note-ink-weak);
+  --theme-paper: #fbf8f1;
+  --theme-paper-ink: #2b2b2b;
+  --theme-paper-ink-weak: #6b6f76;
+  --theme-rule: #cfe0ea;
   --rule-margin: #e88b8b;
   --rule-gap: 32px;
   --rule-alpha: 1;
-  --card: #ffffff;
-  --card-shadow: 0 2px 6px rgba(43, 43, 43, 0.08);
-  --card-shadow-hover: 0 6px 14px rgba(43, 43, 43, 0.12);
-  --tape-alpha: 0.72;
-  --note-weak: 80%; /* 付箋の上の補助の文字の濃さ（インクの割合）。コントラスト 4.5:1 以上になる値 */
+  --theme-card: #ffffff;
+  --theme-card-shadow: 0 2px 6px rgba(43, 43, 43, 0.08);
+  --theme-card-shadow-hover: 0 6px 14px rgba(43, 43, 43, 0.12);
+  --theme-tape-alpha: 0.72;
+  --theme-note-weak: 80%; /* 付箋の上の補助の文字の濃さ（インクの割合）。コントラスト 4.5:1 以上になる値 */
   --c1: #f6c445;
   --c2: #f28b82;
   --c3: #7fd1ae;
@@ -30,7 +44,7 @@
   --pop6: #c3a6ff;
   --pop7: #c2f06a;
   --pop8: #ff8a7a;
-  --focus: #2b2b2b;
+  --theme-focus: #2b2b2b;
   /* 角丸：小（入力・チップ）・中（ボタン）・既定（カード）・大（大きな札）・丸（バッジ・タブ） */
   --radius-s: 6px;
   --radius-m: 8px;
@@ -63,36 +77,36 @@
   --motion: 200ms;
 }
 :root[data-theme='dark'] {
-  --paper: #1f2430;
-  --paper-ink: #eceff4;
-  --paper-ink-weak: #a3aab8;
-  --rule: #2e3647;
+  --theme-paper: #1f2430;
+  --theme-paper-ink: #eceff4;
+  --theme-paper-ink-weak: #a3aab8;
+  --theme-rule: #2e3647;
   --rule-margin: #8c4a4a;
-  --card: #2a3040;
-  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
-  --tape-alpha: 0.55;
-  --note-weak: 100%;
-  --note-mix: #a9a59b;
-  --note-ink-weak: #33363b;
-  --focus: #eceff4;
+  --theme-card: #2a3040;
+  --theme-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --theme-card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
+  --theme-tape-alpha: 0.55;
+  --theme-note-weak: 100%;
+  --theme-note-mix: #a9a59b;
+  --theme-note-ink-weak: #33363b;
+  --theme-focus: #eceff4;
   --danger-ink: #ff8a80;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --paper: #1f2430;
-    --paper-ink: #eceff4;
-    --paper-ink-weak: #a3aab8;
-    --rule: #2e3647;
+    --theme-paper: #1f2430;
+    --theme-paper-ink: #eceff4;
+    --theme-paper-ink-weak: #a3aab8;
+    --theme-rule: #2e3647;
     --rule-margin: #8c4a4a;
-    --card: #2a3040;
-    --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-    --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
-    --tape-alpha: 0.55;
-    --note-weak: 100%;
-    --note-mix: #a9a59b;
-    --note-ink-weak: #33363b;
-    --focus: #eceff4;
+    --theme-card: #2a3040;
+    --theme-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --theme-card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.45);
+    --theme-tape-alpha: 0.55;
+    --theme-note-weak: 100%;
+    --theme-note-mix: #a9a59b;
+    --theme-note-ink-weak: #33363b;
+    --theme-focus: #eceff4;
     --danger-ink: #ff8a80;
   }
 }

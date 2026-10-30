@@ -65,6 +65,7 @@ body {
 .paper,
 html.paper-canvas,
 .note-swatch {
+  color: var(--paper-ink); /* 見本の紙の文字は、その紙の色に合わせる（画面の文字の色を受け継がない） */
   background-color: var(--paper);
   background-image: var(--note-margin), var(--note-cue), var(--note-summary), var(--note-pattern), var(--note-pattern2);
   background-size:

@@ -38,6 +38,7 @@ import {
   forgetSticker,
   globalId,
   noteVars,
+  NOTE_PROPS,
   shapesOf,
   skinOf,
   stickerUrl
@@ -168,9 +169,16 @@ const attrsOf = (attrs) =>
   Object.entries(attrs)
     .map(([k, v]) => `${k}="${esc(v)}"`)
     .join(' ');
-/** ノートの見本の紙 */
+/**
+ * ノートの見本の紙。テンプレートが決めていない色（標準）は、テーマの色（--theme-*）に戻す。
+ * 戻さないと、画面に今当たっているテンプレートの色（html に直に当てた色）を受け継いでしまう
+ */
 function noteSwatch(note, cls, inner = '') {
-  const {attrs, vars} = noteVars(note);
+  const {attrs, vars: own} = noteVars(note);
+  const vars = {
+    ...Object.fromEntries(NOTE_PROPS.filter((p) => p !== '--rule-gap').map((p) => [p, `var(--theme-${p.slice(2)})`])),
+    ...own
+  };
   return `<div class="note-swatch ${cls}" ${attrsOf(attrs)} style="${styleOf(vars)}">${inner}</div>`;
 }
 
