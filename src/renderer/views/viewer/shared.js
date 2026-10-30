@@ -131,16 +131,17 @@ export const BAR = `
     <div class="seg" role="group" aria-label="ツール">
       <button type="button" data-tool="select" title="選択・移動（Esc）：押してそのまま動かす">選択</button>
       <button type="button" data-tool="text" title="文字入れ（${key(MOD, 'T')}）：文字の上を押すと打つ・なぞると範囲を選ぶ。箱のふち（すぐ外側）を押して動かす">文字</button>
-      <button type="button" data-tool="note" title="メモ（${key(MOD, 'M')}）">メモ</button>
+      <button type="button" data-tool="note" title="コメント（${key(MOD, 'M')}）：押した所にアイコンを置き、押すと開く吹き出しに書く">コメント</button>
     </div>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
-      <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="しおり（${key(SHIFT, MOD, 'D')} で今の場所にしおりを足す）">しおり</button>
+      <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="付箋の一覧（押すとその場所へ。${key(SHIFT, MOD, 'D')} で今の場所に付箋を貼る）">付箋</button>
       <div class="bookmark-panel" data-v="bookmark-panel" hidden>
         <div class="bookmark-panel__head">
-          <strong>しおり</strong>
-          <button type="button" class="btn btn--small" data-v="bookmark-add" title="いま見ている場所にしおりを足す（${key(SHIFT, MOD, 'D')}）">＋ ここにしおり</button>
+          <strong>付箋</strong>
+          <button type="button" class="btn btn--small" data-v="bookmark-add" title="いま見ている場所に付箋を貼る（${key(SHIFT, MOD, 'D')}）">＋ ここに付箋</button>
         </div>
+        <div class="bookmark-panel__colors" data-v="fusen-colors" role="group" aria-label="付箋の色"></div>
         <ul class="bookmark-panel__list" data-v="bookmark-list"></ul>
       </div>
     </div>
@@ -158,9 +159,9 @@ export const BAR = `
       <input type="color" data-v="text-custom" title="ほかの色" aria-label="文字のほかの色" />
     </div>
     <div class="viewer-bar__group" data-group="note" hidden>
-      <span class="muted">メモの色</span>
+      <span class="muted">コメントの色</span>
       <span class="swatches">${swatches(NOTE_COLORS, 'note-color')}</span>
-      <input type="color" data-v="note-custom" title="ほかの色" aria-label="メモのほかの色" />
+      <input type="color" data-v="note-custom" title="ほかの色" aria-label="コメントのほかの色" />
     </div>
     <div class="viewer-bar__group viewer-bar__refills" data-group="refill" role="group" aria-label="多機能ペンの芯" hidden></div>
     <button type="button" class="btn btn--small" data-v="delete" hidden title="選んだ注釈を消す（Delete）">削除</button>
@@ -183,14 +184,14 @@ export const BAR = `
       <div class="help-panel" data-v="help-panel" hidden>
         <strong>キーボードの操作</strong>
         <dl>
-          <dt>${key(MOD, 'T')}・${key(MOD, 'M')}</dt><dd>文字入れ・メモ</dd>
+          <dt>${key(MOD, 'T')}・${key(MOD, 'M')}</dt><dd>文字入れ・コメント</dd>
           <dt>${key(MOD, '1')}〜${key(MOD, '6')}</dt><dd>筆箱の 1〜6 本目のペン（多機能ペンは、もう一度押すと次の芯に回る）</dd>
           <dt>${key(MOD, 'K')}・${key(MOD, 'E')}</dt><dd>文字隠しペン・消しゴム</dd>
           <dt>${key(MOD, 'B')}</dt><dd>太字（文字入れを選んでいるとき）</dd>
           <dt>${key(MOD, 'D')}</dt><dd>電卓（ポーチの中）を出す・しまう</dd>
-          <dt>${key(SHIFT, MOD, 'D')}</dt><dd>今の場所にしおり</dd>
+          <dt>${key(SHIFT, MOD, 'D')}</dt><dd>今の場所に付箋</dd>
           <dt>${key(MOD, 'R')}</dt><dd>赤シート（ポーチの中）を出す・しまう</dd>
-          <dt>Tab・Enter</dt><dd>注釈を順に選ぶ・選んだ文字を直す／メモを開く</dd>
+          <dt>Tab・Enter</dt><dd>注釈を順に選ぶ・選んだ文字を直す／コメントを開く</dd>
           <dt>Delete</dt><dd>選んだ注釈を消す</dd>
           <dt>Esc</dt><dd>選択をやめて選択ツールへ</dd>
           <dt>${key(MOD, 'Z')}・${key(SHIFT, MOD, 'Z')}</dt><dd>取り消す・やり直す</dd>
@@ -213,7 +214,7 @@ export const BAR = `
         <label><input type="radio" name="markers" value="blue" checked /> 水色のまま（印刷して赤シートをかぶせると隠れます）</label>
         <label><input type="radio" name="markers" value="black" /> 黒く塗りつぶす</label>
       </fieldset>
-      <label><input type="checkbox" name="notes" checked /> メモを PDF の注釈として入れる（ほかの PDF アプリでも読めます）</label>
+      <label><input type="checkbox" name="notes" checked /> コメントを PDF の注釈として入れる（ほかの PDF アプリでも読めます）</label>
       <div class="export-dialog__foot">
         <button type="submit" class="btn" value="cancel">やめる</button>
         <button type="submit" class="btn btn--primary" value="ok">書き出す…</button>
@@ -233,5 +234,5 @@ export const BAR = `
       <div class="case-panel" data-v="case-panel" hidden></div>
     </div>
   </aside>
-${cornersHtml({index: true})}
+${cornersHtml()}
   <div class="viewer-pages" data-v="pages"><p class="muted">読み込み中…</p></div>`;

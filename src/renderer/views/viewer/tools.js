@@ -292,7 +292,7 @@ export const methods = {
       else if (t.dataset.v === 'fit') this.setZoom(this.fitZoom());
       else if (t.dataset.v === 'back') this.onBack();
       else if (t.dataset.v === 'bookmarks') this.openBookmarks(this.$('bookmark-panel').hidden);
-      else if (t.dataset.v === 'bookmark-add') this.addBookmark();
+      else if (t.dataset.v === 'bookmark-add') this.addFusen();
       else if (t.dataset.v === 'undo') this.undo();
       else if (t.dataset.v === 'redo') this.redo();
       else if (t.dataset.v === 'sheet') {

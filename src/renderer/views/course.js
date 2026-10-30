@@ -42,13 +42,13 @@ export function fileCard(m, course, places) {
       : '';
   // PDF はアプリ内のビューアで開いて編集する。書き出した PDF（§9.7：注釈の対象にしない）とほかの種類は OS の既定のアプリで開く
   const action = extOf(m.name) === 'pdf' && m.source !== 'export' ? 'open-pdf' : 'open-material';
-  // 着せ替え（SPEC-KISEKAE）：種類ごとの色とシール、しおりのある資料にはリボン
+  // 着せ替え（SPEC-KISEKAE）：種類ごとの色とシール、付箋（前のしおりも）のある資料には目印
   const sk = skinOf(state.data, course);
   const kind = kindOf(m.name);
   const bm = bookmarkLook(sk);
   const bmSticker = sk.stickers.find((st) => st.place === 'bookmark');
   return `<div class="file${ok ? '' : ' file--missing'}"${ok ? ` draggable="true" data-drag-material="${esc(m.id)}"` : ''}>
-    <button class="file__open" data-action="${action}" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}${m.bookmarks ? `（しおり ${m.bookmarks}）` : ''}">
+    <button class="file__open" data-action="${action}" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}${m.bookmarks ? `（付箋 ${m.bookmarks}）` : ''}">
       <span class="file__art">${fileArt(m.name, {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}${fixedSticker(
         sk.stickers.find((st) => st.place === 'file' && st.kind === kind),
         state.data,

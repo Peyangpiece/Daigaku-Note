@@ -1,5 +1,5 @@
 // スマホのページ：PDF を見る・書き込む（docs/MOBILE.md §5）。
-// 見えるのはパソコンの注釈すべて（文字入れ・ボールペン・マーカー・文字隠し・メモ・貼りもの）。スマホで書けるのはメモ・マーカー・文字隠しだけ（shared/mobile-kinds.js）。
+// 見えるのはパソコンの注釈すべて（文字入れ・ボールペン・マーカー・文字隠し・コメント・貼りもの・付箋）。スマホで書けるのはコメント・マーカー・文字隠しだけ（shared/mobile-kinds.js）。
 // 書いたものはその場でパソコンへ送る（パソコンの PDF の画面にもすぐ出る。ファイルへの描き込みはパソコンで開いたとき）
 import * as pdfjs from '/m/pdfjs/legacy/build/pdf.min.mjs';
 import {call} from './client.js';
@@ -37,17 +37,17 @@ const MARKERS = [
 ];
 const TOOLS = [
   ['view', '見る'],
-  ['note', 'メモ'],
+  ['note', 'コメント'],
   ['line', 'マーカー'],
   ['mask', '隠す'],
   ['erase', '消す']
 ];
 const TOOL_HINT = {
   view: '',
-  note: 'メモを貼る所を押してください',
+  note: 'コメントを置く所を押してください',
   line: '文字の上を横になぞります（ページを動かすときは「見る」）',
   mask: '隠す文字をなぞります。押すと 1 語（動かすときは「見る」）',
-  erase: 'スマホで書けるもの（メモ・マーカー・文字隠し）を押すと消えます'
+  erase: 'スマホで書けるもの（コメント・マーカー・文字隠し）を押すと消えます'
 };
 const TOOL_KEY = 'daigaku-note.tool';
 
@@ -104,13 +104,13 @@ class PhoneViewer {
   }
 
   async load() {
-    const {material, bytes, bookmarks} = this.r;
+    const {material, bytes} = this.r;
     this.app.innerHTML = `
       <div class="m-viewer">
         <header class="m-head m-head--viewer">
           <button class="m-btn" data-v="back" aria-label="戻る">←</button>
           <h1 class="m-viewer__title">${esc(material.name.replace(/\.pdf$/i, ''))}</h1>
-          ${bookmarks?.length ? '<button class="m-btn" data-v="marks">しおり</button>' : ''}
+          <button class="m-btn" data-v="marks">付箋</button>
           <button class="m-btn" data-v="sheet" aria-pressed="false">赤シート</button>
         </header>
         <div class="m-pages" data-tool="view"></div>
@@ -760,8 +760,8 @@ class PhoneViewer {
     let typed = a.body;
     const strokes = Array.isArray(a.style.ink) ? a.style.ink : [];
     const result = await sheet(
-      `<h2 class="m-sheet__title">メモ</h2>
-       <textarea class="m-note__text" maxlength="${NOTE_MAX}" rows="6" placeholder="メモを書く"></textarea>
+      `<h2 class="m-sheet__title">コメント</h2>
+       <textarea class="m-note__text" maxlength="${NOTE_MAX}" rows="6" placeholder="コメントを書く"></textarea>
        ${strokes.length ? '<svg class="m-note__ink" aria-label="パソコンで書いた手書き"></svg>' : ''}
        <div class="m-row"><button class="m-btn" data-v="del">削除</button><button class="m-btn m-btn--primary" data-v="ok">閉じる</button></div>`,
       (el, close) => {
@@ -809,22 +809,34 @@ class PhoneViewer {
       });
       this.removeAnnoEl(a);
       this.addAnno(annotation);
-      toast('メモをパソコンへ送りました');
+      toast('コメントをパソコンへ送りました');
     } catch (e) {
       toast(e.message, {error: true});
     }
   }
 
-  // ---- しおり ----
+  // ---- 付箋：ページの端の目印の一覧（押すとその場所へ）。前の版のしおりで、まだパソコンで付箋に移していないものも並べる ----
   async openBookmarks() {
-    const list = (this.r.bookmarks ?? []).slice().sort((a, b) => a.page - b.page || a.y - b.y);
+    const tabs = [...this.annos.values()]
+      .filter((a) => a.kind === 'stamp' && a.style.type === 'index' && this.pages[a.page - 1])
+      .map((a) => ({
+        name: a.body,
+        page: a.page,
+        y: this.toScreen(a.page, a.rect).top / this.pages[a.page - 1].viewport.height,
+        color: a.style.color
+      }));
+    const list = [...tabs, ...(this.r.bookmarks ?? [])].sort((a, b) => a.page - b.page || a.y - b.y);
     const pick = await sheet(
-      `<h2 class="m-sheet__title">しおり</h2><ul class="m-list">${list
-        .map(
-          (b, i) =>
-            `<li><button class="m-item" data-i="${i}">${esc(b.name || `${b.page} ページ`)}<span class="m-sub">p.${b.page}</span></button></li>`
-        )
-        .join('')}</ul>`,
+      `<h2 class="m-sheet__title">付箋</h2>${
+        list.length
+          ? `<ul class="m-list">${list
+              .map(
+                (b, i) =>
+                  `<li><button class="m-item" data-i="${i}"><span class="m-dot" style="--c: ${esc(b.color ?? '#f28b82')}"></span>${esc(b.name || '（言葉なし）')}<span class="m-sub">p.${b.page}</span></button></li>`
+              )
+              .join('')}</ul>`
+          : '<p class="m-muted">付箋はまだありません。パソコンの PDF の画面で貼れます。</p>'
+      }`,
       (el, close) => {
         for (const b of el.querySelectorAll('[data-i]')) b.onclick = () => close(list[Number(b.dataset.i)]);
       }

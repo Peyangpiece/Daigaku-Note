@@ -169,12 +169,12 @@ function apiWith(rows = {}) {
   return {api, calls, sent, repo};
 }
 
-test('窓口：スマホで書けるのはメモ・マーカー・文字隠しだけ。書いたらパソコンの画面に知らせる', async () => {
+test('窓口：スマホで書けるのはコメント・マーカー・文字隠しだけ。書いたらパソコンの画面に知らせる', async () => {
   const {api, calls, sent, repo} = apiWith({[ULID]: {id: ULID, kind: 'ink'}});
   const M = '01JABCDEFGHJKMNPQRSTVWXYZ1';
   await assert.rejects(
     api['annotation.save']({materialId: M, annotation: {kind: 'ink', page: 1}}),
-    /メモ・マーカー・文字隠し/
+    /コメント・マーカー・文字隠し/
   );
   await assert.rejects(
     api['annotation.save']({materialId: M, annotation: {id: ULID, kind: 'note', page: 1}}),

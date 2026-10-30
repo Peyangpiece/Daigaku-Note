@@ -936,6 +936,29 @@
   gap: 8px;
   margin-bottom: 6px;
 }
+.bookmark-panel__colors {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+/* 付箋の色（ツールバーのボタンの見た目を外し、付箋の形にする） */
+.viewer-bar .bookmark-panel__colors .index-pad__color {
+  min-width: 0;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px 6px 6px 2px;
+  background: linear-gradient(to right, color-mix(in srgb, var(--index) 45%, #fff) 30%, var(--index) 30%);
+}
+.viewer-bar .bookmark-panel__colors .index-pad__color[aria-pressed='true'] {
+  background: linear-gradient(to right, color-mix(in srgb, var(--index) 45%, #fff) 30%, var(--index) 30%);
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 1px;
+}
+.bookmark-panel__item .index-pad__chip {
+  flex: none;
+}
 .bookmark-panel__list {
   list-style: none;
   margin: 0;

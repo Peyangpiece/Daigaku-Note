@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
 import {nextBookmarkName, normalizeBookmark} from '../src/shared/bookmark.js';
+import {normalizeAnnotation} from '../src/shared/annotation.js';
 
 test('しおりの既定の名前は「しおり1」「しおり2」…（名前を変えたものは数えない）', () => {
   assert.equal(nextBookmarkName([]), 'しおり1');
@@ -38,4 +39,25 @@ test('しおりの保存：ファイル（SHA-256）ごと。名前の変更・�
     repo.listBookmarks('sha-a').map((b) => b.name),
     ['しおり2']
   );
+});
+
+test('授業画面の目印の数：付箋（貼りものの index）と、まだ付箋に移していないしおりを足す', async () => {
+  const {db} = await openDatabase(':memory:');
+  const repo = new Repo(db);
+  repo.saveBookmark('sha-a', null, {page: 1, y: 0.1, name: 'しおり1'});
+  const tab = {
+    page: 1,
+    kind: 'stamp',
+    rect: {x: 580, y: 700, w: 44, h: 16},
+    body: '第3章',
+    style: {type: 'index', color: '#f28b82'}
+  };
+  repo.saveAnnotation('sha-a', null, normalizeAnnotation(tab));
+  repo.saveAnnotation('sha-b', null, normalizeAnnotation(tab));
+  repo.saveAnnotation(
+    'sha-b',
+    null,
+    normalizeAnnotation({...tab, body: '', style: {type: 'memo'}, rect: {x: 10, y: 10, w: 80, h: 80}})
+  );
+  assert.deepEqual(repo.bookmarkCounts(), {'sha-a': 2, 'sha-b': 1});
 });

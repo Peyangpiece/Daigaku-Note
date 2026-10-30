@@ -102,7 +102,6 @@ class Viewer extends DeskTools {
     this.editing = null;
     this.drag = null;
     this.inflight = 0;
-    this.bookmarks = []; // {id, page, y, name}。y はページの高さに対する割合（拡大率が変わっても同じ場所）
     this.failed = false;
     this.destroyed = false;
     const fontDefault = (() => {
@@ -155,12 +154,6 @@ class Viewer extends DeskTools {
     if (!p) return false;
     const box = p.el.getBoundingClientRect();
     this.placeStamp(spec, {p, x: cx - box.left, y: cy - box.top});
-    return true;
-  }
-  pouchAction(v) {
-    if (v !== 'index') return super.pouchAction(v);
-    this.toggleIndexPad();
-    this.tuckSoon();
     return true;
   }
 
@@ -242,8 +235,10 @@ class Viewer extends DeskTools {
     for (const p of this.pages) this.observer.observe(p.el);
     for (const a of r.annotations)
       if (a.page >= 1 && a.page <= this.pages.length) this.addAnno({...a, key: `k${this.seq++}`});
-    this.bookmarks = (r.bookmarks ?? []).filter((b) => b.page >= 1 && b.page <= this.pages.length);
     this.renderBookmarks();
+    // 前の版のしおりは付箋に移す（v0.12.2）
+    const old = (r.bookmarks ?? []).filter((b) => b.page >= 1 && b.page <= this.pages.length);
+    if (old.length) this.migrateBookmarks(old).catch(() => {});
     this.updateBar();
     // スマホ連携（docs/MOBILE.md §6）：スマホで書き込んだら、この画面にも出す。まだファイルに描き込んでいなければ上書き保存する
     this.offPhone = api.on('annotations.changed', ({materialId}) => {
@@ -287,7 +282,6 @@ class Viewer extends DeskTools {
     this.sideObserver?.disconnect();
     clearTimeout(this.tuckTimer);
     this.toggleSheet(false);
-    this.toggleIndexPad(false);
     this.figEditor?.close();
     this.closeTools();
     this.ring?.remove();

@@ -37,7 +37,7 @@ export const methods = {
           this.setTextStyle({bold: !(this.selected?.kind === 'text' ? this.selected.style : this.textStyle).bold});
         else return;
       } else if (k === 'd' && !shift) this.toggleCalc();
-      else if (k === 'd' && shift) this.addBookmark();
+      else if (k === 'd' && shift) this.addFusen();
       else if (k === 'r' && !shift) this.toggleSheet();
       else if (k === '/' || e.key === '?') this.openHelp(this.$('help-panel').hidden);
       else if (/^[1-6]$/.test(e.key) && !shift) this.useSlot(Number(e.key) - 1);

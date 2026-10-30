@@ -46,7 +46,7 @@ export function createMobileApi({handlers, repo, getWindow = () => null, now = (
     repo.setSetting('pdf.stale', [...stale]);
     getWindow()?.webContents.send('annotations.changed', {materialId});
   };
-  /** スマホで直してよい注釈か（メモ・マーカー・文字隠し） */
+  /** スマホで直してよい注釈か（コメント・マーカー・文字隠し） */
   const ownAnnotation = (annotationId) => {
     const row = repo.get('annotation', okId(annotationId)) ?? bad('注釈がありません');
     if (!MOBILE_KINDS.includes(row.kind)) bad('この書き込みはパソコンで直してください');
@@ -103,7 +103,7 @@ export function createMobileApi({handlers, repo, getWindow = () => null, now = (
       return call('annotation.list', {materialId: okId(materialId)});
     },
     async 'annotation.save'({materialId, annotation}) {
-      if (!MOBILE_KINDS.includes(annotation?.kind)) bad('スマホで書けるのはメモ・マーカー・文字隠しです');
+      if (!MOBILE_KINDS.includes(annotation?.kind)) bad('スマホで書けるのはコメント・マーカー・文字隠しです');
       if (annotation.id != null) {
         const row = ownAnnotation(annotation.id);
         if (row.kind !== annotation.kind) bad('注釈が不正です');

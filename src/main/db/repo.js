@@ -383,14 +383,18 @@ export class Repo {
       this.remove('skin_template', id);
     });
   }
-  /** 資料（SHA-256）ごとのしおりの数（授業画面で、しおりのある資料にリボンを出す） */
+  /** 資料（SHA-256）ごとの付箋の数（授業画面で、付箋のある資料に目印を出す）。まだ付箋に移していない前の版のしおりも数える */
   bookmarkCounts() {
-    return Object.fromEntries(
-      this.db
-        .prepare('SELECT sha256, COUNT(*) AS n FROM bookmark GROUP BY sha256')
-        .all()
-        .map((r) => [r.sha256, Number(r.n)])
-    );
+    const out = {};
+    const rows = this.db
+      .prepare(
+        `SELECT sha256, COUNT(*) AS n FROM bookmark GROUP BY sha256
+         UNION ALL
+         SELECT sha256, COUNT(*) AS n FROM annotation WHERE kind = 'stamp' AND json_extract(style_json, '$.type') = 'index' GROUP BY sha256`
+      )
+      .all();
+    for (const r of rows) out[r.sha256] = (out[r.sha256] ?? 0) + Number(r.n);
+    return out;
   }
   /** 資料（注釈の鍵 = base_sha256 か sha256）ごとの、隠した語のある文字隠しマーカーの数（§11.3 の「隠した箇所から穴埋めを作る」を出す判断） */
   maskCounts() {

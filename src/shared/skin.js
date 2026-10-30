@@ -33,7 +33,7 @@ export const LICENSE_LABEL = {
 };
 export const STICKER_MODES = ['global', 'course', 'both'];
 // シールを貼れる場所（SPEC-KISEKAE §5）。home（ホームの余白）は全体のテンプレートだけから貼る。
-// round（回の付箋の角）・file（資料のイラスト。種類 kind ごと）・bookmark（しおりのリボンの先）は 1 枚ずつで、貼る位置は決まっている
+// round（回の付箋の角）・file（資料のイラスト。種類 kind ごと）・bookmark（授業のページの、付箋のある資料の目印の先）は 1 枚ずつで、貼る位置は決まっている
 export const STICKER_PLACES = ['folder', 'home', 'heading', 'viewer', 'round', 'file', 'bookmark'];
 export const PLACE_LABEL = {
   folder: 'フォルダ',
@@ -42,7 +42,7 @@ export const PLACE_LABEL = {
   viewer: 'PDF 編集画面の余白',
   round: '回の付箋の角',
   file: '資料のイラスト',
-  bookmark: 'しおりのリボンの先'
+  bookmark: '付箋の目印の先（授業のページ）'
 };
 export const GLOBAL_ONLY_PLACES = ['home'];
 export const FIXED_PLACES = ['round', 'file', 'bookmark'];
