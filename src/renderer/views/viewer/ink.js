@@ -1,6 +1,15 @@
 // PDF の編集画面：ペンの線・マーカー・消しゴム。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 import {snapRange} from '../../../shared/text-snap.js';
-import {boundsOf, createCapture, encodePoints, speedPressure, strokePath, touchesStroke} from '../../../shared/ink.js';
+import {
+  boundsOf,
+  createCapture,
+  drawMode,
+  encodePoints,
+  modeStyle,
+  speedPressure,
+  strokePath,
+  touchesStroke
+} from '../../../shared/ink.js';
 import {lineOf, ERASER_PX, SVG_NS} from './shared.js';
 
 export const methods = {
@@ -37,14 +46,14 @@ export const methods = {
       return;
     }
     const box = pageEl.getBoundingClientRect();
-    const pressure = e.pointerType === 'pen';
+    const pressure = drawMode(this.penItem, e.pointerType); // 筆圧を使わないペンは 'even'
     const vp = p.viewport;
     const el = document.createElementNS(SVG_NS, 'path');
     el.setAttribute('fill', this.penItem.color);
     el.classList.add('ink-draft');
     p.ink.append(el);
     // 間引き：画面で 0.3px より近い点は捨てる。なめらかさ：ペンは控えめ（遅れを小さく）、指・マウスは強め（手ぶれを抑える）
-    const cap = createCapture({minGap: 0.3 / vp.scale, streamline: pressure ? 0.2 : 0.4});
+    const cap = createCapture({minGap: 0.3 / vp.scale, streamline: e.pointerType === 'pen' ? 0.2 : 0.4});
     const d = (this.drawing = {
       kind: 'ink',
       p,
@@ -52,7 +61,7 @@ export const methods = {
       cap,
       box,
       pressure,
-      byPen: pressure,
+      byPen: e.pointerType === 'pen',
       pointer: e.pointerId,
       item: this.penItem,
       sim: 0.5,
@@ -69,7 +78,8 @@ export const methods = {
     const [cx, cy] = this.onRule(d, ev.clientX, ev.clientY);
     const [x, y] = d.p.viewport.convertToPdfPoint(cx - d.box.left, cy - d.box.top);
     let pr;
-    if (d.pressure) pr = ev.pressure > 0 ? ev.pressure : 0.5;
+    if (d.pressure === 'even') pr = 0.5;
+    else if (d.pressure) pr = ev.pressure > 0 ? ev.pressure : 0.5;
     else {
       const t = ev.timeStamp;
       if (d.last) {
@@ -116,7 +126,7 @@ export const methods = {
     const [x, y, pr] = this.inkPoint(d, e);
     const points = d.cap.finish(x, y, pr);
     if (!points.length) return;
-    const style = {color: d.item.color, width: d.item.width, ...(d.pressure ? {} : {pressure: false})};
+    const style = {color: d.item.color, width: d.item.width, ...modeStyle(d.pressure)};
     const a = this.addAnno({
       key: `k${this.seq++}`,
       id: null,

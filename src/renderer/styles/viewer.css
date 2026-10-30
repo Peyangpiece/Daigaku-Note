@@ -785,12 +785,103 @@
   border-radius: var(--radius-s);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   cursor: grab;
-  resize: both;
-  overflow: hidden;
   touch-action: none;
 }
 .red-sheet:active {
   cursor: grabbing;
+}
+.red-sheet:focus-visible {
+  outline: 2px solid #7a0000;
+  outline-offset: 2px;
+}
+/* 大きさを変えるつまみ：四隅とふち。シートは乗算で重ねるので、白いつまみは見えない。暗い色で描く */
+.red-sheet__grip {
+  position: absolute;
+  z-index: 1;
+  touch-action: none;
+}
+.red-sheet__grip::after {
+  content: '';
+  position: absolute;
+  border-radius: 3px;
+  background: rgba(70, 0, 0, 0.55);
+}
+.red-sheet__grip--n,
+.red-sheet__grip--s {
+  left: 24px;
+  right: 24px;
+  height: 16px;
+  cursor: ns-resize;
+}
+.red-sheet__grip--n {
+  top: -6px;
+}
+.red-sheet__grip--s {
+  bottom: -6px;
+}
+.red-sheet__grip--e,
+.red-sheet__grip--w {
+  top: 24px;
+  bottom: 24px;
+  width: 16px;
+  cursor: ew-resize;
+}
+.red-sheet__grip--e {
+  right: -6px;
+}
+.red-sheet__grip--w {
+  left: -6px;
+}
+.red-sheet__grip--n::after,
+.red-sheet__grip--s::after {
+  left: calc(50% - 20px);
+  top: 6px;
+  width: 40px;
+  height: 4px;
+}
+.red-sheet__grip--e::after,
+.red-sheet__grip--w::after {
+  top: calc(50% - 20px);
+  left: 6px;
+  width: 4px;
+  height: 40px;
+}
+.red-sheet__grip--ne,
+.red-sheet__grip--nw,
+.red-sheet__grip--se,
+.red-sheet__grip--sw {
+  width: 24px;
+  height: 24px;
+}
+.red-sheet__grip--ne {
+  top: -6px;
+  right: -6px;
+  cursor: nesw-resize;
+}
+.red-sheet__grip--sw {
+  bottom: -6px;
+  left: -6px;
+  cursor: nesw-resize;
+}
+.red-sheet__grip--nw {
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
+}
+.red-sheet__grip--se {
+  bottom: -6px;
+  right: -6px;
+  cursor: nwse-resize;
+}
+.red-sheet__grip--ne::after,
+.red-sheet__grip--nw::after,
+.red-sheet__grip--se::after,
+.red-sheet__grip--sw::after {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  top: 7px;
+  left: 7px;
 }
 .red-sheet__label {
   position: absolute;

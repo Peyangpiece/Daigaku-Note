@@ -29,6 +29,14 @@ const pen = (id, name, color, mm, body, accent = color, series = `pen-${mm.repla
   price: 0,
   series
 });
+/**
+ * 筆圧なしのペン（even）：筆圧・書く速さで太さが変わらず、どこも同じ太さの線（書き始め・書き終わりも細くしない。shared/ink.js）。
+ * 図・表の線や、太さをそろえたい字に
+ */
+const evenPen = (id, name, color, body, accent) => ({
+  ...pen(id, name, color, '0.5', body, accent, 'pen-even'),
+  even: true
+});
 const marker = (id, name, color, thick = false) => ({
   id,
   type: 'marker',
@@ -113,6 +121,9 @@ export const CATALOG = [
   pen('pen-mint-05', 'ミント軸 青 0.5', '#1a5fd0', '0.5', '#bfe8dc', '#5fbfa3', 'pen-art'),
   pen('pen-wood-07', '木軸 黒 0.7', '#222222', '0.7', '#c89b6d', '#8a6440', 'pen-art'),
   pen('pen-navy-038', 'ネイビー軸 赤 0.38', '#d93025', '0.38', '#24365c', '#c9a227', 'pen-art'),
+  evenPen('pen-even-black-05', '筆圧なし 黒 0.5', '#222222', '#f1f1ee', '#222222'),
+  evenPen('pen-even-red-05', '筆圧なし 赤 0.5', '#d93025', '#f1f1ee', '#d93025'),
+  evenPen('pen-even-blue-05', '筆圧なし 青 0.5', '#1a5fd0', '#f1f1ee', '#1a5fd0'),
   marker('marker-yellow', '黄色のマーカー', '#ffe14d'),
   marker('marker-pink', 'ピンクのマーカー', '#ff9ec7'),
   marker('marker-orange', 'オレンジのマーカー', '#ffbf6b'),
@@ -210,6 +221,9 @@ const POINTS = {
   'pen-mint-05': 300,
   'pen-wood-07': 400,
   'pen-navy-038': 350,
+  'pen-even-black-05': 200,
+  'pen-even-red-05': 200,
+  'pen-even-blue-05': 200,
   'marker-orange': 120,
   'marker-green': 120,
   'marker-blue': 120,
@@ -429,6 +443,7 @@ const SERIES_INFO = {
   'pen-038': {name: 'ボールペン 0.38'},
   'pen-07': {name: 'ボールペン 0.7'},
   'pen-art': {name: 'デザイン軸のボールペン'}, // 軸の色・柄で選ぶペン（インクの色ちがいの札と分ける）
+  'pen-even': {name: '筆圧なしペン 0.5'}, // 筆圧で太さが変わらないペン
   jetstream: {name: 'ジェットストリーム 0.5'},
   sarasa: {name: 'サラサクリップ 0.5'},
   marker: {name: 'マーカー'},

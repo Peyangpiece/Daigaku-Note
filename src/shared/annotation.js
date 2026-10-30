@@ -71,7 +71,7 @@ function cleanNoteInk(ink) {
       c: isHex(s.c) ? s.c.toLowerCase() : DEFAULT_TEXT_COLOR,
       w: Number.isNaN(w) ? 1.1 : Math.min(WIDTH_MAX, Math.max(WIDTH_MIN, round2(w)))
     };
-    if (s.pressure === false) stroke.pressure = false;
+    if (s.pressure === false || s.pressure === 'even') stroke.pressure = s.pressure;
     out.push(stroke);
   }
   return out;
@@ -122,7 +122,8 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
     if (points.some(([px, py]) => Math.abs(px) > COORD_MAX || Math.abs(py) > COORD_MAX))
       throw new Error('位置が不正です');
     const cleanStyle = {color: isHex(s.color) ? s.color.toLowerCase() : DEFAULT_TEXT_COLOR, width: width(s.width, 1.1)};
-    if (s.pressure === false) cleanStyle.pressure = false; // 筆圧の取れない道具で書いた（太さの変え方が違う。shared/ink.js）
+    // 筆圧の取れない道具で書いた（false）・筆圧を使わないペンで書いた（'even'）。太さの変え方が違う（shared/ink.js）
+    if (s.pressure === false || s.pressure === 'even') cleanStyle.pressure = s.pressure;
     const b = boundsOf(points, cleanStyle.width);
     return {
       page,

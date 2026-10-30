@@ -10,7 +10,7 @@
 // - 貼りもの（シール・素材の図・メモ帳からちぎった紙）：レンダラが描いた画像を貼る（文字入れと同じ）。いちばん下に置き、
 //   上からマーカー・ペンの線・文字を重ねる（画面と同じ重なり）
 import {BlendMode, PDFDocument, PDFHexString, PDFString, degrees, drawSvgPath, rgb} from 'pdf-lib';
-import {decodePoints, strokePath} from '../shared/ink.js';
+import {decodePoints, inkMode, strokePath} from '../shared/ink.js';
 import {NOTE_INK_PT_PER_PX, NOTE_INK_SCALE} from '../shared/annotation.js';
 
 export const MARKER_HEX = '#00d2ff'; // レンダラの表示と同じ。赤の成分が 0 なので赤シートの下で黒になる
@@ -96,7 +96,7 @@ export async function exportAnnotatedPdf(
       const points = decodePoints(a.body);
       if (!points) continue;
       // drawSvgPath は y が下向きなので、上下を返したパスを原点に置く（PDF の座標そのままで描かれる）
-      const d = strokePath(points, a.style?.width ?? 1.1, {pressure: a.style?.pressure !== false, flipY: true});
+      const d = strokePath(points, a.style?.width ?? 1.1, {pressure: inkMode(a.style), flipY: true});
       if (d)
         page.drawSvgPath(d, {x: 0, y: 0, color: rgb(...hexToRgb(isHex(a.style?.color) ? a.style.color : '#222222'))});
     } else if (a.kind === 'text' || a.kind === 'stamp') {
@@ -138,7 +138,7 @@ export function noteInkStamp(doc, a, page) {
       points: decodePoints(s.p),
       color: isHex(s.c) ? s.c : '#2b2b2b',
       width: (s.w ?? 1.1) * NOTE_INK_SCALE,
-      pressure: s.pressure !== false
+      pressure: inkMode(s)
     }))
     .filter((s) => s.points?.length);
   if (!strokes.length) return null;

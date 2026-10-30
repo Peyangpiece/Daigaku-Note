@@ -125,12 +125,24 @@ export function outlinePath(outline, {flipY = false} = {}) {
   return `${d}Z`;
 }
 
-/** 書き味の設定（ペンの種類ごとの太さの変わり方）。筆圧の取れる道具（ペンタブ・スタイラス）とそれ以外で変える */
+/**
+ * 書き味の設定（ペンの種類ごとの太さの変わり方）。pressure は 3 とおり：
+ * true（筆圧の取れる道具：ペンタブ・スタイラス）・false（指・マウス：速さで太さを変える）・
+ * 'even'（筆圧を使わないペン：どこも同じ太さ。書き始め・書き終わりも細くしない）
+ */
 export function strokeOptions(width, {pressure = true} = {}) {
+  if (pressure === 'even') return {size: width, thinning: 0, taperStart: 0, taperEnd: 0};
   return pressure
     ? {size: width, thinning: 0.35, taperStart: width * 1.2, taperEnd: width * 1.5}
     : {size: width, thinning: 0.25, taperStart: width * 2, taperEnd: width * 3};
 }
+
+/** 保存した線の書き味（style.pressure）→ strokePath の pressure。'even'（筆圧なし）・false（筆圧の取れない道具）・true */
+export const inkMode = (style) => (style?.pressure === 'even' ? 'even' : style?.pressure !== false);
+/** 書くときの書き味：筆圧を使わないペン（item.even）は 'even'、そうでなければペン先で筆圧が取れるか */
+export const drawMode = (item, pointerType) => (item?.even ? 'even' : pointerType === 'pen');
+/** 線の style に入れる書き味（true は入れない。前の版と同じ形） */
+export const modeStyle = (mode) => (mode === true ? {} : {pressure: mode});
 
 /** 線のパス（SVG）。points・幅・筆圧が取れたかから一度に作る */
 export function strokePath(points, width, {pressure = true, flipY = false} = {}) {

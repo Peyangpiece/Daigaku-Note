@@ -7,10 +7,11 @@
 // - 下書きの線と貼りものは、ページと一緒にスクロールする（文書の座標で持つ）
 // - 赤シート（ポーチ・⌘R）：赤を乗算で重ねる。赤い字は消え、文字隠しペンの線は黒くなる
 import {isTyping} from './ui-kit.js';
+import {createRedSheet} from './red-sheet.js';
 import {state} from './store.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, isModKey, tearClip} from './desk-tools.js';
 import {DEFAULT_HIDER, TYPE_LABEL, heldPen, itemOf, stationeryState, toolArt} from '../shared/stationery.js';
-import {createCapture, strokePath, touchesStroke} from '../shared/ink.js';
+import {createCapture, drawMode, strokePath, touchesStroke} from '../shared/ink.js';
 import {growFigure, openFigureEditor, renderFigure} from './figure-view.js';
 import {figureSize, growsWithSize} from '../shared/figures.js';
 
@@ -218,7 +219,7 @@ class Desk extends DeskTools {
         kind: 'ink',
         el,
         width: look.width,
-        pressure: e.pointerType === 'pen' && this.held.item.type === 'pen',
+        pressure: this.held.item.type === 'pen' ? drawMode(this.held.item, e.pointerType) : false,
         cap: createCapture({minGap: 0.3, streamline: e.pointerType === 'pen' ? 0.2 : 0.4}),
         rule: this.held.item.type === 'pen' ? this.rulerEdgeAt(e.clientX, e.clientY) : null
       };
@@ -240,7 +241,7 @@ class Desk extends DeskTools {
         }
       return;
     }
-    d.cap.add(x, y, d.pressure ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
+    d.cap.add(x, y, d.pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
     d.el.setAttribute('d', strokePath(d.cap.points, d.width, {pressure: d.pressure}));
   }
 
@@ -365,40 +366,17 @@ class Desk extends DeskTools {
     });
   }
 
-  // ---- 赤シート：画面の上に赤を乗算で重ねる。ドラッグで動かし、右下で大きさを変える ----
+  // ---- 赤シート：画面の上に赤を乗算で重ねる。ドラッグで動かし、四隅とふちのつまみで大きさを変える（red-sheet.js） ----
   toggleSheet(on = !this.sheet) {
     if (!on) {
       this.sheet?.remove();
       this.sheet = null;
     } else if (!this.sheet) {
-      const el = document.createElement('div');
-      el.className = 'red-sheet';
-      el.setAttribute('role', 'region');
-      el.setAttribute('aria-label', '赤シート');
-      el.innerHTML = '<span class="red-sheet__label">赤シート</span>';
-      Object.assign(el.style, {
-        left: `${Math.round(window.innerWidth * 0.2)}px`,
-        top: `${Math.round(window.innerHeight * 0.45)}px`,
-        width: `${Math.round(window.innerWidth * 0.6)}px`,
-        height: '200px'
-      });
-      el.addEventListener('pointerdown', (e) => {
-        const r = el.getBoundingClientRect();
-        if (e.button !== 0 || (e.clientX > r.right - 20 && e.clientY > r.bottom - 20)) return; // 右下は大きさ変え
-        e.preventDefault();
-        el.setPointerCapture(e.pointerId);
-        const sx = e.clientX - r.left,
-          sy = e.clientY - r.top;
-        const move = (ev) => {
-          el.style.left = `${ev.clientX - sx}px`;
-          el.style.top = `${ev.clientY - sy}px`;
-        };
-        const up = () => {
-          el.removeEventListener('pointermove', move);
-          el.removeEventListener('pointerup', up);
-        };
-        el.addEventListener('pointermove', move);
-        el.addEventListener('pointerup', up);
+      const el = createRedSheet({
+        left: Math.round(window.innerWidth * 0.2),
+        top: Math.round(window.innerHeight * 0.45),
+        width: Math.round(window.innerWidth * 0.6),
+        height: 200
       });
       this.root.append(el);
       this.sheet = el;

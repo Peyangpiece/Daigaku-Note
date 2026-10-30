@@ -1,7 +1,7 @@
 // PDF の編集画面：注釈の中心（追加・配置・選択・編集・削除）。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 import {state} from '../../store.js';
 import {inkOn} from '../../../shared/skin.js';
-import {decodePoints, strokePath} from '../../../shared/ink.js';
+import {decodePoints, inkMode, strokePath} from '../../../shared/ink.js';
 import {MEMO_COLOR, MEMO_SIZE, NOTE_INK_SCALE, NOTE_SIZE, hidesUnderRedSheet} from '../../../shared/annotation.js';
 import {BUILTIN_STICKERS, isBuiltinSticker} from '../../../shared/stickers.js';
 import {figureOf} from '../../../shared/figures.js';
@@ -234,7 +234,7 @@ export const methods = {
     if (a.kind === 'ink') {
       a.points = decodePoints(a.body) ?? a.points ?? [];
       a.el.setAttribute('fill', a.style.color);
-      a.el.setAttribute('d', strokePath(a.points, a.style.width, {pressure: a.style.pressure !== false}));
+      a.el.setAttribute('d', strokePath(a.points, a.style.width, {pressure: inkMode(a.style)}));
     } else if (a.kind === 'line') a.el.style.setProperty('--line', a.style.color);
     else if (a.kind === 'mask') a.el.style.setProperty('--mask', a.style.color ?? MASK_HEX);
     else if (a.kind === 'text') {
@@ -306,7 +306,7 @@ export const methods = {
       const points = decodePoints(s.p) ?? [];
       const path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('fill', s.c);
-      path.setAttribute('d', strokePath(points, s.w * NOTE_INK_SCALE, {pressure: s.pressure !== false}));
+      path.setAttribute('d', strokePath(points, s.w * NOTE_INK_SCALE, {pressure: inkMode(s)}));
       svg.append(path);
     }
   },

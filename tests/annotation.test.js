@@ -118,6 +118,16 @@ test('ボールペン：点から四角を作り直し、色・太さ・筆圧�
   });
   assert.deepEqual(JSON.parse(r.rect_json), {x: 99, y: 199, w: 12, h: 7});
   assert.deepEqual(JSON.parse(r.style_json), {color: '#d93025', width: 2, pressure: false});
+  const even = normalizeAnnotation({
+    kind: 'ink',
+    page: 1,
+    rect: {x: 0, y: 0, w: 1, h: 1},
+    body,
+    style: {pressure: 'even'}
+  });
+  assert.equal(JSON.parse(even.style_json).pressure, 'even', '筆圧なしのペンの線');
+  const odd = normalizeAnnotation({kind: 'ink', page: 1, rect: {x: 0, y: 0, w: 1, h: 1}, body, style: {pressure: 'x'}});
+  assert.equal(JSON.parse(odd.style_json).pressure, undefined, '知らない書き味は落とす');
   const thick = normalizeAnnotation({kind: 'ink', page: 1, rect: {x: 0, y: 0, w: 1, h: 1}, body, style: {width: 99}});
   assert.deepEqual(JSON.parse(thick.style_json), {color: '#2b2b2b', width: 12});
   assert.throws(

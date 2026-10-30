@@ -61,8 +61,8 @@ function sample(item) {
     return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true">${paths}</svg>`;
   }
   if (item.type === 'pen') {
-    // ゆるい波を、筆圧が少しずつ変わる線で書く（見本なので太さは 2 倍に見せる）
-    return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><path fill="${item.color}" d="${strokePath(wave(6, 40), item.width * 1.6)}"/></svg>`;
+    // ゆるい波を、筆圧が少しずつ変わる線で書く（見本なので太さは 2 倍に見せる）。筆圧なしのペンは同じ太さのまま
+    return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><path fill="${item.color}" d="${strokePath(wave(6, 40), item.width * 1.6, {pressure: item.even ? 'even' : true})}"/></svg>`;
   }
   if (item.type === 'marker')
     return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><text x="8" y="14" font-size="12" fill="#333">大学ノート</text><rect x="6" y="${item.thick ? 10 : 13}" width="72" height="${item.thick ? 7 : 3.5}" rx="2" fill="${item.color}" style="mix-blend-mode:multiply"/></svg>`;
@@ -76,7 +76,7 @@ function spec(item) {
   if (item.refills)
     return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格`;
   if (item.experimental) return `${esc(item.maker)}・${item.mm} mm`;
-  if (item.type === 'pen') return `${item.mm} mm`;
+  if (item.type === 'pen') return item.even ? `${item.mm} mm・筆圧なし（太さが一定）` : `${item.mm} mm`;
   if (item.type === 'marker') return item.thick ? '太め' : 'ふつう';
   if (item.type === 'hider') return '赤シートで隠れる色';
   return '';
@@ -240,7 +240,7 @@ function seriesCard(series, s) {
   const sub = [it.maker ?? '大学ノート'];
   if (series.items.length > 1) sub.push(it.name);
   else if (it.refills) sub.push(`2&1・替え芯 ${it.refill} 規格`);
-  else if (it.type === 'pen') sub.push(`${it.mm} mm`);
+  else if (it.type === 'pen') sub.push(it.even ? `${it.mm} mm・筆圧なし` : `${it.mm} mm`);
   else if (it.type === 'marker') sub.push(it.thick ? '太め' : 'ふつう');
   else if (it.type === 'hider') sub.push('赤シートで隠れる');
   return `<article class="shop-card shop-card--${tier.id}${owned ? ' is-owned' : ''}" data-series="${esc(series.id)}">
@@ -391,8 +391,14 @@ function detail(s, id) {
       `${it.refills.length - it.refills.filter((r) => r.sharp).length}&${it.refills.filter((r) => r.sharp).length}（回転式の多機能ペン。持つと芯を選べ、同じ場所をもう一度押すと次の芯に回ります）`
     ]);
     rows.push(['替え芯', `${esc(it.refill)} 規格`]);
-  } else if (it.type === 'pen') rows.push(['字幅', `${it.mm} mm`]);
-  else if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
+  } else if (it.type === 'pen') {
+    rows.push(['字幅', `${it.mm} mm`]);
+    if (it.even)
+      rows.push([
+        '書き味',
+        '筆圧なし：ペンタブ・スタイラスの筆圧や書く速さで太さが変わらず、どこも同じ太さの線になります（書き始め・書き終わりも細くなりません）'
+      ]);
+  } else if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
   else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
   if (it.art === 'model') rows.push(['見た目', '3D モデル（実物の形と材質）']);
   const samples = it.refills
