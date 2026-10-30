@@ -1,7 +1,7 @@
 // IPC の窓口：状態の読み込みとポイント（state.get・points.*）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
 import {app} from 'electron';
 import path from 'node:path';
-import {CLASSIC_ID, templateIdOf} from '../../shared/skin.js';
+import {CLASSIC_ID, lookByTemplate, templateIdOf} from '../../shared/skin.js';
 import {defaultRoot} from '../../shared/paths.js';
 import {currentTerm} from '../../shared/term.js';
 import {PERIOD_PRESETS, todayJst} from '../../shared/schedule.js';
@@ -11,17 +11,18 @@ import {claimLogin, pointsState} from '../../shared/points.js';
 import {loginItem, reviewSummary} from './common.js';
 
 /**
- * フォルダごとの色。前の版で選んだ色（どのテンプレートで選んだかの tid がない）は、今のテンプレートで選んだものとして印を付けて残す
+ * フォルダごとの色（{授業の id: {byTemplate: {テンプレートの id: 色}}}）。前の版の形は今の形に直して保存する。
+ * どのテンプレートで選んだかの印がない色（v0.12.7 まで）は、今のテンプレートで選んだものとみなす
  */
-function folderLooks(repo, courses) {
+function folderLooks(repo) {
   const looks = repo.getSetting('skin.folderLooks', {}) ?? {};
-  const global = repo.getSetting('skin.global', CLASSIC_ID);
+  const tid = templateIdOf(repo.getSetting('skin.global', CLASSIC_ID));
   let changed = false;
   for (const [cid, look] of Object.entries(looks)) {
-    if (look?.tid) continue;
-    const course = courses.find((c) => c.id === cid);
-    if (!course) continue;
-    looks[cid] = {...look, tid: templateIdOf(global, course)};
+    if (look?.byTemplate) continue;
+    const by = lookByTemplate(look, tid);
+    if (Object.keys(by).length) looks[cid] = {byTemplate: by};
+    else delete looks[cid];
     changed = true;
   }
   if (changed) repo.setSetting('skin.folderLooks', looks);
@@ -80,7 +81,7 @@ export function register({handle, ctx, repo}) {
         everyHours: repo.getSetting('sync.everyHours', 0),
         theme: repo.getSetting('ui.theme', 'system'),
         rules: repo.getSetting('ui.rules', 'normal'),
-        folderLooks: folderLooks(repo, courses), // フォルダごとの色 {授業の id: {tid, card, tab, tape, badge}}（右クリック →「着せ替え…」）
+        folderLooks: folderLooks(repo), // フォルダごとの色 {授業の id: {byTemplate: {テンプレートの id: {card, tab, tape, badge}}}}（右クリック →「着せ替え…」）
         ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「振り分け前」の付箋の色（5 色の何番目か）
         role: repo.getSetting('profile.role', null), // 使う人（profile.js の ROLES）。まだ選んでいなければ null
         uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）

@@ -662,7 +662,9 @@ async function applyTemplate(data, templateId) {
     action: {
       label: '元に戻す',
       run: async () => {
-        await api['skin.apply']({templateId: prev});
+        // 前の着せ替えを消したあとだと戻せない（クラシックにはしない。知らせるだけ）
+        const u = await api['skin.apply']({templateId: prev});
+        if (u?.error) return toast(`元に戻せませんでした（${u.error}）`, {error: true});
         reload();
       }
     }
