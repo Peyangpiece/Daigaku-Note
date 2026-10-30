@@ -1,7 +1,7 @@
 // IPC の窓口：状態の読み込みとポイント（state.get・points.*）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
 import {app} from 'electron';
 import path from 'node:path';
-import {CLASSIC_ID} from '../../shared/skin.js';
+import {CLASSIC_ID, templateIdOf} from '../../shared/skin.js';
 import {defaultRoot} from '../../shared/paths.js';
 import {currentTerm} from '../../shared/term.js';
 import {PERIOD_PRESETS, todayJst} from '../../shared/schedule.js';
@@ -9,6 +9,24 @@ import {annoKey} from '../pdf-save.js';
 import {stationeryState} from '../../shared/stationery.js';
 import {claimLogin, pointsState} from '../../shared/points.js';
 import {loginItem, reviewSummary} from './common.js';
+
+/**
+ * フォルダごとの色。前の版で選んだ色（どのテンプレートで選んだかの tid がない）は、今のテンプレートで選んだものとして印を付けて残す
+ */
+function folderLooks(repo, courses) {
+  const looks = repo.getSetting('skin.folderLooks', {}) ?? {};
+  const global = repo.getSetting('skin.global', CLASSIC_ID);
+  let changed = false;
+  for (const [cid, look] of Object.entries(looks)) {
+    if (look?.tid) continue;
+    const course = courses.find((c) => c.id === cid);
+    if (!course) continue;
+    looks[cid] = {...look, tid: templateIdOf(global, course)};
+    changed = true;
+  }
+  if (changed) repo.setSetting('skin.folderLooks', looks);
+  return looks;
+}
 
 export function register({handle, ctx, repo}) {
   // ログインボーナス：その日に初めて開いたときに 1 回だけ（shared/points.js）。画面が起動のあとに 1 回呼ぶ（state.get は読むだけ）
@@ -62,7 +80,7 @@ export function register({handle, ctx, repo}) {
         everyHours: repo.getSetting('sync.everyHours', 0),
         theme: repo.getSetting('ui.theme', 'system'),
         rules: repo.getSetting('ui.rules', 'normal'),
-        folderLooks: repo.getSetting('skin.folderLooks', {}), // フォルダごとの色 {授業の id: {card, tab, tape, badge}}（右クリック →「着せ替え…」）
+        folderLooks: folderLooks(repo, courses), // フォルダごとの色 {授業の id: {tid, card, tab, tape, badge}}（右クリック →「着せ替え…」）
         ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「振り分け前」の付箋の色（5 色の何番目か）
         role: repo.getSetting('profile.role', null), // 使う人（profile.js の ROLES）。まだ選んでいなければ null
         uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）

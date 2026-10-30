@@ -6,7 +6,8 @@ import {browserState} from './settings.js';
 import {folderShown, scopeLabel} from './folder.js';
 import {features} from '../../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
-import {folderLook, shapesOf, skinOf, stickerImg, stickerLayer} from '../skin.js';
+import {folderLook, globalId, shapesOf, skinOf, stickerImg, stickerLayer} from '../skin.js';
+import {folderLookFor} from '../../shared/skin.js';
 import {classWeekday, termCalendar} from '../../shared/calendar.js';
 import {addDays, weekdayOf} from '../../shared/holidays.js';
 
@@ -56,8 +57,11 @@ const longestRun = (html) => Math.max(...html.split('<wbr>').map((s) => [...s.re
 // 新着のバッジの色：授業の色（曜日ごとの色はやめた。色の体系を授業の色に寄せ、ホームと授業画面で同じ色が同じ授業を指すように）
 const badgeColor = (course) => `var(--c${course.color ?? 1})`;
 
-/** フォルダごとに選んだ色（右クリック →「着せ替え…」）。タブ・フォルダ・マスキングテープ・新着の知らせ。選んでいなければ空 */
-export const folderLookOf = (data, course) => data?.settings?.folderLooks?.[course.id] ?? {};
+/**
+ * フォルダごとに選んだ色（右クリック →「着せ替え…」）。タブ・フォルダ・マスキングテープ・新着の知らせ。選んでいなければ空。
+ * 選んだときと同じテンプレートのときだけ（ほかのテンプレートに替えたら持ち越さない）
+ */
+export const folderLookOf = (data, course) => folderLookFor(data?.settings?.folderLooks, globalId(data), course);
 /** テンプレートの見た目に、フォルダごとに選んだ色を重ねる */
 function withFolderLook(sk, over) {
   if (!over.card && !over.tab && !over.tape) return sk;

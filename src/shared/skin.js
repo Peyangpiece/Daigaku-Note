@@ -288,24 +288,34 @@ export function resolveSkin(templates, globalId, course = null) {
       : mode === 'both'
         ? [...global.stickers, ...(own?.stickers ?? [])]
         : global.stickers;
-  // 資料のイラスト・付箋・しおりは、授業のテンプレートで変えていなければ（はじめのまま）全体のものを使う。
-  // はじめからあるテンプレートはこれらを持たないので、授業に自動で当たったテンプレートが全体の設定を隠さないように
-  const inherit = (k) =>
-    own && JSON.stringify(own.parts[k]) !== JSON.stringify(DEFAULT_PARTS[k]) ? own.parts[k] : global.parts[k];
   return {
     template: own ?? global,
     own: !!own,
     note: global.parts.note,
     folder: (own ?? global).parts.folder,
     tape: (own ?? global).parts.tape,
-    file: inherit('file'),
-    fileBody: inherit('fileBody'),
-    fileArt: inherit('fileArt'),
-    sticky: inherit('sticky'),
-    bookmark: inherit('bookmark'),
+    file: (own ?? global).parts.file,
+    fileBody: (own ?? global).parts.fileBody,
+    fileArt: (own ?? global).parts.fileArt,
+    sticky: (own ?? global).parts.sticky,
+    bookmark: (own ?? global).parts.bookmark,
     stickers: stickers.slice().sort((a, b) => a.z - b.z)
   };
 }
+
+/** 授業に今当たっているテンプレートの id（授業のテンプレートがなければ全体） */
+export const templateIdOf = (globalId, course) => course?.skin_template_id || globalId || CLASSIC_ID;
+
+/**
+ * フォルダごとの色（ホームの右クリック →「着せ替え…」）。選んだときのテンプレート（tid）でだけ当てる：
+ * ほかのテンプレートに替えたら、そのテンプレートの色のまま（前のテンプレートで選んだ色を持ち越さない）
+ */
+export const folderLookFor = (looks, globalId, course) => {
+  const look = looks?.[course.id];
+  if (!look || look.tid !== templateIdOf(globalId, course)) return {};
+  const {tid: _tid, ...colors} = look;
+  return colors;
+};
 
 /** テンプレートを使っている授業の数（全体で使っていれば all も true） */
 export function usage(templateId, courses, globalId) {
