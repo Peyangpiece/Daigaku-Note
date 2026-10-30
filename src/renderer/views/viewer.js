@@ -293,10 +293,10 @@ class Viewer extends DeskTools {
   }
 }
 
-/** ビューアを root に開く。戻り値の unmount() で閉じる（保存待ちの注釈はその場で保存する） */
-// 関心ごとのメソッドを足す（this は Viewer）
-Object.assign(
-  Viewer.prototype,
+// 関心ごとのメソッドを足す（this は Viewer）。名前が重なると後のほうが黙って上書きするので、重なったら止める
+// （v0.12.2 まで、注釈の renderText(a) がページの文字の層の renderText(p, vp) を上書きし、文字の選択・コピーができなかった）。
+// 親（DeskTools）の空のメソッドを上書きするのは意図どおりなので数えない
+const MIXINS = [
   bookmarksMethods,
   pagesMethods,
   annotationsMethods,
@@ -309,8 +309,16 @@ Object.assign(
   notesMethods,
   exportMethods,
   keysMethods
-);
+];
+const taken = new Set(Object.getOwnPropertyNames(Viewer.prototype));
+for (const m of MIXINS)
+  for (const k of Object.keys(m)) {
+    if (taken.has(k)) throw new Error(`Viewer のメソッドの名前が重なっています：${k}`);
+    taken.add(k);
+  }
+Object.assign(Viewer.prototype, ...MIXINS);
 
+/** ビューアを root に開く。戻り値の unmount() で閉じる（保存待ちの注釈はその場で保存する） */
 export function mountViewer(root, opts) {
   const v = new Viewer(root, opts);
   v.start().catch((e) => v.fail(`開けませんでした（${e.message}）`));

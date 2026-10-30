@@ -173,7 +173,10 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
   /**
    * フォルダを読み直して記録を合わせる。大きさと更新日時が同じファイルは読み直さない（中身の SHA-256 を毎回は計算しない）。
    * 消えたファイルは「ゴミ箱」の印（status = 'trashed'）にして画面から外す。同じ中身が別の名前・場所に現れたら記録を移す（未読の印や注釈はそのまま）
-   * 戻り：{added, removed, truncated, missing}
+   * 上書き保存したことのある PDF（base_sha256 あり）の中身がほかのアプリで変わっていたら、変わったファイルを新しい元にする
+   * （base_sha256 を外す）。元の写しに描き直すと、その変更を消してしまうため。アプリの注釈は描き込まれた形でファイルに残り、
+   * アプリの中では動かせなくなる（rebased に数えて知らせる）
+   * 戻り：{added, removed, rebased, truncated, missing}
    */
   async function scan(courseId) {
     const course = folderCourse(courseId);
@@ -186,6 +189,7 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
     const present = new Set(files.map((f) => f.path));
     const keep = new Set();
     let added = 0;
+    let rebased = 0;
     for (const f of files) {
       const m = byPath.get(f.path);
       if (m && m.status === 'ok' && m.size === f.size && m.lms_modified === f.mtime) {
@@ -210,7 +214,16 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
       };
       const same = repo.findMaterialByHash(course.id, h);
       if (m && (!same || same.id === m.id)) {
-        repo.updateMaterial(m.id, fields); // 中身が変わった（または消えたあとで戻った）
+        // 中身が変わった（または消えたあとで戻った）
+        if (m.base_sha256 && m.sha256 !== h) {
+          fields.base_sha256 = null;
+          // 元の中身に戻されただけなら、注釈の鍵（元の SHA-256）は変わらず、注釈もそのまま動かせる
+          if (h !== m.base_sha256) {
+            rebased++;
+            log(`[folder] ほかのアプリで変わった PDF を新しい元にしました：${f.path}`);
+          }
+        }
+        repo.updateMaterial(m.id, fields);
         keep.add(m.id);
       } else if (same && !keep.has(same.id) && (same.status !== 'ok' || !present.has(same.path))) {
         repo.updateMaterial(same.id, fields); // 名前を変えた・別の下のフォルダへ移した
@@ -239,7 +252,7 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
       repo.updateMaterial(m.id, {status: 'trashed'});
       removed++;
     }
-    return {added, removed, truncated, missing: false};
+    return {added, removed, rebased, truncated, missing: false};
   }
 
   /** フォルダの名前を変える。パソコンのフォルダの名前も変える（同じ親フォルダの中のまま）。戻りは course 行 */

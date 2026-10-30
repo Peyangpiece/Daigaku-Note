@@ -12,6 +12,10 @@ import {MAX_SKEW_MS, open, seal} from '../../shared/mobile-wire.js';
 
 export const DEFAULT_PORT = 47390;
 const BODY_MAX = 48 * 1024 * 1024; // 写真 1 枚（30MB）の base64（4/3 倍）＋余り。スマホは写真を 1 枚ずつ送る
+const HEAD = 26; // 本文の頭：端末の番号（ULID）
+const PENDING_MAX = 4096; // QR を読んだだけの端末のあいさつの大きさの上限
+const INFLIGHT_MAX = 4; // 同時に受ける窓口の要求
+const CONNECTIONS_MAX = 32; // 同時につなげる数（画面のファイルも含む）
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'); // src
 const require = createRequire(import.meta.url);
 // パッケージの置き場所（package.json を exports に出していないパッケージもあるので、中のファイルから求める）
@@ -80,6 +84,7 @@ export function lanAddresses(ifaces = os.networkInterfaces()) {
 export function createMobileServer({devices, api, log = () => {}, now = () => Date.now()}) {
   let server = null;
   let port = null;
+  let inflight = 0;
   const seen = new Map(); // 端末 → Map(nonce → 期限)
 
   const replay = (deviceId, nonce) => {
@@ -92,19 +97,39 @@ export function createMobileServer({devices, api, log = () => {}, now = () => Da
     return false;
   };
 
-  const readBody = (req) =>
-    new Promise((resolve, reject) => {
-      const chunks = [];
-      let size = 0;
-      req.on('data', (c) => {
-        size += c.length;
-        if (size > BODY_MAX) {
-          reject(new Error('too large'));
-          req.destroy();
-        } else chunks.push(c);
-      });
-      req.on('end', () => resolve(Buffer.concat(chunks)));
-      req.on('error', reject);
+  /**
+   * 本文を読む。先に Content-Length を見て、大きすぎれば読まずに断る。決めた長さより多く届いたら打ち切る。
+   * 戻りは Buffer（形が悪ければ null）
+   */
+  const readExact = async (req, len, head = Buffer.alloc(0)) => {
+    const chunks = [head];
+    let size = head.length;
+    for await (const c of req) {
+      size += c.length;
+      if (size > len) return null;
+      chunks.push(c);
+    }
+    return size === len ? Buffer.concat(chunks) : null;
+  };
+  /** 先頭の n バイト（端末の番号）だけ読む。残りは読まずに置いておく（続きは readExact で） */
+  const readHead = (req, n) =>
+    new Promise((resolve) => {
+      let buf = Buffer.alloc(0);
+      const done = (v) => {
+        req.off('data', onData);
+        req.off('end', onEnd);
+        req.off('error', onEnd);
+        req.pause();
+        resolve(v);
+      };
+      const onData = (c) => {
+        buf = Buffer.concat([buf, c]);
+        if (buf.length >= n) done(buf);
+      };
+      const onEnd = () => done(buf.length >= n ? buf : null);
+      req.on('data', onData);
+      req.on('end', onEnd);
+      req.on('error', onEnd);
     });
 
   const send = (res, status, body, type = 'text/plain; charset=utf-8') => {
@@ -117,15 +142,44 @@ export function createMobileServer({devices, api, log = () => {}, now = () => Da
     res.end(body);
   };
 
+  // 断ったときは、残りの本文を読まずに接続を閉じる（ため込まない）
+  const refuse = (req, res, status, text) => {
+    res.setHeader('Connection', 'close');
+    res.on('finish', () => req.destroy());
+    send(res, status, text);
+  };
+
+  /**
+   * 窓口。LAN の誰でも送れるので、本文は端末を確かめてから読む：
+   * Content-Length を先に見る（大きすぎれば 413）→ 先頭 26 バイトの端末の番号で鍵を引く（知らなければ 403）→ 残りを読む。
+   * 同時に受けるのは INFLIGHT_MAX 件まで（それより多ければ 503）
+   */
   async function onApi(req, res) {
-    const body = await readBody(req).catch(() => null);
-    if (!body || body.length < 26 + 40) return send(res, 400, 'bad request');
-    const deviceId = body.subarray(0, 26).toString('ascii');
+    const len = Number(req.headers['content-length']);
+    if (!Number.isSafeInteger(len) || len < HEAD + 40) return refuse(req, res, 400, 'bad request');
+    if (len > BODY_MAX) return refuse(req, res, 413, 'too large');
+    if (inflight >= INFLIGHT_MAX) return refuse(req, res, 503, 'busy');
+    inflight++;
+    try {
+      await api1(req, res, len);
+    } finally {
+      inflight--;
+    }
+  }
+
+  async function api1(req, res, len) {
+    const head = await readHead(req, HEAD);
+    if (!head) return refuse(req, res, 400, 'bad request');
+    const deviceId = head.subarray(0, HEAD).toString('ascii');
     const key = await devices.keyOf(deviceId);
-    if (!key) return send(res, 403, 'unknown device'); // スマホは「つなぎ直してください」を出す
+    if (!key) return refuse(req, res, 403, 'unknown device'); // スマホは「つなぎ直してください」を出す
+    // QR を読んだだけの端末が送れるのはあいさつ（小さい）だけ
+    if (devices.isPending(deviceId) && len > PENDING_MAX) return refuse(req, res, 413, 'too large');
+    const body = await readExact(req, len, head).catch(() => null);
+    if (!body) return refuse(req, res, 400, 'bad request');
     let msg;
     try {
-      msg = open(key, new Uint8Array(body.buffer, body.byteOffset + 26, body.length - 26));
+      msg = open(key, new Uint8Array(body.buffer, body.byteOffset + HEAD, body.length - HEAD));
     } catch {
       return send(res, 400, 'bad request');
     }
@@ -191,6 +245,9 @@ export function createMobileServer({devices, api, log = () => {}, now = () => Da
               if (!res.headersSent) send(res, 500, 'error');
             })
           );
+          s.maxConnections = CONNECTIONS_MAX;
+          s.headersTimeout = 20_000;
+          s.requestTimeout = 120_000; // 写真 1 枚を送るのに十分な長さ。それより遅い送り方で居座らせない
           s.once('error', reject);
           s.listen(p, '0.0.0.0', () => resolve(s));
         });

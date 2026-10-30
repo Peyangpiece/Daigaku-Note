@@ -242,3 +242,82 @@ test('授業フォルダを取り込む：中のフォルダを 1 つずつ今�
   );
   await assert.rejects(folders.importCourses(path.join(base, 'ない')), /見つかりません/);
 });
+
+test('上書き保存したあと、ほかのアプリで変えた PDF：読み直すと変えたファイルが新しい元になり、次の上書き保存でその変更を消さない', async (t) => {
+  const {PDFDocument} = await import('pdf-lib');
+  const {readFile} = await import('node:fs/promises');
+  const {overwritePdf, annoKey} = await import('../src/main/pdf-save.js');
+  const {sha256} = await import('../src/main/sync/files.js');
+  const {normalizeAnnotation} = await import('../src/shared/annotation.js');
+  const {base, repo, folders, files} = await setup(t);
+  const f = await folders.create({name: 'ゼミ', scope: 'always', mode: 'new'});
+  const doc = await PDFDocument.create();
+  doc.addPage([595, 842]);
+  const orig = Buffer.from(await doc.save());
+  const r = await files.addOwn({
+    term: repo.get('term', f.term_id),
+    course: f,
+    round: folders.roundOf(f),
+    name: 'レジュメ.pdf',
+    data: orig
+  });
+  const originalsDir = path.join(base, 'originals');
+  const anno = normalizeAnnotation({kind: 'mask', page: 1, rect: {x: 50, y: 700, w: 200, h: 14}, body: '', style: {}});
+  repo.saveAnnotation(sha256(orig), null, anno);
+  const list = () =>
+    repo
+      .listAnnotations(annoKey(repo.get('material', r.material.id)))
+      .map((a) => ({...a, rect: JSON.parse(a.rect_json), style: {}}));
+  // 1. アプリで上書き保存（元の写しを取っておき、注釈を描き込む）
+  await overwritePdf({repo, material: repo.get('material', r.material.id), annotations: list(), originalsDir});
+  assert.equal(repo.get('material', r.material.id).base_sha256, sha256(orig));
+  // 2. ほかのアプリで編集（ページを 1 枚足す）。更新日時も変わる
+  const saved = await PDFDocument.load(await readFile(r.material.path));
+  saved.addPage([595, 842]);
+  const edited = Buffer.from(await saved.save());
+  await writeFile(r.material.path, edited);
+  const later = new Date(Date.now() + 5000);
+  await utimes(r.material.path, later, later);
+  // 3. フォルダを読み直す：変わったファイルが新しい元になる
+  const s = await folders.scan(f.id);
+  assert.equal(s.rebased, 1);
+  const m = repo.get('material', r.material.id);
+  assert.equal(m.sha256, sha256(edited));
+  assert.equal(m.base_sha256, null);
+  // 4. もう一度上書き保存しても、ほかのアプリでの変更は消えない
+  await overwritePdf({repo, material: m, annotations: list(), originalsDir});
+  assert.deepEqual(await readFile(r.material.path), edited, 'ほかのアプリで足したページが残る');
+});
+
+test('上書き保存したあと、元の中身に戻されたファイル：注釈はそのまま動かせる（知らせない）', async (t) => {
+  const {PDFDocument} = await import('pdf-lib');
+  const {overwritePdf} = await import('../src/main/pdf-save.js');
+  const {sha256} = await import('../src/main/sync/files.js');
+  const {base, repo, folders, files} = await setup(t);
+  const f = await folders.create({name: 'ゼミ', scope: 'always', mode: 'new'});
+  const doc = await PDFDocument.create();
+  doc.addPage([595, 842]);
+  const orig = Buffer.from(await doc.save());
+  const r = await files.addOwn({
+    term: repo.get('term', f.term_id),
+    course: f,
+    round: folders.roundOf(f),
+    name: 'a.pdf',
+    data: orig
+  });
+  const mask = {id: 'x', page: 1, kind: 'mask', rect: {x: 50, y: 700, w: 200, h: 14}, body: '', style: {}};
+  await overwritePdf({
+    repo,
+    material: repo.get('material', r.material.id),
+    annotations: [mask],
+    originalsDir: path.join(base, 'o')
+  });
+  await writeFile(r.material.path, orig);
+  const later = new Date(Date.now() + 5000);
+  await utimes(r.material.path, later, later);
+  const s = await folders.scan(f.id);
+  assert.equal(s.rebased, 0);
+  const m = repo.get('material', r.material.id);
+  assert.equal(m.sha256, sha256(orig));
+  assert.equal(m.base_sha256, null, '注釈の鍵は元の SHA-256 のまま（base が sha256 と同じになった）');
+});
