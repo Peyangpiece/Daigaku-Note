@@ -142,7 +142,9 @@ test('上書き保存の途中で落ちた（ファイルを置き換えたあ�
 
 test('置き換える前に失敗したら（書き込めない）、一時ファイルも途中の記録も残さず、ファイルはそのまま', async (t) => {
   const {dir, file, bytes, repo, m, originalsDir} = await setup(t);
+  // フォルダを書き込み禁止にして失敗させる。root と Windows（フォルダの chmod が効かない）ではできないので飛ばす
   if (process.getuid?.() === 0) return t.skip('root では書き込み禁止にならない');
+  if (process.platform === 'win32') return t.skip('Windows ではフォルダの chmod で書き込み禁止にならない');
   const {chmod} = await import('node:fs/promises');
   // 元の写しを先に作っておく（フォルダを書き込み禁止にする前に）
   await overwritePdf({repo, material: m, annotations: [mask('a1')], originalsDir});
