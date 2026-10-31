@@ -93,6 +93,9 @@
   text-align: center;
   vertical-align: 1px;
 }
+.topnav__count[hidden] {
+  display: none; /* display: inline-block が hidden に勝って、問題がない日も空の札の幅が残っていた */
+}
 .topnav__btn:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;

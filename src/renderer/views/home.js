@@ -101,8 +101,6 @@ export function folderCard(course, {today = false, data = null, skin = null, edi
   </button>`;
 }
 
-/** 復習の入口（常設）。今日の問題があれば強調、なければ次の予定を添える（間隔反復の仕組みが見える） */
-
 export function renderHome({data, progress}) {
   const all = data.courses.filter((c) => !c.hidden && c.kind !== 'folder');
   // 今日の授業（なければ次の授業）を上の 1 行に。学期の学年暦（休講日・振替授業日）があればそれで数える
@@ -191,12 +189,13 @@ export function renderHome({data, progress}) {
       ${
         hasLms
           ? `<button class="btn" data-action="sync" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : '同期'}</button>
-      <span class="muted" id="sync-status" role="status">${preparing ? 'LMS を読むためのブラウザを準備しています（初回だけ。数分かかります）。終わると同期が始まります。' : status}</span>`
+      <span class="muted home-foot__status" id="sync-status" role="status">${preparing ? 'LMS を読むためのブラウザを準備しています（初回だけ。数分かかります）。終わると同期が始まります。' : status}</span>`
           : ''
       }
-      <span style="margin-left:auto"></span>
-      <button class="btn btn--quiet" data-action="nav" data-route="/kisekae">✿ 着せ替え</button>
-      <button class="btn btn--quiet" data-action="nav" data-route="/fudebako">✎ 筆箱</button>
-      <button class="btn" data-action="open-root">資料のフォルダ</button>
+      <span class="home-foot__tools">
+        <button class="btn btn--quiet" data-action="nav" data-route="/kisekae">✿ 着せ替え</button>
+        <button class="btn btn--quiet" data-action="nav" data-route="/fudebako">✎ 筆箱</button>
+        <button class="btn" data-action="open-root">資料のフォルダ</button>
+      </span>
     </footer>`;
 }
