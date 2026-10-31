@@ -8,7 +8,8 @@
   right: 0;
   z-index: 20;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; /* いつも 1 段（道具の設定は下の帯 .viewer-sub に出す。高さが変わって PDF に重ならないように） */
+  white-space: nowrap;
   align-items: center;
   gap: 8px;
   margin: 0;
@@ -17,7 +18,7 @@
   box-shadow: var(--card-shadow);
   font-size: var(--fs-small);
 }
-.viewer-bar button:not(.btn) {
+:is(.viewer-bar, .viewer-sub) button:not(.btn) {
   min-width: 32px;
   height: 32px;
   padding: 0 8px;
@@ -29,19 +30,21 @@
   font-weight: 600;
   cursor: pointer;
 }
-.viewer-bar button:not(.btn):hover {
+:is(.viewer-bar, .viewer-sub) button:not(.btn):hover {
   background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
 }
-.viewer-bar button[aria-pressed='true']:not(.swatch) {
+:is(.viewer-bar, .viewer-sub) button[aria-pressed='true']:not(.swatch) {
   border-color: var(--paper-ink);
   background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
 }
-.viewer-bar button:focus-visible,
-.viewer-bar input:focus-visible {
+:is(.viewer-bar, .viewer-sub) button:focus-visible,
+:is(.viewer-bar, .viewer-sub) input:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 .viewer-bar__name {
+  min-width: 0;
+  flex: 0 1 auto;
   max-width: 150px;
   overflow: hidden;
   white-space: nowrap;
@@ -105,7 +108,7 @@
   font-size: var(--fs-small);
   color: var(--paper-ink-weak);
 }
-.viewer-bar button.viewer-bar__refill::before {
+:is(.viewer-bar, .viewer-sub) button.viewer-bar__refill::before {
   content: '';
   display: inline-block;
   width: 10px;
@@ -120,7 +123,7 @@
   display: inline-flex;
   gap: 4px;
 }
-.viewer-bar button.swatch {
+:is(.viewer-bar, .viewer-sub) button.swatch {
   width: 22px;
   min-width: 22px;
   height: 22px;
@@ -129,16 +132,16 @@
   border: 1.5px solid color-mix(in srgb, var(--paper-ink) 30%, transparent);
   background: var(--swatch);
 }
-.viewer-bar button.swatch:hover {
+:is(.viewer-bar, .viewer-sub) button.swatch:hover {
   background: var(--swatch);
   transform: scale(1.1);
 }
-.viewer-bar button.swatch[aria-pressed='true'] {
+:is(.viewer-bar, .viewer-sub) button.swatch[aria-pressed='true'] {
   box-shadow:
     0 0 0 2px var(--card),
     0 0 0 4px var(--paper-ink);
 }
-.viewer-bar input[type='color'] {
+:is(.viewer-bar, .viewer-sub) input[type='color'] {
   width: 28px;
   height: 24px;
   padding: 0;
@@ -820,7 +823,7 @@
   display: inline-flex;
   gap: 2px;
 }
-.viewer-bar button:disabled {
+:is(.viewer-bar, .viewer-sub) button:disabled {
   opacity: 0.35;
   cursor: default;
 }
@@ -1084,4 +1087,147 @@
   margin: 8px 0 0;
   font-size: var(--fs-small);
   line-height: 1.5;
+}
+
+/* ツールバーのすぐ下の帯：文字・コメントの書式、多機能ペンの芯、検索。使うときだけ出す */
+.viewer-sub {
+  position: fixed;
+  top: var(--bar-h, 52px);
+  left: 0;
+  right: 0;
+  z-index: 19;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 6px var(--space-6);
+  background: color-mix(in srgb, var(--card) 94%, var(--paper-ink));
+  box-shadow: var(--card-shadow);
+  font-size: var(--fs-small);
+}
+.viewer-sub[hidden] {
+  display: none;
+}
+.viewer-sub .viewer-sub__group {
+  padding-left: 0;
+  border-left: 0;
+}
+.viewer-sub .viewer-sub__group + .viewer-sub__group:not([hidden]) {
+  padding-left: 16px;
+  border-left: 1px solid var(--rule);
+}
+/* 持っている道具の札（ペン・マーカー・文字隠し・消しゴム）。× で選択に戻る */
+.viewer-bar button.viewer-bar__held {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  border-color: color-mix(in srgb, var(--paper-ink) 30%, transparent);
+  border-radius: var(--radius-pill);
+}
+.viewer-bar button.viewer-bar__held[hidden] {
+  display: none;
+}
+.viewer-bar__held [data-v='held-name'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.viewer-bar__held-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--held, var(--paper-ink));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+/* 書き出すは使う回数が少ないので、枠のない控えめなボタン */
+.viewer-bar button.viewer-bar__export {
+  color: var(--paper-ink-weak);
+}
+/* 窓が狭いとき：ファイル名 → 書き出す・操作の字 → ページ幅の字と左右の余白、の順に外して 1 段に収める（押す所と説明の title は残す） */
+@media (max-width: 1180px) {
+  .viewer-bar__name {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  .viewer-bar button[data-v='export'],
+  .viewer-bar button[data-v='help'] {
+    font-size: 0;
+  }
+  .viewer-bar button[data-v='export']::after {
+    content: '⤓';
+    font-size: 16px;
+  }
+  .viewer-bar button[data-v='help']::after {
+    content: '?';
+    font-size: var(--fs-small);
+  }
+}
+@media (max-width: 1000px) {
+  .viewer-bar {
+    gap: 6px;
+    padding: 10px 16px;
+  }
+  .viewer-sub {
+    padding: 6px 16px;
+  }
+  .viewer-bar button[data-v='fit'] {
+    font-size: 0;
+  }
+  .viewer-bar button[data-v='fit']::after {
+    content: '↔';
+    font-size: 16px;
+  }
+}
+/* 検索 */
+.viewer-find__q {
+  width: 220px;
+  height: 32px;
+  padding: 4px 10px;
+}
+.viewer-find__count {
+  min-width: 5em;
+}
+.find-hit {
+  position: absolute;
+  z-index: 3;
+  border-radius: 2px;
+  background: rgba(255, 213, 0, 0.35);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.find-hit.is-current {
+  background: rgba(255, 140, 0, 0.55);
+  outline: 2px solid #e07b00;
+}
+/* 筆箱を開いたままにする：つまみを隠し、PDF を筆箱の分だけ左に寄せる */
+.fude-side__pin {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.fude-side__pin[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--case-base, #2e3f66);
+}
+.fude-side__pin[hidden] {
+  display: none;
+}
+.viewer--pinned .viewer-pages {
+  padding-right: 352px;
+}
+.viewer--pinned .fude-side__tab {
+  display: none;
+}
+/* 開いたままの筆箱の下にポーチ */
+.viewer--pinned .corner--pouch {
+  top: var(--pouch-top, 50vh);
+  max-height: calc(100vh - var(--pouch-top, 50vh) - 16px);
 }

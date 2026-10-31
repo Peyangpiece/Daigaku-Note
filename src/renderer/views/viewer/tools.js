@@ -13,6 +13,8 @@ import {
 } from '../../../shared/stationery.js';
 import {api, clampSize} from './shared.js';
 
+const PIN_MIN_WIDTH = 1100; // これより狭い窓では、開いたままにしない（PDF が小さくなりすぎる）
+
 export const methods = {
   // ---- 操作 ----
   setTool(tool) {
@@ -35,6 +37,35 @@ export const methods = {
     for (const a of this.annos.values())
       if (a.kind === 'note' && a.el.classList.contains('is-open')) this.setNoteMode(a);
     this.updateBar();
+  },
+
+  // ---- 筆箱を開いたままにする（窓が広いときだけ。PDF は筆箱の分だけ左に寄せ、ページ幅に合わせ直す）----
+  pinCase(on) {
+    this.casePinned = !!on;
+    try {
+      localStorage.setItem('viewer.casePinned', on ? '1' : '');
+    } catch {
+      // 覚えられなくても使える
+    }
+    this.applyPin();
+  },
+  applyPin() {
+    const active = !!this.casePinned && window.innerWidth >= PIN_MIN_WIDTH;
+    this.pinnedCorner = active ? 'fude' : null; // desk-tools の openCorner が、しまわない
+    this.root.classList.toggle('viewer--pinned', active);
+    this.$('pin').setAttribute('aria-pressed', String(!!this.casePinned));
+    this.$('pin').hidden = window.innerWidth < PIN_MIN_WIDTH;
+    const side = this.$('side');
+    if (active) side.classList.remove('is-tucked');
+    else if (this.corner !== 'fude') side.classList.add('is-tucked');
+    // 開いたままの筆箱の下にポーチのつまみを置く（重ならないように）
+    if (active)
+      requestAnimationFrame(() =>
+        this.root.style.setProperty(
+          '--pouch-top',
+          `${Math.max(window.innerHeight / 2, side.getBoundingClientRect().bottom + 16)}px`
+        )
+      );
   },
 
   // ---- 筆箱（§9.8）----
@@ -245,16 +276,37 @@ export const methods = {
       if (rg.innerHTML !== html) rg.innerHTML = html;
     }
     this.$('delete').hidden = !a; // 選んでいるときだけ出す（ツールバーを 1 行に収める）
+    // 持っている道具（ペン・マーカー・文字隠し・消しゴム）：筆箱を閉じていても分かるように、ツールバーに札で出す
+    const held = this.$('held');
+    const pen = ['ink', 'line', 'mask'].includes(this.tool) ? this.penItem : null;
+    held.hidden = !pen && this.tool !== 'eraser';
+    if (!held.hidden) {
+      const name = pen ? `${pen.name}${pen.refill ? `・${pen.refill.name}` : ''}` : '消しゴム';
+      this.$('held-name').textContent = name;
+      held.style.setProperty('--held', pen ? pen.color : '#2f6fb5');
+      held.setAttribute('aria-label', `持っている道具：${name}（押すと選択に戻る）`);
+    }
+    // 下の帯：文字・コメントの書式、多機能ペンの芯、検索。どれもなければしまう（ツールバーは 1 段のまま）
+    const sub = this.$('sub');
+    sub.hidden = [...sub.querySelectorAll('[data-group]')].every((g) => g.hidden);
   },
 
   bindBar() {
     const bar = this.root.querySelector('.viewer-bar');
     // ツールバーは窓に固定なので、ページの上にツールバーの高さ（2 行に折り返したときも）＋余白を空ける
+    // 下の帯（文字・コメントの書式・検索）が出たときも同じ。帯が出入りしても見ている場所が動かないよう、増えた分だけスクロールする
+    const subEl = this.$('sub');
     this.barObserver = new ResizeObserver(() => {
       const top = this.pagesEl.parentElement.getBoundingClientRect().top + window.scrollY; // ページの並びの親の上端（紙の上の余白の下）
-      this.pagesEl.style.marginTop = `${Math.max(0, bar.offsetHeight + 24 - top)}px`;
+      const h = bar.offsetHeight + (subEl.hidden ? 0 : subEl.offsetHeight);
+      const before = parseFloat(this.pagesEl.style.marginTop) || 0;
+      const next = Math.max(0, h + 24 - top);
+      this.pagesEl.style.marginTop = `${next}px`;
+      this.root.style.setProperty('--bar-h', `${bar.offsetHeight}px`);
+      if (window.scrollY > 0 && next !== before) window.scrollBy(0, next - before);
     });
     this.barObserver.observe(bar);
+    this.barObserver.observe(subEl);
     // ツールバーを押しても文字入れの編集を終わらせない（書式を変えながら打てるように）
     this.on(bar, 'pointerdown', (e) => {
       // 文字入れの編集中・メモの本文を打っている間は、ツールバーを押してもフォーカスを奪わない（続けて打てる）
@@ -262,10 +314,12 @@ export const methods = {
       if ((this.editing || inNote) && e.target.closest('button, .swatch')) e.preventDefault();
     });
     // 四隅の上の 2 つ（筆箱・シール帳）が見えている場所：ツールバーの下から
-    this.sideObserver = new ResizeObserver(() =>
-      this.root.style.setProperty('--corner-top', `${bar.getBoundingClientRect().bottom + 16}px`)
-    );
+    this.sideObserver = new ResizeObserver(() => {
+      const bottom = subEl.hidden ? bar.getBoundingClientRect().bottom : subEl.getBoundingClientRect().bottom;
+      this.root.style.setProperty('--corner-top', `${bottom + 16}px`);
+    });
     this.sideObserver.observe(bar);
+    this.sideObserver.observe(subEl);
     const onClick = (e) => {
       const t = e.target.closest('button');
       if (!t || t.closest('.case-panel')) return;
@@ -287,9 +341,15 @@ export const methods = {
         this.setTextStyle({bold: !(this.selected?.kind === 'text' ? this.selected.style : this.textStyle).bold});
       else if (t.dataset.align) this.setTextStyle({align: t.dataset.align});
       else if (t.dataset.v === 'delete' && this.selected) this.removeAnno(this.selected);
+      else if (t.dataset.v === 'held') this.setTool('select');
+      else if (t.dataset.v === 'find') this.openFind();
+      else if (t.dataset.v === 'find-next') this.findStep(1);
+      else if (t.dataset.v === 'find-prev') this.findStep(-1);
+      else if (t.dataset.v === 'find-close') this.closeFind();
+      else if (t.dataset.v === 'pin') this.pinCase(!this.casePinned);
       else if (t.dataset.v === 'zoom-in') this.zoomStep('in');
       else if (t.dataset.v === 'zoom-out') this.zoomStep('out');
-      else if (t.dataset.v === 'fit') this.setZoom(this.fitZoom());
+      else if (t.dataset.v === 'fit') this.fitWidth();
       else if (t.dataset.v === 'back') this.onBack();
       else if (t.dataset.v === 'bookmarks') this.openBookmarks(this.$('bookmark-panel').hidden);
       else if (t.dataset.v === 'bookmark-add') this.addFusen();
@@ -305,6 +365,12 @@ export const methods = {
       if (fromSide && (t.dataset.slot !== undefined || t.dataset.tool === 'eraser')) this.tuckSoon();
     };
     this.on(bar, 'click', onClick);
+    const sub = this.$('sub');
+    this.on(sub, 'click', onClick);
+    this.on(sub, 'pointerdown', (e) => {
+      const inNote = document.activeElement?.closest?.('.anno-note__pop');
+      if ((this.editing || inNote) && e.target.closest('button, .swatch')) e.preventDefault();
+    });
     for (const el of this.root.querySelectorAll('[data-corner]')) {
       this.on(el, 'click', onClick);
       this.on(el, 'pointerdown', (e) => {

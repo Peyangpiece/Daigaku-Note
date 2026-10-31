@@ -220,7 +220,7 @@ export class DeskTools {
     this.cornerAt = window.performance.now();
     this.root.toggleAttribute('data-corner-open', !!name); // 出している間は、ほかのつまみを隠す（箱の下からはみ出さない）
     for (const el of this.root.querySelectorAll('[data-corner]')) {
-      const on = el.dataset.corner === name;
+      const on = el.dataset.corner === name || el.dataset.corner === this.pinnedCorner; // 開いたままにした筆箱はしまわない
       el.classList.toggle('is-tucked', !on);
       el.querySelector('[data-corner-tab]').setAttribute('aria-expanded', String(on));
     }
