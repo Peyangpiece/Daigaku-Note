@@ -18,9 +18,11 @@ import {EARN, dayOf, pt} from '../../shared/points.js';
 import {
   PAYMENT_METHODS,
   SLOTS,
-  TOOL_TYPES,
+  TOOL_KINDS,
   TYPES,
   TYPE_LABEL,
+  kindOf,
+  typeLabel,
   cartPoints,
   cartTotal,
   caseArt,
@@ -76,6 +78,7 @@ function spec(item) {
   if (item.refills)
     return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格`;
   if (item.experimental) return `${esc(item.maker)}・${item.mm} mm`;
+  if (item.pencil) return `芯 ${item.mm} mm・${item.lead}`;
   if (item.type === 'pen') return item.even ? `${item.mm} mm・筆圧なし（太さが一定）` : `${item.mm} mm`;
   if (item.type === 'marker') return item.thick ? '太め' : 'ふつう';
   if (item.type === 'hider') return '赤シートで隠れる色';
@@ -144,8 +147,9 @@ function mine(s) {
     })
     .join('');
   const owned = s.owned.map(itemOf).filter(Boolean);
-  const list = TOOL_TYPES.map((type) => {
-    const items = owned.filter((it) => it.type === type);
+  const list = TOOL_KINDS.map((type) => {
+    const items = owned.filter((it) => kindOf(it) === type);
+    if (!items.length && type === 'pencil') return ''; // シャープペンシルは持っていれば見出しを出す
     return `<section class="fb-group"><h3>${TYPE_LABEL[type]}</h3><div class="fb-grid">
       ${items
         .map((it) => {
@@ -242,6 +246,7 @@ function seriesCard(series, s) {
   const sub = [it.maker ?? '大学ノート'];
   if (series.items.length > 1) sub.push(it.name);
   else if (it.refills) sub.push(`2&1・替え芯 ${it.refill} 規格`);
+  else if (it.pencil) sub.push(`芯 ${it.mm} mm・${it.lead}`);
   else if (it.type === 'pen') sub.push(it.even ? `${it.mm} mm・筆圧なし` : `${it.mm} mm`);
   else if (it.type === 'marker') sub.push(it.thick ? '太め' : 'ふつう');
   else if (it.type === 'hider') sub.push('赤シートで隠れる');
@@ -386,13 +391,16 @@ function detail(s, id) {
   if (!it || !listed(it))
     return `<p class="muted">その文房具はありません。</p><p><button type="button" class="btn" data-action="nav" data-route="${SHOP}">← ショップ</button></p>`;
   const rows = [];
-  rows.push(['種類', TYPE_LABEL[it.type]]);
+  rows.push(['種類', typeLabel(it)]);
   if (it.refills) {
     rows.push([
       'しくみ',
       `${it.refills.length - it.refills.filter((r) => r.sharp).length}&${it.refills.filter((r) => r.sharp).length}（回転式の多機能ペン。持つと芯を選べ、同じ場所をもう一度押すと次の芯に回ります）`
     ]);
     rows.push(['替え芯', `${esc(it.refill)} 規格`]);
+  } else if (it.pencil) {
+    rows.push(['芯', `${it.mm} mm・${it.lead}（線は黒鉛の灰色）`]);
+    rows.push(['しくみ', 'ノック式の製図用。細い金属のパイプ・アヤ目のローレットのグリップ・硬度の窓']);
   } else if (it.type === 'pen') {
     rows.push(['字幅', `${it.mm} mm`]);
     if (it.even)
@@ -455,7 +463,7 @@ function cartItems(s) {
 }
 /** カート・注文の行の説明（メーカー・字幅など。既製品の見た目の品は spec にメーカーが入るので重ねない） */
 const rowSpec = (it) =>
-  [it.experimental ? '' : (it.maker ?? '大学ノート'), spec(it) || TYPE_LABEL[it.type]].filter(Boolean).join('・');
+  [it.experimental ? '' : (it.maker ?? '大学ノート'), spec(it) || typeLabel(it)].filter(Boolean).join('・');
 const orderRow = (it, {remove = false} = {}) =>
   `<li class="shop-row">
     <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'case' ? caseArt(it) : toolArt(it)}</button>

@@ -5,11 +5,13 @@ import {
   DEFAULT_HIDER,
   KIND_OF,
   TYPE_LABEL,
-  TOOL_TYPES,
+  TOOL_KINDS,
   heldPen,
   itemOf,
+  kindOf,
   nextRefill,
-  toolArt
+  toolArt,
+  typeLabel
 } from '../../../shared/stationery.js';
 import {api, clampSize} from './shared.js';
 import {dressCase} from '../../model3d.js';
@@ -129,7 +131,7 @@ export const methods = {
         const held = heldPen(it, this.st.refills?.[it.id]);
         const tip = held.refill
           ? `${it.name}（${held.refill.name}・キー ${i + 1}。もう一度押すと次の芯）`
-          : `${it.name}（${TYPE_LABEL[it.type]}・キー ${i + 1}）`;
+          : `${it.name}（${typeLabel(it)}・キー ${i + 1}）`;
         return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${held.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
       })
       .join('');
@@ -145,8 +147,9 @@ export const methods = {
     this.$('case').setAttribute('aria-expanded', String(open));
     if (!open) return;
     const at = this.slot ?? Math.max(0, this.st.slots.indexOf(null));
-    const groups = TOOL_TYPES.map((type) => {
-      const items = this.st.owned.map(itemOf).filter((it) => it?.type === type);
+    const groups = TOOL_KINDS.map((type) => {
+      const items = this.st.owned.map(itemOf).filter((it) => it && kindOf(it) === type);
+      if (!items.length && type === 'pencil') return '';
       return `<div class="case-panel__group"><span class="muted">${TYPE_LABEL[type]}</span>
         ${items
           .map((it) => {

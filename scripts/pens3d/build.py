@@ -365,6 +365,112 @@ def marker(wide=False, hider=False):
                  M['print'], sx=sx, sy=sy)
 
 
+def lathe_fn(name, zs, rfun, mat, seg=SEG):
+    """z の並びと、(z, 角度) → 半径 の関数から作る回転体（角度で半径が変わる：ローレットなど）。両端は極でふさぐ"""
+    bm = bmesh.new()
+    rings = []
+    for z in zs:
+        rings.append([bm.verts.new((rfun(z, 2 * math.pi * k / seg) * math.cos(2 * math.pi * k / seg),
+                                    rfun(z, 2 * math.pi * k / seg) * math.sin(2 * math.pi * k / seg), z))
+                      for k in range(seg)])
+    for i in range(len(rings) - 1):
+        for k in range(seg):
+            k2 = (k + 1) % seg
+            bm.faces.new((rings[i][k], rings[i][k2], rings[i + 1][k2], rings[i + 1][k]))
+    for ring, z, rev in ((rings[0], zs[0], True), (rings[-1], zs[-1], False)):
+        c = bm.verts.new((0, 0, z))
+        for k in range(seg):
+            k2 = (k + 1) % seg
+            bm.faces.new((ring[k2], ring[k], c) if rev else (ring[k], ring[k2], c))
+    bm.normal_update()
+    return obj_from_bm(name, bm, mat)
+
+
+def pencil():
+    """製図用のシャープペンシル（大学ノートのオリジナル。長さ 146 mm・軸の太さ 8.6 mm）。
+    細い金属のガイドパイプ（芯が 0.6 mm 出る）・溝を刻んだ金属の口金・アヤ目のローレットのグリップ・樹脂の軸・
+    硬度の窓（HB）・板を曲げたクリップ・金属の天冠とノック"""
+    M = {
+        'body': material('Body', srgb('#2c2d30'), roughness=0.3, coat=0.6, coat_rough=0.12),
+        'accent': material('Accent', srgb('#55575c'), roughness=0.25, coat=0.6),
+        'chrome': material('Chrome', (0.92, 0.92, 0.92), metallic=1.0, roughness=0.08),
+        'knurl': material('Knurl', (0.80, 0.80, 0.81), metallic=1.0, roughness=0.32),
+        'tip': material('TipMetal', (0.85, 0.85, 0.86), metallic=1.0, roughness=0.2),
+        'lead': material('Lead', (0.09, 0.09, 0.1), metallic=0.4, roughness=0.45),
+        'print': material('Print', (0.9, 0.9, 0.9), roughness=0.45),
+        'window': material('HardnessPrint', (0.95, 0.95, 0.95), roughness=0.4),
+    }
+    R = 4.3
+    # 芯（0.6 mm 出ている）とガイドパイプ（4 mm）
+    lathe('Lead', fillet([(0, -0.6), (0.2, -0.58), (0.25, -0.5), (0.25, 0.6), (0, 0.6)], 0.05), M['lead'], seg=24)
+    lathe('Sleeve', fillet([(0, 0.0), (0.42, 0.0), (0.5, 0.15), (0.5, 4.0), (0.75, 4.3), (0, 4.3)], 0.08), M['tip'],
+          seg=48)
+    # 口金：円すいに細い溝を 6 本
+    cone = [(0, 4.2), (0.75, 4.2), (0.9, 4.6), (1.5, 7.0)]
+    for i in range(6):
+        z = 8.0 + i * 1.2
+        r = 1.5 + (z - 7.0) / 13.0 * 2.4
+        cone += [(r, z), (r - 0.12, z + 0.15), (r - 0.12, z + 0.35), (r + 0.02, z + 0.5)]
+    cone += [(3.9, 20.0), (4.05, 20.4), (4.05, 21.0), (0, 21.0)]
+    lathe('Cone', fillet(cone, 0.08, 3), M['tip'], seg=SEG)
+    # グリップ：アヤ目のローレット（斜めの溝が交わる小さなピラミッド）。両端は溝のない帯
+    N = 36  # 1 周の山の数
+    g0, g1 = 21.0, 47.0
+    pitch = 2 * math.pi * 4.15 / N
+
+    def knurl(z, th):
+        r0 = 4.15
+        if z < g0 + 1.2 or z > g1 - 1.2:  # 端の帯（面取り）
+            e = min(z - g0, g1 - z)
+            return r0 - max(0.0, 0.25 - e) * 0.8
+        u = th * N / (2 * math.pi)
+        v = (z - g0) / pitch
+        a, b = (u + v) % 1.0, (u - v) % 1.0
+        h = min(1 - abs(2 * a - 1), 1 - abs(2 * b - 1))  # ピラミッドの高さ（0：溝 〜 1：頂）
+        return r0 - 0.22 * (1 - h) ** 1.3
+
+    zs = [g0 + (g1 - g0) * i / 260 for i in range(261)]
+    lathe_fn('Knurl', zs, knurl, M['knurl'], seg=N * 6)
+    # 継ぎ目の輪と軸（わずかに先細り）
+    lathe('Ring', fillet([(0, 46.8), (4.2, 46.8), (4.42, 47.0), (4.42, 48.4), (4.2, 48.6), (0, 48.6)], 0.15),
+          M['chrome'])
+    lathe('Barrel', fillet([(0, 48.4), (4.2, 48.4), (R, 48.7), (R, 100), (4.22, 117.0), (4.1, 117.3), (0, 117.3)],
+                           0.3), M['body'])
+    # 硬度の窓の帯（差し色）と、金属の天冠・ノック
+    lathe('HardnessBand', fillet([(0, 117.2), (4.15, 117.2), (4.2, 117.5), (4.2, 124.5), (4.15, 124.8), (0, 124.8)],
+                                 0.2), M['accent'])
+    lathe('TopCap', fillet([(0, 124.6), (4.15, 124.6), (4.25, 125.0), (4.2, 131.5), (3.7, 132.3), (0, 132.3)], 0.35),
+          M['chrome'])
+    lathe('Knock', fillet([(0, 132.0), (3.0, 132.0), (3.05, 141.5), (2.8, 145.2), (2.0, 146.0), (0, 146.1)], 0.5),
+          M['chrome'])
+    # クリップ（天冠から軸に沿って下り、先に軸へ触れるふくらみ）
+    path = []
+    for i in range(61):
+        t = i / 60
+        z = 131.0 - t * 40.0
+        if t < 0.08:
+            off = 3.9 + (t / 0.08) * 1.4
+        elif t < 0.92:
+            off = 5.3 - (t - 0.08) / 0.84 * 0.5
+        else:
+            off = 4.8 - math.sin((t - 0.92) / 0.08 * math.pi) * 0.25
+        path.append((0, -off, z))
+    sweep('ClipBlade', path, 3.6, 0.7, M['chrome'], lambda p: (0, -1, 0), round_r=0.3)
+    lathe('ClipBall', fillet([(0, 90.6), (1.0, 90.8), (1.1, 91.7), (1.0, 92.6), (0, 92.8)], 0.3), M['chrome'],
+          seg=48).location = (0, -4.95, 0)
+    # 印字：大学ノート・DAIGAKU NOTE・芯の太さ（3 つ。アプリが品の太さだけを出す）・硬度の窓の HB
+
+    def br(z):
+        return R if z <= 100 else R - (z - 100) / 17.0 * 0.08
+
+    wrapped_text('Print_brand', '大学ノート', FONT_JA, 2.6, 56.0, br, 0.0, M['print'], lift=0.04)
+    wrapped_text('Print_brand_en', 'DAIGAKU NOTE', None, 1.9, 71.0, br, 0.0, M['print'], lift=0.04)
+    for mm in ('0.3', '0.5', '0.7'):
+        wrapped_text(f'Print_mm_{mm.replace(".", "")}', mm, None, 2.2, 98.0, br, 0.0, M['print'], lift=0.04)
+    wrapped_text('Print_hb', 'HB', None, 2.4, 119.6, 4.2, 0.0, M['window'], lift=0.04)
+
+
+
 def wood_maps(w=1024, h=2048, out_dir='/tmp/pens3d-wood'):
     """木軸の画像 3 枚（色・粗さ・凹凸の法線）。実物の木の作りから求める：
     - 軸は、丸太から削り出した円柱。年輪は丸太の芯のまわりの同心の筒で、芯は軸から外れ、わずかに傾いている
@@ -1054,6 +1160,7 @@ FAMILIES = {
     'marker': lambda: marker(),
     'marker-wide': lambda: marker(wide=True),
     'hider': lambda: marker(hider=True),
+    'pencil-mech': pencil,
     'case-pouch': case_pouch,
     'case-leather': case_leather,
     'case-clear': case_clear,

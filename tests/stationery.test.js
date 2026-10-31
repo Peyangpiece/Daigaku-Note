@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CATALOG,
+  kindOf,
   SLOTS,
   STARTER,
   STARTER_CASE,
@@ -89,8 +90,8 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
   assert.ok(craft.items[0].featured, '新しく入った品は上の帯に出す');
   for (const s of series)
     assert.ok(
-      s.items.every((it) => it.type === s.type),
-      '札の中の種類はそろう'
+      s.items.every((it) => kindOf(it) === s.type),
+      '札の中の種類（シャープペンシルはボールペンと分ける）はそろう'
     );
   assert.deepEqual(
     siblingsOf(itemOf('maker-sarasa-black')).map((it) => it.id),
@@ -197,6 +198,23 @@ test('絵：道具とペンケースの SVG に名前が入る（名前は文字
   assert.doesNotMatch(toolArt(itemOf('pen-black-05'), {label: false}), /<title>/);
   for (const id of ['case-canvas-navy', 'case-tin-silver', 'case-leather-brown', 'case-clear'])
     assert.match(caseArt(itemOf(id)), /<svg/);
+});
+
+test('シャープペンシル：書く道具としてはペン（type pen）で、種類は pencil。線は黒鉛の灰色、太さは芯の太さで決まる。3D モデル', () => {
+  const ps = CATALOG.filter((it) => it.pencil);
+  assert.ok(ps.length >= 3);
+  for (const it of ps) {
+    assert.equal(it.type, 'pen');
+    assert.equal(kindOf(it), 'pencil');
+    assert.equal(it.color, '#4a4a4a');
+    assert.equal(it.model, 'pencil-mech');
+    assert.equal(needsRedSheet(it), false, '黒鉛の線は赤シートで消えない');
+  }
+  const w = (mm) => ps.find((it) => it.mm === mm).width;
+  assert.ok(w('0.3') < w('0.5') && w('0.5') < w('0.7'));
+  const se = shopSeries().find((x) => x.id === 'pencil-05');
+  assert.equal(se.type, 'pencil');
+  assert.equal(se.items.length, 3);
 });
 
 test('ペンケースは 3D モデル（形の種類ごとの GLB。色は base・trim で塗る）。描けないときはペンケースの絵', async () => {

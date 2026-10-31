@@ -11,7 +11,7 @@ import {createRedSheet} from './red-sheet.js';
 import {state} from './store.js';
 import {dressCase} from './model3d.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, isModKey, tearClip} from './desk-tools.js';
-import {DEFAULT_HIDER, TYPE_LABEL, heldPen, itemOf, stationeryState, toolArt} from '../shared/stationery.js';
+import {DEFAULT_HIDER, heldPen, itemOf, stationeryState, toolArt, typeLabel} from '../shared/stationery.js';
 import {createCapture, drawMode, strokePath, touchesStroke} from '../shared/ink.js';
 import {growFigure, openFigureEditor, renderFigure} from './figure-view.js';
 import {figureSize, growsWithSize} from '../shared/figures.js';
@@ -136,7 +136,7 @@ class Desk extends DeskTools {
         if (!it)
           return `<button type="button" class="fude-side__pen is-empty" disabled aria-label="${i + 1} 本目：空き"><span class="fude-side__num">${i + 1}</span></button>`;
         const held = heldPen(it, this.st.refills?.[it.id]);
-        return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${it.name}（${TYPE_LABEL[it.type]}）" aria-pressed="false" style="--ink: ${held.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
+        return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${it.name}（${typeLabel(it)}）" aria-pressed="false" style="--ink: ${held.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
       })
       .join('');
     dressCase(side, this.$('slots'), kase); // 横のペンケースを、選んでいるケースの 3D の材質で描く
