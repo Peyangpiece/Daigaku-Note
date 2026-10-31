@@ -1154,6 +1154,90 @@ def case_tin():
     to_pen_axes()
 
 
+def rubber_maps(tile_mm=8.0, px=512):
+    """消しゴムのゴム：ごく細かい気泡の穴と、型から出したなめらかな面のわずかなゆらぎ。色は白にかすかなむら"""
+    rng = np.random.default_rng(17)
+    mm = tile_mm / px
+    pits = np.clip(rng.normal(size=(px, px)) - 3.0, 0, None)  # まばらでごく小さな気泡（型から出したなめらかな面）
+    pits = np.clip(gblur(pits, 0.7) * 3, 0, 1)
+    wave = pnoise(px, px, 25, 25, rng)
+    fine = pnoise(px, px, 1.2, 1.2, rng)
+    height = -0.012 * pits + 0.002 * wave + 0.0012 * fine
+    col = np.clip(0.96 - 0.06 * pits + 0.01 * wave, 0, 1)
+    rough = np.clip(0.62 + 0.2 * pits + 0.03 * fine, 0, 1)
+    return (save_image('RubberColor', col, 'sRGB', 'JPEG'), save_image('RubberRough', rough, 'Non-Color', 'JPEG'),
+            save_image('RubberNormal', normal_map(height, mm, 1.0), 'Non-Color', 'PNG'), tile_mm)
+
+
+def paper_maps(tile_mm=12.0, px=512):
+    """紙のスリーブ：紙の繊維のごく細かな凹凸"""
+    rng = np.random.default_rng(19)
+    fib = pnoise(px, px, 0.8, 3.0, rng) * 0.6 + pnoise(px, px, 3.0, 0.8, rng) * 0.4
+    height = 0.002 * fib + 0.002 * pnoise(px, px, 8, 8, rng)
+    rough = np.clip(0.72 + 0.04 * fib, 0, 1)
+    return (None, save_image('PaperRough', rough, 'Non-Color', 'JPEG'),
+            save_image('PaperNormal', normal_map(height, tile_mm / px, 1.0), 'Non-Color', 'PNG'), tile_mm)
+
+
+def eraser():
+    """消しゴム（大学ノートのオリジナル。形と質感は角形の字消し〔トンボ鉛筆の MONO〕を参考にした。配色・字は大学ノートのもの）：
+    角のきりっとした白い角形の塊（角はわずかに丸めるだけ。使った側の端は角が少しすり減る）に、紙のスリーブ。
+    スリーブは塊の真ん中より少し右寄りに巻き、両端からゴムが出る。スリーブの端の 4 つの角は、消すときに塊が折れないよう
+    斜めに切り欠く。L 50 × W 21 × H 11.5 mm"""
+    rm = rubber_maps()
+    pm = paper_maps()
+    rubber = material('Rubber', (1, 1, 1), roughness=0.66, texture=rm[0], rough_map=rm[1], normal_map=rm[2])
+    sleeve = material('Sleeve', srgb('#2f6fb5'), roughness=0.7, rough_map=pm[1], normal_map=pm[2])
+    paper = material('SleevePanel', srgb('#ffffff'), roughness=0.6, rough_map=pm[1], normal_map=pm[2])
+    ink_blue = material('SleeveInk', srgb('#2f6fb5'), roughness=0.6)
+    ink_white = material('SleeveInkWhite', srgb('#ffffff'), roughness=0.6)
+    L, W, H = 50.0, 21.0, 11.5
+    body = rbox('Rubber', L, W, H, 0.0, 0.9, 0.7, rubber, seg_v=6, seg_e=4, tile_mm=rm[3])
+    # 使った側（左の端）：角が少しすり減る（端に近いほど、角を内へ寄せる）
+    for v in body.data.vertices:
+        d = v.co.x + L / 2
+        if d < 5.0:
+            k = (1 - d / 5.0) ** 2
+            cy = abs(v.co.y) / (W / 2)
+            cz = abs(v.co.z - H / 2) / (H / 2)
+            corner = max(0.0, cy * cz - 0.4)
+            v.co.y *= 1 - 0.08 * k * corner
+            v.co.z = H / 2 + (v.co.z - H / 2) * (1 - 0.10 * k * corner)
+            v.co.x += 0.4 * k * (cy + cz) / 2
+    # スリーブ（紙の筒。ゴムより 0.3 mm 外。角はゴムに沿って小さく丸い）
+    SL = 34.0
+    cx = 3.0  # 中心（右寄り）
+    sl = rbox('Sleeve', SL, W + 0.6, H + 0.6, -0.3, 1.2, 0.5, sleeve, seg_v=6, seg_e=3, tile_mm=pm[3])
+    # 端の 4 つの長い角を斜めに切り欠く：端に近く、角に近い点ほど真ん中へ寄せる（最大 2.4 mm）
+    for v in sl.data.vertices:
+        e = SL / 2 - abs(v.co.x)
+        if e < 2.6:
+            cy = abs(v.co.y) / ((W + 0.6) / 2)
+            cz = abs(v.co.z - H / 2) / ((H + 0.6) / 2)
+            near = max(0.0, min(cy, cz) - 0.55) / 0.45  # 角に近いほど 1
+            cut = 2.4 * near
+            if cut > e:
+                v.co.x = math.copysign(SL / 2 - cut, v.co.x)
+    sl.data.transform(Matrix.Translation((cx, 0, 0)))
+    # 正面の白い札と字
+    lab = rounded_plate('SleeveLabel', 24.0, 7.6, 1.0, paper)
+    place_on(lab, sl, lambda x, y: (cx + x, -100, H / 2 + y), (0, 1, 0), 0.04)
+    t1 = flat_text('SleeveText', '大学ノート', FONT_JA, 4.3, ink_blue)
+    place_on(t1, sl, lambda x, y: (cx + x, -100, H / 2 + y), (0, 1, 0), 0.07)
+    # 上の面の字（DAIGAKU NOTE）と、白い細い線 2 本
+    t2 = flat_text('SleeveTop', 'DAIGAKU NOTE', None, 2.8, ink_white)
+    place_on(t2, sl, lambda x, y: (cx + x, y, 100), (0, 0, -1), 0.04)
+    for k, yy in enumerate((-6.8, 6.8)):
+        line = rounded_plate(f'SleeveLine_{k}', 28.0, 0.7, 0.3, ink_white)
+        place_on(line, sl, lambda x, y, yy=yy: (cx + x, yy + y, 100), (0, 0, -1), 0.04)
+    # 後ろの面の字（ERASER）
+    t3 = flat_text('SleeveBack', 'ERASER', None, 3.4, ink_white)
+    for v in t3.data.vertices:
+        v.co.x = -v.co.x  # 後ろから見て読めるように左右を返す
+    place_on(t3, sl, lambda x, y: (cx + x, 100, H / 2 + y), (0, -1, 0), 0.04)
+    to_pen_axes()
+
+
 FAMILIES = {
     'pen-ballpoint': lambda: ballpoint(),
     'pen-ballpoint-wood': lambda: ballpoint(wood=True),
@@ -1161,6 +1245,7 @@ FAMILIES = {
     'marker-wide': lambda: marker(wide=True),
     'hider': lambda: marker(hider=True),
     'pencil-mech': pencil,
+    'eraser': eraser,
     'case-pouch': case_pouch,
     'case-leather': case_leather,
     'case-clear': case_clear,

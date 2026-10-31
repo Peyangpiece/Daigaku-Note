@@ -25,6 +25,8 @@ export const TYPE_LABEL = {
 };
 /** 品の種類（シャープペンシルは 'pencil'、ほかは type） */
 export const kindOf = (item) => (item?.pencil ? 'pencil' : item?.type);
+/** 品ぞろえ（CATALOG）の外の 3D モデル：消しゴム（筆箱の横にいつもある道具） */
+export const EXTRA_MODELS = ['eraser'];
 /** 品の種類の名前 */
 export const typeLabel = (item) => TYPE_LABEL[kindOf(item)];
 /** 道具の種類 → 編集画面の注釈の種類（shared/annotation.js） */
@@ -680,6 +682,14 @@ function sarasaArt(item, g) {
     <path d="M118 7 H178 Q186 7 186 3.6 V2.8 Q186 0.9 183.8 0.9 H126 Q120 0.9 118.6 3.4 Z" fill="url(#${g}-c)" stroke="${shade(item.accent, -0.35)}" stroke-width="0.4"/>
     <path d="M118 7 Q115.4 7 115.4 9.2" fill="none" stroke="${shade(item.accent, -0.2)}" stroke-width="1"/>
     <rect x="132" y="2" width="40" height="1.1" rx="0.55" fill="#fff" opacity="0.55"/>`;
+}
+
+/**
+ * 消しゴムの絵（筆箱の横）。viewBox 0 0 64 28。3D モデル（eraser）を斜め上から描いた画像を入れる（renderer/model3d.js）。
+ * 入るまで・描けないときは、平らな絵（data-model-flat）を見せる
+ */
+export function eraserArt() {
+  return `<svg viewBox="0 0 64 28" aria-hidden="true" data-model="eraser"><g data-model-flat><rect x="2" y="5" width="40" height="18" rx="3" fill="#fbfbf8" stroke="#c9c6bd"/><rect x="26" y="4" width="36" height="20" rx="2" fill="#2f6fb5"/><rect x="30" y="9" width="28" height="10" rx="1" fill="#fff" opacity="0.9"/></g><image data-model-img x="0" y="0" width="64" height="28" preserveAspectRatio="xMidYMid meet"/></svg>`;
 }
 
 /** ペンケースの絵。viewBox 0 0 200 80。3D モデルの品は、モデルを斜め上から描いた画像（renderer/model3d.js が入れる） */

@@ -20,11 +20,15 @@ const itemOf = (el) => CATALOG.find((it) => it.id === el.dataset.item) ?? null;
 const plainArt = (item, opts) =>
   item.type === 'case' ? caseArt({...item, art: null}) : toolArt({...item, art: null}, opts);
 
-const snapshot = (id, item) => {
+const snapshot = (id, item, svg) => {
   const key = `${id}|${item?.id ?? ''}`;
   if (!snaps.has(key)) {
-    // ペンケースの絵は 200×80（斜め上から）、ペンは 200×28（真横から）
-    const size = item?.type === 'case' ? {w: 1200, h: 480} : {};
+    // 絵の縦横比に合わせる：ペンケースは 200×80、消しゴムは 64×28（どちらも斜め上から）、ペンは 200×28（真横から）
+    const vb = svg?.viewBox?.baseVal;
+    const size =
+      vb && vb.width && Math.abs(vb.width / vb.height - 200 / 28) > 0.01
+        ? {w: 1200, h: Math.round((1200 * vb.height) / vb.width)}
+        : {};
     const p = loadThree().then((m) => m.snapshot(id, {item, ...size}));
     p.catch(() => snaps.delete(key));
     snaps.set(key, p);
@@ -42,8 +46,11 @@ function fallback(svg, id) {
 function hydrateArt(svg) {
   svg.dataset.modelReady = '1';
   const id = svg.dataset.model;
-  snapshot(id, itemOf(svg)).then(
-    (url) => svg.querySelector('image[data-model-img]')?.setAttribute('href', url),
+  snapshot(id, itemOf(svg), svg).then(
+    (url) => {
+      svg.querySelector('image[data-model-img]')?.setAttribute('href', url);
+      svg.querySelector('[data-model-flat]')?.remove(); // 入るまで見せていた平らな絵（消しゴム）
+    },
     (e) => {
       console.warn('3D モデルを描けません', id, e);
       fallback(svg, id);

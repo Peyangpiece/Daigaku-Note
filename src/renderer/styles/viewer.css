@@ -714,8 +714,8 @@
   cursor: pointer;
 }
 .fude-side__eraser svg {
-  width: 52px;
-  height: 22px;
+  width: 66px;
+  height: 29px;
 }
 .fude-side__eraser[aria-pressed='true'] {
   box-shadow:

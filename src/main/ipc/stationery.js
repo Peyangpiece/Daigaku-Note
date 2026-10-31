@@ -1,7 +1,7 @@
 // IPC の窓口：文房具（stationery.*）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
-import {CATALOG, arrange, purchase} from '../../shared/stationery.js';
+import {CATALOG, EXTRA_MODELS, arrange, purchase} from '../../shared/stationery.js';
 import {spend} from '../../shared/points.js';
 import {here, bad} from './common.js';
 
@@ -39,7 +39,8 @@ export function register({handle, repo}) {
 
   handle('stationery.model', async ({model}) => {
     const id = String(model ?? '');
-    if (!/^[a-z0-9-]+$/.test(id) || !CATALOG.some((it) => it.model === id)) bad('そのモデルはありません');
+    if (!/^[a-z0-9-]+$/.test(id) || !(CATALOG.some((it) => it.model === id) || EXTRA_MODELS.includes(id)))
+      bad('そのモデルはありません');
     const bytes = await fsp.readFile(path.join(modelsDir, `${id}.glb`));
     return {bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)};
   });

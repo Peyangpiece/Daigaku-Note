@@ -1,6 +1,7 @@
 // PDF の編集画面の定数と小さな補助（viewer.js と viewer/*.js が使う）
 import * as pdfjs from '../../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
 import {ROUND_DEFAULTS} from '../../../shared/skin.js';
+import {eraserArt} from '../../../shared/stationery.js';
 import {DEFAULT_SIZE, MASK_COLOR, SIZE_MAX, SIZE_MIN} from '../../../shared/annotation.js';
 import {cornersHtml} from '../../desk-tools.js';
 
@@ -238,7 +239,7 @@ export const BAR = `
     <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span><button type="button" class="fude-side__pin" data-v="pin" aria-pressed="false" title="開いたままにする（窓が広いときだけ。PDF は左に寄せて小さくします）">開いたまま</button></div>
     <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン（${key(MOD, '1')}〜${key(MOD, '6')}）"></div>
     <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカー・文字隠しをなぞって消す（${key(MOD, 'E')}）">
-      <svg viewBox="0 0 64 28" aria-hidden="true"><rect x="2" y="5" width="40" height="18" rx="3" fill="#fbfbf8" stroke="#c9c6bd"/><rect x="26" y="4" width="36" height="20" rx="2" fill="#2f6fb5"/><rect x="30" y="9" width="28" height="10" rx="1" fill="#fff" opacity="0.9"/></svg>
+      ${eraserArt()}
       <span>消しゴム</span>
     </button>
     <div class="fude-side__swap">
