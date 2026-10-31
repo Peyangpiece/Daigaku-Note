@@ -11,7 +11,7 @@ import {createRedSheet} from './red-sheet.js';
 import {state} from './store.js';
 import {dressCase} from './model3d.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, isModKey, tearClip} from './desk-tools.js';
-import {DEFAULT_HIDER, heldPen, itemOf, stationeryState, toolArt, typeLabel} from '../shared/stationery.js';
+import {DEFAULT_HIDER, eraserArt, heldPen, itemOf, stationeryState, toolArt, typeLabel} from '../shared/stationery.js';
 import {createCapture, drawMode, strokePath, touchesStroke} from '../shared/ink.js';
 import {growFigure, openFigureEditor, renderFigure} from './figure-view.js';
 import {figureSize, growsWithSize} from '../shared/figures.js';
@@ -30,7 +30,7 @@ const FUDE = `
     <div class="fude-side__head"><strong>筆箱</strong><span class="muted">画面に下書き（保存しません）</span></div>
     <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン"></div>
     <button type="button" class="fude-side__eraser" data-desk-tool="eraser" aria-pressed="false" title="消しゴム：下書きの線をなぞって消す">
-      <svg viewBox="0 0 64 28" aria-hidden="true"><rect x="2" y="5" width="40" height="18" rx="3" fill="#fbfbf8" stroke="#c9c6bd"/><rect x="26" y="4" width="36" height="20" rx="2" fill="#2f6fb5"/><rect x="30" y="9" width="28" height="10" rx="1" fill="#fff" opacity="0.9"/></svg>
+      ${eraserArt()}
       <span>消しゴム</span>
     </button>
     <div class="desk__clear"><button type="button" class="btn btn--small" data-desk-clear title="下書きの線・貼ったものを全部消す">下書きを全部消す</button></div>

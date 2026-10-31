@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CATALOG,
+  EXTRA_MODELS,
+  eraserArt,
   kindOf,
   SLOTS,
   STARTER,
@@ -215,6 +217,16 @@ test('シャープペンシル：書く道具としてはペン（type pen）で
   const se = shopSeries().find((x) => x.id === 'pencil-05');
   assert.equal(se.type, 'pencil');
   assert.equal(se.items.length, 3);
+});
+
+test('消しゴムの絵：3D モデル（eraser）の画像を入れる所と、入るまでの平らな絵がある。GLB がある', async () => {
+  const {existsSync} = await import('node:fs');
+  assert.ok(EXTRA_MODELS.includes('eraser'));
+  assert.ok(existsSync(new URL('../src/renderer/assets/stationery/eraser.glb', import.meta.url)));
+  const art = eraserArt();
+  assert.match(art, /data-model="eraser"/);
+  assert.match(art, /<image data-model-img/);
+  assert.match(art, /data-model-flat/);
 });
 
 test('ペンケースは 3D モデル（形の種類ごとの GLB。色は base・trim で塗る）。描けないときはペンケースの絵', async () => {

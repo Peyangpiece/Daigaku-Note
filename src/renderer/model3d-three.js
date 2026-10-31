@@ -184,7 +184,8 @@ async function loadNow(id, item) {
   const group = new THREE.Group();
   group.add(inner);
   // ペンケースは机に置いた向きで、縦の軸のまわりに回す（ペンは軸のまわりに転がす）
-  const kind = /^case-/.test(id) ? 'case' : 'pen';
+  // 机に置く物（ペンケース・消しゴム）は 'case'：置いた向きで回し、小さな絵は斜め上から
+  const kind = /^(case-|eraser$)/.test(id) ? 'case' : 'pen';
   const scene = new THREE.Scene();
   scene.add(group);
   scene.environment = envMap;
