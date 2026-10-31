@@ -15,7 +15,7 @@ const models = new Map(); // 「model id|品の id」→ Promise<{scene, group, 
 
 /**
  * 品の色で塗り替える（公式の品：形の種類ごとの GLB を、品の body・accent・color で）。材質は名前で見分ける
- * （scripts/pens3d/build.py）。Body 軸・Accent 天冠とノック・Grip グリップ・Print 印字・Cap キャップ・Felt 芯・Plug 尻栓・Ink インクの窓。
+ * （scripts/pens3d/build.py）。Body 軸・Accent 先の円すい・天冠・ノック・Grip グリップ・Print 印字・Cap キャップ・Felt 芯・Plug 尻栓。
  * 字幅の印字（Print_mm_05 など）は品の字幅のものだけを出す
  */
 function tint(obj, item) {
@@ -43,8 +43,10 @@ function tint(obj, item) {
         m.metalness = 1;
         m.roughness = 0.22;
       }
-    } else if (name === 'Grip') m.color = color(item.accent).lerp(new THREE.Color('#1b1b1d'), 0.62);
-    else if (name === 'Print') m.color = color(lum(item.body) > 0.35 ? '#3a3b3f' : '#f2f2ee');
+    } else if (name === 'Grip') {
+      // ゴムのグリップは差し色を暗くした色。金の飾りの品は金のゴムにならないよう、軸の色から作る
+      m.color = color(item.trim === 'gold' ? item.body : item.accent).lerp(new THREE.Color('#1b1b1d'), 0.62);
+    } else if (name === 'Print') m.color = color(lum(item.body) > 0.35 ? '#3a3b3f' : '#f2f2ee');
     else if (['Cap', 'Felt', 'Plug', 'Ink'].includes(name)) m.color = color(item.color);
   });
 }

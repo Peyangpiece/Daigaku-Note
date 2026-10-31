@@ -8,6 +8,7 @@
 - **Electron**（MIT）と、その中の **Chromium**・**Node.js** ほか。これらのライセンス文はアプリに同梱の `LICENSE.electron.txt`・`LICENSES.chromium.html` にあります。
 - **Noto Sans JP**・**Zen Maru Gothic**（SIL Open Font License 1.1）。ライセンス文は `src/renderer/fonts/OFL-NotoSansJP.txt`・`OFL-ZenMaruGothic.txt`。
 - **three.js の addons**（MIT。three 本体と同じ。`src/renderer/vendor/three-addons/LICENSE`）。
+- **IPA ゴシック**（IPA フォントライセンス v1.0）。公式の文房具の 3D モデル（`src/renderer/assets/stationery/*.glb`）の印字「大学ノート」は、この書体の字の形を立体にしたもの（フォントのファイルは含まない）。
 
 ## npm の依存
 

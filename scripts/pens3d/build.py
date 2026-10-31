@@ -24,7 +24,7 @@ SEG = 96  # 円周の分け方
 
 # ---- 材質 ----
 def material(name, color=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.4, coat=0.0, coat_rough=0.05,
-             transmission=0.0, ior=1.45, texture=None):
+             transmission=0.0, ior=1.45, texture=None, rough_map=None, normal_map=None, normal_strength=1.0):
     m = bpy.data.materials.new(name)
     m.use_nodes = True
     p = m.node_tree.nodes['Principled BSDF']
@@ -35,10 +35,22 @@ def material(name, color=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.4, coat=0.0,
     p.inputs['Coat Roughness'].default_value = coat_rough
     p.inputs['Transmission Weight'].default_value = transmission
     p.inputs['IOR'].default_value = ior
+    nt = m.node_tree
     if texture:
-        t = m.node_tree.nodes.new('ShaderNodeTexImage')
+        t = nt.nodes.new('ShaderNodeTexImage')
         t.image = texture
-        m.node_tree.links.new(t.outputs['Color'], p.inputs['Base Color'])
+        nt.links.new(t.outputs['Color'], p.inputs['Base Color'])
+    if rough_map:
+        t = nt.nodes.new('ShaderNodeTexImage')
+        t.image = rough_map
+        nt.links.new(t.outputs['Color'], p.inputs['Roughness'])
+    if normal_map:
+        t = nt.nodes.new('ShaderNodeTexImage')
+        t.image = normal_map
+        nm = nt.nodes.new('ShaderNodeNormalMap')
+        nm.inputs['Strength'].default_value = normal_strength
+        nt.links.new(t.outputs['Color'], nm.inputs['Color'])
+        nt.links.new(nm.outputs['Normal'], p.inputs['Normal'])
     return m
 
 
@@ -167,8 +179,15 @@ def sweep(name, path, width, thick, mat, radius_dir, round_r=0.25, n_round=3):
     return obj
 
 
-def wrapped_text(name, text, font, size, z_start, radius, angle, mat, lift=0.02):
-    """文字を軸の表面に巻き付ける（字の横方向が軸の長さ方向、縦方向が円周）。angle は字の中心の角度（ラジアン）"""
+def wrapped_text(name, text, font, size, z_start, radius, angle, mat, lift=0.03, sx=1.0, sy=1.0):
+    """radius は数か、z → 半径の関数（先細りの軸に沿わせる）"""
+    rad = radius if callable(radius) else (lambda z: radius)
+    return _wrapped_text(name, text, font, size, z_start, rad, angle, mat, lift, sx, sy)
+
+
+def _wrapped_text(name, text, font, size, z_start, rad, angle, mat, lift, sx, sy):
+    """文字を軸の表面に巻き付ける（字の横方向が軸の長さ方向、縦方向が円周）。angle は字の中心の角度（ラジアン。0 が +X＝正面）。
+    字の上はクリップの側（−Y）へ向ける（ペン先を左にして見たとき、左から右へ正しく読める）。sx・sy は楕円の軸"""
     cu = bpy.data.curves.new(name, 'FONT')
     cu.body = text
     cu.size = size
@@ -184,11 +203,25 @@ def wrapped_text(name, text, font, size, z_start, radius, angle, mat, lift=0.02)
     ob = bpy.context.view_layer.objects.active
     ob.select_set(False)
     me = ob.data
-    r = radius + lift
+    # 長い辺は巻き付けると弦になり、円周の中ほどが軸の中へ沈む（字の一部が欠ける）。0.25 mm 以下に割ってから巻く
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.triangulate(bm, faces=bm.faces[:])
+    for _ in range(8):
+        long_edges = [e for e in bm.edges if e.calc_length() > 0.25]
+        if not long_edges:
+            break
+        bmesh.ops.subdivide_edges(bm, edges=long_edges, cuts=1, use_grid_fill=False)
+        bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
+    bm.to_mesh(me)
+    bm.free()
     for v in me.vertices:
         x, y = v.co.x, v.co.y
-        a = angle + y / r
-        v.co = Vector((r * math.cos(a), r * math.sin(a), z_start + x))
+        z = z_start + x
+        r = rad(z)
+        a = angle - y / (r * max(sx, sy))
+        n = Vector((math.cos(a) / sx, math.sin(a) / sy, 0)).normalized()  # 楕円の面の外向き
+        v.co = Vector((r * sx * math.cos(a), r * sy * math.sin(a), z)) + n * lift
     me.materials.clear()
     me.materials.append(mat)
     return ob
@@ -197,16 +230,23 @@ def wrapped_text(name, text, font, size, z_start, radius, angle, mat, lift=0.02)
 # ---- 形の種類 ----
 def ballpoint(wood=False):
     """ノック式のボールペン（大学ノートのオリジナル。長さ 144 mm・軸の太さ 10.4 mm）"""
-    tex = wood_texture() if wood else None
+    if wood:
+        col, rough, nrm = wood_maps()
+        body = material('Body', (1, 1, 1), roughness=0.5, texture=col, rough_map=rough, normal_map=nrm,
+                        normal_strength=1.0)
+    else:
+        body = material('Body', srgb('#2c2d30'), roughness=0.16, coat=1.0)
     M = {
-        'body': material('Body', srgb('#2c2d30'), roughness=0.38 if wood else 0.16, coat=0.0 if wood else 1.0,
-                         texture=tex),
-        'accent': material('Accent', srgb('#55575c'), roughness=0.2, coat=0.8),
+        'body': body,
+        # 木軸の金具は、つや消しのクロム（品の色で塗り替えない名前 Trim）
+        'accent': material('Trim', (0.86, 0.86, 0.86), metallic=1.0, roughness=0.28) if wood
+        else material('Accent', srgb('#55575c'), roughness=0.2, coat=0.8),
         'grip': material('Grip', srgb('#2a2a2c'), roughness=0.72),
         'chrome': material('Chrome', (0.92, 0.92, 0.92), metallic=1.0, roughness=0.08),
         'tip': material('TipMetal', (0.85, 0.85, 0.86), metallic=1.0, roughness=0.18),
         'ball': material('Ball', (0.5, 0.5, 0.52), metallic=1.0, roughness=0.12),
-        'print': material('Print', (0.9, 0.9, 0.9), roughness=0.45),
+        'print': material('Engrave', srgb('#3b2414'), roughness=0.8) if wood
+        else material('Print', (0.9, 0.9, 0.9), roughness=0.45),
     }
     R = 5.2  # 軸の半径
     # ペン先（金属の口金とボール）
@@ -216,8 +256,13 @@ def ballpoint(wood=False):
     # 先の円すい（樹脂）とグリップ
     cone = fillet([(0, 3.4), (1.5, 3.4), (1.7, 3.6), (3.4, 9.0), (4.6, 13.0), (4.9, 14.0), (4.9, 14.2), (0, 14.2)], 0.4)
     lathe('Cone', cone, M['accent'])
-    grip = [(0, 14.0), (4.95, 14.0), (5.15, 14.3)] + ridged(5.15, 14.6, 40.6, 0.16, 0.85) + [(5.1, 40.9), (4.95, 41.2), (0, 41.2)]
-    lathe('Grip', grip, M['grip'])
+    if wood:  # 木軸：グリップも同じ木（ゴムを巻かない）。持つ所はわずかにくびれる
+        lathe('Grip', fillet([(0, 14.0), (4.95, 14.0), (5.1, 14.6), (4.85, 27.0), (5.1, 40.6), (4.95, 41.2), (0, 41.2)], 0.5),
+              M['body'])
+    else:
+        grip = [(0, 14.0), (4.95, 14.0), (5.15, 14.3)] + ridged(5.15, 14.6, 40.6, 0.16, 0.85) + [(5.1, 40.9), (4.95, 41.2),
+                                                                                                    (0, 41.2)]
+        lathe('Grip', grip, M['grip'])
     # 継ぎ目の金属の輪
     lathe('Ring', fillet([(0, 41.0), (5.0, 41.0), (5.32, 41.2), (5.32, 42.6), (5.0, 42.8), (0, 42.8)], 0.15), M['chrome'])
     # 軸（わずかに先細り）
@@ -241,15 +286,20 @@ def ballpoint(wood=False):
         else:
             off = 5.7 - math.sin((t - 0.92) / 0.08 * math.pi) * 0.25
         path.append((0, -off, z))
-    sweep('Clip', path, 3.4, 0.62, M['chrome'], lambda p: (0, -1, 0))
-    lathe('ClipBall', fillet([(0, 89.0), (0.9, 89.2), (1.0, 90.0), (0.9, 90.8), (0, 91.0)], 0.3), M['chrome'],
-          seg=32).location = (0, -5.75, 0)
+    sweep('Clip', path, 4.2, 0.8, M['chrome'], lambda p: (0, -1, 0), round_r=0.35)
+    lathe('ClipBall', fillet([(0, 88.8), (1.1, 89.0), (1.25, 90.0), (1.1, 91.0), (0, 91.2)], 0.35), M['chrome'],
+          seg=48).location = (0, -5.85, 0)
     # 印字：大学ノートと字幅（字幅は 4 つ。アプリが品の字幅だけを出す）
-    ang = math.radians(150)
-    wrapped_text('Print_brand', '大学ノート', FONT_JA, 3.0, 62.0, 5.13, ang, M['print'])
-    wrapped_text('Print_brand_en', 'DAIGAKU NOTE', None, 2.2, 79.0, 5.11, ang, M['print'])
+    ang = 0.0  # 正面（3D の表示と横からの絵で見える側）
+
+    def br(z):  # 軸の半径（先細り：60 mm で 5.2、100 mm で 5.12、126.8 mm で 5.0）
+        return 5.2 if z <= 60 else 5.2 - (z - 60) / 40 * 0.08 if z <= 100 else 5.12 - (z - 100) / 26.8 * 0.12
+
+    lift = 0.03  # 焼き印も印刷も、面から 0.04mm 浮かせる（同じ高さだと奥行きの精度で欠ける）
+    wrapped_text('Print_brand', '大学ノート', FONT_JA, 3.0, 62.0, br, ang, M['print'], lift=lift + 0.01)
+    wrapped_text('Print_brand_en', 'DAIGAKU NOTE', None, 2.2, 79.0, br, ang, M['print'], lift=lift + 0.01)
     for mm in ('0.38', '0.5', '0.7', '1.0'):
-        wrapped_text(f'Print_mm_{mm.replace(".", "")}', mm, None, 2.4, 106.0, 5.07, ang, M['print'])
+        wrapped_text(f'Print_mm_{mm.replace(".", "")}', mm, None, 2.4, 106.0, br, ang, M['print'], lift=lift + 0.01)
 
 
 def marker(wide=False, hider=False):
@@ -262,7 +312,6 @@ def marker(wide=False, hider=False):
         'cap': material('Cap', srgb('#ffe14d'), roughness=0.18, transmission=0.55, ior=1.49),
         'felt': material('Felt', srgb('#ffe14d'), roughness=0.95),
         'plug': material('Plug', srgb('#ffe14d'), roughness=0.3, coat=0.5),
-        'ink': material('Ink', srgb('#ffe14d'), roughness=0.15, transmission=0.4),
         'print': material('Print', (0.25, 0.25, 0.27), roughness=0.45),
     }
     # 角芯（フェルト）：先を斜めに切った板
@@ -288,8 +337,6 @@ def marker(wide=False, hider=False):
     # 軸：楕円の断面（マーカー）・丸（文字隠しペン）
     lathe('Barrel', fillet([(0, 17.0), (W - 0.2, 17.0), (W, 18.0), (W, L - 22), (W - 0.15, L - 8), (W - 0.5, L - 6.0),
                             (0, L - 6.0)], 0.5), M['body'], sx=sx, sy=sy)
-    # インクの窓（軸の中ほどの色の帯）
-    lathe('InkWindow', fillet([(0, 46.0), (W + 0.02, 46.0), (W + 0.02, 70.0), (0, 70.0)], 0.2), M['ink'], sx=sx, sy=sy)
     # 尻栓
     lathe('Plug', fillet([(0, L - 6.6), (W - 0.6, L - 6.6), (W - 0.55, L - 1.6), (W - 1.6, L), (0, L + 0.05)], 0.6),
           M['plug'], sx=sx, sy=sy)
@@ -299,44 +346,145 @@ def marker(wide=False, hider=False):
     inner = [(W - 0.05, cl), (W - 0.05, 6.5), (W - 1.0, 2.6), (1.6, 0.2), (0, 0.2)]
     lathe('Cap', fillet(outer, 0.8) + fillet(inner, 0.5), M['cap'], sx=sx, sy=sy)
     # キャップのクリップ（キャップと同じ樹脂。根元から先へ細くなる）
+    # 根元はキャップの閉じた側（ペン先の側）。開いた側へ向かってわずかに軸へ寄り、先はふくらんで軸に触れる
     path = []
-    for i in range(41):
-        t = i / 40
-        z = cl - 3 - t * 34
-        off = (W + 0.6) * sy + 1.2 - t * 0.4 + (0.3 * math.sin(t * math.pi) if t > 0.85 else 0)
+    for i in range(49):
+        t = i / 48
+        z = 3.0 + t * 36.0
+        if t < 0.1:
+            off = (W + 0.4) * sy + (t / 0.1) * 1.5
+        else:
+            off = (W + 0.6) * sy + 1.5 - (t - 0.1) * 0.5 - (0.35 * math.sin((t - 0.86) / 0.14 * math.pi) if t > 0.86 else 0)
         path.append((0, -off, z))
-    sweep('CapClip', path, 3.0 if not hider else 2.6, 1.1, M['cap'], lambda p: (0, -1, 0), round_r=0.45)
-    # 印字
-    wrapped_text('Print_brand', '大学ノート', FONT_JA, 3.0, 76.0 if not hider else 80.0, W * (sy if sx == 1 else 1.0) + 0.0,
-                 math.radians(150), M['print'])
+    sweep('CapClip', path, 4.0 if not hider else 3.2, 1.6, M['cap'], lambda p: (0, -1, 0), round_r=0.7)
+    # 印字（軸の正面）
+    wrapped_text('Print_brand', '大学ノート', FONT_JA, 3.2, 60.0 if not hider else 62.0, W, 0.0, M['print'], sx=sx, sy=sy)
+    wrapped_text('Print_kind', 'HIGHLIGHTER' if not hider else 'CHECK PEN', None, 2.2, 80.0 if not hider else 82.0, W, 0.0,
+                 M['print'], sx=sx, sy=sy)
 
 
-def wood_texture():
-    """木目（ウォルナットのような）を描いて、軸に貼る画像にする（Cycles で焼き付ける）"""
-    img = bpy.data.images.new('WoodGrain', 1024, 1024)
-    # 板目：縦に流れる年輪（波の模様）を、軸の長さ方向（v）に沿わせる
-    w, h = img.size
-    px = [0.0] * (w * h * 4)
-    import random
-    random.seed(7)
-    base = srgb('#b8865a')
-    dark = srgb('#7a5233')
-    for y in range(h):
-        for x in range(w):
-            u, v = x / w, y / h
-            wobble = 0.035 * math.sin(v * 9.0 + math.sin(u * 6.28) * 1.4) + 0.012 * math.sin(v * 41.0 + u * 3.0)
-            ring = (u * 18.0 + wobble * 18.0) % 1.0
-            g = 0.5 + 0.5 * math.cos(ring * 2 * math.pi)
-            g = g ** 3.0
-            fine = 0.06 * math.sin(u * 900.0 + v * 30.0)
-            k = min(1.0, max(0.0, g * 0.75 + fine + 0.04 * random.random()))
-            c = [base[i] * (1 - k) + dark[i] * k for i in range(3)]
-            o = (y * w + x) * 4
-            px[o:o + 4] = [c[0], c[1], c[2], 1.0]
-    img.pixels = px
-    img.file_format = 'PNG'
-    img.pack()
-    return img
+def wood_maps(w=1024, h=2048, out_dir='/tmp/pens3d-wood'):
+    """木軸の画像 3 枚（色・粗さ・凹凸の法線）。実物の木の作りから求める：
+    - 軸は、丸太から削り出した円柱。年輪は丸太の芯のまわりの同心の筒で、芯は軸から外れ、わずかに傾いている
+      → 軸の表面と年輪が交わる所が木目。ほぼまっすぐな筋（柾目）と、ところどころの山形（板目のタケノコ模様）が出る
+    - 年輪の中は、春にできる早材（明るく柔らかい・大きな導管＝小さな穴が並ぶ）と、夏にできる晩材（濃く硬い）
+    - 仕上げはオイル：早材はわずかにへこみ（研ぐと柔らかい所が先に削れる）、導管はくぼみで光沢が鈍い
+    - 放射組織（芯から外へ向かう細い斑）、色むら、細かな繊維の筋も足す
+    u は軸の円周（周 2π×5.2 mm）、v は軸の長さ（約 85 mm）"""
+    import numpy as np
+    rng = np.random.default_rng(20261031)
+    os.makedirs(out_dir, exist_ok=True)
+    R = 5.2
+    L = 85.0
+    th = np.linspace(0, 2 * np.pi, w, endpoint=False)[None, :]
+    z = np.linspace(0, L, h)[:, None]
+    X, Y = R * np.cos(th), R * np.sin(th)
+
+    def fbm(px, py, pz, octaves, base, seed):
+        """方向をばらした正弦波を重ねた、なめらかなゆらぎ（-1〜1 くらい）"""
+        r = np.random.default_rng(seed)
+        acc = np.zeros(np.broadcast(px, py, pz).shape)
+        amp, f = 1.0, base
+        for _ in range(octaves):
+            for _ in range(3):
+                d = r.normal(size=3)
+                d /= np.linalg.norm(d)
+                acc += amp * np.sin(f * (d[0] * px + d[1] * py + d[2] * pz) + r.uniform(0, 2 * np.pi))
+            amp *= 0.55
+            f *= 2.1
+        return acc / 3
+
+    # 丸太の芯：軸から 38 mm 外れ、長さ方向に 2.5° 傾く（年輪が軸の表面を斜めに切って山形が出る）
+    cx, cy, tilt = 38.0, 9.0, np.radians(2.5)
+    ax = np.array([np.sin(tilt), 0.0, np.cos(tilt)])
+    PX, PY, PZ = X - cx, Y - cy, z + 0 * X
+    dot = PX * ax[0] + PY * ax[1] + PZ * ax[2]
+    dist = np.sqrt(np.maximum(PX ** 2 + PY ** 2 + PZ ** 2 - dot ** 2, 0))
+    # 年輪の幅（1.1〜1.8 mm で年ごとに違う）とゆがみ
+    warp = fbm(X, Y, z, 4, 0.08, 1) * 1.6 + fbm(X, Y, z, 3, 0.6, 2) * 0.18
+    rings = dist + warp
+    year_w = 1.45 + 0.35 * np.sin(rings * 0.21) + 0.15 * np.sin(rings * 0.53 + 1.0)
+    phase = (rings / year_w) % 1.0  # 0：早材の始まり → 1：晩材の終わり
+    late = np.clip((phase - 0.58) / 0.32, 0, 1) ** 1.4  # 晩材の割合（年輪の後ろ 4 割で濃くなる）
+    late = np.where(phase > 0.93, 1 - (phase - 0.93) / 0.07 * 0.85, late)  # 年輪の境（はっきりした線）
+    early_band = np.clip(1 - phase / 0.25, 0, 1)  # 早材の帯（導管が並ぶ所）
+
+    def blur(a, r):
+        """ずらして平均するぼかし（u は輪のようにつながる）"""
+        out = a.copy()
+        for _ in range(r):
+            out = (out + np.roll(out, 1, 1) + np.roll(out, -1, 1) + np.roll(out, 1, 0) + np.roll(out, -1, 0)) / 5
+        return out
+
+    # 導管（小さな穴）：早材の帯に多く、晩材にはまばら。長さ方向に伸びた大小の楕円のくぼみ（ふちはぼかす）
+    pores = np.zeros((h, w))
+    n = 60000
+    pu = rng.integers(0, w, n)
+    pv = rng.integers(0, h, n)
+    p_keep = 0.08 + 0.92 * early_band[pv, pu] ** 0.7
+    keep = rng.random(n) < p_keep
+    pu, pv = pu[keep], pv[keep]
+    lens = np.clip(rng.gamma(2.0, 2.5, pu.size).astype(int) + 1, 1, 16)  # 長さ 0.04〜0.65 mm（短いものが多い）
+    depth = rng.uniform(0.5, 1.0, pu.size)
+    for k in range(16):
+        m = k < lens
+        taper = np.sin(np.pi * (k + 0.5) / np.maximum(lens[m], 1))  # 端ほど浅い
+        vv = (pv[m] + k) % h
+        pores[vv, pu[m]] = np.maximum(pores[vv, pu[m]], depth[m] * taper)
+    pores = np.clip(blur(pores, 1) * 1.6, 0, 1)
+    # 放射組織：年輪を横切る、ごく細く短いつやのある斑（わずかに明るい）
+    ray_seed = np.clip(rng.normal(size=(h, w)) - 3.1, 0, None)
+    rays = blur(np.maximum.reduce([np.roll(ray_seed, k, 0) for k in range(0, 18, 2)]), 1)
+    rays = np.clip(rays * 2.5, 0, 1) * (0.4 + 0.6 * late)
+    # 繊維の細かな筋：円周の向きに細かく変わり、長さ方向にはゆっくり変わる（ペーパーで研いだ木の表面の筋）
+    col_noise = rng.normal(size=w)
+    col_noise = (col_noise + np.roll(col_noise, 1) * 0.6 + np.roll(col_noise, -1) * 0.6) / 2.2
+    fiber = col_noise[None, :] * (0.7 + 0.3 * np.sin(z / 3.0 + col_noise[None, :] * 3)) + 0.35 * fbm(X * 9, Y * 9, z * 0.35, 3, 2.8, 4)
+    # 色むら：年ごとの色の濃さの違い（年輪に沿う）と、大きくゆるやかなむら
+    year = np.floor(rings / year_w)
+    year_tone = np.sin(year * 12.9898) * 43758.5453 % 1.0 - 0.5
+    mott = fbm(X, Y, z, 2, 0.02, 5) * 0.5 + year_tone * 0.8
+
+    # 色（sRGB）：明るい早材のはちみつ色、濃い晩材の焦げ茶、導管は暗く
+    early_c = np.array([0.80, 0.62, 0.42])
+    late_c = np.array([0.50, 0.32, 0.18])
+    k = np.clip(late * 0.82 + mott * 0.12 + fiber * 0.035, 0, 1)[..., None]
+    col = early_c * (1 - k) + late_c * k
+    pore_c = np.array([0.30, 0.18, 0.09])  # 導管の中（濃い茶。灰色にしない）
+    col = col * (1 - 0.75 * pores[..., None]) + pore_c * 0.75 * pores[..., None]
+    col = col * (1 + 0.10 * rays[..., None])
+    col = np.clip(col * (1 + 0.05 * mott[..., None]), 0, 1)
+
+    # 高さ（mm）：早材は 4 µm へこみ、導管は 25 µm のくぼみ、繊維の筋で 1 µm のざらつき
+    height = -0.004 * (1 - late) - 0.022 * pores + 0.0012 * fiber + 0.001 * rays
+    du_mm = 2 * np.pi * R / w
+    dv_mm = L / h
+    gy, gx = np.gradient(height, dv_mm, du_mm)
+    s = 18.0  # 見た目の強さ（実物の凹凸は細かいので、光で分かる程度に強める）
+    nx, ny = -gx * s, -gy * s
+    nz = np.ones_like(nx)
+    ln = np.sqrt(nx ** 2 + ny ** 2 + nz ** 2)
+    nrm = np.stack([nx / ln, ny / ln, nz / ln], -1) * 0.5 + 0.5
+
+    # 粗さ：オイル仕上げの半つや（0.42）。晩材は少しつや、導管はつやなし
+    rough = np.clip(0.44 - 0.08 * late + 0.38 * pores + 0.03 * fiber, 0.25, 0.95)
+
+    def save(name, arr, colorspace, fmt):
+        a = arr if arr.ndim == 3 else np.repeat(arr[..., None], 3, -1)
+        img = bpy.data.images.new(name, w, h, alpha=False)
+        rgba = np.concatenate([a, np.ones((h, w, 1))], -1).astype(np.float32)
+        img.pixels.foreach_set(rgba.ravel())
+        path = os.path.join(out_dir, f'{name}.{fmt.lower().replace("jpeg", "jpg")}')
+        img.filepath_raw = path
+        img.file_format = fmt
+        img.save()
+        bpy.data.images.remove(img)
+        im = bpy.data.images.load(path)
+        im.colorspace_settings.name = colorspace
+        return im
+
+    return (save('WoodColor', col, 'sRGB', 'JPEG'), save('WoodRough', rough, 'Non-Color', 'JPEG'),
+            save('WoodNormal', nrm, 'Non-Color', 'PNG'))
 
 
 FAMILIES = {
@@ -360,7 +508,7 @@ def build(name, out):
     path = os.path.join(out, f'{name}.glb')
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', export_yup=True, export_apply=True,
                               export_texcoords=True, export_normals=True, export_materials='EXPORT',
-                              export_image_format='JPEG', export_jpeg_quality=88)
+                              export_image_format='AUTO', export_jpeg_quality=90)
     return path
 
 
