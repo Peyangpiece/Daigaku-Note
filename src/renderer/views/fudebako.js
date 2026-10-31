@@ -84,7 +84,7 @@ function spec(item) {
 
 /** 札の絵。3D モデルの品は、ドラッグで回せる 3D 表示（renderer/model3d.js が中を作る）。big は詳細ページ（拡大もできる）。foot: false で下の説明を省く */
 const art = (item, {big = false, foot = true} = {}) =>
-  item.type === 'case'
+  item.type === 'case' && !big
     ? caseArt(item)
     : item.art === 'model'
       ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}" data-item="${esc(item.id)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
@@ -97,7 +97,9 @@ const art = (item, {big = false, foot = true} = {}) =>
               }</div>`
             : ''
         }`
-      : toolArt(item);
+      : item.type === 'case'
+        ? caseArt(item)
+        : toolArt(item);
 const detailRoute = (item) => `/fudebako/item/${encodeURIComponent(item.id)}`;
 const SHOP = '/fudebako?tab=shop';
 
@@ -245,7 +247,7 @@ function seriesCard(series, s) {
   else if (it.type === 'hider') sub.push('赤シートで隠れる');
   return `<article class="shop-card shop-card--${tier.id}${owned ? ' is-owned' : ''}" data-series="${esc(series.id)}">
     ${ribbons(it)}
-    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.art === 'model' ? toolArt(it) : it.type === 'case' ? caseArt(it) : toolArt(it)}</button>
+    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'case' ? caseArt(it) : toolArt(it)}</button>
     <button type="button" class="shop-card__name" data-action="nav" data-route="${detailRoute(it)}">${esc(series.name)}</button>
     <div class="muted shop-card__spec">${sub.map(esc).join('・')}</div>
     <div class="shop-card__foot">${priceTag(it, owned)}${dots(series, it)}</div>
@@ -322,7 +324,7 @@ function hero(s) {
       <p>${esc(it.maker)}。${it.refills ? '黒・赤のボールペンと 0.5 のシャープが 1 本に。' : ''}${it.art === 'model' ? '3D モデルで、実物の形と材質を回して確かめられます。' : ''}</p>
       <div class="shop-hero__act">${priceTag(it, owned)}${owned ? '' : cartAction(it, s)}<button type="button" class="btn btn--small" data-action="nav" data-route="${detailRoute(it)}">くわしく見る</button></div>
     </div>
-    <div class="shop-hero__art">${art(it, {foot: false})}${it.art === 'model' ? '<p class="muted shop-hero__hint">ドラッグで回せます</p>' : ''}</div>
+    <div class="shop-hero__art">${art(it, {foot: false})}${it.art === 'model' && it.type !== 'case' ? '<p class="muted shop-hero__hint">ドラッグで回せます</p>' : ''}</div>
   </section>`;
 }
 /** ショップ：帯・検索・絞り込み・シリーズの札 */

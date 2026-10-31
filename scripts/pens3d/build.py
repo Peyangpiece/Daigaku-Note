@@ -16,7 +16,9 @@ import sys
 
 import bpy  # bmesh・mathutils は bpy を読んだあとで使える
 import bmesh
-from mathutils import Vector
+from mathutils import Matrix, Vector
+from mathutils.bvhtree import BVHTree
+import numpy as np
 
 FONT_JA = '/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf'
 SEG = 96  # 円周の分け方
@@ -487,12 +489,575 @@ def wood_maps(w=1024, h=2048, out_dir='/tmp/pens3d-wood'):
             save('WoodNormal', nrm, 'Non-Color', 'PNG'))
 
 
+# ---- ペンケース ----
+# 形は自然な向き（長さ X・奥行き Y〔正面は −Y〕・高さ Z〔底が 0〕）で作り、最後にペンと同じ向き
+# （長さ → Blender の +Z、上 → −Y、正面 → +X）へ回す（renderer/model3d-three.js はペンと同じ読み方で寝かせる）。
+# 材質の名前（アプリが品の色で塗る）：CaseBase 本体（base）・CaseTrim 縁・タブ・ステッチ・ファスナーのテープ（trim）・
+#   CaseZipCoil 樹脂のファスナーの歯（trim を暗く）・CaseZipTape 革のファスナーのテープ（base を暗く）・
+#   CaseDeboss 型押しの字（base を暗く）・CaseLabelText 織りネームの字（base）。ZipMetal・Brass は塗らない
+TEX_DIR = '/tmp/pens3d-tex'
+TO_PEN = Matrix(((0, -1, 0), (0, 0, -1), (1, 0, 0))).to_4x4()  # X→Z・Y→−X・Z→−Y
+
+
+def save_image(name, arr, colorspace, fmt):
+    """numpy の配列（行 0 が画像の下）を画像にし、書き出して読み直す（GLB に入るように）"""
+    os.makedirs(TEX_DIR, exist_ok=True)
+    h, w = arr.shape[:2]
+    a = arr if arr.ndim == 3 else np.repeat(arr[..., None], 3, -1)
+    img = bpy.data.images.new(name, w, h, alpha=False)
+    img.pixels.foreach_set(np.concatenate([a, np.ones((h, w, 1))], -1).astype(np.float32).ravel())
+    path = os.path.join(TEX_DIR, f'{name}.{"jpg" if fmt == "JPEG" else "png"}')
+    img.filepath_raw = path
+    img.file_format = fmt
+    img.save()
+    bpy.data.images.remove(img)
+    im = bpy.data.images.load(path)
+    im.colorspace_settings.name = colorspace
+    return im
+
+
+def pnoise(h, w, sy, sx, rng):
+    """つなぎ目なく繰り返すなめらかなゆらぎ（標準偏差 1）。sy・sx はぼかしの大きさ（画素）"""
+    n = rng.normal(size=(h, w))
+    fy = np.fft.fftfreq(h)[:, None]
+    fx = np.fft.fftfreq(w)[None, :]
+    g = np.exp(-2 * np.pi ** 2 * ((fy * sy) ** 2 + (fx * sx) ** 2))
+    out = np.real(np.fft.ifft2(np.fft.fft2(n) * g))
+    return out / (out.std() + 1e-12)
+
+
+def normal_map(height, px_mm, strength=1.0):
+    """高さ（mm）→ 法線（つなぎ目なく）。行が v（上）、列が u（右）"""
+    gx = (np.roll(height, -1, 1) - np.roll(height, 1, 1)) / (2 * px_mm)
+    gy = (np.roll(height, -1, 0) - np.roll(height, 1, 0)) / (2 * px_mm)
+    nx, ny, nz = -gx * strength, -gy * strength, np.ones_like(gx)
+    ln = np.sqrt(nx ** 2 + ny ** 2 + nz ** 2)
+    return np.stack([nx / ln, ny / ln, nz / ln], -1) * 0.5 + 0.5
+
+
+def canvas_maps(tile_mm=9.6, n=16, px=768):
+    """帆布（太い綿糸の平織り）：たて糸とよこ糸が 1 本ずつ上下に交わる。糸ごとの太さ・色のむら、毛羽、
+    織り目の谷の影。色は灰色（アプリが品の色を掛ける）"""
+    rng = np.random.default_rng(7)
+    c = px / n  # 1 本の幅（画素）
+    y, x = np.mgrid[0:px, 0:px].astype(float)
+    i, j = np.floor(x / c), np.floor(y / c)
+    fx, fy = (x % c) / c, (y % c) / c
+    slub_w = 1 + 0.10 * pnoise(px, n, 40, 0.01, rng)[:, i[0].astype(int)]  # たて糸の太さ（長さに沿ってゆっくり変わる）
+    slub_f = 1 + 0.10 * pnoise(n, px, 0.01, 40, rng)[j[:, 0].astype(int)][:, :]
+    prof = lambda f, k: np.sqrt(np.clip(1 - ((f - 0.5) / (0.47 * k)) ** 2, 0, 1))  # 糸の断面（丸）
+    warp = prof(fx, slub_w) * (0.45 + 0.55 * (0.5 + 0.5 * np.cos(np.pi * (y / c - 0.5 + i))))
+    weft = prof(fy, slub_f) * (0.45 + 0.55 * (0.5 + 0.5 * np.cos(np.pi * (x / c - 0.5 + j + 1))))
+    top = np.maximum(warp, weft)
+    # 糸の撚り（斜めの細い筋）と毛羽
+    twist_w = 0.06 * np.sin(2 * np.pi * (y / c * 3 + fx * 1.2))
+    twist_f = 0.06 * np.sin(2 * np.pi * (x / c * 3 + fy * 1.2))
+    twist = np.where(warp >= weft, twist_w, twist_f) * top
+    fuzz = 0.05 * pnoise(px, px, 0.8, 0.8, rng)
+    height = 0.16 * (top + twist + fuzz)  # mm（糸の太さ 0.3 mm くらい）
+    tone_w = rng.normal(0, 0.035, n)[i.astype(int)]
+    tone_f = rng.normal(0, 0.035, n)[j.astype(int)]
+    tone = np.where(warp >= weft, tone_w, tone_f)
+    mott = 0.025 * pnoise(px, px, 60, 60, rng)
+    col = np.clip(0.70 + 0.30 * top ** 0.7 + tone + mott + 0.5 * fuzz * top, 0, 1)
+    rough = np.clip(0.93 - 0.08 * top, 0, 1)
+    return (save_image('CanvasColor', col, 'sRGB', 'JPEG'), save_image('CanvasRough', rough, 'Non-Color', 'JPEG'),
+            save_image('CanvasNormal', normal_map(height, tile_mm / px, 1.0), 'Non-Color', 'PNG'), tile_mm)
+
+
+def gblur(a, sigma):
+    """つなぎ目なくぼかす（画素）"""
+    h, w = a.shape
+    fy = np.fft.fftfreq(h)[:, None]
+    fx = np.fft.fftfreq(w)[None, :]
+    return np.real(np.fft.ifft2(np.fft.fft2(a) * np.exp(-2 * np.pi ** 2 * sigma ** 2 * (fx ** 2 + fy ** 2))))
+
+
+def voronoi(px, k, rng, warp=0.0):
+    """つなぎ目なく繰り返すボロノイ（いちばん近い種までの距離 f1 と 2 番目 f2。画素）。
+    warp：位置をなめらかにゆがめる量（画素。境がまっすぐな多角形に見えないように）"""
+    seeds = rng.random((k, 2)) * px
+    y, x = np.mgrid[0:px, 0:px].astype(float)
+    if warp:
+        x = (x + warp * pnoise(px, px, px / 40, px / 40, rng)) % px
+        y = (y + warp * pnoise(px, px, px / 40, px / 40, rng)) % px
+    f1 = np.full((px, px), 1e9)
+    f2 = np.full((px, px), 1e9)
+    for sx, sy in seeds:
+        dx = np.abs(x - sx)
+        dx = np.minimum(dx, px - dx)
+        dy = np.abs(y - sy)
+        dy = np.minimum(dy, px - dy)
+        d = np.sqrt(dx * dx + dy * dy)
+        f2 = np.where(d < f1, f1, np.minimum(f2, d))
+        f1 = np.minimum(f1, d)
+    return f1, f2
+
+
+def leather_maps(tile_mm=16.0, px=1024):
+    """シボ革（自然なシボ）：大小の丸い粒のゆるいふくらみと、そのあいだの浅くやわらかな谷、毛穴、大きなゆるいしわ。
+    谷はわずかに暗くつやが鈍く、粒の頭はなでられてつやが出る（コントラストは低く、近くで見て分かる程度）"""
+    rng = np.random.default_rng(11)
+    mm = tile_mm / px
+    # 大きな粒（1.4 mm くらい）と小さな粒（0.6 mm くらい）を重ねる。位置を少しゆがめて、多角形に見えないようにする
+    f1a, f2a = voronoi(px, int((tile_mm / 1.3) ** 2), rng, warp=9)
+    f1b, f2b = voronoi(px, int((tile_mm / 0.55) ** 2), rng, warp=4)
+    valley_a = np.exp(-((f2a - f1a) * mm) / 0.06)  # 粒のあいだの細い谷
+    valley_b = np.exp(-((f2b - f1b) * mm) / 0.035)
+    dome = 1 - np.clip(f1a * mm / 1.0, 0, 1) ** 2  # 粒のふくらみ
+    wrinkle = pnoise(px, px, 40, 110, rng)
+    pores = np.clip(rng.normal(size=(px, px)) - 3.0, 0, None)
+    pores = np.clip(gblur(pores, 0.6) * 3, 0, 1)
+    height = gblur(0.020 * dome - 0.028 * valley_a - 0.008 * valley_b - 0.008 * pores, 1.0) + 0.012 * wrinkle
+    mott = pnoise(px, px, 70, 70, rng)
+    col = np.clip(0.92 + 0.03 * dome - 0.07 * valley_a - 0.025 * valley_b - 0.03 * pores + 0.02 * mott, 0, 1)
+    rough = np.clip(0.46 - 0.06 * dome + 0.16 * valley_a + 0.05 * valley_b + 0.15 * pores, 0.2, 1)
+    return (save_image('LeatherColor', col, 'sRGB', 'JPEG'), save_image('LeatherRough', rough, 'Non-Color', 'JPEG'),
+            save_image('LeatherNormal', normal_map(height, mm, 1.0), 'Non-Color', 'PNG'), tile_mm)
+
+
+def brushed_maps(tile_mm=24.0, px=512):
+    """缶の塗装：長さの向きにごく細いヘアラインと、わずかなゆず肌"""
+    rng = np.random.default_rng(13)
+    lines = pnoise(px, px, 0.5, 80, rng)  # 横（長さ）に伸びた筋（ごく弱く。塗装の下の地肌がうっすら見える程度）
+    peel = pnoise(px, px, 5, 5, rng)
+    height = 0.0004 * lines + 0.0012 * peel
+    rough = np.clip(0.30 + 0.015 * lines, 0, 1)
+    return (None, save_image('TinRough', rough, 'Non-Color', 'JPEG'),
+            save_image('TinNormal', normal_map(height, tile_mm / px, 1.0), 'Non-Color', 'PNG'), tile_mm)
+
+
+def obj_from_bm(name, bm, mat, smooth=True):
+    mesh = bpy.data.meshes.new(name)
+    bm.to_mesh(mesh)
+    bm.free()
+    ob = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(ob)
+    ob.data.materials.append(mat)
+    if smooth:
+        for p in ob.data.polygons:
+            p.use_smooth = True
+    return ob
+
+
+def pouch_surface(L, D, H, nu=161, nv=128, end='pinch', end_frac=0.12, n_top=2.6, n_bot=4.5, top_narrow=0.35,
+                  wrinkle=0.0, seed=1):
+    """袋の形の点（nu×nv×3）。s は長さ（−1〜1）、t は断面の角（0 が奥 +Y、π/2 が上、π が正面 −Y）。
+    end='pinch'：端は縫い目（奥行きが 0 になる・高さは残る）、'round'：端を丸く閉じる"""
+    s = np.sin(np.linspace(-1, 1, nu) * np.pi / 2)[:, None]  # 端ほど細かく（端の丸みをなめらかに）
+    t = np.linspace(0, 2 * np.pi, nv, endpoint=False)[None, :]
+    a_s = np.abs(s)
+    if end == 'pinch':
+        fa = np.clip(1 - a_s ** 3.2, 0, 1) ** 0.5
+        z1 = H * (1 - 0.14 * s ** 4)
+        z0 = H * 0.10 * a_s ** 6
+        kk = np.ones_like(s)
+    else:
+        e = end_frac
+        q = np.clip((a_s - (1 - e)) / e, 0, 1)
+        kk = np.sqrt(np.clip(1 - q ** 2, 0, 1))
+        fa = kk
+        z1 = np.full_like(s, H)
+        z0 = np.zeros_like(s)
+    zc = (z0 + z1) / 2
+    b = (z1 - z0) / 2 * kk
+    c, sn = np.cos(t), np.sin(t)
+    n = np.where(sn > 0, n_top, n_bot)
+    cy = np.sign(c) * np.abs(c) ** (2 / n)
+    cz = np.sign(sn) * np.abs(sn) ** (2 / n)
+    yy = (D / 2) * fa * cy * (1 - top_narrow * np.clip(sn, 0, None) ** 2)
+    zz = zc + b * cz
+    xx = np.broadcast_to(s * L / 2, yy.shape).copy()
+    P = np.stack([xx, yy, zz], -1)
+    if wrinkle:
+        r = np.random.default_rng(seed)
+        w = np.zeros_like(yy)
+        for _ in range(7):
+            w += r.normal() * np.sin(r.uniform(4, 16) * s + r.integers(1, 5) * t + r.uniform(0, 6.3))
+        w *= wrinkle / 3 * np.clip(1 - a_s ** 2, 0, 1) * (0.4 + 0.6 * np.clip(-sn, 0, 1) + 0.6 * np.clip(sn, 0, 1))
+        nrm = np.stack(np.broadcast_arrays(np.zeros_like(yy), cy, cz), -1).astype(float)
+        nrm /= np.linalg.norm(nrm, axis=-1, keepdims=True) + 1e-9
+        P += nrm * w[..., None]
+    return P
+
+
+def grid_object(name, P, mat, tile_mm, poles=False):
+    """点の格子（u：長さ・v：円周〔つながる〕）から面を作る。UV は長さに沿った mm ÷ 模様の大きさ。
+    poles：両端の輪の真ん中に 1 点を足してふさぐ"""
+    nu, nv = P.shape[:2]
+    du = np.linalg.norm(np.diff(P, axis=0), axis=-1).mean(axis=1)
+    U = np.concatenate([[0], np.cumsum(du)]) / tile_mm
+    seg = np.linalg.norm(np.roll(P, -1, axis=1) - P, axis=-1)
+    V = np.concatenate([np.zeros((nu, 1)), np.cumsum(seg, axis=1)], axis=1) / tile_mm
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new()
+    vs = [[bm.verts.new(P[i, j]) for j in range(nv)] for i in range(nu)]
+    for i in range(nu - 1):
+        for j in range(nv):
+            j2 = (j + 1) % nv
+            f = bm.faces.new((vs[i][j], vs[i][j2], vs[i + 1][j2], vs[i + 1][j]))
+            for loop, (ii, jj) in zip(f.loops, ((i, j), (i, j + 1), (i + 1, j + 1), (i + 1, j))):
+                loop[uvl].uv = (U[ii], V[ii, jj])
+    if poles:
+        for i, rev in ((0, True), (nu - 1, False)):
+            cpos = P[i].mean(axis=0)
+            cv = bm.verts.new(cpos)
+            for j in range(nv):
+                j2 = (j + 1) % nv
+                tri = (vs[i][j], vs[i][j2], cv) if not rev else (vs[i][j2], vs[i][j], cv)
+                try:
+                    f = bm.faces.new(tri)
+                except ValueError:
+                    continue
+                for loop in f.loops:
+                    co = loop.vert.co
+                    loop[uvl].uv = (co.y / tile_mm, co.z / tile_mm)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=1e-4)
+    bm.normal_update()
+    return obj_from_bm(name, bm, mat)
+
+
+def surf_at(P, s, t):
+    """格子の点を (s: 0〜1, t: 0〜2π) で引く（近い格子の点を線形にまぜる）"""
+    nu, nv = P.shape[:2]
+    fi = s * (nu - 1)
+    fj = (t % (2 * np.pi)) / (2 * np.pi) * nv
+    i0, j0 = int(min(fi, nu - 2)), int(fj) % nv
+    di, dj = fi - i0, fj - int(fj)
+    j1 = (j0 + 1) % nv
+    p = (P[i0, j0] * (1 - di) * (1 - dj) + P[i0 + 1, j0] * di * (1 - dj) + P[i0, j1] * (1 - di) * dj +
+         P[i0 + 1, j1] * di * dj)
+    return Vector(p)
+
+
+def surf_normal(P, s, t):
+    e = 1e-3
+    a = surf_at(P, min(s + e, 1), t) - surf_at(P, max(s - e, 0), t)
+    b = surf_at(P, s, t + 0.02) - surf_at(P, s, t - 0.02)
+    n = b.cross(a)  # 外向き（grid_object と同じ回り）
+    return n.normalized() if n.length > 1e-9 else Vector((0, 0, 1))
+
+
+def blocks(name, items, mat, smooth=False):
+    """小さな直方体をまとめた 1 つの形。items：(中心, 長さの向き, 上の向き, 長さ, 幅, 高さ)"""
+    bm = bmesh.new()
+    for c, ax, up, l, w, h in items:
+        ax = Vector(ax).normalized()
+        up = (Vector(up) - ax * Vector(up).dot(ax)).normalized()
+        sd = ax.cross(up)
+        vs = []
+        for dz in (-0.5, 0.5):
+            for dy in (-0.5, 0.5):
+                for dx in (-0.5, 0.5):
+                    k = 0.8 if dz > 0 else 1.0  # 上を少しすぼめる（丸みに見せる）
+                    vs.append(bm.verts.new(Vector(c) + ax * (dx * l * k) + sd * (dy * w * k) + up * (dz * h)))
+        for f in ((0, 2, 3, 1), (4, 5, 7, 6), (0, 1, 5, 4), (2, 6, 7, 3), (0, 4, 6, 2), (1, 3, 7, 5)):
+            bm.faces.new([vs[i] for i in f])
+    bm.normal_update()
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    return obj_from_bm(name, bm, mat, smooth)
+
+
+def rbox(name, sx, sy, sz, z0, r_v, r_e, mat, seg_v=10, seg_e=4, tile_mm=None):
+    """角を丸めた箱（縦の角は r_v、ほかの角は r_e）"""
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    for v in bm.verts:
+        v.co = Vector((v.co.x * sx, v.co.y * sy, v.co.z * sz + z0 + sz / 2))
+    vert_edges = [e for e in bm.edges if abs(e.verts[0].co.x - e.verts[1].co.x) < 1e-6 and
+                  abs(e.verts[0].co.y - e.verts[1].co.y) < 1e-6]
+    bmesh.ops.bevel(bm, geom=vert_edges, offset=r_v, offset_type='OFFSET', segments=seg_v, profile=0.5,
+                    affect='EDGES', clamp_overlap=True)
+    bm.edges.ensure_lookup_table()
+    sharp = [e for e in bm.edges if e.is_manifold and e.calc_face_angle(0) > 0.6]
+    bmesh.ops.bevel(bm, geom=sharp, offset=r_e, offset_type='OFFSET', segments=seg_e, profile=0.5,
+                    affect='EDGES', clamp_overlap=True)
+    bm.normal_update()
+    if tile_mm:
+        uvl = bm.loops.layers.uv.new()
+        for f in bm.faces:
+            n = f.normal
+            for loop in f.loops:
+                co = loop.vert.co
+                loop[uvl].uv = ((co.x / tile_mm, co.y / tile_mm) if abs(n.z) > 0.7 else
+                                (co.x / tile_mm, co.z / tile_mm) if abs(n.y) >= abs(n.x) else (co.y / tile_mm, co.z / tile_mm))
+    ob = obj_from_bm(name, bm, mat)
+    ob.data.set_sharp_from_angle(angle=math.radians(35))
+    return ob
+
+
+def flat_text(name, text, font, size, mat, align='CENTER'):
+    """字の形（XY 面・字の中心が原点）。長い辺は細かく割る（あとで面に沿わせるため）"""
+    cu = bpy.data.curves.new(name, 'FONT')
+    cu.body = text
+    cu.size = size
+    cu.align_x = align
+    cu.align_y = 'CENTER'
+    if font:
+        cu.font = bpy.data.fonts.load(font, check_existing=True)
+    ob = bpy.data.objects.new(name, cu)
+    bpy.context.collection.objects.link(ob)
+    bpy.context.view_layer.objects.active = ob
+    ob.select_set(True)
+    bpy.ops.object.convert(target='MESH')
+    ob = bpy.context.view_layer.objects.active
+    ob.select_set(False)
+    subdivide_long(ob.data, 0.6)
+    ob.data.materials.clear()
+    ob.data.materials.append(mat)
+    return ob
+
+
+def subdivide_long(me, limit):
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.triangulate(bm, faces=bm.faces[:])
+    for _ in range(8):
+        long_edges = [e for e in bm.edges if e.calc_length() > limit]
+        if not long_edges:
+            break
+        bmesh.ops.subdivide_edges(bm, edges=long_edges, cuts=1, use_grid_fill=False)
+        bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
+    bm.to_mesh(me)
+    bm.free()
+
+
+def rounded_plate(name, w, h, r, mat):
+    """角を丸めた平らな板（XY 面・中心が原点。織りネームや札）"""
+    bm = bmesh.new()
+    pts = []
+    for cx, cy, a0 in ((w / 2 - r, h / 2 - r, 0), (-w / 2 + r, h / 2 - r, 90), (-w / 2 + r, -h / 2 + r, 180),
+                       (w / 2 - r, -h / 2 + r, 270)):
+        for k in range(7):
+            a = math.radians(a0 + 90 * k / 6)
+            pts.append(bm.verts.new((cx + r * math.cos(a), cy + r * math.sin(a), 0)))
+    bm.faces.new(pts)
+    ob = obj_from_bm(name, bm, mat, smooth=False)
+    subdivide_long(ob.data, 0.8)
+    return ob
+
+
+def place_on(ob, target, origin_of, direction, lift):
+    """平らな形（XY 面）の点を、origin_of(x, y) から direction へ飛ばして target の面に当て、面から lift だけ浮かせる"""
+    dg = bpy.context.evaluated_depsgraph_get()
+    bvh = BVHTree.FromObject(target, dg)
+    d = Vector(direction).normalized()
+    for v in ob.data.vertices:
+        o = Vector(origin_of(v.co.x, v.co.y))
+        hit, nrm, _, _ = bvh.ray_cast(o, d)
+        if hit is not None:
+            if nrm.dot(d) > 0:
+                nrm = -nrm
+            v.co = hit + nrm * lift
+    for p in ob.data.polygons:
+        p.use_smooth = True
+
+
+def zipper(P, s0, s1, tape_mat, teeth_mat, metal_mat, pull_mat, tape_w=10.0, tooth=(1.6, 5.2, 1.3), pitch=1.9,
+           slider_s=0.78, pull_len=20.0, pull_w=6.5, pull_thick=1.2, leather_pull=False):
+    """袋の上（t=π/2）に沿ったファスナー：テープ・歯（左右からかみ合う）・スライダー・引き手（正面へ垂れる）"""
+    n = 400
+    path, ups = [], []
+    for k in range(n + 1):
+        s = s0 + (s1 - s0) * k / n
+        p = surf_at(P, s, math.pi / 2)
+        nrm = surf_normal(P, s, math.pi / 2)
+        path.append(p + nrm * 0.45)
+        ups.append(nrm)
+    sweep('ZipTape', [tuple(p) for p in path], tape_w, 0.9, tape_mat,
+          lambda p: tuple(ups[min(range(len(path)), key=lambda i: (path[i] - Vector(p)).length_squared)]),
+          round_r=0.4)
+    # 歯：テープの真ん中に、左右から交互に（かみ合う形）
+    items = []
+    acc, last = 0.0, path[0]
+    side = 1
+    for k in range(1, len(path)):
+        acc += (path[k] - last).length
+        last = path[k]
+        if acc >= pitch:
+            acc = 0.0
+            ax = (path[min(k + 1, n)] - path[k - 1]).normalized()
+            up = ups[k]
+            sd = ax.cross(up).normalized()
+            c = path[k] + up * (0.45 + tooth[2] / 2) + sd * (0.35 * side)
+            items.append((tuple(c), tuple(ax), tuple(up), tooth[0], tooth[1], tooth[2]))
+            side = -side
+    blocks('ZipTeeth', items, teeth_mat, smooth=True)
+    # スライダー（角を丸めた金属の塊）と引き手
+    ks = int(slider_s * n)
+    c, ax, up = path[ks], (path[ks + 1] - path[ks - 1]).normalized(), ups[ks]
+    sl = rbox('ZipSlider', 11.0, 8.6, 3.6, 0, 1.6, 0.8, metal_mat, seg_v=4, seg_e=2)
+    sd = ax.cross(up).normalized()
+    m = Matrix((ax, sd, up)).transposed().to_4x4()
+    sl.data.transform(m)
+    sl.data.transform(Matrix.Translation(c + up * 0.6))
+    # 引き手：スライダーの正面側のふちから、袋の面に沿って正面（−Y）へ垂れる
+    s_mid = s0 + (s1 - s0) * slider_s
+    pts = []
+    t0 = math.pi / 2 + 0.12
+    for k in range(25):
+        tt = t0 + (0.72 if leather_pull else 0.55) * k / 24
+        p = surf_at(P, s_mid, tt)
+        nr = surf_normal(P, s_mid, tt)
+        pts.append(p + nr * (pull_thick / 2 + 0.9 + 2.0 * max(0, 1 - k / 6)))
+    lim, out, acc = pull_len, [pts[0]], 0.0
+    for k in range(1, len(pts)):
+        acc += (pts[k] - pts[k - 1]).length
+        out.append(pts[k])
+        if acc >= lim:
+            break
+    sweep('ZipPull', [tuple(p) for p in out], pull_w, pull_thick, pull_mat,
+          lambda p, s_mid=s_mid: tuple(Vector((0, -1, 0.6)).normalized()), round_r=0.5)
+    return path
+
+
+def stitches(name, curve_pts, normals, mat, length=2.3, gap=1.2, w=0.75, h=0.5):
+    """縫い目の糸（面に沿った点の並びに、短い糸を一定の間隔で置く）"""
+    items = []
+    acc, on, start = 0.0, True, curve_pts[0]
+    for k in range(1, len(curve_pts)):
+        acc += (curve_pts[k] - curve_pts[k - 1]).length
+        if on and acc >= length:
+            mid = (start + curve_pts[k]) / 2
+            ax = curve_pts[k] - start
+            items.append((tuple(mid + normals[k] * (h * 0.35)), tuple(ax), tuple(normals[k]), ax.length, w, h))
+            acc, on = 0.0, False
+        elif not on and acc >= gap:
+            acc, on, start = 0.0, True, curve_pts[k]
+    return blocks(name, items, mat, smooth=True)
+
+
+def case_materials(base=None, trim=None):
+    """材質をそろえる（名前で塗るので、同じ名前を 2 度作らない）。base・trim は material() に渡す引数"""
+    M = {}
+    M['base'] = material('CaseBase', (1, 1, 1), **(base or {}))
+    M['trim'] = material('CaseTrim', (1, 1, 1), **(trim or {'roughness': 0.8}))
+    M['coil'] = material('CaseZipCoil', (0.6, 0.6, 0.6), roughness=0.45)
+    M['ztape'] = material('CaseZipTape', (0.3, 0.3, 0.3), roughness=0.85)
+    M['deboss'] = material('CaseDeboss', (0.4, 0.3, 0.2), roughness=0.75)
+    M['label_text'] = material('CaseLabelText', (0.2, 0.2, 0.3), roughness=0.8)
+    M['metal'] = material('ZipMetal', srgb('#a8a9a6'), metallic=1.0, roughness=0.3)
+    M['brass'] = material('Brass', srgb('#c09a52'), metallic=1.0, roughness=0.28)
+    return M
+
+
+def maps_kw(maps, roughness):
+    col, rough, nrm, _ = maps
+    return dict(roughness=roughness, texture=col, rough_map=rough, normal_map=nrm)
+
+
+def to_pen_axes():
+    for ob in bpy.context.scene.objects:
+        if ob.type == 'MESH':
+            ob.data.transform(TO_PEN)
+
+
+def case_pouch():
+    """帆布の筆箱：舟形（両端は縫い目で閉じる）。上にコイルのファスナー、両端に縁取り、片方の端に輪のタブ、
+    正面に織りネーム。L 200 × D 72 × H 62 mm"""
+    cv = canvas_maps()
+    M = case_materials(maps_kw(cv, 0.9), maps_kw(cv, 0.9))
+    L, D, H = 200.0, 72.0, 62.0
+    P = pouch_surface(L, D, H, end='pinch', n_top=2.4, n_bot=4.5, top_narrow=0.42, wrinkle=0.9, seed=3)
+    body = grid_object('Body', P, M['base'], cv[3])
+    zipper(P, 0.075, 0.925, M['trim'], M['coil'], M['metal'], M['metal'], tooth=(1.2, 4.6, 1.2), pitch=1.6)
+    # 両端の縁取り（縫い目を包むテープ）
+    for sgn in (-1, 1):
+        z0 = H * 0.10 + 0.5
+        z1 = H * (1 - 0.14) + 0.5
+        path = [(sgn * (L / 2 - 0.5), 0, z0 - 1.2 + (z1 - z0 + 2.4) * k / 40) for k in range(41)]
+        sweep(f'Binding_{"L" if sgn < 0 else "R"}', path, 9.0, 3.2, M['trim'], lambda p, sgn=sgn: (sgn, 0, 0),
+              round_r=1.2)
+    # 輪のタブ（右の端。テープを折って縫い込んだもの）
+    zt = H * 0.62
+    tab = [(L / 2 + 0.5, -1.4, zt), (L / 2 + 9, -1.4, zt), (L / 2 + 12, -0.8, zt), (L / 2 + 12.6, 0, zt),
+           (L / 2 + 12, 0.8, zt), (L / 2 + 9, 1.4, zt), (L / 2 + 0.5, 1.4, zt)]
+    sweep('LoopTab', tab, 11.0, 1.3, M['trim'],
+          lambda p: (1, 0, 0) if p[0] > L / 2 + 11 else (0, -1 if p[1] < 0 else 1, 0), round_r=0.5)
+    # 正面の織りネーム（右寄り）
+    lab = rounded_plate('Label', 34, 12, 1.2, M['trim'])
+    place_on(lab, body, lambda x, y: (52 + x, -200, H * 0.45 + y), (0, 1, 0), 0.5)
+    txt = flat_text('LabelText', '大学ノート', FONT_JA, 5.6, M['label_text'])
+    place_on(txt, body, lambda x, y: (52 + x, -200, H * 0.45 + y), (0, 1, 0), 0.75)
+    to_pen_axes()
+
+
+def case_leather():
+    """革のペンケース：ふっくらした箱形（端は丸く閉じる）。真ちゅうのファスナー、両側に生成りのステッチ、
+    革の引き手、正面に型押しの「大学ノート」。L 195 × D 60 × H 50 mm"""
+    lv = leather_maps()
+    M = case_materials(maps_kw(lv, 0.5), {'roughness': 0.7})
+    L, D, H = 195.0, 60.0, 50.0
+    P = pouch_surface(L, D, H, end='round', end_frac=0.13, n_top=3.6, n_bot=5.0, top_narrow=0.18, wrinkle=0.35,
+                      seed=5)
+    body = grid_object('Body', P, M['base'], lv[3], poles=True)
+    zipper(P, 0.085, 0.915, M['ztape'], M['brass'], M['brass'], M['base'], tape_w=11.0, tooth=(1.8, 5.6, 1.5),
+           pitch=2.1, pull_len=26.0, pull_w=7.5, pull_thick=2.2, leather_pull=True)
+    # ステッチ：ファスナーの両側と、底の両側のふち
+    for k, (tt, s0, s1) in enumerate(((math.pi / 2 - 0.30, 0.07, 0.93), (math.pi / 2 + 0.30, 0.07, 0.93),
+                                     (-0.45, 0.10, 0.90), (math.pi + 0.45, 0.10, 0.90))):
+        pts, nrs = [], []
+        for i in range(600):
+            s = s0 + (s1 - s0) * i / 599
+            pts.append(surf_at(P, s, tt))
+            nrs.append(surf_normal(P, s, tt))
+        stitches(f'Stitch_{k}', pts, nrs, M['trim'])
+    txt = flat_text('Deboss', '大学ノート', FONT_JA, 7.5, M['deboss'])
+    place_on(txt, body, lambda x, y: (x, -200, H * 0.42 + y), (0, 1, 0), 0.05)
+    txt2 = flat_text('Deboss_en', 'DAIGAKU NOTE', None, 3.0, M['deboss'])
+    place_on(txt2, body, lambda x, y: (x, -200, H * 0.42 - 7 + y), (0, 1, 0), 0.05)
+    to_pen_axes()
+
+
+def case_clear():
+    """クリアケース：平たい透明のポーチ（端は丸く閉じる）。色の付いた樹脂のファスナー。
+    L 205 × D 34 × H 84 mm"""
+    M = case_materials({'roughness': 0.06, 'transmission': 1.0, 'ior': 1.5}, {'roughness': 0.6})
+    M['base'].use_backface_culling = False
+    L, D, H = 205.0, 34.0, 84.0
+    P = pouch_surface(L, D, H, nu=121, nv=128, end='round', end_frac=0.09, n_top=3.0, n_bot=6.0, top_narrow=0.25,
+                      wrinkle=0.25, seed=9)
+    body = grid_object('Body', P, M['base'], 20.0, poles=True)
+    zipper(P, 0.05, 0.95, M['trim'], M['coil'], M['metal'], M['metal'], tooth=(1.2, 4.4, 1.2), pitch=1.6,
+           slider_s=0.82)
+    txt = flat_text('Print', '大学ノート', FONT_JA, 6.0, M['trim'])
+    place_on(txt, body, lambda x, y: (60 + x, -200, H * 0.30 + y), (0, 1, 0), 0.05)
+    to_pen_axes()
+
+
+def case_tin():
+    """缶ペンケース：角を丸めた浅い箱（下の箱とかぶせぶた）。後ろに蝶番、ふたに「大学ノート」の印刷。
+    L 196 × D 64 × H 26 mm"""
+    bmaps = brushed_maps()
+    M = case_materials({'metallic': 0.9, 'roughness': 0.3, 'rough_map': bmaps[1], 'normal_map': bmaps[2]},
+                       {'metallic': 0.6, 'roughness': 0.35})
+    rbox('Tray', 194.0, 62.0, 16.5, 0.0, 9.0, 1.4, M['base'], tile_mm=bmaps[3])
+    lid = rbox('Lid', 196.6, 64.6, 10.4, 15.6, 10.0, 2.6, M['base'], tile_mm=bmaps[3])
+    # 後ろの蝶番（5 つの筒）
+    for k in range(5):
+        x = -78 + k * 39
+        bm = bmesh.new()
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=1.9, radius2=1.9, depth=16.0)
+        ob = obj_from_bm(f'Hinge_{k}', bm, M['trim'])
+        ob.data.transform(Matrix.Rotation(math.pi / 2, 4, 'Y'))
+        ob.data.transform(Matrix.Translation((x, 32.6, 16.0)))
+    txt = flat_text('Print', '大学ノート', FONT_JA, 11.0, M['trim'])
+    place_on(txt, lid, lambda x, y: (x, y + 3.0, 200), (0, 0, -1), 0.05)
+    txt2 = flat_text('Print_en', 'DAIGAKU NOTE', None, 4.0, M['trim'])
+    place_on(txt2, lid, lambda x, y: (x, y - 9.0, 200), (0, 0, -1), 0.05)
+    to_pen_axes()
+
+
 FAMILIES = {
     'pen-ballpoint': lambda: ballpoint(),
     'pen-ballpoint-wood': lambda: ballpoint(wood=True),
     'marker': lambda: marker(),
     'marker-wide': lambda: marker(wide=True),
     'hider': lambda: marker(hider=True),
+    'case-pouch': case_pouch,
+    'case-leather': case_leather,
+    'case-clear': case_clear,
+    'case-tin': case_tin,
 }
 
 

@@ -5,8 +5,8 @@
 //   - .model-view[data-model]：ドラッグで回せる 3D 表示を中に作る（わたしの筆箱の札。data-model-zoom="1" なら
 //     文房具の詳細ページの大きな表示：ホイールやピンチで近づけて細部を見られる）
 //   - [data-model-reset]：同じ [data-model-box] の中の 3D 表示の向きと距離を戻す
-// 描けないとき（WebGL が使えない・読み込めない）は、ふつうのペンの絵に置き換える
-import {CATALOG, toolArt} from '../shared/stationery.js';
+// 描けないとき（WebGL が使えない・読み込めない）は、ふつうのペン（ペンケース）の絵に置き換える
+import {CATALOG, caseArt, toolArt} from '../shared/stationery.js';
 
 const handles = new WeakMap(); // .model-view → mount() の戻り（reset）
 
@@ -16,10 +16,16 @@ const snaps = new Map(); // 「model id|品の id」→ Promise<data URL>
 // 同じ形（model）を品ごとの色で描く（公式の品は形の種類ごとに 1 つの GLB）。品の id がなければ GLB の色のまま
 const itemOf = (el) => CATALOG.find((it) => it.id === el.dataset.item) ?? null;
 
+/** 描けないときの絵（ペンケースはペンケースの絵） */
+const plainArt = (item, opts) =>
+  item.type === 'case' ? caseArt({...item, art: null}) : toolArt({...item, art: null}, opts);
+
 const snapshot = (id, item) => {
   const key = `${id}|${item?.id ?? ''}`;
   if (!snaps.has(key)) {
-    const p = loadThree().then((m) => m.snapshot(id, {item}));
+    // ペンケースの絵は 200×80（斜め上から）、ペンは 200×28（真横から）
+    const size = item?.type === 'case' ? {w: 1200, h: 480} : {};
+    const p = loadThree().then((m) => m.snapshot(id, {item, ...size}));
     p.catch(() => snaps.delete(key));
     snaps.set(key, p);
   }
@@ -30,7 +36,7 @@ const snapshot = (id, item) => {
 function fallback(svg, id) {
   const item = itemOf(svg) ?? CATALOG.find((it) => it.model === id);
   if (!item || !svg.isConnected) return;
-  svg.outerHTML = toolArt({...item, art: null}, {label: !!svg.querySelector('title')});
+  svg.outerHTML = plainArt(item, {label: !!svg.querySelector('title')});
 }
 
 function hydrateArt(svg) {
@@ -53,7 +59,7 @@ function hydrateView(el) {
       console.warn('3D モデルを描けません', el.dataset.model, e);
       el.classList.add('is-failed');
       const item = itemOf(el) ?? CATALOG.find((it) => it.model === el.dataset.model);
-      if (item) el.innerHTML = toolArt({...item, art: null});
+      if (item) el.innerHTML = plainArt(item);
     }
   );
 }
