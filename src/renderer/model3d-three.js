@@ -11,7 +11,45 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 const api = window.daigaku;
 let renderer = null;
 let envMap = null;
-const models = new Map(); // model id → Promise<{scene, group, ground}>
+const models = new Map(); // 「model id|品の id」→ Promise<{scene, group, ground}>
+
+/**
+ * 品の色で塗り替える（公式の品：形の種類ごとの GLB を、品の body・accent・color で）。材質は名前で見分ける
+ * （scripts/pens3d/build.py）。Body 軸・Accent 先の円すい・天冠・ノック・Grip グリップ・Print 印字・Cap キャップ・Felt 芯・Plug 尻栓。
+ * 字幅の印字（Print_mm_05 など）は品の字幅のものだけを出す
+ */
+function tint(obj, item) {
+  if (!item) return;
+  const color = (hex) => new THREE.Color(hex);
+  const lum = (hex) => {
+    const c = new THREE.Color(hex);
+    return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; // リニアの明るさ
+  };
+  const mm = item.mm ? `Print_mm_${item.mm.replace('.', '')}` : null;
+  const seen = new Set();
+  obj.traverse((o) => {
+    if (/^Print_mm_/.test(o.name) || /^Print_mm_/.test(o.parent?.name ?? '')) {
+      const n = /^Print_mm_/.test(o.name) ? o.name : o.parent.name;
+      o.visible = n.startsWith(mm ?? '-');
+    }
+    if (!o.isMesh || seen.has(o.material)) return;
+    const m = o.material;
+    seen.add(m);
+    const name = m.name ?? '';
+    if (name === 'Body' && !m.map) m.color = color(item.body);
+    else if (name === 'Accent') {
+      m.color = color(item.trim === 'gold' ? '#c9a227' : item.accent);
+      if (item.trim === 'gold') {
+        m.metalness = 1;
+        m.roughness = 0.22;
+      }
+    } else if (name === 'Grip') {
+      // ゴムのグリップは差し色を暗くした色。金の飾りの品は金のゴムにならないよう、軸の色から作る
+      m.color = color(item.trim === 'gold' ? item.body : item.accent).lerp(new THREE.Color('#1b1b1d'), 0.62);
+    } else if (name === 'Print') m.color = color(lum(item.body) > 0.35 ? '#3a3b3f' : '#f2f2ee');
+    else if (['Cap', 'Felt', 'Plug', 'Ink'].includes(name)) m.color = color(item.color);
+  });
+}
 
 /** 面光源の材質（明るさ 1 を超える色で、環境の映り込みに光として写る） */
 function lightPanel(w, h, intensity, tint = [1, 1, 1]) {
@@ -92,7 +130,7 @@ async function useLookMaterials(gltf) {
   });
 }
 
-async function loadNow(id) {
+async function loadNow(id, item) {
   const r = await api['stationery.model']({model: id});
   if (r?.error) throw new Error(r.error);
   const b = r.bytes;
@@ -101,6 +139,7 @@ async function loadNow(id) {
   const gltf = await new GLTFLoader().parseAsync(buf, '');
   const obj = gltf.scene;
   await useLookMaterials(gltf);
+  tint(obj, item);
   obj.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;
@@ -155,18 +194,19 @@ async function loadNow(id) {
   return {scene, group, ground};
 }
 
-function load(id) {
-  if (!models.has(id)) {
-    const p = loadNow(id);
-    p.catch(() => models.delete(id));
-    models.set(id, p);
+function load(id, item = null) {
+  const key = `${id}|${item?.id ?? ''}`;
+  if (!models.has(key)) {
+    const p = loadNow(id, item);
+    p.catch(() => models.delete(key));
+    models.set(key, p);
   }
-  return models.get(id);
+  return models.get(key);
 }
 
 /** 横から描いた画像（data URL の PNG）。stationery.js の絵の viewBox（200×28）と同じ比率 */
-export async function snapshot(id, {w = 1600, h = 224} = {}) {
-  const m = await load(id);
+export async function snapshot(id, {w = 1600, h = 224, item = null} = {}) {
+  const m = await load(id, item);
   const g = gl();
   g.setSize(w, h, false);
   const viewW = 1.04;
@@ -185,7 +225,7 @@ export async function snapshot(id, {w = 1600, h = 224} = {}) {
  * el の中に、ドラッグで回せる 3D 表示を作る。見えている間だけ描き、el が画面から消えたらやめる。
  * zoom: ホイール・ピンチで近づける（大きな表示用）。戻り値：{reset()} 向きと距離を戻す
  */
-export function mount(el, id, {zoom = false} = {}) {
+export function mount(el, id, {zoom = false, item = null} = {}) {
   const canvas = document.createElement('canvas');
   canvas.className = 'model-view__canvas';
   el.replaceChildren(canvas);
@@ -222,7 +262,11 @@ export function mount(el, id, {zoom = false} = {}) {
   let last = 0;
   // 「動きを減らす」設定では、勝手に回さず、利用者が回したときだけ描く
   const reduceMotion = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  controls.addEventListener('change', () => reduceMotion && visible && model && tick());
+  // 描き直しは次のフレームに 1 回だけ頼む（tick の中の controls.update() がまた change を出すので、その場で描くと
+  // 呼び出しが果てしなく重なって止まっていた）
+  controls.addEventListener('change', () => {
+    if (reduceMotion && visible && model) raf = requestAnimationFrame(tick);
+  });
   const size = () => {
     const r = el.getBoundingClientRect();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -263,7 +307,7 @@ export function mount(el, id, {zoom = false} = {}) {
   size();
   io.observe(el);
   ro.observe(el);
-  load(id).then(
+  load(id, item).then(
     (m) => {
       model = m;
       el.classList.add('is-ready');

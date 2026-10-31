@@ -87,7 +87,7 @@ const art = (item, {big = false, foot = true} = {}) =>
   item.type === 'case'
     ? caseArt(item)
     : item.art === 'model'
-      ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
+      ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}" data-item="${esc(item.id)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
         ${
           foot
             ? `<div class="${big ? 'fb-detail__foot' : 'model-view__foot'}"><span class="muted">${big ? 'ドラッグで回す・ホイールやピンチで近づける' : 'ドラッグで回せます'}</span>${
@@ -222,7 +222,7 @@ function cartAction(it, s) {
 function ribbons(it) {
   const r = [];
   if (it.featured) r.push('<span class="shop-ribbon shop-ribbon--new">新着</span>');
-  if (it.art === 'model') r.push('<span class="shop-ribbon shop-ribbon--3d">3D で見られる</span>');
+  if (it.art === 'model' && it.maker) r.push('<span class="shop-ribbon shop-ribbon--3d">3D で見られる</span>'); // 公式の品はみな 3D なので、既製品の見た目の品だけに付ける
   return r.length ? `<span class="shop-ribbons">${r.join('')}</span>` : '';
 }
 /** 持っている色を選んでいるときの札の下：ほかに持っていない色があれば、その数 */

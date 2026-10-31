@@ -10,8 +10,8 @@ files:
   - recipes/**
   - package.json
   - THIRD-PARTY-NOTICES.md
-  # 既製品の 3D モデル（src/renderer/assets/stationery/*.glb）は、α 版のあいだは配布物に入れる。
-  # 正式に公開する前に、許しを得られなければ '!src/renderer/assets/stationery/*.glb' で除く（stationery.js の MAKER_ITEMS_LISTED）
+  # 既製品の 3D モデル（src/renderer/assets/stationery/craftlab-004.glb）は、α 版のあいだは配布物に入れる（公式の品の GLB はいつも入れる）。
+  # 正式に公開する前に、許しを得られなければ '!src/renderer/assets/stationery/craftlab-004.glb' で除く（stationery.js の MAKER_ITEMS_LISTED）
   # three.js（文房具の 3D モデル）は本体の ESM だけ（addons は src/renderer/vendor/three-addons に写してある。
   # node_modules の examples は electron-builder が自動で外すため）
   - '!node_modules/three/src/**'

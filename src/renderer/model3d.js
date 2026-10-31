@@ -12,20 +12,23 @@ const handles = new WeakMap(); // .model-view → mount() の戻り（reset）
 
 let three = null;
 const loadThree = () => (three ??= import('./model3d-three.js'));
-const snaps = new Map(); // model id → Promise<data URL>
+const snaps = new Map(); // 「model id|品の id」→ Promise<data URL>
+// 同じ形（model）を品ごとの色で描く（公式の品は形の種類ごとに 1 つの GLB）。品の id がなければ GLB の色のまま
+const itemOf = (el) => CATALOG.find((it) => it.id === el.dataset.item) ?? null;
 
-const snapshot = (id) => {
-  if (!snaps.has(id)) {
-    const p = loadThree().then((m) => m.snapshot(id));
-    p.catch(() => snaps.delete(id));
-    snaps.set(id, p);
+const snapshot = (id, item) => {
+  const key = `${id}|${item?.id ?? ''}`;
+  if (!snaps.has(key)) {
+    const p = loadThree().then((m) => m.snapshot(id, {item}));
+    p.catch(() => snaps.delete(key));
+    snaps.set(key, p);
   }
-  return snaps.get(id);
+  return snaps.get(key);
 };
 
 /** 描けなかったとき：ふつうのペンの絵に置き換える */
 function fallback(svg, id) {
-  const item = CATALOG.find((it) => it.model === id);
+  const item = itemOf(svg) ?? CATALOG.find((it) => it.model === id);
   if (!item || !svg.isConnected) return;
   svg.outerHTML = toolArt({...item, art: null}, {label: !!svg.querySelector('title')});
 }
@@ -33,7 +36,7 @@ function fallback(svg, id) {
 function hydrateArt(svg) {
   svg.dataset.modelReady = '1';
   const id = svg.dataset.model;
-  snapshot(id).then(
+  snapshot(id, itemOf(svg)).then(
     (url) => svg.querySelector('image[data-model-img]')?.setAttribute('href', url),
     (e) => {
       console.warn('3D モデルを描けません', id, e);
@@ -45,11 +48,11 @@ function hydrateArt(svg) {
 function hydrateView(el) {
   el.dataset.modelReady = '1';
   loadThree().then(
-    (m) => handles.set(el, m.mount(el, el.dataset.model, {zoom: el.dataset.modelZoom === '1'})),
+    (m) => handles.set(el, m.mount(el, el.dataset.model, {zoom: el.dataset.modelZoom === '1', item: itemOf(el)})),
     (e) => {
       console.warn('3D モデルを描けません', el.dataset.model, e);
       el.classList.add('is-failed');
-      const item = CATALOG.find((it) => it.model === el.dataset.model);
+      const item = itemOf(el) ?? CATALOG.find((it) => it.model === el.dataset.model);
       if (item) el.innerHTML = toolArt({...item, art: null});
     }
   );
