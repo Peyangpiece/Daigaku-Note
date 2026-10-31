@@ -304,14 +304,6 @@
 .my-folders {
   margin-top: var(--space-4);
 }
-.my-folders__title {
-  margin: 0 0 var(--space-1);
-  font-size: 1rem;
-  color: var(--paper-ink-weak);
-}
-.my-folders .actions {
-  margin-top: var(--space-2);
-}
 .my-folders__past {
   margin-top: var(--space-2);
 }

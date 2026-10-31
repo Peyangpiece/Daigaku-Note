@@ -92,8 +92,189 @@
 }
 /* ホームの上の 1 行：今日の授業・次の授業 */
 .home-day {
-  margin: 0 0 var(--space-1);
+  margin: 0;
   color: var(--paper-ink-weak);
+}
+/* 上の行：左に今日の授業、右に同期（ボタンと前回の結果） */
+.home-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.home-sync {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  min-width: 0;
+}
+.home-sync__status {
+  font-size: var(--fs-small);
+}
+.home-sync__fail {
+  position: relative;
+  font-size: var(--fs-small);
+}
+.home-sync__fail summary {
+  cursor: pointer;
+  color: var(--danger-ink);
+  font-weight: 600;
+}
+.home-sync__fail ul {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  width: min(420px, 80vw);
+  margin: 0;
+  padding: 10px 14px 10px 28px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow-hover);
+  color: var(--paper-ink);
+}
+.home-sync__fail li + li {
+  margin-top: 4px;
+}
+/* 今日の復習の入口（問題があるときだけ） */
+.home-review {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: min(100%, 560px);
+  margin: 0 0 var(--space-3);
+  padding: 12px 18px;
+  border: 0;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--c3) 30%, var(--card));
+  box-shadow: var(--card-shadow);
+  color: var(--paper-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform var(--motion) ease,
+    box-shadow var(--motion) ease;
+}
+.home-review:hover,
+.home-review:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: var(--card-shadow-hover);
+  outline: none;
+}
+.home-review:focus-visible {
+  box-shadow:
+    var(--card-shadow-hover),
+    0 0 0 2px var(--focus);
+}
+.home-review__mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--c3);
+  color: #1d3b2f;
+  font-weight: 700;
+  flex: none;
+}
+.home-review__text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+.home-review__text .muted {
+  font-size: var(--fs-small);
+}
+.home-review__go {
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* 急がないお勧め（学年暦）：1 行の知らせ */
+.home-tip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--space-1);
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-small);
+}
+.home-tip .muted {
+  margin-right: 4px;
+}
+.home-tip__acts {
+  display: inline-flex;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+/* 段の見出し（授業・自分のフォルダ） */
+.home-sec {
+  margin: var(--space-3) 0 0;
+  font-size: 1rem;
+  color: var(--paper-ink);
+}
+.home__main > :first-child .home-sec,
+.home__main > .home-sec:first-child {
+  margin-top: 0;
+}
+/* フォルダのカードと、右上の「⋯」（右クリックと同じメニュー）。マウスを乗せたとき・選んだときに出す */
+.folder-slot {
+  position: relative;
+}
+.folder__more {
+  position: absolute;
+  top: 30px;
+  right: 6px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--folder-ink, var(--paper-ink));
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--motion) ease;
+}
+.folder-slot:hover .folder__more,
+.folder-slot:focus-within .folder__more,
+.folder__more[aria-expanded='true'] {
+  opacity: 1;
+}
+.folder__more:hover,
+.folder__more:focus-visible {
+  background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
+  outline: none;
+}
+/* タッチの画面（マウスがない）では、いつも出す */
+@media (hover: none) {
+  .folder__more {
+    opacity: 0.7;
+  }
+}
+/* 自分のフォルダを足すカード（点線） */
+.folder--add {
+  background: transparent;
+  box-shadow: none;
+  border: 2px dashed color-mix(in srgb, var(--paper-ink) 28%, transparent);
+  justify-content: center;
+  gap: 2px;
+}
+.folder--add::before {
+  display: none;
+}
+.folder__add-plus {
+  font-size: 26px;
+  line-height: 1;
+}
+.folder--add .folder__name {
+  font-size: 15px;
 }
 .home-day strong {
   margin-right: 8px;

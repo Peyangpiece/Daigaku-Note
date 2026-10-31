@@ -91,27 +91,6 @@
   overflow-wrap: anywhere;
 }
 /* 下の帯：同期と設定。長い画面でも画面の下に見えている */
-.home-foot {
-  /* 画面の下に貼り付けない（最小の窓で 2 行になるとフォルダを覆っていた） */
-  margin-top: var(--space-6);
-  padding: 12px 0;
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  flex-wrap: wrap;
-}
-/* 同期の知らせは長くなるので縮めて折り返す。右の 3 つのボタンはひとまとまりで右に寄せる（1 つだけ次の行に落ちないように） */
-.home-foot__status {
-  flex: 1 1 240px;
-  min-width: 0;
-}
-.home-foot__tools {
-  display: flex;
-  gap: var(--space-2);
-  margin-left: auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
 
 /* 授業画面の上：同期のボタンと進み具合 */
 .course-actions {

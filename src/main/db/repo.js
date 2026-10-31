@@ -627,6 +627,15 @@ export class Repo {
       at: now()
     });
   }
+  /** 同期 1 回分の失敗（新しい順に max 件。授業の名前つき）。ホームの「失敗 n 件」を押したときに出す */
+  syncErrors(runId, max = 20) {
+    return this.db
+      .prepare(
+        "SELECT e.code, e.message, c.name AS course FROM sync_event e LEFT JOIN course c ON c.id = e.course_id WHERE e.run_id = ? AND e.level = 'error' ORDER BY e.at DESC LIMIT ?"
+      )
+      .all(runId, max)
+      .map((r) => ({...r}));
+  }
   lastSyncRun(connectionId = null) {
     return connectionId
       ? (this.db

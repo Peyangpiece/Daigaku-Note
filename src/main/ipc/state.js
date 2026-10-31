@@ -29,6 +29,12 @@ function folderLooks(repo) {
   return looks;
 }
 
+/** 前回の同期と、その失敗（ホームの「失敗 n 件」を押すと出す） */
+function lastSync(repo) {
+  const run = repo.lastSyncRun();
+  return run ? {...run, errors: run.failures ? repo.syncErrors(run.id) : []} : null;
+}
+
 export function register({handle, ctx, repo}) {
   // ログインボーナス：その日に初めて開いたときに 1 回だけ（shared/points.js）。画面が起動のあとに 1 回呼ぶ（state.get は読むだけ）
   handle('points.claimLogin', () => {
@@ -103,7 +109,7 @@ export function register({handle, ctx, repo}) {
       stationery: stationeryState(repo.getSetting('stationery', null)), // 文房具：持ち物・筆箱の中身・ペンケース（shared/stationery.js）
       orders: repo.getSetting('stationery.orders', []), // ショップの注文の記録（新しい順。α 版はデモ決済）
       points: pointsState(repo.getSetting('points', null)), // アプリ内のポイント：残高・履歴（shared/points.js）
-      lastSync: repo.lastSyncRun(),
+      lastSync: lastSync(repo),
       browser: ctx.browser ?? {state: 'pending', message: ''},
       status: ctx.status ?? '',
       jobs: repo.pendingJobs().map((j) => ({id: j.id, kind: j.kind, status: j.status})),
