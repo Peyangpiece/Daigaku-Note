@@ -207,7 +207,7 @@ test('LMS を使わない授業の名前を変える：授業フォルダの名�
   await assert.rejects(renameCourse(ctx, c.id, other.name), /もうあります/);
 });
 
-test('授業フォルダを取り込む：中のフォルダを 1 つずつ今学期のフォルダとして登録する（コピーしない）。中になければそのもの', async (t) => {
+test('中のフォルダを 1 つずつ登録する：今学期のフォルダ（選べばマイフォルダ）として登録する（コピーしない）。中になければそのもの', async (t) => {
   const {base, repo, folders, live} = await setup(t);
   const src = path.join(base, '授業');
   await mkdir(path.join(src, '経済学'), {recursive: true});
@@ -241,6 +241,14 @@ test('授業フォルダを取り込む：中のフォルダを 1 つずつ今�
     [one]
   );
   await assert.rejects(folders.importCourses(path.join(base, 'ない')), /見つかりません/);
+  // マイフォルダとして 1 つずつ登録する（「パソコンのフォルダを登録」で種類を選んだとき）
+  const keep = path.join(base, '残す');
+  await mkdir(path.join(keep, 'ゼミ'), {recursive: true});
+  const r3 = await folders.importCourses(keep, {scope: 'always'});
+  assert.deepEqual(
+    r3.added.map((c) => [c.name, c.scope]),
+    [['ゼミ', 'always']]
+  );
 });
 
 test('上書き保存したあと、ほかのアプリで変えた PDF：読み直すと変えたファイルが新しい元になり、次の上書き保存でその変更を消さない', async (t) => {

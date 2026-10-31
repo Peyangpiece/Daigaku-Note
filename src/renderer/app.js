@@ -12,7 +12,7 @@ import {renderFudebako} from './views/fudebako.js';
 import {policyText} from '../shared/policy.js';
 import {applySkin, setStickerReload, skinOf, stickerLayer, watchTheme} from './skin.js';
 import {renderCourse} from './views/course.js';
-import {renderFolder, renderFolderNew} from './views/folder.js';
+import {eachText, renderFolder, renderFolderNew} from './views/folder.js';
 import {renderSettings} from './views/settings.js';
 import {renderSetup, resetSetup} from './views/setup.js';
 import {renderTerm, resetTerm} from './views/term.js';
@@ -389,18 +389,6 @@ document.addEventListener('click', async (e) => {
       const r = await api['settings.update']({patch: {ownColor: {courseId: el.dataset.courseId, index}}});
       if (r?.error) return toast(r.error, {error: true});
       await reload();
-    } else if (action === 'import-courses') {
-      // パソコンの授業フォルダを取り込む（中のフォルダを 1 つずつ今学期のフォルダとして登録）
-      const r = await api['folder.importCourses']();
-      if (r?.error) return toast(r.error, {error: true});
-      if (r.canceled) return;
-      toast(
-        r.added.length
-          ? `${r.added.length} 個の授業フォルダを取り込みました${r.failed.length ? `（${r.failed.length} 個は取り込めませんでした）` : ''}`
-          : '取り込めるフォルダがありませんでした',
-        {error: !r.added.length}
-      );
-      await reload();
     } else if (action === 'upload') {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
       if (r?.error) toast(r.error, {error: true});
@@ -414,9 +402,18 @@ document.addEventListener('click', async (e) => {
       const name = document.getElementById('fn-name')?.value ?? '';
       const scope = document.querySelector('input[name=fn-scope]:checked')?.value ?? 'term';
       el.disabled = true;
-      const r = await api['folder.create']({name, scope, mode: el.dataset.mode}).finally(() => (el.disabled = false));
+      const each = document.querySelector('input[name=fn-each]:checked')?.value === 'each';
+      const r = await api['folder.create']({name, scope, mode: el.dataset.mode, each}).finally(
+        () => (el.disabled = false)
+      );
       if (r?.error) return toast(r.error, {error: true});
       if (r.canceled) return;
+      if (r.each) {
+        // 中のフォルダを 1 つずつ登録した：ホームへ戻って、登録した数を知らせる
+        toast(eachText(r), {error: !r.added.length});
+        await reload();
+        return navigate('/');
+      }
       if (r.truncated) toast('ファイルが多いため、一部だけを表示しています（2000 件まで）', {error: true});
       await reload();
       navigate(`/course/${r.courseId}`);

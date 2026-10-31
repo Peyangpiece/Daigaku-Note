@@ -43,7 +43,7 @@ const blank = () => ({
   uses: null,
   university: null,
   materials: null, // 授業の資料の集め方：'folder'（PC の授業フォルダ）・'service'（大学の LMS とつなぐ）・'later'
-  imported: null, // 取り込んだ授業フォルダの結果
+  imported: null, // 登録した授業フォルダの結果
   detected: false, // 「種類を判定」を押した（候補がなければ、まだ対応していないと知らせる）
   label: null, // 学習支援サービスの名前（自分で付ける。空なら判定した種類の名前）
   term: null, // 「学期と保存先」で入れかけの学期（保存先を選んで描き直しても消えないように）
@@ -186,12 +186,13 @@ function stepProfile(data, n) {
     }
     <div class="actions"><button class="btn btn--primary" id="su-profile" ${role && uses.length ? '' : 'disabled'}>次へ</button></div>`;
 }
-// 授業の資料の集め方を選ぶ。PC の授業フォルダはその場で取り込む。大学サービスとの連携は、次の手順で利用規約に同意してから
+// 授業の資料の集め方を選ぶ。パソコンの授業フォルダはその場で登録する（ホームの「パソコンのフォルダを登録」で、中のフォルダを
+// 1 つずつ登録するのと同じ）。大学サービスとの連携は、次の手順で利用規約に同意してから
 const MATERIALS = [
   [
     'folder',
-    'PC内の授業フォルダを取り込む',
-    '授業ごとのフォルダが入ったフォルダを選ぶと、そのまま使えます（コピーしません）'
+    'パソコンのフォルダを登録',
+    '授業ごとのフォルダが入ったフォルダを選ぶと、中のフォルダを 1 つずつ登録して、そのまま使えます（コピーしません）'
   ],
   [
     'service',
@@ -204,7 +205,7 @@ function stepMaterials(data, n) {
   const m = draft.materials;
   const r = draft.imported;
   const done = r
-    ? `<p role="status">${r.added.length ? `${r.added.length} 個の授業フォルダを取り込みました（${r.added.map(esc).join('・')}）` : '取り込めるフォルダがありませんでした'}${r.failed.length ? `<br><span class="muted">取り込めなかったもの：${r.failed.map((f) => `${esc(f.name)}（${esc(f.message)}）`).join('・')}</span>` : ''}</p>`
+    ? `<p role="status">${r.added.length ? `${r.added.length} 個のフォルダを登録しました（${r.added.map(esc).join('・')}）` : '登録できるフォルダがありませんでした'}${r.failed.length ? `<br><span class="muted">登録できなかったもの：${r.failed.map((f) => `${esc(f.name)}（${esc(f.message)}）`).join('・')}</span>` : ''}</p>`
     : '';
   return `<h2>${n}. 授業の資料をどうしますか</h2>
     <div class="use-pick use-pick--one" role="radiogroup" aria-label="授業の資料の集め方">${MATERIALS.map(
@@ -319,7 +320,7 @@ function bind() {
   );
   if ($('su-import'))
     $('su-import').onclick = async () => {
-      const r = await api['folder.importCourses']();
+      const r = await api['folder.create']({mode: 'link', scope: 'term', each: true});
       if (r?.error) return toast(r.error, {error: true});
       if (r.canceled) return;
       draft.imported = r;

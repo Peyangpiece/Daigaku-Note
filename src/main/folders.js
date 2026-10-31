@@ -285,10 +285,11 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
   }
 
   /**
-   * パソコンの授業フォルダを取り込む：dir の中のフォルダを 1 つずつ今学期のフォルダとして登録する（コピーしない）。
-   * 中にフォルダがなければ dir そのものを登録する。戻り：{added: [course], failed: [{name, message}]}
+   * 中のフォルダを 1 つずつ登録する（「パソコンのフォルダを登録」で「中のフォルダを 1 つずつ」を選んだとき。コピーしない）。
+   * 授業ごとのフォルダが入ったフォルダを選ぶ使い方。中にフォルダがなければ dir そのものを登録する。
+   * scope は登録するフォルダの種類（既定は今学期のフォルダ）。戻り：{added: [course], failed: [{name, message}]}
    */
-  async function importCourses(dir) {
+  async function importCourses(dir, {scope = 'term'} = {}) {
     const base = path.resolve(String(dir ?? ''));
     const entries = await fsp.readdir(base, {withFileTypes: true}).catch(() => null);
     if (!entries) throw err('フォルダが見つかりません');
@@ -300,7 +301,7 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
       failed = [];
     for (const d of dirs) {
       try {
-        const c = await create({name: path.basename(d), scope: 'term', mode: 'link', dir: d});
+        const c = await create({name: path.basename(d), scope, mode: 'link', dir: d});
         await scan(c.id);
         added.push(c);
       } catch (e) {

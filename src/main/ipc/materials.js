@@ -130,8 +130,9 @@ export function register({handle, repo, jobs, files, log, folders, getWindow}) {
     return {ok: true};
   });
 
-  // 自分のフォルダ：作る（保存先の中に新しく）・パソコンのフォルダを登録する（選ぶ窓はメインで開く。パスは受け取らない）
-  handle('folder.create', async ({name, scope, mode}) => {
+  // 自分のフォルダ：作る（保存先の中に新しく）・パソコンのフォルダを登録する（選ぶ窓はメインで開く。パスは受け取らない）。
+  // 登録は、選んだフォルダを 1 つ（each なし）か、中のフォルダを 1 つずつ（each。授業ごとのフォルダが入ったフォルダ）
+  handle('folder.create', async ({name, scope, mode, each = false}) => {
     if (!['term', 'always'].includes(scope)) bad('フォルダの種類が不正です');
     if (mode === 'new') {
       const course = await folders.create({name: str(name, 200) ?? bad('フォルダの名前を入れてください'), scope, mode});
@@ -139,22 +140,19 @@ export function register({handle, repo, jobs, files, log, folders, getWindow}) {
     }
     if (mode !== 'link') bad('フォルダの作り方が不正です');
     const win = getWindow();
-    const opts = {title: '大学ノートに登録するフォルダ', properties: ['openDirectory']};
+    const opts = {
+      title: each ? '授業ごとのフォルダが入っているフォルダ' : '大学ノートに登録するフォルダ',
+      properties: ['openDirectory']
+    };
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
     if (r.canceled || !r.filePaths.length) return {canceled: true};
+    if (each === true) {
+      const out = await folders.importCourses(r.filePaths[0], {scope});
+      return {each: true, added: out.added.map((c) => c.name), failed: out.failed};
+    }
     const course = await folders.create({name: str(name, 200) ?? '', scope, mode, dir: r.filePaths[0]});
     const scanned = await folders.scan(course.id);
     return {courseId: course.id, ...scanned};
-  });
-
-  // パソコンの授業フォルダを取り込む（中のフォルダを 1 つずつ今学期のフォルダとして登録。コピーしない）
-  handle('folder.importCourses', async () => {
-    const win = getWindow();
-    const opts = {title: '授業ごとのフォルダが入っているフォルダ', properties: ['openDirectory']};
-    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
-    if (r.canceled || !r.filePaths.length) return {canceled: true};
-    const out = await folders.importCourses(r.filePaths[0]);
-    return {added: out.added.map((c) => c.name), failed: out.failed};
   });
 
   handle('folder.scan', async ({courseId}) => folders.scan(id(courseId) ?? bad('このフォルダは見つかりませんでした')));
