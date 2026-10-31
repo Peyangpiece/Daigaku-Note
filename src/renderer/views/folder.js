@@ -22,6 +22,25 @@ function scopeChoice(terms, selected = 'term') {
     </fieldset>`;
 }
 
+/** 中のフォルダを 1 つずつ登録したときの知らせ（{added: [名前], failed: [{name, message}]}） */
+export const eachText = (r) =>
+  r.added.length
+    ? `${r.added.length} 個のフォルダを登録しました${r.failed.length ? `（${r.failed.length} 個は登録できませんでした）` : ''}`
+    : '登録できるフォルダがありませんでした';
+
+/**
+ * 登録のしかた：選んだフォルダを 1 つ（one）か、中のフォルダを 1 つずつ（each。授業ごとのフォルダが入ったフォルダを選ぶとき）。
+ * 大学生で LMS を使う人は、授業ごとのフォルダをまとめて登録することが多いので each を先に選んでおく
+ */
+function eachChoice(data) {
+  const each = data.settings.role === 'student' && data.settings.uses?.includes('lms');
+  return `<fieldset class="folder-new__scope">
+      <legend>登録のしかた</legend>
+      <label><input type="radio" name="fn-each" value="one"${each ? '' : ' checked'}> 選んだフォルダを 1 つ登録する</label>
+      <label><input type="radio" name="fn-each" value="each"${each ? ' checked' : ''}> 中のフォルダを 1 つずつ登録する <span class="muted">（授業ごとのフォルダが入ったフォルダを選ぶとき。名前はそれぞれのフォルダの名前）</span></label>
+    </fieldset>`;
+}
+
 /** /folder-new?mode=new|link */
 export function renderFolderNew({data}, route) {
   const mode = new URLSearchParams(route.split('?')[1] ?? '').get('mode') === 'link' ? 'link' : 'new';
@@ -40,7 +59,8 @@ export function renderFolderNew({data}, route) {
         <label for="fn-name">フォルダの名前</label>
         <input class="input" id="fn-name" type="text" maxlength="80" placeholder="例：ゼミ・就活・資格の勉強" autocomplete="off">`
           : `<p class="muted">パソコンのフォルダを、コピーせずにそのまま開きます。中身の変更は次に開いたときに反映されます。</p>
-        <label for="fn-name">大学ノートでの名前 <span class="muted">（空ならフォルダの名前）</span></label>
+        ${eachChoice(data)}
+        <label for="fn-name">大学ノートでの名前 <span class="muted">（1 つ登録するとき。空ならフォルダの名前）</span></label>
         <input class="input" id="fn-name" type="text" maxlength="80" autocomplete="off">`
       }
       ${scopeChoice(useTerms)}

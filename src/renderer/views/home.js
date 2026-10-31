@@ -127,7 +127,6 @@ export function renderHome({data, progress}) {
       <div class="actions">
         <button class="btn" data-action="nav" data-route="/folder-new?mode=new">＋ フォルダを作る</button>
         <button class="btn" data-action="nav" data-route="/folder-new?mode=link">＋ パソコンのフォルダを登録</button>
-        ${data.settings.role === 'student' && data.settings.uses?.includes('lms') ? '<button class="btn" data-action="import-courses">＋ PC内の授業フォルダを取り込む</button>' : ''}
       </div>
       ${past.length ? `<details class="my-folders__past" id="my-folders-past"><summary>前の学期のフォルダ ${past.length}</summary><div class="folders">${past.map((c) => folderCard(c, {data})).join('')}</div></details>` : ''}
     </section>`;
