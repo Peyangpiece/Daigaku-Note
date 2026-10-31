@@ -1,5 +1,5 @@
 import {esc} from './html.js';
-// 文房具（SPEC §9.8・§15）：ボールペン・マーカー（アンダーライン用）・文字隠しペン・ペンケース。副作用なし。
+// 文房具（SPEC §9.8・§15）：ボールペン・シャープペンシル・マーカー（アンダーライン用）・文字隠しペン・ペンケース。副作用なし。
 // 品ぞろえはアプリに入っている（公式の品はアプリ内のポイントで買う〔POINTS。はじめから持っている品は 0〕。既製品の見た目の品は定価）。
 // 持ち物と筆箱の中身は設定（stationery）に保存する。ポイントの残高は shared/points.js。
 // ショップはシリーズ（series：同じ品の色ちがい）ごとに 1 枚の札で出し、色は札の右下の丸で選ぶ（SERIES・shopSeries）。
@@ -11,9 +11,22 @@ import {esc} from './html.js';
 // 見た目が 3D モデル（art: 'model'）の品は、GLB を renderer/assets/stationery に置き、renderer/model3d.js が描く
 
 export const SLOTS = 6;
-export const TYPES = ['pen', 'marker', 'hider', 'case'];
+// 種類（kind）：ショップの絞り込み・一覧の見出しの分け方。シャープペンシルは書く道具としてはペン（type: 'pen'）で、
+// 線が黒鉛の灰色になるだけなので、種類だけを分ける（pencil: true の品。kindOf）
+export const TYPES = ['pen', 'pencil', 'marker', 'hider', 'case'];
 export const TOOL_TYPES = ['pen', 'marker', 'hider'];
-export const TYPE_LABEL = {pen: 'ボールペン', marker: 'マーカー', hider: '文字隠しペン', case: 'ペンケース'};
+export const TOOL_KINDS = ['pen', 'pencil', 'marker', 'hider'];
+export const TYPE_LABEL = {
+  pen: 'ボールペン',
+  pencil: 'シャープペンシル',
+  marker: 'マーカー',
+  hider: '文字隠しペン',
+  case: 'ペンケース'
+};
+/** 品の種類（シャープペンシルは 'pencil'、ほかは type） */
+export const kindOf = (item) => (item?.pencil ? 'pencil' : item?.type);
+/** 品の種類の名前 */
+export const typeLabel = (item) => TYPE_LABEL[kindOf(item)];
 /** 道具の種類 → 編集画面の注釈の種類（shared/annotation.js） */
 export const KIND_OF = {pen: 'ink', marker: 'line', hider: 'mask'};
 
@@ -55,6 +68,26 @@ const marker = (id, name, color, thick = false) => ({
   series: thick ? 'marker-wide' : 'marker',
   art: 'model',
   model: thick ? 'marker-wide' : 'marker'
+});
+/**
+ * シャープペンシル（大学ノートのオリジナル。製図用の形）：書く道具としてはペン（type: 'pen'）。線は黒鉛の灰色で、
+ * 太さは芯の太さで決まる（PENCIL_WIDTH）。芯の硬さは HB。見た目は 3D モデル pencil-mech
+ */
+const pencil = (id, name, mm, body, accent, series = `pencil-${mm.replace('.', '')}`) => ({
+  id,
+  type: 'pen',
+  pencil: true,
+  name,
+  color: SHARP.color,
+  width: PENCIL_WIDTH[mm],
+  mm,
+  lead: 'HB',
+  body,
+  accent,
+  price: 0,
+  series,
+  art: 'model',
+  model: 'pencil-mech'
 });
 const hider = (id, name, color) => ({
   id,
@@ -101,6 +134,8 @@ const maker = (id, name, makerName, art, color, body, accent, price, series) => 
 const PEN_WIDTH = {0.38: 0.8, 0.5: 1.1, 0.7: 1.5, '1.0': 2};
 // シャープペンシル 0.5 の線：芯の太さ（0.5mm ≒ 1.4pt）より少し細く、黒鉛の灰色
 const SHARP = {color: '#4a4a4a', width: 1.3};
+// シャープペンシルの芯の太さ（mm）→ 線の太さ（pt）。0.5 は SHARP と同じ
+const PENCIL_WIDTH = {0.3: 0.9, 0.5: 1.3, 0.7: 1.7};
 
 /**
  * 実験：既製品の多機能ペン（3D モデルの見た目）。refills の最初の芯で書き始める。
@@ -155,6 +190,11 @@ export const CATALOG = [
   hider('hider-cyan', '文字隠しペン（水色）', '#00d2ff'),
   hider('hider-green', '文字隠しペン（緑）', '#00c98d'),
   hider('hider-blue', '文字隠しペン（青）', '#0094ff'),
+  pencil('pencil-black-05', 'シャープペンシル 0.5（黒）', '0.5', '#2c2d30', '#55575c'),
+  pencil('pencil-silver-05', 'シャープペンシル 0.5（銀）', '0.5', '#c9ced6', '#55575c'),
+  pencil('pencil-navy-05', 'シャープペンシル 0.5（紺）', '0.5', '#24365c', '#55575c'),
+  pencil('pencil-black-03', 'シャープペンシル 0.3', '0.3', '#2c2d30', '#7d1a1e'),
+  pencil('pencil-black-07', 'シャープペンシル 0.7', '0.7', '#2c2d30', '#183a7f'),
   pencase('case-canvas-navy', '帆布の筆箱（紺）', 'pouch', '#2e3f66', '#d9d2c3'),
   pencase('case-tin-silver', '缶ペンケース（銀）', 'tin', '#c9ced6', '#8a929e'),
   pencase('case-leather-brown', '革のペンケース（茶）', 'leather', '#8a5a3b', '#e8c9a0'),
@@ -252,6 +292,11 @@ const POINTS = {
   'marker-pink-wide': 180,
   'hider-green': 200,
   'hider-blue': 200,
+  'pencil-black-05': 250,
+  'pencil-silver-05': 250,
+  'pencil-navy-05': 250,
+  'pencil-black-03': 250,
+  'pencil-black-07': 250,
   'case-tin-silver': 400,
   'case-leather-brown': 600,
   'case-pastel-pink': 400,
@@ -468,7 +513,10 @@ const SERIES_INFO = {
   sarasa: {name: 'サラサクリップ 0.5'},
   marker: {name: 'マーカー'},
   'marker-wide': {name: 'マーカー（太）'},
-  hider: {name: '文字隠しペン'}
+  hider: {name: '文字隠しペン'},
+  'pencil-05': {name: 'シャープペンシル 0.5'},
+  'pencil-03': {name: 'シャープペンシル 0.3'},
+  'pencil-07': {name: 'シャープペンシル 0.7'}
 };
 /** 品のシリーズの id（series がなければ品の id） */
 export const seriesIdOf = (item) => item.series ?? item.id;
@@ -485,7 +533,7 @@ export function shopSeries(items = CATALOG) {
         id: sid,
         name: SERIES_INFO[sid]?.name ?? it.name,
         maker: it.maker ?? '大学ノート',
-        type: it.type,
+        type: kindOf(it),
         items: []
       });
     map.get(sid).items.push(it);
