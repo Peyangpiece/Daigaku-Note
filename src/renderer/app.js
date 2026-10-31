@@ -63,10 +63,13 @@ setHooks({
     if (state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
       state.data.skin.introduced = true;
       api['skin.introduced']();
-      toast('着せ替えができるようになりました。ホーム下の「着せ替え」か、フォルダの右クリックから選べます', {
-        action: {label: '見てみる', run: () => navigate('/kisekae')},
-        untilNavigate: true
-      });
+      toast(
+        '着せ替えができるようになりました。上の「着せ替え」から選べます。フォルダごとの色は、フォルダの「⋯」か右クリックから',
+        {
+          action: {label: '見てみる', run: () => navigate('/kisekae')},
+          untilNavigate: true
+        }
+      );
     }
   }
 });
@@ -410,6 +413,24 @@ document.addEventListener('click', async (e) => {
       await api['settings.update']({patch: {skipSetup: true}});
       await reload();
       navigate(el.dataset.next || '/');
+    } else if (action === 'card-menu') {
+      // カードの右上の「⋯」：右クリックと同じメニューを、ボタンの下に出す
+      const card = el.closest('.folder-slot')?.querySelector('.folder[data-action="open-course"]');
+      const r = el.getBoundingClientRect();
+      if (card) openCardMenu(card, r.left, r.bottom + 4);
+    } else if (action === 'folder-add') {
+      // 自分のフォルダを足す：作るか、パソコンのフォルダを登録するか
+      const r = el.getBoundingClientRect();
+      openMenu(
+        'フォルダを追加',
+        [
+          ['new', '新しくフォルダを作る'],
+          ['link', 'パソコンのフォルダを登録']
+        ],
+        r.left + 12,
+        r.top + 40,
+        (mode) => navigate(`/folder-new?mode=${mode}`)
+      );
     } else if (action === 'folder-create') {
       const name = document.getElementById('fn-name')?.value ?? '';
       const scope = document.querySelector('input[name=fn-scope]:checked')?.value ?? 'term';
@@ -619,47 +640,71 @@ function renameFrom(el) {
 }
 
 let cardMenu = null;
+let menuOpenedAt = 0;
 const closeCardMenu = () => {
   cardMenu?.remove();
   cardMenu = null;
 };
-document.addEventListener('contextmenu', (e) => {
-  const card = e.target.closest?.('.folder[data-action="open-course"]');
+/** 小さなメニューを x・y に出す。items は [鍵, 名前]。選ぶと onPick(鍵) */
+function openMenu(label, items, x, y, onPick) {
   closeCardMenu();
   closeSkinPicker();
-  if (!card) return;
-  const course = state.data?.courses.find((c) => c.id === card.dataset.id);
-  if (!course) return;
-  e.preventDefault();
   cardMenu = document.createElement('div');
+  menuOpenedAt = Date.now();
   cardMenu.className = 'card-menu';
   cardMenu.setAttribute('role', 'menu');
-  cardMenu.setAttribute('aria-label', course.name);
-  cardMenu.innerHTML = `<button type="button" role="menuitem" data-card-menu="open">開く</button>${canRename(course) ? '<button type="button" role="menuitem" data-card-menu="rename">名前を変える…</button>' : ''}<button type="button" role="menuitem" data-card-menu="skin">着せ替え…</button><button type="button" role="menuitem" data-card-menu="remove">ホームから外す</button>`;
+  cardMenu.setAttribute('aria-label', label);
+  cardMenu.innerHTML = items
+    .map(([k, l]) => `<button type="button" role="menuitem" data-card-menu="${k}">${esc(l)}</button>`)
+    .join('');
   document.body.append(cardMenu);
   const {width, height} = cardMenu.getBoundingClientRect();
-  // キーボードのメニューキー（Shift+F10）では座標が (0,0) なので、フォルダの位置に出す
-  const r = card.getBoundingClientRect();
-  const x = e.clientX || e.clientY ? e.clientX : r.left + 16;
-  const y = e.clientX || e.clientY ? e.clientY : r.top + 16;
-  cardMenu.style.left = `${Math.min(x, window.innerWidth - width - 8)}px`;
-  cardMenu.style.top = `${Math.min(y, window.innerHeight - height - 8)}px`;
+  cardMenu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - width - 8))}px`;
+  cardMenu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - height - 8))}px`;
   cardMenu.querySelector('button').focus();
   cardMenu.onclick = (ev) => {
     const what = ev.target.closest('[data-card-menu]')?.dataset.cardMenu;
     if (!what) return;
     closeCardMenu();
+    onPick(what);
+  };
+}
+/** フォルダのメニュー（右クリック・カードの「⋯」）：開く・名前を変える・着せ替え・ホームから外す */
+function openCardMenu(card, x, y) {
+  const course = state.data?.courses.find((c) => c.id === card.dataset.id);
+  if (!course) return;
+  const items = [
+    ['open', '開く'],
+    ...(canRename(course) ? [['rename', '名前を変える…']] : []),
+    ['skin', '着せ替え…'],
+    ['remove', 'ホームから外す']
+  ];
+  openMenu(course.name, items, x, y, (what) => {
     if (what === 'open') navigate(`/course/${course.id}`);
     else if (what === 'rename') renameCourse(course, card.querySelector('.folder__name') ?? card);
     else if (what === 'skin') {
       const r = card.getBoundingClientRect();
       openSkinPicker(course, card, r.right + 8, r.top);
     } else removeCourse(course).catch((err) => toast(err.message, {error: true}));
-  };
+  });
+}
+document.addEventListener('contextmenu', (e) => {
+  const card = e.target.closest?.('.folder[data-action="open-course"]');
+  closeCardMenu();
+  closeSkinPicker();
+  if (!card) return;
+  e.preventDefault();
+  // キーボードのメニューキー（Shift+F10）では座標が (0,0) なので、フォルダの位置に出す
+  const r = card.getBoundingClientRect();
+  const at = e.clientX || e.clientY;
+  openCardMenu(card, at ? e.clientX : r.left + 16, at ? e.clientY : r.top + 16);
 });
 document.addEventListener('pointerdown', (e) => cardMenu && !cardMenu.contains(e.target) && closeCardMenu());
 document.addEventListener('keydown', (e) => e.key === 'Escape' && closeCardMenu());
-window.addEventListener('scroll', closeCardMenu, {passive: true});
+// スクロールしたら閉じる。ただし開いた直後は閉じない（トラックパッドの慣性で動いている最中に押すと、出たとたんに消えていた）
+window.addEventListener('scroll', () => cardMenu && Date.now() - menuOpenedAt > 250 && closeCardMenu(), {
+  passive: true
+});
 window.addEventListener('hashchange', closeCardMenu);
 
 /** ホームから外す（非表示にして同期もやめる。保存した資料・メモ・パソコンのフォルダは残し、設定から戻せる） */

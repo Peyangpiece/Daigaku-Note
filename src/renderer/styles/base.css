@@ -141,7 +141,22 @@ html.paper-canvas body,
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 0 calc(var(--space-6) + 276px) 0 var(--space-6); /* 右は上の固定ボタン（ホーム・着せ替え・筆箱）の分 */
+  padding: 0 calc(var(--space-6) + 440px) 0 var(--space-6); /* 右は上の固定ボタン（ホーム・復習・筆箱・着せ替え・設定）の分 */
+  white-space: nowrap;
+}
+/* 窓が狭いときは、日付、学期の順に外す（アプリ名・ポイント・上のボタンを 1 行に収める） */
+@media (max-width: 1120px) {
+  #head-date {
+    display: none;
+  }
+  .head-points {
+    margin-left: auto;
+  }
+}
+@media (max-width: 1000px) {
+  #head-term {
+    display: none;
+  }
 }
 h1,
 h2,

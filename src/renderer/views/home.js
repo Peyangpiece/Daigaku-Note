@@ -96,9 +96,45 @@ export function folderCard(course, {today = false, data = null, skin = null, edi
     <span class="folder__badges">${badges}</span>`;
   if (edit)
     return `<div class="${cls} folder--preview" style="${look.style}"${edit.still ? ' aria-hidden="true"' : ' data-drop-place="folder" data-edit="folder" title="押すとフォルダの色を変えられます。シールをここへドラッグすると貼れます"'}>${inner}</div>`;
-  return `<button class="${cls}" style="${look.style}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
+  // 右上の「…」：右クリックと同じメニュー（名前を変える・着せ替え・ホームから外す）。右クリックに気づかなくても使えるように
+  return `<div class="folder-slot"><button class="${cls}" style="${look.style}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
     ${inner}
-  </button>`;
+  </button><button type="button" class="folder__more" data-action="card-menu" data-id="${esc(course.id)}" aria-label="${esc(course.name)} のメニュー" title="メニュー（右クリックでも出ます）" aria-haspopup="menu">⋯</button></div>`;
+}
+
+/** 今日の復習の入口：問題があるときだけ、授業の上に出す（上のボタンの数だけでは気づきにくいため） */
+function reviewEntry(data) {
+  const due = data.quiz?.reviewDue ?? 0;
+  if (!due) return '';
+  return `<button type="button" class="home-review" data-action="nav" data-route="/review">
+      <span class="home-review__mark" aria-hidden="true">✓</span>
+      <span class="home-review__text"><strong>今日の復習 ${due} 問</strong><span class="muted">忘れかけたころに出る問題です。正解するとポイントがたまります</span></span>
+      <span class="home-review__go">始める →</span>
+    </button>`;
+}
+
+/** 同期：ボタンと前回の結果（失敗があれば押すと中身が出る）。上の行の右に置く */
+function syncBox(data, progress, syncing) {
+  const last = data.lastSync;
+  const preparing = data.browser?.state === 'pending';
+  const time = last ? new Date(last.finished_at).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'}) : '';
+  const status = preparing
+    ? 'LMS を読むためのブラウザを準備しています（初回だけ。数分かかります）'
+    : progress
+      ? progressText(progress)
+      : last
+        ? `前回の同期 ${time}（資料 ${last.materials} 件）`
+        : 'まだ同期していません';
+  const errors = !progress && last?.failures ? (last.errors ?? []) : [];
+  const fail = errors.length
+    ? `<details class="home-sync__fail"><summary>失敗 ${last.failures} 件</summary><ul>${errors
+        .map((e) => `<li>${e.course ? `<strong>${esc(e.course)}</strong>：` : ''}${esc(e.message)}</li>`)
+        .join('')}</ul></details>`
+    : '';
+  return `<div class="home-sync">
+      <span class="muted home-sync__status" id="sync-status" role="status">${esc(status)}</span>${fail}
+      <button class="btn btn--small" data-action="sync" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : '同期'}</button>
+    </div>`;
 }
 
 export function renderHome({data, progress}) {
@@ -115,25 +151,18 @@ export function renderHome({data, progress}) {
       ? `<p class="home-day"><strong>次の授業</strong> ${next.inDays === 1 ? '明日' : `${esc(next.dayOfWeek)}曜`}${next.weekday !== next.dayOfWeek ? `（${esc(next.weekday)}曜日の授業の日）` : ''}　${next.list.map((c) => `${esc(c.name)}${c.period ? `（${c.period}限）` : ''}`).join('・')}</p>`
       : '';
   const hidden = data.courses.filter((c) => c.hidden);
-  // 自分のフォルダ：マイフォルダと今学期のフォルダ。前の学期のフォルダは畳んで下に
+  // 自分のフォルダ：マイフォルダと今学期のフォルダ。前の学期のフォルダは畳んで下に。
+  // 足すのは並びの最後の「＋ フォルダを追加」のカードから（作る・パソコンのフォルダを登録を選ぶ）
   const mine = data.courses.filter((c) => c.kind === 'folder' && !c.hidden);
   const shown = mine.filter((c) => folderShown(c, data.currentTermId));
   const past = mine.filter((c) => !folderShown(c, data.currentTermId));
+  const addCard = `<button type="button" class="folder folder--add" data-action="folder-add" aria-haspopup="menu"><span class="folder__add-plus" aria-hidden="true">＋</span><span class="folder__name">フォルダを追加</span><span class="folder__sub">作る・パソコンのフォルダを登録</span></button>`;
   const myFolders = `<section class="my-folders" aria-labelledby="my-folders-title">
-      <h2 class="my-folders__title" id="my-folders-title">自分のフォルダ</h2>
-      ${shown.length ? `<div class="folders">${shown.map((c) => folderCard(c, {data})).join('')}</div>` : ''}
-      <div class="actions">
-        <button class="btn" data-action="nav" data-route="/folder-new?mode=new">＋ フォルダを作る</button>
-        <button class="btn" data-action="nav" data-route="/folder-new?mode=link">＋ パソコンのフォルダを登録</button>
-      </div>
+      <h2 class="home-sec" id="my-folders-title">自分のフォルダ</h2>
+      <div class="folders">${shown.map((c) => folderCard(c, {data})).join('')}${addCard}</div>
       ${past.length ? `<details class="my-folders__past" id="my-folders-past"><summary>前の学期のフォルダ ${past.length}</summary><div class="folders">${past.map((c) => folderCard(c, {data})).join('')}</div></details>` : ''}
     </section>`;
-  const last = data.lastSync;
-  const status = progress
-    ? esc(progressText(progress))
-    : last
-      ? `前回の同期 ${new Date(last.finished_at).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'})}（授業 ${last.courses} 件・資料 ${last.materials} 件保存・失敗 ${last.failures} 件）`
-      : 'まだ同期していません';
+  // 要確認：すぐ手当てが要るものだけ（ログイン・規約・ブラウザ）。急がないお勧め（学年暦）は 1 行の知らせにする
   const attention = data.connections
     .filter((c) => c.status === 'login-required')
     .map(
@@ -147,55 +176,46 @@ export function renderHome({data, progress}) {
     attention.push(
       '<li>大学の LMS とつなぐ機能の利用規約に同意すると、同期を続けます。<button class="btn btn--small" data-action="nav" data-route="/settings/lms-terms">利用規約を読む</button></li>'
     );
+  if (hasLms && data.browser?.state === 'failed')
+    attention.push(
+      `<li>LMS を読むためのブラウザの${browserState(data.browser)}<button class="btn btn--small" data-action="install-browser">準備し直す</button></li>`
+    );
   // LMS をつないでいる人には、学年暦（休講日・振替授業日）がまだない学期で案内する（「この学期は入れない」で消せる）
-  if (
+  const tip =
     hasLms &&
     term &&
     cal &&
     !cal.holidays.length &&
     !cal.swaps.length &&
     !(data.settings.calendarDismissed ?? []).includes(term.id)
-  )
-    attention.push(
-      `<li>大学の学年暦（休講日・振替授業日）を入れると、回の日付と「今日の授業」が大学の予定どおりになります。<button class="btn btn--small" data-action="nav" data-route="/settings/term?calendar=1">学年暦を入れる</button> <button class="btn btn--small btn--quiet" data-action="calendar-dismiss" data-term-id="${esc(term.id)}">この学期は入れない</button></li>`
-    );
-  if (hasLms && data.browser?.state === 'failed')
-    attention.push(
-      `<li>LMS を読むためのブラウザの${browserState(data.browser)}<button class="btn btn--small" data-action="install-browser">準備し直す</button></li>`
-    );
-  const preparing = data.browser?.state === 'pending';
+      ? `<p class="home-tip"><span class="muted">大学の学年暦（休講日・振替授業日）を入れると、「今日の授業」と回の日付が大学の予定どおりになります。</span><span class="home-tip__acts"><button class="btn btn--small" data-action="nav" data-route="/settings/term?calendar=1">学年暦を入れる</button><button class="btn btn--small btn--quiet" data-action="calendar-dismiss" data-term-id="${esc(term.id)}">この学期は入れない</button></span></p>`
+      : '';
   // 使い方に合わせた並び：LMS を使わない人・社会人は自分のフォルダを先に
   const foldersFirst = features(data.settings).foldersFirst;
   const syncing = !!progress || (data.jobs ?? []).some((j) => j.kind === 'sync');
+  // 上の行：今日の授業（なければ次の授業）と、同期
+  const top =
+    dayLine || hasLms
+      ? `<div class="home-top">${dayLine || '<span></span>'}${hasLms ? syncBox(data, progress, syncing) : ''}</div>`
+      : '';
+  const classes = courses.length
+    ? `<section aria-labelledby="classes-title"><h2 class="home-sec" id="classes-title">授業</h2><div class="folders">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</div></section>`
+    : hasLms
+      ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
+      : features(data.settings).lms
+        ? `<div class="empty"><p>大学の LMS（manaba・Moodle など）とつなぐと、授業の資料が自動で集まり、ここに授業のフォルダが貼られます。</p><button class="btn btn--primary" data-action="nav" data-route="/settings/lms">大学の LMS とつなぐ</button></div>`
+        : ''; /* LMS を使わない人には授業の段を出さない（自分のフォルダだけ） */
   return `
     ${stickerLayer(skinOf(data).stickers, 'home', data)}
     <div class="home${attention.length ? ' home--attention' : ''}">
       ${attention.length ? `<aside class="sticky attention" style="--sticky-color: var(--c2)" aria-labelledby="attention-title"><strong id="attention-title">要確認</strong><ul>${attention.join('')}</ul></aside>` : ''}
       <div class="home__main">
+      ${top}
+      ${reviewEntry(data)}
+      ${tip}
       ${foldersFirst ? myFolders : ''}
-      ${
-        courses.length
-          ? `${dayLine}<section class="folders" aria-label="授業">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</section>`
-          : hasLms
-            ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
-            : features(data.settings).lms
-              ? `<div class="empty"><p>大学の LMS（manaba・Moodle など）とつなぐと、授業の資料が自動で集まり、ここに授業のフォルダが貼られます。</p><button class="btn btn--primary" data-action="nav" data-route="/settings/lms">大学の LMS とつなぐ</button></div>`
-              : '' /* LMS を使わない人には授業の段を出さない（自分のフォルダだけ） */
-      }
+      ${classes}
       ${foldersFirst ? '' : myFolders}
       </div>
-    </div>
-    <footer class="home-foot">
-      ${
-        hasLms
-          ? `<button class="btn" data-action="sync" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : '同期'}</button>
-      <span class="muted home-foot__status" id="sync-status" role="status">${preparing ? 'LMS を読むためのブラウザを準備しています（初回だけ。数分かかります）。終わると同期が始まります。' : status}</span>`
-          : ''
-      }
-      <span class="home-foot__tools">
-        <button class="btn btn--quiet" data-action="nav" data-route="/kisekae">✿ 着せ替え</button>
-        <button class="btn btn--quiet" data-action="nav" data-route="/fudebako">✎ 筆箱</button>
-        <button class="btn" data-action="open-root">資料のフォルダ</button>
-      </span>
-    </footer>`;
+    </div>`;
 }
