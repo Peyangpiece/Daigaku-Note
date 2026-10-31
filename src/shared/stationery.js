@@ -17,7 +17,9 @@ export const TYPE_LABEL = {pen: 'ボールペン', marker: 'マーカー', hider
 /** 道具の種類 → 編集画面の注釈の種類（shared/annotation.js） */
 export const KIND_OF = {pen: 'ink', marker: 'line', hider: 'mask'};
 
-const pen = (id, name, color, mm, body, accent = color, series = `pen-${mm.replace('.', '')}`) => ({
+// 公式の品の見た目は 3D モデル（scripts/pens3d/build.py が形の種類ごとに作る GLB）。色は品の body・accent・color で
+// 塗り替える（renderer/model3d-three.js の tint）。model は形の種類（ファイル名）。trim: 'gold' は天冠・ノックが金色の金属
+const pen = (id, name, color, mm, body, accent = color, series = `pen-${mm.replace('.', '')}`, extra = {}) => ({
   id,
   type: 'pen',
   name,
@@ -27,7 +29,10 @@ const pen = (id, name, color, mm, body, accent = color, series = `pen-${mm.repla
   body,
   accent,
   price: 0,
-  series
+  series,
+  art: 'model',
+  model: 'pen-ballpoint',
+  ...extra
 });
 /**
  * 筆圧なしのペン（even）：筆圧・書く速さで太さが変わらず、どこも同じ太さの線（書き始め・書き終わりも細くしない。shared/ink.js）。
@@ -47,7 +52,9 @@ const marker = (id, name, color, thick = false) => ({
   body: '#f4f4f2',
   accent: color,
   price: 0,
-  series: thick ? 'marker-wide' : 'marker'
+  series: thick ? 'marker-wide' : 'marker',
+  art: 'model',
+  model: thick ? 'marker-wide' : 'marker'
 });
 const hider = (id, name, color) => ({
   id,
@@ -57,7 +64,9 @@ const hider = (id, name, color) => ({
   body: '#ffffff',
   accent: color,
   price: 0,
-  series: 'hider'
+  series: 'hider',
+  art: 'model',
+  model: 'hider'
 });
 const pencase = (id, name, style, base, trim) => ({id, type: 'case', name, style, base, trim, price: 0});
 /** 既製品の見た目のペン（実験）。art で絵を分ける。ゲルインク（サラサ）は少し太く濃い線。price はその品の定価（税込） */
@@ -119,8 +128,8 @@ export const CATALOG = [
   pen('pen-purple-05', '紫のボールペン 0.5', '#7b3fbf', '0.5', '#ece2f7'),
   pen('pen-sakura-05', 'さくら軸 黒 0.5', '#222222', '0.5', '#f7c5d5', '#e98aa8', 'pen-art'),
   pen('pen-mint-05', 'ミント軸 青 0.5', '#1a5fd0', '0.5', '#bfe8dc', '#5fbfa3', 'pen-art'),
-  pen('pen-wood-07', '木軸 黒 0.7', '#222222', '0.7', '#c89b6d', '#8a6440', 'pen-art'),
-  pen('pen-navy-038', 'ネイビー軸 赤 0.38', '#d93025', '0.38', '#24365c', '#c9a227', 'pen-art'),
+  pen('pen-wood-07', '木軸 黒 0.7', '#222222', '0.7', '#c89b6d', '#8a6440', 'pen-art', {model: 'pen-ballpoint-wood'}),
+  pen('pen-navy-038', 'ネイビー軸 赤 0.38', '#d93025', '0.38', '#24365c', '#c9a227', 'pen-art', {trim: 'gold'}),
   evenPen('pen-even-black-05', '筆圧なし 黒 0.5', '#222222', '#f1f1ee', '#222222'),
   evenPen('pen-even-red-05', '筆圧なし 赤 0.5', '#d93025', '#f1f1ee', '#d93025'),
   evenPen('pen-even-blue-05', '筆圧なし 青 0.5', '#1a5fd0', '#f1f1ee', '#1a5fd0'),
@@ -510,7 +519,7 @@ export function toolArt(item, {label = true} = {}) {
   const g = `st-${item.id}`; // グラデーションの id（品ごと）
   const open = `<svg class="st-art st-art--${item.type === 'pen' ? 'pen' : 'marker'}" viewBox="0 0 200 28" aria-hidden="${label ? 'false' : 'true'}" role="img">${title}`;
   if (item.art === 'model')
-    return `${open.replace('<svg ', `<svg data-model="${esc(item.model)}" `)}${modelArt()}</svg>`;
+    return `${open.replace('<svg ', `<svg data-model="${esc(item.model)}" data-item="${esc(item.id)}" `)}${modelArt()}</svg>`;
   if (item.art === 'jetstream') return `${open}${jetstreamArt(item, g)}</svg>`;
   if (item.art === 'sarasa') return `${open}${sarasaArt(item, g)}</svg>`;
   if (item.type === 'pen') {
