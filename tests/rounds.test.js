@@ -83,7 +83,12 @@ test('授業画面の並び：今週の回が先頭、前の回は新しい順�
     r(2, '2026-10-09'),
     r(5, '2026-10-30')
   ];
-  const ids = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v.map((x) => x.id)]));
+  const ids = (o) =>
+    Object.fromEntries(
+      Object.entries(o)
+        .filter(([, v]) => Array.isArray(v))
+        .map(([k, v]) => [k, v.map((x) => x.id)])
+    );
   assert.deepEqual(ids(orderRounds(rounds, '2026-10-20')), {
     current: ['r4', 'r5'],
     past: ['r1', 'r2', 'r3'],

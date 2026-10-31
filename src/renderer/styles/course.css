@@ -190,44 +190,37 @@
   background: var(--card);
   color: var(--paper-ink);
 }
-/* 資料の道具（フォルダで表示・移す・外す）：ホバーかキーボードで資料を選んだときに出る。文字ラベル付き */
-.file__tools {
+/* 資料の「⋯」（右クリックと同じメニュー）：マウスを乗せたとき・選んだときに右上に出す */
+.file__more {
   position: absolute;
-  left: 50%;
-  top: 100%;
-  margin-top: 4px;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 4px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--motion);
+  top: 0;
+  right: 0;
   z-index: 2;
-}
-.file:hover .file__tools,
-.file:focus-within .file__tools {
-  opacity: 1;
-  pointer-events: auto;
-}
-.file__tool,
-.file__move {
-  padding: 5px 10px; /* 押し目標はおよそ 32px（文字 13px ＋ 上下 5px ずつ ＋ 行間） */
+  width: 26px;
+  height: 26px;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: 50%;
   background: var(--card);
-  color: var(--paper-ink);
   box-shadow: var(--card-shadow);
+  color: var(--paper-ink);
   font: inherit;
-  font-size: var(--fs-small);
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--motion);
 }
-.file__move {
-  max-width: 7.5em;
+.file:hover .file__more,
+.file:focus-within .file__more {
+  opacity: 1;
 }
-.file__tool:focus-visible,
-.file__move:focus-visible {
+.file__more:focus-visible {
   outline: 2px solid var(--focus);
+}
+@media (hover: none) {
+  .file__more {
+    opacity: 0.8;
+  }
 }
 .file[draggable='true'] {
   cursor: grab;
@@ -236,12 +229,62 @@
   cursor: grabbing;
 }
 
-/* 「これまでの回」の見出し：行の幅いっぱい */
+/* 「これまでの回」の見出し：行の幅いっぱい。ホームの段の見出しと同じ濃さ */
 .round-notes__divider {
   grid-column: 1 / -1;
   margin: var(--space-2) 0 0;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  color: var(--paper-ink);
+}
+/* これからの回（資料のない先の回）：畳んだ一覧。行にファイルを落とすと、その回に入る */
+.later-rounds {
+  margin: var(--space-4) 0 0;
+  max-width: 920px;
+}
+.later-rounds summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.later-rounds ul {
+  display: grid;
+  gap: 2px;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.later-rounds li {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
+}
+.later-rounds li:nth-child(odd) {
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+}
+.later-rounds li.round-note--drop {
+  outline: 2px dashed var(--paper-ink);
+  transform: none;
+}
+.later-rounds li .muted {
+  margin-left: auto;
+  font-size: var(--fs-small);
+}
+/* 振り分け前が空のとき：ファイルを落とせる細い帯 */
+.own-drop {
+  max-width: 920px;
+  margin: 0 0 var(--space-3);
+  padding: 10px 14px;
+  border: 2px dashed color-mix(in srgb, var(--paper-ink) 22%, transparent);
+  border-radius: var(--radius);
   color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+}
+.own-drop.round-note--drop {
+  outline: none;
+  transform: none;
+  border-color: var(--paper-ink);
+  color: var(--paper-ink);
 }
 
 /* 付箋を追加：自分で入れたファイルが最初に置かれる。回の付箋と同じ大きさ。罫線入りの白い付箋に黄色のテープ */
@@ -269,29 +312,6 @@
 .round-note--own .round-note__round {
   flex: 1;
   white-space: nowrap;
-}
-/* 色を選んだときは回の付箋と同じ色の混ぜ方にする（罫線は残す） */
-.round-note--own-colored {
-  --note-bg: color-mix(in srgb, var(--note-color) 55%, var(--note-mix, #fff));
-}
-/* 色の選択は付箋の下に小さく */
-.own-colors {
-  display: flex;
-  gap: 6px;
-  margin-top: 16px;
-}
-.own-color {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--paper-ink) 30%, transparent);
-  border-radius: 50%;
-  background: var(--sw);
-  cursor: pointer;
-}
-.own-color[aria-pressed='true'] {
-  outline: 2px solid var(--paper-ink);
-  outline-offset: 1px;
 }
 /* ドラッグで上に来た付箋 */
 .round-note--drop {

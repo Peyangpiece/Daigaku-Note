@@ -329,3 +329,21 @@ test('上書き保存したあと、元の中身に戻されたファイル：�
   assert.equal(m.sha256, sha256(orig));
   assert.equal(m.base_sha256, null, '注釈の鍵は元の SHA-256 のまま（base が sha256 と同じになった）');
 });
+
+test('自分のフォルダ：中身が同じファイルが 2 か所にあれば、記録は 1 つのまま写しの場所を覚える（画面に両方出す）', async (t) => {
+  const {base, repo, folders, live} = await setup(t);
+  const dir = path.join(base, '写し');
+  await mkdir(path.join(dir, '第1週'), {recursive: true});
+  await writeFile(path.join(dir, 'レジュメ.pdf'), 'SAME');
+  await writeFile(path.join(dir, '第1週', '論文.pdf'), 'SAME');
+  const c = await folders.create({name: '写し', scope: 'always', mode: 'link', dir});
+  await folders.scan(c.id);
+  assert.equal(live(c.id).length, 1, '記録は 1 つ（授業ごとに同じ中身は 1 つ）');
+  const copies = repo.getSetting('folder.copies', {})[c.id];
+  assert.equal(copies.length, 1);
+  assert.equal(copies[0].of, live(c.id)[0].id);
+  // 写しを消したら、覚えた写しも消える
+  await rm(path.join(dir, '第1週', '論文.pdf'));
+  await folders.scan(c.id);
+  assert.equal(repo.getSetting('folder.copies', {})[c.id], undefined);
+});

@@ -188,6 +188,8 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
     const byPath = new Map(known.map((m) => [m.path, m]));
     const present = new Set(files.map((f) => f.path));
     const keep = new Set();
+    // 同じ中身の写し（ほかの場所に同じファイルがある）：記録は 1 つ（授業ごとに同じ中身は 1 つ）のまま、画面には写しの場所にも出す
+    const copies = [];
     let added = 0;
     let rebased = 0;
     for (const f of files) {
@@ -241,9 +243,15 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
         });
         keep.add(row.id);
         added++;
-      }
-      // 同じ中身のファイルがフォルダの中に 2 つあるときは、先に見つけたほうだけを出す
+      } else copies.push({path: f.path, of: same.id}); // 同じ中身のファイルがほかの場所にもある：写しとして出す
     }
+    // 写しには記録がないので、読み直すたびに中身を確かめて見つけ直す（ここで覚え直す）
+    const before = repo.getSetting('folder.copies', {}) ?? {};
+    const map = {...before};
+    if (copies.length) map[course.id] = copies;
+    else delete map[course.id];
+    if (JSON.stringify(map[course.id] ?? null) !== JSON.stringify(before[course.id] ?? null))
+      repo.setSetting('folder.copies', map);
     let removed = 0;
     for (const m of known) {
       if (keep.has(m.id) || m.status === 'trashed') continue;
