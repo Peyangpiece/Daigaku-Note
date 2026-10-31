@@ -374,3 +374,172 @@ export function mount(el, id, {zoom = false, item = null} = {}) {
     }
   };
 }
+
+// ---- 筆箱の横のペンケース（開いた形）：選んでいるペンケースの GLB の材質（帆布・革・缶・透明）で、
+// 筆箱の大きさに合わせた「開いたケース」を真上から描く。ふちは厚みと丸み、内側は裏地、ふちにファスナー ----
+const TILE_MM = {'case-pouch': 9.6, 'case-leather': 16, 'case-tin': 24, 'case-clear': 20}; // 模様の 1 枚の大きさ（build.py）
+
+function findMat(root, name) {
+  let m = null;
+  root.traverse((o) => {
+    if (!m && o.isMesh && o.material?.name === name) m = o.material;
+  });
+  return m;
+}
+
+/** 角を丸めた四角の輪郭（左下が x, y） */
+function roundRect(path, x, y, w, h, r) {
+  r = Math.max(0.5, Math.min(r, w / 2, h / 2));
+  path.moveTo(x + r, y);
+  path.lineTo(x + w - r, y);
+  path.quadraticCurveTo(x + w, y, x + w, y + r);
+  path.lineTo(x + w, y + h - r);
+  path.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  path.lineTo(x + r, y + h);
+  path.quadraticCurveTo(x, y + h, x, y + h - r);
+  path.lineTo(x, y + r);
+  path.quadraticCurveTo(x, y, x + r, y);
+  return path;
+}
+
+function scaleUV(geo, k) {
+  const uv = geo.attributes.uv;
+  if (!uv) return;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * k, uv.getY(i) * k);
+}
+
+/**
+ * 開いたペンケースを真上から描いた画像（data URL の PNG）。w・h は筆箱の大きさ（CSS の px）、inner は中の
+ * ペンを並べる所（筆箱の左上からの x・y・w・h）。そこを裏地の見える内側にし、まわりをケースのふちにする
+ */
+export async function caseTray(id, {item = null, w, h, inner, radius = 18, dpr = 1} = {}) {
+  const m = await load(id, item);
+  const g = gl();
+  const kind = id.replace(/^case-/, '');
+  const base = findMat(m.scene, 'CaseBase');
+  const trim = findMat(m.scene, 'CaseTrim') ?? base;
+  const teethMat = findMat(m.scene, 'CaseZipCoil') ?? findMat(m.scene, 'Brass');
+  const tapeMat = findMat(m.scene, 'CaseZipTape') ?? trim;
+  const metal = findMat(m.scene, 'ZipMetal') ?? findMat(m.scene, 'Brass');
+  // 模様の大きさ：筆箱の幅をケースの長さ（約 200 mm）とみなす
+  const k = 200 / w / (TILE_MM[id] ?? 10);
+  const scene = new THREE.Scene();
+  scene.environment = envMap;
+  scene.environmentIntensity = 1.1;
+  scene.environmentRotation.x = Math.PI / 2; // 真上から見るので、スタジオの頭上のソフトボックスをカメラの側（+Z）へ向ける
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 0.9));
+  const disposables = [];
+  const add = (geo, mat, {cast = true, receive = true} = {}) => {
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = cast;
+    mesh.receiveShadow = receive;
+    scene.add(mesh);
+    disposables.push(geo);
+    return mesh;
+  };
+  // DOM の座標（y が下向き）→ 描く座標（y が上向き）
+  const cy = (y, hh) => h - y - hh;
+  const cav = {x: inner.x, y: cy(inner.y, inner.h), w: inner.w, h: inner.h};
+  const wall = 14; // ふちの高さ
+  const bv = 5; // ふちの丸み
+  // ふち（外の形から、中の形をくりぬいて押し出す。丸み〔bevel〕の分だけ外を小さく、穴を大きくしておく）
+  const outer = roundRect(new THREE.Shape(), bv, bv, w - 2 * bv, h - 2 * bv, radius - bv);
+  outer.holes.push(roundRect(new THREE.Path(), cav.x - bv, cav.y - bv, cav.w + 2 * bv, cav.h + 2 * bv, 10 + bv));
+  const rimGeo = new THREE.ExtrudeGeometry(outer, {
+    depth: wall,
+    bevelEnabled: true,
+    bevelThickness: bv,
+    bevelSize: bv,
+    bevelSegments: 6,
+    curveSegments: 20
+  });
+  scaleUV(rimGeo, k);
+  let rimMat = base;
+  if (base?.transparent) {
+    // 透明のケース：ふちは少し濃く（ペンが浮いて見えないように）
+    rimMat = base.clone();
+    rimMat.opacity = 0.5;
+    rimMat.depthWrite = true;
+    disposables.push(rimMat);
+  }
+  add(rimGeo, rimMat);
+  // 内側の底（裏地。缶は金属のまま少し暗く）
+  const floorShape = roundRect(new THREE.Shape(), cav.x - 2, cav.y - 2, cav.w + 4, cav.h + 4, 12);
+  const floorGeo = new THREE.ShapeGeometry(floorShape, 16);
+  scaleUV(floorGeo, k);
+  let lining;
+  if (kind === 'tin') {
+    lining = base.clone();
+    lining.color = base.color.clone().multiplyScalar(0.85);
+  } else {
+    lining = (trim ?? base).clone();
+    lining.color = new THREE.Color(item?.trim ?? '#d9d2c3').lerp(new THREE.Color('#ffffff'), 0.35);
+    lining.transparent = false;
+    lining.opacity = 1;
+    lining.metalness = 0;
+  }
+  disposables.push(lining);
+  add(floorGeo, lining, {cast: false}).position.z = 1;
+  // ファスナー（缶にはない）：ふちの上、内側のふちに沿ってテープと歯、右上にスライダー
+  if (kind !== 'tin' && teethMat) {
+    const top = wall + bv;
+    const tape = roundRect(new THREE.Shape(), cav.x - 8, cav.y - 8, cav.w + 16, cav.h + 16, 18);
+    tape.holes.push(roundRect(new THREE.Path(), cav.x - 1, cav.y - 1, cav.w + 2, cav.h + 2, 11));
+    const tapeGeo = new THREE.ExtrudeGeometry(tape, {depth: 1.2, bevelEnabled: false, curveSegments: 20});
+    scaleUV(tapeGeo, k);
+    add(tapeGeo, tapeMat, {cast: false}).position.z = top - 0.4;
+    const path = roundRect(new THREE.Path(), cav.x - 4.5, cav.y - 4.5, cav.w + 9, cav.h + 9, 14.5);
+    const len = path.getLength();
+    const n = Math.round(len / (kind === 'leather' ? 3.4 : 2.8));
+    const pts = path.getSpacedPoints(n);
+    const tooth = new THREE.BoxGeometry(kind === 'leather' ? 2.2 : 1.6, kind === 'leather' ? 6 : 5, 1.8);
+    disposables.push(tooth);
+    // 歯は小さいので、テープより少し濃くして見分けられるようにする
+    const tMat = teethMat.clone();
+    if (kind !== 'leather') tMat.color = teethMat.color.clone().lerp(new THREE.Color('#1b1b1d'), 0.35);
+    disposables.push(tMat);
+    const teeth = new THREE.InstancedMesh(tooth, tMat, n);
+    const q = new THREE.Quaternion();
+    const zAxis = new THREE.Vector3(0, 0, 1);
+    const mtx = new THREE.Matrix4();
+    for (let i = 0; i < n; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % n];
+      q.setFromAxisAngle(zAxis, Math.atan2(b.y - a.y, b.x - a.x));
+      mtx.compose(new THREE.Vector3(a.x, a.y, top + 1.4), q, new THREE.Vector3(1, 1, 1));
+      teeth.setMatrixAt(i, mtx);
+    }
+    teeth.castShadow = true;
+    scene.add(teeth);
+    if (metal) {
+      // スライダーは右の辺の上のほう、引き手はふちに沿って下へ（見出しや消しゴムにかからない所）
+      const sx = cav.x + cav.w + 4.5;
+      const sy = cav.y + cav.h - 46;
+      const slider = new THREE.BoxGeometry(11, 15, 5);
+      disposables.push(slider);
+      add(slider, metal).position.set(sx, sy, top + 3.2);
+      const pull = new THREE.BoxGeometry(7, 24, 1.8);
+      disposables.push(pull);
+      add(pull, kind === 'leather' ? base : metal).position.set(sx, sy - 18, top + 2.2);
+    }
+  }
+  // 光：左上からの主光源（ふちの影が内側に落ちる）と、環境の映り込み
+  const key = new THREE.DirectionalLight(0xfff6ea, 1.6);
+  key.position.set(w * 0.2, h * 1.1, 260);
+  key.target.position.set(w / 2, h / 2, 0);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  const ext = Math.max(w, h);
+  Object.assign(key.shadow.camera, {left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 2000});
+  key.shadow.radius = 6;
+  key.shadow.blurSamples = 12;
+  key.shadow.bias = -0.0008;
+  scene.add(key, key.target);
+  const cam = new THREE.OrthographicCamera(0, w, h, 0, 1, 2000);
+  cam.position.set(0, 0, 1000);
+  g.setSize(Math.round(w * dpr), Math.round(h * dpr), false);
+  g.render(scene, cam);
+  const url = g.domElement.toDataURL('image/png');
+  for (const d of disposables) d.dispose();
+  return url;
+}

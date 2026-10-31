@@ -621,6 +621,23 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* 3D のペンケース（model3d.js の dressCase）：選んでいるケースの材質で描いた開いたケースを背景に敷く。
+   内側の裏地・ふち・ファスナーは絵に入っているので、CSS の裏地と縫い目は消す */
+.fude-side.has-3d {
+  background: var(--case-img) center / 100% 100% no-repeat;
+}
+.fude-side.is-light .fude-side__head {
+  color: #26262a;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.fude-side.is-light .fude-side__head .muted {
+  color: rgba(0, 0, 0, 0.62);
+}
+.fude-side.has-3d .fude-side__case {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
 /* ペンケースの内側（明るい裏地）。ふちは縫い目 */
 .fude-side__case {
   display: flex;
@@ -1216,6 +1233,14 @@
 .fude-side__pin[aria-pressed='true'] {
   background: rgba(255, 255, 255, 0.92);
   color: var(--case-base, #2e3f66);
+}
+.fude-side.is-light .fude-side__pin {
+  border-color: rgba(0, 0, 0, 0.3);
+  color: #26262a;
+}
+.fude-side.is-light .fude-side__pin[aria-pressed='true'] {
+  background: #26262a;
+  color: #fff;
 }
 .fude-side__pin[hidden] {
   display: none;

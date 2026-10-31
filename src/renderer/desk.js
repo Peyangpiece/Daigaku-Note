@@ -9,6 +9,7 @@
 import {isTyping} from './ui-kit.js';
 import {createRedSheet} from './red-sheet.js';
 import {state} from './store.js';
+import {dressCase} from './model3d.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, isModKey, tearClip} from './desk-tools.js';
 import {DEFAULT_HIDER, TYPE_LABEL, heldPen, itemOf, stationeryState, toolArt} from '../shared/stationery.js';
 import {createCapture, drawMode, strokePath, touchesStroke} from '../shared/ink.js';
@@ -138,6 +139,7 @@ class Desk extends DeskTools {
         return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${it.name}（${TYPE_LABEL[it.type]}）" aria-pressed="false" style="--ink: ${held.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
       })
       .join('');
+    dressCase(side, this.$('slots'), kase); // 横のペンケースを、選んでいるケースの 3D の材質で描く
   }
   /** 文字隠しペン（⌘K）：筆箱の中の最初の文字隠しペン。なければ水色。持っていれば置く */
   holdHider() {

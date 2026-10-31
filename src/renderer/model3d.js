@@ -72,6 +72,68 @@ function hydrate(root) {
   for (const el of views) if (!el.dataset.modelReady) hydrateView(el);
 }
 
+/** 明るい色か（相対輝度が 0.4 より上。白い字が読みにくくなる明るさ） */
+function lightColor(hex) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex ?? '');
+  if (!m) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const c = parseInt(m[1].slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4;
+}
+
+const trays = new WeakMap(); // 筆箱の要素 → {draw, ro}
+
+/**
+ * 筆箱の横のペンケース：選んでいるペンケース（item）の 3D モデルの材質で、開いたケースを真上から描き、
+ * 筆箱（side）の背景にする。中のペンを並べる所（box）が裏地の見える内側になる。大きさが変わったら描き直す。
+ * 描けないとき・3D モデルでない品は、CSS の色のまま
+ */
+export function dressCase(side, box, item) {
+  let t = trays.get(side);
+  if (!t) {
+    let raf = 0;
+    t = {draw: () => {}, ro: null};
+    t.ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => t.draw());
+    });
+    t.ro.observe(side);
+    t.ro.observe(box);
+    trays.set(side, t);
+  }
+  // 明るいケース（缶・クリア・パステル）では、上の見出しを濃い字にする（白い字が読めないため）
+  side.classList.toggle('is-light', lightColor(item?.base));
+  t.draw = () => {
+    if (!item || item.art !== 'model' || !side.isConnected) {
+      side.classList.remove('has-3d');
+      return;
+    }
+    const w = side.offsetWidth;
+    const h = side.offsetHeight;
+    if (!w || !h) return;
+    const inner = {x: box.offsetLeft, y: box.offsetTop, w: box.offsetWidth, h: box.offsetHeight};
+    const key = JSON.stringify([item.id, w, h, inner]);
+    if (side.dataset.trayKey === key) return;
+    side.dataset.trayKey = key;
+    loadThree()
+      .then((m) => m.caseTray(item.model, {item, w, h, inner, dpr: Math.min(2, window.devicePixelRatio || 1)}))
+      .then(
+        (url) => {
+          if (side.dataset.trayKey !== key) return;
+          side.style.setProperty('--case-img', `url("${url}")`);
+          side.classList.add('has-3d');
+        },
+        (e) => {
+          console.warn('筆箱のペンケースを 3D で描けません', item.model, e);
+          side.classList.remove('has-3d');
+        }
+      );
+  };
+  t.draw();
+}
+
 /** 画面に出たモデルの品を見張って描く（起動時に 1 回呼ぶ） */
 export function watchModels() {
   hydrate(document.body);
