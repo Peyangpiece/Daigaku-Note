@@ -9,6 +9,7 @@ export {state, navigate, reload, refresh, canRename} from './store.js';
 import {renderHome} from './views/home.js';
 import {closeSkinPicker, openSkinPicker, renderKisekae} from './views/kisekae.js';
 import {renderFudebako} from './views/fudebako.js';
+import {pt} from '../shared/points.js';
 import {policyText} from '../shared/policy.js';
 import {applySkin, setStickerReload, skinOf, stickerLayer, watchTheme} from './skin.js';
 import {renderCourse} from './views/course.js';
@@ -93,7 +94,18 @@ function head() {
   // 学期を使わない人（社会人）には学期名を出さない
   const useTerms = features(state.data?.settings ?? {}).terms;
   document.getElementById('head-term').textContent = term && useTerms ? `${term.year} ${term.label}` : '';
+  // ポイントの残高：ホームと復習（ポイントをためる画面）で上に出す。押すと残高・もらい方・履歴のページ
+  const route = location.hash.replace(/^#/, '') || '/';
+  const chip = document.getElementById('head-points');
+  const balance = state.data?.points?.balance ?? 0;
+  chip.hidden = !(route === '/' || route.startsWith('/review'));
+  chip.innerHTML = `${COIN}<b>${balance.toLocaleString('ja-JP')}</b> pt`;
+  chip.setAttribute('aria-label', `ポイント（${pt(balance)}）。押すと、もらい方と履歴を見られます`);
+  chip.title = 'ポイント：復習のクイズに正解したり、毎日開いたりするとたまります。筆箱のショップで使えます';
 }
+/** ポイントの印（筆箱のショップの札と同じ） */
+const COIN =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#f5c542" stroke="#b8860b" stroke-width="1.6"/><text x="12" y="16.2" text-anchor="middle" font-size="11" font-weight="700" fill="#7a5600" font-family="sans-serif">P</text></svg>';
 
 // 描き直しても入力中の値・フォーカス・スクロールが消えないように、同じ画面の描き直しでは控えて戻す
 const keyOf = (el) =>

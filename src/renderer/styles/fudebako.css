@@ -35,6 +35,17 @@
 .shop-points b {
   font-size: 15px;
 }
+/* 上の帯（ホーム・復習）のポイントの札：日付の横に小さめに */
+.head-points {
+  padding: 4px 12px;
+  font-size: var(--fs-small);
+}
+.head-points[hidden] {
+  display: none;
+}
+.head-points b {
+  font-size: 14px;
+}
 /* レジ：ポイントで払う分 */
 .shop-pay__points {
   margin: 12px 0;
