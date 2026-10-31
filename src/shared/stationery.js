@@ -68,7 +68,18 @@ const hider = (id, name, color) => ({
   art: 'model',
   model: 'hider'
 });
-const pencase = (id, name, style, base, trim) => ({id, type: 'case', name, style, base, trim, price: 0});
+// ペンケースも 3D モデル（形の種類ごとの GLB：case-pouch・case-tin・case-leather・case-clear。色は base・trim で塗る）
+const pencase = (id, name, style, base, trim) => ({
+  id,
+  type: 'case',
+  name,
+  style,
+  base,
+  trim,
+  price: 0,
+  art: 'model',
+  model: `case-${style}`
+});
 /** 既製品の見た目のペン（実験）。art で絵を分ける。ゲルインク（サラサ）は少し太く濃い線。price はその品の定価（税込） */
 const maker = (id, name, makerName, art, color, body, accent, price, series) => ({
   id,
@@ -623,10 +634,13 @@ function sarasaArt(item, g) {
     <rect x="132" y="2" width="40" height="1.1" rx="0.55" fill="#fff" opacity="0.55"/>`;
 }
 
-/** ペンケースの絵。viewBox 0 0 200 80 */
+/** ペンケースの絵。viewBox 0 0 200 80。3D モデルの品は、モデルを斜め上から描いた画像（renderer/model3d.js が入れる） */
 export function caseArt(item) {
   const {style, base, trim} = item;
   const title = `<title>${esc(item.name)}</title>`;
+  if (item.art === 'model')
+    return `<svg class="st-art st-art--case" viewBox="0 0 200 80" role="img" data-model="${esc(item.model)}" data-item="${esc(item.id)}">${title}
+      <ellipse cx="100" cy="74" rx="90" ry="4" fill="#000" opacity="0.10"/><image data-model-img x="0" y="0" width="200" height="80" preserveAspectRatio="xMidYMid meet"/></svg>`;
   if (style === 'tin')
     return `<svg class="st-art st-art--case" viewBox="0 0 200 80" role="img">${title}
       <rect x="4" y="8" width="192" height="66" rx="10" fill="${base}" stroke="${trim}" stroke-width="3"/>

@@ -199,6 +199,21 @@ test('絵：道具とペンケースの SVG に名前が入る（名前は文字
     assert.match(caseArt(itemOf(id)), /<svg/);
 });
 
+test('ペンケースは 3D モデル（形の種類ごとの GLB。色は base・trim で塗る）。描けないときはペンケースの絵', async () => {
+  const {existsSync} = await import('node:fs');
+  for (const it of CATALOG.filter((x) => x.type === 'case')) {
+    assert.equal(it.art, 'model');
+    assert.equal(it.model, `case-${it.style}`);
+    assert.ok(existsSync(new URL(`../src/renderer/assets/stationery/${it.model}.glb`, import.meta.url)), it.model);
+    const art = caseArt(it);
+    assert.match(art, new RegExp(`data-model="${it.model}"`));
+    assert.match(art, new RegExp(`data-item="${it.id}"`));
+    assert.match(art, /viewBox="0 0 200 80"/);
+    assert.match(art, /<image data-model-img/);
+    assert.doesNotMatch(caseArt({...it, art: null}), /data-model/);
+  }
+});
+
 test('既製品の見た目のペン：α 版のあいだはショップに出て入手できる（正式な公開の前に見直す目印 experimental）。持っている人の筆箱には残る', async () => {
   const {MAKER_ITEMS_LISTED, listed} = await import('../src/shared/stationery.js');
   const js = itemOf('maker-jetstream-black');

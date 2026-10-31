@@ -12,6 +12,7 @@ import {
   toolArt
 } from '../../../shared/stationery.js';
 import {api, clampSize} from './shared.js';
+import {dressCase} from '../../model3d.js';
 
 const PIN_MIN_WIDTH = 1100; // これより狭い窓では、開いたままにしない（PDF が小さくなりすぎる）
 
@@ -132,6 +133,7 @@ export const methods = {
         return `<button type="button" class="fude-side__pen" data-slot="${i}" title="${tip}" aria-label="${tip}" aria-pressed="false" style="--ink: ${held.color}"><span class="fude-side__num">${i + 1}</span>${toolArt(it, {label: false})}</button>`;
       })
       .join('');
+    dressCase(this.$('side'), box, kase); // 横のペンケースを、選んでいるケースの 3D の材質で描く
     // 使っていたペンが筆箱から出たら、選択に戻す
     if (this.slot !== null && this.st.slots[this.slot] !== this.penItem?.id) this.setTool('select');
     else this.setTool(this.tool);
