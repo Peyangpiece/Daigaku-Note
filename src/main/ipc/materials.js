@@ -43,7 +43,16 @@ export function register({handle, repo, jobs, files, log, folders, getWindow}) {
     if (m.status !== 'ok') bad('ファイルが見つからないため移せません');
     const course = repo.get('course', m.course_id);
     const term = repo.get('term', course.term_id);
-    await files.relocate({term, course, material: m, round: r});
+    try {
+      await files.relocate({term, course, material: m, round: r});
+    } catch (e) {
+      // パソコンの側でファイルを動かした・消した：ENOENT のままでは分からないので言い換える
+      if (e?.code === 'ENOENT')
+        bad(
+          'ファイルが見つかりません（パソコンで動かしたか、消した可能性があります）。同期し直すか、ファイルを入れ直してください'
+        );
+      throw e;
+    }
     return {ok: true};
   });
 

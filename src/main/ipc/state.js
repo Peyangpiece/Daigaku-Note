@@ -59,10 +59,19 @@ export function register({handle, ctx, repo}) {
     // しおりと文字隠しマーカーは注釈の鍵（上書き保存した PDF は元の中身の base_sha256）で数える
     const marks = repo.bookmarkCounts();
     const maskCounts = repo.maskCounts();
+    // 自分のフォルダの中の同じ中身の写し（folders.js の scan が覚える）：元の資料と同じ id で、写しの場所にも出す（開くと元の資料）
+    const copies = repo.getSetting('folder.copies', {}) ?? {};
+    const copiesOf = (c, list) =>
+      c.kind === 'folder'
+        ? (copies[c.id] ?? []).flatMap((x) => {
+            const o = list.find((m) => m.id === x.of && m.status === 'ok');
+            return o ? [{...o, path: x.path, name: path.basename(x.path), copyOf: o.name}] : [];
+          })
+        : [];
     const materials = Object.fromEntries(
       courses.map((c) => [
         c.id,
-        (materialsAll[c.id] ?? []).map(({path: p, ...m}) => ({
+        [...(materialsAll[c.id] ?? []), ...copiesOf(c, materialsAll[c.id] ?? [])].map(({path: p, ...m}) => ({
           ...m,
           sub: sub(c, {path: p}),
           bookmarks: marks[annoKey(m)] ?? 0,
@@ -88,7 +97,6 @@ export function register({handle, ctx, repo}) {
         theme: repo.getSetting('ui.theme', 'system'),
         rules: repo.getSetting('ui.rules', 'normal'),
         folderLooks: folderLooks(repo), // フォルダごとの色 {授業の id: {byTemplate: {テンプレートの id: {card, tab, tape, badge}}}}（右クリック →「着せ替え…」）
-        ownColors: repo.getSetting('ui.ownColors', {}), // 授業ごとの「振り分け前」の付箋の色（5 色の何番目か）
         role: repo.getSetting('profile.role', null), // 使う人（profile.js の ROLES）。まだ選んでいなければ null
         uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）
         university: repo.getSetting('profile.university', ''),

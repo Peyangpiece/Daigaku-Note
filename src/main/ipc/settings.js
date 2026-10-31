@@ -65,16 +65,6 @@ export function register({handle, ctx, repo}) {
       else delete map[cid];
       repo.setSetting('skin.folderLooks', map);
     }
-    // 「振り分け前」の付箋の色：5 色の何番目か（0〜4）。null で元の白に戻す
-    if (patch.ownColor && typeof patch.ownColor === 'object') {
-      const cid = id(patch.ownColor.courseId) ?? bad('この授業は見つかりませんでした');
-      const i = patch.ownColor.index;
-      if (i !== null && !(Number.isInteger(i) && i >= 0 && i < 5)) bad('色が不正です');
-      const map = {...repo.getSetting('ui.ownColors', {})};
-      if (i === null) delete map[cid];
-      else map[cid] = i;
-      repo.setSetting('ui.ownColors', map);
-    }
     if (patch.resetRoot === true) repo.setSetting('storage.root', null);
     if (patch.skipSetup === true) repo.setSetting('setup.skipped', true); // 初回のセットアップを終えた（次から起動時に出さない。LMS は任意で、設定からつなぐ）
     if (typeof patch.openAtLogin === 'boolean') {

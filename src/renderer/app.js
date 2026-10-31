@@ -12,7 +12,7 @@ import {renderFudebako} from './views/fudebako.js';
 import {pt} from '../shared/points.js';
 import {policyText} from '../shared/policy.js';
 import {applySkin, setStickerReload, skinOf, stickerLayer, watchTheme} from './skin.js';
-import {renderCourse} from './views/course.js';
+import {placesOf, renderCourse} from './views/course.js';
 import {eachText, renderFolder, renderFolderNew} from './views/folder.js';
 import {renderSettings} from './views/settings.js';
 import {renderSetup, resetSetup} from './views/setup.js';
@@ -398,12 +398,6 @@ document.addEventListener('click', async (e) => {
       });
       if (r?.ok) await api['sync.run']({connectionId: el.dataset.id});
       reload();
-    } else if (action === 'own-color') {
-      // 「付箋を追加」の色。選んでいる色をもう一度押すと元の白に戻す
-      const index = el.dataset.index === '' ? null : Number(el.dataset.index);
-      const r = await api['settings.update']({patch: {ownColor: {courseId: el.dataset.courseId, index}}});
-      if (r?.error) return toast(r.error, {error: true});
-      await reload();
     } else if (action === 'upload') {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
       if (r?.error) toast(r.error, {error: true});
@@ -413,6 +407,12 @@ document.addEventListener('click', async (e) => {
       await api['settings.update']({patch: {skipSetup: true}});
       await reload();
       navigate(el.dataset.next || '/');
+    } else if (action === 'material-menu') {
+      const r = el.getBoundingClientRect();
+      openMaterialMenu(el.dataset.id, r.left, r.bottom + 4);
+    } else if (action === 'course-menu') {
+      const r = el.getBoundingClientRect();
+      openCourseMenu(el.dataset.id, r.left, r.bottom + 4);
     } else if (action === 'card-menu') {
       // カードの右上の「⋯」：右クリックと同じメニューを、ボタンの下に出す
       const card = el.closest('.folder-slot')?.querySelector('.folder[data-action="open-course"]');
@@ -688,7 +688,97 @@ function openCardMenu(card, x, y) {
     } else removeCourse(course).catch((err) => toast(err.message, {error: true}));
   });
 }
+/** メニューの項目から、画面のボタンと同じ操作を動かす（data-action の処理をそのまま使う） */
+function fire(action, data = {}) {
+  const b = document.createElement('button');
+  b.hidden = true;
+  b.dataset.action = action;
+  Object.assign(b.dataset, data);
+  document.body.append(b);
+  b.click();
+  b.remove();
+}
+const materialOf = (id) => {
+  for (const [courseId, list] of Object.entries(state.data?.materials ?? {})) {
+    const m = list.find((x) => x.id === id && !x.copyOf);
+    if (m) return {m, course: state.data.courses.find((c) => c.id === courseId)};
+  }
+  return {};
+};
+/** 資料のメニュー（右クリック・資料の「⋯」）：開く・フォルダで表示・別の付箋へ移す・ゴミ箱へ（自分で入れたもの） */
+function openMaterialMenu(id, x, y) {
+  const {m, course} = materialOf(id);
+  if (!m || !course) return;
+  const pdf = /\.pdf$/i.test(m.name) && m.source !== 'export';
+  const here = m.round_id ?? 'own';
+  // 自分のフォルダの資料は、パソコンのフォルダの中の場所がそのまま並びなので、付箋のあいだでは移さない
+  const moves =
+    course.kind === 'folder'
+      ? []
+      : placesOf(state.data, course)
+          .filter((p) => p.value !== here)
+          .map((p) => [`move:${p.value}`, `${p.label}へ移す`]);
+  const items = [
+    ['open', '開く'],
+    ['reveal', 'フォルダで表示'],
+    ...(moves.length ? [['move', '別の付箋へ移す…']] : []),
+    ...(m.source === 'upload' ? [['trash', 'ゴミ箱へ…']] : [])
+  ];
+  openMenu(m.name, items, x, y, (what) => {
+    if (what === 'open') fire(pdf ? 'open-pdf' : 'open-material', {id});
+    else if (what === 'reveal') fire('reveal-material', {id});
+    else if (what === 'trash') fire('remove-material', {id, name: m.name});
+    // 移す先は回の数だけあるので、選んでから 2 つ目のメニューで出す（ドラッグでも移せる）
+    else if (what === 'move')
+      openMenu(`${m.name} を移す先`, moves, x, y, (to) =>
+        moveMaterial(id, to.slice(5)).catch((err) => toast(err.message, {error: true}))
+      );
+  });
+}
+/** 授業・自分のフォルダの「⋯」：めったに使わない操作 */
+function openCourseMenu(id, x, y) {
+  const course = state.data?.courses.find((c) => c.id === id);
+  if (!course) return;
+  const items = [];
+  if (course.kind === 'folder') {
+    items.push(['scan', '読み直す（パソコンで足した・消したファイルを反映）']);
+    if (features(state.data.settings).terms)
+      items.push(
+        course.scope === 'always' ? ['scope:term', '今学期のフォルダにする'] : ['scope:always', 'マイフォルダにする']
+      );
+    items.push(['hide', 'ホームから外す']);
+  } else {
+    const conn = state.data.connections.find((c) => c.id === course.connection_id);
+    if (conn && conn.kind !== 'manual') items.push(['full', '過去の回も全部確かめる（数分かかります）']);
+    if (course.lms_url) items.push(['lms', `${conn?.label || 'LMS'} で開く`]);
+    const quizzes = state.data.quizzes?.[id] ?? [];
+    if (!state.data.quiz?.key?.set && !quizzes.length && features(state.data.settings).quiz)
+      items.push(['quiz', 'クイズを使う…（Claude API キーを入れる）']);
+    items.push(['hide', 'ホームから外す']);
+  }
+  openMenu(course.name, items, x, y, (what) => {
+    if (what === 'scan') fire('folder-scan', {courseId: id});
+    else if (what.startsWith('scope:')) fire('folder-scope', {courseId: id, scope: what.slice(6)});
+    else if (what === 'full') fire('sync', {courseId: id, full: '1'});
+    else if (what === 'lms') fire('open-external', {url: course.lms_url});
+    else if (what === 'quiz') navigate('/settings?focus=quiz');
+    else if (what === 'hide')
+      course.kind === 'folder'
+        ? fire('folder-hide', {courseId: id})
+        : removeCourse(course)
+            .then(() => navigate('/'))
+            .catch((err) => toast(err.message, {error: true}));
+  });
+}
 document.addEventListener('contextmenu', (e) => {
+  // 資料の紙の右クリック：資料のメニュー
+  const file = e.target.closest?.('.file[data-material]:not([data-copy])');
+  if (file) {
+    e.preventDefault();
+    const r = file.getBoundingClientRect();
+    const at = e.clientX || e.clientY;
+    return openMaterialMenu(file.dataset.material, at ? e.clientX : r.left + 16, at ? e.clientY : r.top + 16);
+  }
   const card = e.target.closest?.('.folder[data-action="open-course"]');
   closeCardMenu();
   closeSkinPicker();

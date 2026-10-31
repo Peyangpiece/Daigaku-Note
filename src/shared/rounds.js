@@ -103,5 +103,5 @@ export function orderRounds(rounds, today) {
   const monday = weekStart(today);
   let i = numbered.findIndex((r) => r.date && r.date >= monday);
   if (i < 0) i = numbered.length;
-  return {current: numbered.slice(i), past: numbered.slice(0, i), other};
+  return {current: numbered.slice(i), past: numbered.slice(0, i), other, monday};
 }
