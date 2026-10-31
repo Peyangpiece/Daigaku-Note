@@ -8,8 +8,10 @@ export const methods = {
   fitZoom() {
     const first = this.pages[0]?.page.getViewport({scale: CSS_UNITS});
     if (!first) return 1;
-    // ページの右の端からはみ出す付箋（インデックス）の分も、左右に空けておく（ページは真ん中に置く）
-    const avail = this.pagesEl.clientWidth - 32;
+    // ページの右の端からはみ出す付箋（インデックス）の分も、左右に空けておく（ページは真ん中に置く）。
+    // 開いたままの筆箱の分（右の余白）は使えない
+    const cs = getComputedStyle(this.pagesEl);
+    const avail = this.pagesEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 32;
     const tab = (INDEX_W - INDEX_OVER) * CSS_UNITS * 2;
     return Math.min(2, Math.max(0.5, Math.floor((avail / (first.width + tab)) * 100) / 100));
   },
@@ -32,6 +34,7 @@ export const methods = {
     for (const a of this.annos.values()) this.place(a);
     if (this.sheet) this.syncCovers();
     if (this.ruler) this.drawRuler();
+    this.drawFind?.(); // 検索で見つけた所の印も、拡大率に合わせて描き直す
     this.$('zoom-label').textContent = `${Math.round(this.zoom * 100)}%`;
     if (anchor && frac > 0) {
       const top = anchor.el.getBoundingClientRect().top + window.scrollY;
@@ -53,8 +56,24 @@ export const methods = {
     return {x: document.documentElement.clientWidth / 2, y: (top + window.innerHeight) / 2};
   },
 
+  /** ページ幅に合わせる。合わせている間は、窓の幅が変わったら合わせ直す（fitting。自分で拡大・縮小したらやめる） */
+  fitWidth() {
+    this.setZoom(this.fitZoom());
+    this.fitting = true;
+  },
+  /** 窓の幅（ページの並びの幅）が変わったとき：ページ幅に合わせている間だけ合わせ直す */
+  refit() {
+    if (!this.fitting || !this.pages.length) return;
+    const z = this.fitZoom();
+    if (Math.abs(z - this.zoom) > 0.005) {
+      this.setZoom(z);
+      this.fitting = true;
+    }
+  },
+
   /** at（画面の座標）を渡すと、その下にあったページの場所を描き直したあとも同じ位置に保つ（ピンチの指の下） */
   setZoom(z, at = null) {
+    this.fitting = false;
     // 指の下（ページとページの間なら、いちばん近いページ）
     const gap = (p) => {
       const r = p.el.getBoundingClientRect();

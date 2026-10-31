@@ -41,6 +41,7 @@ import {methods as maskMethods} from './viewer/mask.js';
 import {methods as notesMethods} from './viewer/notes.js';
 import {methods as exportMethods} from './viewer/export.js';
 import {methods as keysMethods} from './viewer/keys.js';
+import {methods as findMethods} from './viewer/find.js';
 import {
   api,
   FONT,
@@ -170,6 +171,16 @@ class Viewer extends DeskTools {
     this.bindSide();
     this.renderSlots();
     this.setTool('select');
+    // 筆箱を開いたままにするか（このパソコンの中だけ覚える）。窓の幅が変わったら、開いたままにできるかとページ幅を合わせ直す
+    try {
+      this.casePinned = localStorage.getItem('viewer.casePinned') === '1';
+    } catch {
+      this.casePinned = false;
+    }
+    this.applyPin();
+    this.on(window, 'resize', () => this.applyPin());
+    this.fitObserver = new ResizeObserver(() => this.refit());
+    this.fitObserver.observe(this.pagesEl);
     const r = await api['pdf.open']({materialId: this.materialId});
     if (this.destroyed) return;
     if (r?.error) return this.fail(r.error);
@@ -232,6 +243,7 @@ class Viewer extends DeskTools {
     }
     this.observer = new IntersectionObserver((entries) => this.onIntersect(entries), {rootMargin: '1200px 0px'});
     this.zoom = this.fitZoom();
+    this.fitting = true; // ページ幅に合わせている（窓の幅が変わったら合わせ直す）
     this.layout();
     for (const p of this.pages) this.observer.observe(p.el);
     for (const a of r.annotations)
@@ -286,6 +298,7 @@ class Viewer extends DeskTools {
     this.observer?.disconnect();
     this.barObserver?.disconnect();
     this.sideObserver?.disconnect();
+    this.fitObserver?.disconnect();
     clearTimeout(this.tuckTimer);
     this.toggleSheet(false);
     this.figEditor?.close();
@@ -314,7 +327,8 @@ const MIXINS = [
   maskMethods,
   notesMethods,
   exportMethods,
-  keysMethods
+  keysMethods,
+  findMethods
 ];
 const taken = new Set(Object.getOwnPropertyNames(Viewer.prototype));
 for (const m of MIXINS)

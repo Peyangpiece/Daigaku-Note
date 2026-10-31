@@ -40,6 +40,7 @@ export const methods = {
       else if (k === 'd' && shift) this.addFusen();
       else if (k === 'r' && !shift) this.toggleSheet();
       else if (k === '/' || e.key === '?') this.openHelp(this.$('help-panel').hidden);
+      else if (k === 'f' && !shift) this.openFind();
       else if (/^[1-6]$/.test(e.key) && !shift) this.useSlot(Number(e.key) - 1);
       else return;
       return e.preventDefault();

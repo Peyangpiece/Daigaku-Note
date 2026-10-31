@@ -133,6 +133,7 @@ export const BAR = `
       <button type="button" data-tool="text" title="文字入れ（${key(MOD, 'T')}）：文字の上を押すと打つ・なぞると範囲を選ぶ。箱のふち（すぐ外側）を押して動かす">文字</button>
       <button type="button" data-tool="note" title="コメント（${key(MOD, 'M')}）：押した所にアイコンを置き、押すと開く吹き出しに書く">コメント</button>
     </div>
+    <button type="button" class="viewer-bar__held" data-v="held" hidden title="持っている道具（押すと選択に戻る。Esc でも）"><span class="viewer-bar__held-dot" aria-hidden="true"></span><span data-v="held-name"></span><span aria-hidden="true">×</span></button>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
       <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="付箋の一覧（押すとその場所へ。${key(SHIFT, MOD, 'D')} で今の場所に付箋を貼る）">付箋</button>
@@ -150,21 +151,8 @@ export const BAR = `
       <button type="button" data-v="undo" disabled title="取り消す（${key(MOD, 'Z')}）" aria-label="取り消す">↶</button>
       <button type="button" data-v="redo" disabled title="やり直す（${key(SHIFT, MOD, 'Z')}）" aria-label="やり直す">↷</button>
     </div>
-    <div class="viewer-bar__group" data-group="text" hidden>
-      <span class="viewer-bar__font" title="文字入れのフォントは${IS_MAC ? 'ヒラギノ角ゴ' : 'この OS の標準のゴシック体'}です（変えられません）">${FONT_LABEL}</span>
-      <label class="viewer-bar__size">サイズ<input type="number" data-v="size" min="${SIZE_MIN}" max="${SIZE_MAX}" step="0.5" />pt</label>
-      <button type="button" class="viewer-bar__bold" data-v="bold" aria-pressed="false" title="太字（${key(MOD, 'B')}）">B</button>
-      <span class="viewer-bar__align" role="group" aria-label="揃え">${ALIGN_BUTTONS}</span>
-      <span class="swatches" title="打っている途中で文字を選んでから色を押すと、その文字だけ色が変わります">${swatches(TEXT_COLORS, 'text-color')}</span>
-      <input type="color" data-v="text-custom" title="ほかの色" aria-label="文字のほかの色" />
-    </div>
-    <div class="viewer-bar__group" data-group="note" hidden>
-      <span class="muted">コメントの色</span>
-      <span class="swatches">${swatches(NOTE_COLORS, 'note-color')}</span>
-      <input type="color" data-v="note-custom" title="ほかの色" aria-label="コメントのほかの色" />
-    </div>
-    <div class="viewer-bar__group viewer-bar__refills" data-group="refill" role="group" aria-label="多機能ペンの芯" hidden></div>
     <button type="button" class="btn btn--small" data-v="delete" hidden title="選んだ注釈を消す（Delete）">削除</button>
+    <button type="button" class="viewer-bar__find" data-v="find" title="PDF の中の文字を探す（${key(MOD, 'F')}）">検索</button>
     <span class="viewer-bar__spacer"></span>
     <div class="viewer-bar__nav">
     <label class="viewer-bar__page" title="ページ番号を入れて Enter で移る">
@@ -178,9 +166,9 @@ export const BAR = `
     </div>
     </div>
     <button type="button" class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（${key(MOD, 'S')} ですぐに保存）。保存できなかったときは押すともう一度保存します"></button>
-    <button type="button" class="btn btn--small btn--quiet" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（${key(SHIFT, MOD, 'E')}）">書き出す…</button>
+    <button type="button" class="viewer-bar__export" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（${key(SHIFT, MOD, 'E')}）">書き出す…</button>
     <div class="viewer-bar__help">
-      <button type="button" data-v="help" aria-expanded="false" aria-haspopup="true" title="キーボードの操作（${key(MOD, '/')}）" aria-label="キーボードの操作">?</button>
+      <button type="button" data-v="help" aria-expanded="false" aria-haspopup="true" title="キーボードの操作（${key(MOD, '/')}）" aria-label="キーボードの操作">? 操作</button>
       <div class="help-panel" data-v="help-panel" hidden>
         <strong>キーボードの操作</strong>
         <dl>
@@ -194,6 +182,7 @@ export const BAR = `
           <dt>Tab・Enter</dt><dd>注釈を順に選ぶ・選んだ文字を直す／コメントを開く</dd>
           <dt>Delete</dt><dd>選んだ注釈を消す</dd>
           <dt>Esc</dt><dd>選択をやめて選択ツールへ</dd>
+          <dt>${key(MOD, 'F')}</dt><dd>PDF の中の文字を探す（Enter で次、Shift＋Enter で前）</dd>
           <dt>${key(MOD, 'Z')}・${key(SHIFT, MOD, 'Z')}</dt><dd>取り消す・やり直す</dd>
           <dt>${key(MOD, 'S')}・${key(SHIFT, MOD, 'E')}</dt><dd>すぐに保存（ふだんは自動）・書き出す</dd>
           <dt>${key(MOD, '/')}</dt><dd>この一覧を出す・しまう</dd>
@@ -203,6 +192,29 @@ export const BAR = `
         <p class="help-panel__note">変更は自動で保存されます（右上の「保存しました」が目印）。赤シートは、マーカーのところを黒く隠し、赤い字・赤ペンの線を見えなくします。</p>
         <p class="help-panel__note">画面の四隅：左上にシール帳、左下に素材、右上に筆箱、右下にポーチ（赤シート・電卓・メモ帳）。端のつまみを押すか、マウスを画面の端へ動かすと出ます。</p>
       </div>
+    </div>
+  </div>
+  <div class="viewer-sub" data-v="sub" role="toolbar" aria-label="道具の設定" hidden>
+    <div class="viewer-bar__group viewer-sub__group" data-group="text" hidden>
+      <span class="viewer-bar__font" title="文字入れのフォントは${IS_MAC ? 'ヒラギノ角ゴ' : 'この OS の標準のゴシック体'}です（変えられません）">${FONT_LABEL}</span>
+      <label class="viewer-bar__size">サイズ<input type="number" data-v="size" min="${SIZE_MIN}" max="${SIZE_MAX}" step="0.5" />pt</label>
+      <button type="button" class="viewer-bar__bold" data-v="bold" aria-pressed="false" title="太字（${key(MOD, 'B')}）">B</button>
+      <span class="viewer-bar__align" role="group" aria-label="揃え">${ALIGN_BUTTONS}</span>
+      <span class="swatches" title="打っている途中で文字を選んでから色を押すと、その文字だけ色が変わります">${swatches(TEXT_COLORS, 'text-color')}</span>
+      <input type="color" data-v="text-custom" title="ほかの色" aria-label="文字のほかの色" />
+    </div>
+    <div class="viewer-bar__group viewer-sub__group" data-group="note" hidden>
+      <span class="muted">コメントの色</span>
+      <span class="swatches">${swatches(NOTE_COLORS, 'note-color')}</span>
+      <input type="color" data-v="note-custom" title="ほかの色" aria-label="コメントのほかの色" />
+    </div>
+    <div class="viewer-bar__group viewer-sub__group viewer-bar__refills" data-group="refill" role="group" aria-label="多機能ペンの芯" hidden></div>
+    <div class="viewer-bar__group viewer-sub__group viewer-find" data-group="find" role="search" hidden>
+      <input type="search" class="input viewer-find__q" data-v="find-q" placeholder="PDF の中を検索" aria-label="PDF の中を検索" />
+      <span class="muted viewer-find__count" data-v="find-count" aria-live="polite"></span>
+      <button type="button" data-v="find-prev" title="前（Shift＋Enter）" aria-label="前の場所">↑</button>
+      <button type="button" data-v="find-next" title="次（Enter）" aria-label="次の場所">↓</button>
+      <button type="button" data-v="find-close" title="検索を閉じる（Esc）" aria-label="検索を閉じる">×</button>
     </div>
   </div>
   <dialog class="export-dialog" data-v="export-dialog">
@@ -223,7 +235,7 @@ export const BAR = `
   </dialog>
   <aside class="fude-side is-tucked" data-v="side" data-corner="fude" aria-label="筆箱">
     <button type="button" class="fude-side__tab" data-corner-tab="fude" aria-expanded="false" title="筆箱を出す（マウスを画面の右上の端へ・右端から左へなでる）" aria-label="筆箱を出す"><span>筆箱</span></button>
-    <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span></div>
+    <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span><button type="button" class="fude-side__pin" data-v="pin" aria-pressed="false" title="開いたままにする（窓が広いときだけ。PDF は左に寄せて小さくします）">開いたまま</button></div>
     <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン（${key(MOD, '1')}〜${key(MOD, '6')}）"></div>
     <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカー・文字隠しをなぞって消す（${key(MOD, 'E')}）">
       <svg viewBox="0 0 64 28" aria-hidden="true"><rect x="2" y="5" width="40" height="18" rx="3" fill="#fbfbf8" stroke="#c9c6bd"/><rect x="26" y="4" width="36" height="20" rx="2" fill="#2f6fb5"/><rect x="30" y="9" width="28" height="10" rx="1" fill="#fff" opacity="0.9"/></svg>
