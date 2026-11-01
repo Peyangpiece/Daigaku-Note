@@ -10,7 +10,7 @@ import {normalizeBookmark} from '../../shared/bookmark.js';
 import {cleanAlign} from '../../shared/text-runs.js';
 import {str, id, PDFJS_DIR, PDFJS_ASSET, bad} from './common.js';
 
-export function register({handle, repo, log, getWindow, notifyOthers = () => {}}) {
+export function register({handle, ctx, repo, log, getWindow, notifyOthers = () => {}}) {
   // アプリ内の PDF ビューア（SPEC §9）。編集できるのは PDF だけ。中身はバイト列で渡し、パスはレンダラに出さない
   const pdfMaterial = (materialId) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
@@ -132,7 +132,13 @@ export function register({handle, repo, log, getWindow, notifyOthers = () => {}}
   };
 
   // 上書き保存：注釈を描き込んだ PDF でファイルを置き換える（Finder で開いても注釈が見える）。元の写しはアプリの中に取っておく
+  // ノートは、ページの足し引き・描き直しと重ならないよう順番待ちの中で保存する（元の写しが入れ替わる途中に読まない）
   handle('pdf.save', async ({materialId, texts}) => {
+    const m0 = pdfMaterial(materialId);
+    if (m0.source === 'note' && ctx?.noteSerial) return ctx.noteSerial(String(m0.id), () => save(materialId, texts));
+    return save(materialId, texts);
+  });
+  const save = async (materialId, texts) => {
     const m = pdfMaterial(materialId);
     const rows = repo.listAnnotations(annoKey(m)).map(annotationToClient);
     const r = await overwritePdf({
@@ -150,7 +156,7 @@ export function register({handle, repo, log, getWindow, notifyOthers = () => {}}
         stale.filter((x) => x !== m.id)
       );
     return {ok: true, changed: r.changed, name: m.name};
-  });
+  };
 
   // 注釈付きで別名で書き出す（§9.7）。注釈の位置と中身は DB のものを使い、レンダラからは文字入れの画像だけ受け取る
   handle('pdf.export', async ({materialId, options, texts}) => {

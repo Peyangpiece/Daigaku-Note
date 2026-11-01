@@ -43,7 +43,7 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
 
   // 同じノートのページの足し引き・描き直しは 1 つずつ（パソコンとスマホでほぼ同時に足すと、同じ元の写しから作った後のほうが
   // 先のほうを上書きし、注釈の付け替え先が食い違って書いたものが見えなくなるため）
-  const exclusive = createSerial();
+  const exclusive = ctx.noteSerial ?? createSerial();
 
   /** 回のノート（なければ null） */
   const noteOf = (courseId, roundId) =>
@@ -84,8 +84,12 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
     const h = sha256(Buffer.from(bytes));
     await fsp.mkdir(originalsDir(), {recursive: true});
     await replaceFile(originalPath(originalsDir(), h), Buffer.from(bytes));
-    repo.rekeyAnnotations(annoKey(m), h);
+    const old = annoKey(m);
+    repo.rekeyAnnotations(old, h);
     repo.updateMaterial(m.id, {base_sha256: h, pages});
+    // 前の元の写しは、ほかに使う資料がなければ消す（ページを足し引きするたびに残っていかないように）
+    if (old !== h && !repo.shaInUse(old))
+      await fsp.rm(originalPath(originalsDir(), old), {force: true}).catch(() => {});
   };
   /** ノートと今の元の写し。足し引きの順番待ち（exclusive）の中で読むので、いつも前の足し引きのあとの写し */
   const noteMaterial = async (materialId) => {
@@ -149,6 +153,29 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
       return {changed: true, pages, bytes: asBytes(bytes)};
     })
   );
+
+  // ノートを消す：ファイルはパソコンのゴミ箱へ（描き込んで保存した中身はそのまま。ゴミ箱から戻せる）。記録・注釈・付箋・元の写し・
+  // 上の欄の画像・紙の設定も片付ける。開いているほかの窓（横に並べた窓など）には note.removed を知らせ、閉じさせる
+  const removeNote = (mid, from = null) =>
+    exclusive(String(mid), async () => {
+      const m = repo.get('material', mid) ?? bad('ノートがありません');
+      if (m.source !== 'note') bad('ノートではありません');
+      const key = annoKey(m);
+      // ファイルがもうなければ（Finder で消した・ほかのパソコンへ移したなど）、記録だけ片付ける
+      if (m.status === 'ok' && (await fsp.stat(m.path).catch(() => null))) await files.trash(m.path);
+      repo.remove('material', m.id);
+      if (!repo.shaInUse(key)) {
+        repo.removeAnnotationsFor(key);
+        await fsp.rm(originalPath(originalsDir(), key), {force: true}).catch(() => {});
+      }
+      await fsp.rm(headerFile(m.id), {force: true}).catch(() => {});
+      repo.removeSetting(`note.design.${m.id}`);
+      repo.removeSetting(`note.head.${m.id}`);
+      notifyOthers(from, 'note.removed', {materialId: m.id});
+      changed();
+      return {ok: true};
+    });
+  ctx.removeNote = removeNote;
 
   // 資料（ノート・PDF）を横に並べる窓で開く（PDF の編集画面の「横に並べる」。元の窓は左半分、こちらは右半分。main.js の openSideWindow）
   handle('window.openSide', ({materialId}) => {

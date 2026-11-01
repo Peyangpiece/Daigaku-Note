@@ -294,6 +294,7 @@ class Viewer extends DeskTools {
     this.updateBar();
     this.startNote(); // ノートは最初のペンを持って開く・初めてなら使い方を知らせる
     this.bindNotePages();
+    this.bindNoteRemoved();
     // スマホ連携（docs/MOBILE.md §6）：スマホで書き込んだら、この画面にも出す。まだファイルに描き込んでいなければ上書き保存する
     // 横に並べたもう 1 つの窓で同じ資料に書いたとき（all）も、すべての種類をそろえる
     this.offPhone = api.on('annotations.changed', ({materialId, all = false}) => {

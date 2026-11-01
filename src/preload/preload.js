@@ -98,7 +98,8 @@ const ON = [
   'route',
   'zoom',
   'annotations.changed',
-  'note.pages'
+  'note.pages',
+  'note.removed'
 ];
 
 const api = {};

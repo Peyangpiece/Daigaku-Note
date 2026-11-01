@@ -1,5 +1,6 @@
 // レンダラとの窓口（DESIGN-M0 §4）。handle は失敗を {error} に包んで返す。窓口は関心ごとに ipc/*.js に分かれ、ここが順に register する
 import {BrowserWindow, ipcMain} from 'electron';
+import {createSerial} from '../serial.js';
 import * as stateIpc from './state.js';
 import * as connectionsIpc from './connections.js';
 import * as termsIpc from './terms.js';
@@ -35,6 +36,8 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
       if (!w.isDestroyed() && w.webContents !== from) w.webContents.send(channel, payload);
   };
   ctx.notifyOthers = notifyOthers;
+  // ノートごとの順番待ち：ページの足し引き・描き直し・消す・上書き保存を重ねない（ipc/notes.js・ipc/pdf.js）
+  ctx.noteSerial ??= createSerial();
   const c = {handle, ctx, repo, registry, jobs, files, secrets, log, folders, getWindow, notifyOthers, quiz: ctx.quiz};
   for (const m of [
     stateIpc,

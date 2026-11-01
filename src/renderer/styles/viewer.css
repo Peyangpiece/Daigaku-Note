@@ -285,6 +285,11 @@
 .viewer-addpage [hidden] {
   display: none;
 }
+/* 「ノートを削除…」は左の端に、目立たない赤で（足す・消すボタンから離す） */
+.viewer-addpage__delete {
+  margin-right: auto;
+  color: var(--danger-ink);
+}
 /* ノートの「📄 資料」：同じ回の PDF（開く・横に並べる） */
 .viewer-pdfmenu {
   position: fixed;
