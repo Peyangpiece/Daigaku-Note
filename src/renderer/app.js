@@ -357,6 +357,7 @@ api.on('sync.progress', (p) => {
 });
 api.on('sync.finished', (r) => {
   state.progress = null;
+  if (EMBED) return; // アプリ全体の知らせは親の画面だけで出す（並べた左右の画面で 3 つ重ならないように）
   if (r.status === 'login-required')
     toast(r.message || 'LMS へのログインが必要です（設定 → 大学の LMS → ログインし直す）', {error: true});
   else if (r.status === 'failed' || r.status === 'browser-not-ready')
@@ -371,6 +372,7 @@ api.on('sync.finished', (r) => {
 });
 api.on('quiz.progress', () => reload().catch(console.error));
 api.on('quiz.finished', (r) => {
+  if (EMBED) return;
   if (r.ok)
     toast(
       `クイズができました：${r.count} 問${r.flagged ? `（要確認 ${r.flagged} 問）` : ''}${r.notes?.length ? `。${r.notes.join('。')}` : ''}`
@@ -384,7 +386,10 @@ document.addEventListener('submit', (e) => {
     quizSubmitNum(e.target);
   }
 });
-api.on('login.required', ({label, message}) => toast(message ?? `${label} へのログインが必要です`, {error: true}));
+api.on(
+  'login.required',
+  ({label, message}) => !EMBED && toast(message ?? `${label} へのログインが必要です`, {error: true})
+);
 api.on('route', (r) => navigate(r));
 // メニューの拡大・縮小（⌘＋・⌘−・⌘0）。編集画面では PDF だけ、ほかの画面ではアプリ全体
 api.on('zoom', (dir) => (split ? zoomSplit(dir) : viewer ? viewer.zoomStep(dir) : api.appZoom(dir)));
@@ -404,7 +409,8 @@ const splitRatio = () => {
     return 0.5;
   }
 };
-const paneUrl = (id, side) => `index.html?pane=embed&side=${side}#/viewer/${encodeURIComponent(id)}`;
+const paneUrl = (id, side, other) =>
+  `index.html?pane=embed&side=${side}&other=${encodeURIComponent(other)}#/viewer/${encodeURIComponent(id)}`;
 const SIDES = ['left', 'right'];
 
 function mountSplit(view, left, right) {
@@ -414,9 +420,10 @@ function mountSplit(view, left, right) {
   const el = document.createElement('div');
   el.className = 'split';
   el.style.setProperty('--split', `${splitRatio() * 100}%`);
-  el.innerHTML = `<iframe class="split__pane" title="左の資料" src="${esc(paneUrl(left, 'left'))}"></iframe>
+  el.innerHTML = `<iframe class="split__pane" title="左の資料" src="${esc(paneUrl(left, 'left', right))}"></iframe>
+    <i class="split__mark split__mark--left is-active" aria-hidden="true"></i><i class="split__mark split__mark--right" aria-hidden="true"></i>
     <div class="split__bar" role="separator" aria-orientation="vertical" aria-label="左右の幅（ドラッグ・← → キーで変える）" aria-valuemin="25" aria-valuemax="75" tabindex="0"><span></span></div>
-    <iframe class="split__pane" title="右の資料" src="${esc(paneUrl(right, 'right'))}"></iframe>
+    <iframe class="split__pane" title="右の資料" src="${esc(paneUrl(right, 'right', left))}"></iframe>
     <div class="split__ghost" hidden></div>`;
   document.body.append(el);
   const bar = el.querySelector('.split__bar');
@@ -467,6 +474,8 @@ function mountSplit(view, left, right) {
       // 最後に触った側：メニューの拡大・縮小、押して貼るシール・素材、ポーチの赤シート・定規の向け先
       s.active = i;
       for (const k of [0, 1]) send(k, {type: 'split-active-is', side: SIDES[i]});
+      // 最後に触った側の上に色の線（押して貼るシール・赤シートなどはこちらに出る）
+      for (const [k, m] of el.querySelectorAll('.split__mark').entries()) m.classList.toggle('is-active', k === i);
     } else if (d.type === 'split-relay') {
       // もう片方にしてもらう。運んで離した点は、窓の中の位置に直してから渡す
       const msg = {...d, type: 'split-do'};
@@ -499,7 +508,12 @@ function mountSplit(view, left, right) {
       s.titles[i] = String(d.title ?? '');
       document.title = `${s.titles.filter(Boolean).join(' ＋ ') || 'PDF とノート'} — 大学ノート`;
     } else if (d.type === 'split-left') s.acks?.(i);
-    else if (d.type === 'split-close') {
+    else if (d.type === 'split-swap' && d.id) {
+      // ノートの「📄 資料」から：もう片方（PDF）を同じ回の別の PDF に替える。左右の書きかけを保存してから並べ直す
+      const otherNow = i === 0 ? s.right : s.left;
+      const ids = i === 0 ? [s.left, String(d.id)] : [String(d.id), s.right];
+      if (String(d.id) !== otherNow) flushSplit(s).then(() => navigate(`/split/${ids[0]}/${ids[1]}`));
+    } else if (d.type === 'split-close') {
       // 「閉じる」：左右の書きかけを保存してから、もう片方を窓いっぱいに出す
       const id = i === 0 ? s.right : s.left;
       flushSplit(s).then(() => navigate(id ? `/viewer/${id}` : '/'));

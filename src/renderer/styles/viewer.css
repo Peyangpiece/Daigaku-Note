@@ -1517,7 +1517,32 @@ svg[data-flat] > ellipse {
 .split.is-dragging .split__pane {
   pointer-events: none; /* ドラッグの間は iframe にマウスを取られないように */
 }
+/* 上の細い帯：最後に触った側に色の線（押して貼るシール・赤シート・定規はこちらに出る） */
+.split {
+  grid-template-rows: 3px minmax(0, 1fr);
+}
+.split > .split__pane:first-of-type {
+  grid-area: 2 / 1;
+}
+.split > .split__pane:last-of-type {
+  grid-area: 2 / 3;
+}
+.split__mark {
+  grid-row: 1;
+  background: transparent;
+  transition: background var(--motion);
+}
+.split__mark--left {
+  grid-column: 1;
+}
+.split__mark--right {
+  grid-column: 3;
+}
+.split__mark.is-active {
+  background: color-mix(in srgb, #2f6fb5 70%, transparent);
+}
 .split__bar {
+  grid-area: 1 / 2 / 3 / 3;
   display: grid;
   place-items: center;
   cursor: col-resize;

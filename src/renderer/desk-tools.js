@@ -577,6 +577,7 @@ export class DeskTools {
         el.removeEventListener('pointermove', move);
         el.removeEventListener('pointerup', up);
         el.removeEventListener('pointercancel', up);
+        this.floatMoved?.(el); // PDF とノートを並べたとき：分かれ目の向こうへ動かしたら、もう片方へ移す（viewer/split.js）
       };
       el.addEventListener('pointermove', move);
       el.addEventListener('pointerup', up);
@@ -649,6 +650,7 @@ export class DeskTools {
       input.focus();
     }
     this.$('calc').setAttribute('aria-pressed', String(!!this.calc));
+    this.splitPouchState?.('calc'); // PDF とノートを並べたとき：左右で 1 そろい（viewer/split.js）
   }
 
   toggleMemo(on = !this.memo) {
@@ -708,6 +710,7 @@ export class DeskTools {
       ta.focus();
     }
     this.$('memo').setAttribute('aria-pressed', String(!!this.memo));
+    this.splitPouchState?.('memo'); // PDF とノートを並べたとき：左右で 1 そろい（viewer/split.js）
   }
 
   // ---- 定規：ページの上に置く透明な定規。ドラッグで動かし、右の端のつまみで回す（15° ごとに吸い付く）。ダブルクリックで水平に ----
@@ -733,6 +736,7 @@ export class DeskTools {
       this.drawRuler();
     }
     this.$('ruler').setAttribute('aria-pressed', String(!!this.ruler));
+    this.splitPouchState?.('ruler'); // PDF とノートを並べたとき：左右で 1 そろい（viewer/split.js）
   }
 
   /** 目盛りと位置・向きを描く（拡大率が変わったら描き直す。目盛りはページの実寸） */
@@ -865,6 +869,7 @@ export class DeskTools {
       this.tickTimer();
     }
     this.$('timer').setAttribute('aria-pressed', String(!!this.timerEl));
+    this.splitPouchState?.('timer'); // PDF とノートを並べたとき：左右で 1 そろい（viewer/split.js）
     if (stop || !this.timerEl) this.tickTimer();
   }
 
