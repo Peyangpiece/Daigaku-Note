@@ -1,6 +1,7 @@
 // PDF の編集画面：PDF の中の文字を探す（⌘F）。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 // pdf.js の文字（getTextContent）をページごとにつなげて探す。空白は無視し、全角・半角と大文字・小文字の違いも無視する（NFKC）。
-// 見つけた所は、文字の位置から四角を出してページの上に印を付ける（今の 1 つは濃く）。文字の層が描けていないページでも探せる
+// 見つけた所は、文字の位置から四角を出してページの上に印を付ける（今の 1 つは濃く）。文字の層が描けていないページでも探せる。
+// 自分で書き込んだ文字（文字入れ・コメント・メモの紙・付箋の言葉）も探す（ノートは PDF の字がないので、これを探す。v0.14.2）
 const MAX_HITS = 2000;
 const norm = (c) => c.normalize('NFKC').toLowerCase();
 
@@ -98,6 +99,19 @@ export const methods = {
       for (let at = s.indexOf(q); at >= 0 && hits.length < MAX_HITS; at = s.indexOf(q, at + 1))
         hits.push({page: p.num, rects: rectsOf(p.textContent, p.findChars, at, at + q.length)});
     }
+    // 書き込んだ文字：注釈の四角を印にする
+    for (const a of this.annos.values()) {
+      if (hits.length >= MAX_HITS) break;
+      if (a.removed || !a.rect || typeof a.body !== 'string' || !a.body) continue;
+      const writable =
+        a.kind === 'text' || a.kind === 'note' || (a.kind === 'stamp' && ['memo', 'index'].includes(a.style?.type));
+      if (!writable) continue;
+      const s = [...norm(a.body)].filter((c) => !/\s/.test(c)).join('');
+      if (s.includes(q))
+        hits.push({page: a.page, rects: [[a.rect.x, a.rect.y, a.rect.x + a.rect.w, a.rect.y + a.rect.h]]});
+    }
+    // ページの順、同じページでは上から（PDF の座標は下が 0）
+    hits.sort((x, y) => x.page - y.page || y.rects[0][3] - x.rects[0][3]);
     // 今見ている場所より後ろの、いちばん近いものから
     const here = this.currentSpot?.().page ?? 1;
     this.find = {

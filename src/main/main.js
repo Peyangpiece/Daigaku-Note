@@ -79,6 +79,7 @@ if (!primary && !SELF_TEST) app.exit(0);
 
 let win = null,
   side = null, // 横に並べる窓（PDF の横にノートを開く。openSideWindow）
+  beforeSide = null, // 横に並べる前の元の窓の大きさ（横の窓を閉じたら戻す）：{bounds, maximized}
   tray = null;
 const ctx = {}; // repo・files・engine・registry・secrets・log・jobs・scheduler
 
@@ -131,6 +132,7 @@ function openSideWindow(materialId) {
   ).workArea;
   const half = Math.floor(area.width / 2);
   if (win && !win.isDestroyed()) {
+    if (!side || side.isDestroyed()) beforeSide = {bounds: win.getBounds(), maximized: win.isMaximized()};
     if (win.isMaximized()) win.unmaximize();
     if (win.isFullScreen()) win.setFullScreen(false);
     win.setBounds({x: area.x, y: area.y, width: half, height: area.height});
@@ -155,7 +157,15 @@ function openSideWindow(materialId) {
   });
   side.loadFile(RENDERER, {hash, query: {pane: 'side'}});
   guardWindow(side);
-  side.on('closed', () => (side = null));
+  side.on('closed', () => {
+    side = null;
+    // 元の窓を、横に並べる前の大きさに戻す
+    if (win && !win.isDestroyed() && beforeSide) {
+      win.setBounds(beforeSide.bounds);
+      if (beforeSide.maximized) win.maximize();
+    }
+    beforeSide = null;
+  });
 }
 
 /** 窓の守り：ほかのサイト・ファイルへ移らない、右クリックのメニュー、画面のプロセスが落ちたら開き直す */

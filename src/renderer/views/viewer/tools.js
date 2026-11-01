@@ -281,6 +281,7 @@ export const methods = {
       if (rg.innerHTML !== html) rg.innerHTML = html;
     }
     this.$('delete').hidden = !a; // 選んでいるときだけ出す（ツールバーを 1 行に収める）
+    this.$('rotate').hidden = !(a?.kind === 'stamp' && a.style?.type === 'photo'); // 写真を選んでいるとき
     // 持っている道具（ペン・マーカー・文字隠し・消しゴム）：筆箱を閉じていても分かるように、ツールバーに札で出す
     const held = this.$('held');
     const pen = ['ink', 'line', 'mask'].includes(this.tool) ? this.penItem : null;
@@ -361,6 +362,8 @@ export const methods = {
       else if (t.dataset.v === 'note-side') this.openRoundNoteSide();
       else if (t.dataset.v === 'spread') this.toggleSpread();
       else if (t.dataset.v === 'photo') this.photoInput?.click();
+      else if (t.dataset.v === 'rotate') this.rotatePhoto();
+      else if (t.dataset.v === 'note-pdfs') this.pdfMenu ? this.closePdfMenu() : this.openPdfMenu(t);
       else if (t.dataset.v === 'bookmarks') this.openBookmarks(this.$('bookmark-panel').hidden);
       else if (t.dataset.v === 'bookmark-add') this.addFusen();
       else if (t.dataset.v === 'undo') this.undo();

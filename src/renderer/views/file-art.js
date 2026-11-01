@@ -82,3 +82,16 @@ export function fileArt(name, {colors = null, bodies = null, art = null, editabl
     )}
   </svg>`;
 }
+
+/**
+ * 回のノート（SPEC §8.6）の絵：青い表紙のノート（左に背、真ん中に白い題の札と罫線）。資料の紙と同じ大きさ（54 × 66）
+ */
+export function noteArt() {
+  return `<svg class="file-art file-art--note" viewBox="0 0 54 66" width="54" height="66" aria-hidden="true">
+    <rect x="7" y="3" width="40" height="60" rx="3" fill="#3f7fc4" stroke="${INK}" stroke-width="1.6"/>
+    <rect x="7" y="3" width="7" height="60" rx="2" fill="#2c5f99" stroke="${INK}" stroke-width="1.6"/>
+    <rect x="19" y="15" width="23" height="15" rx="1.5" fill="#ffffff" stroke="${INK}" stroke-width="1.2"/>
+    <path d="M22 20.5h17M22 25h17" stroke="#9cc0e6" stroke-width="1.2"/>
+    <path d="M17 40h28M17 45h28M17 50h28" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1"/>
+  </svg>`;
+}

@@ -4,7 +4,8 @@ import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {sha256} from '../sync/files.js';
 import {annoKey, readBase, replaceFile, originalPath} from '../pdf-save.js';
-import {appendNotePage, cleanDesign, createNotePdf} from '../note-pdf.js';
+import {appendNotePage, cleanPaper, createNotePdf, removeLastNotePage} from '../note-pdf.js';
+import {isPng} from '../pdf-export.js';
 import {id, bad} from './common.js';
 
 /** ノートのファイル名（回ごと。同じ回フォルダの中でも、自分のフォルダの中でも名前が重ならないように回を入れる） */
@@ -25,6 +26,9 @@ const photoExt = (b) =>
 export function register({handle, ctx, repo, files, folders, getWindow}) {
   const originalsDir = () => path.join(app.getPath('userData'), 'originals');
   const photosDir = () => path.join(app.getPath('userData'), 'photos');
+  // ノートの上の欄に印刷する画像（授業・回・題・日付。ノートごと）。足すページにも同じものを印刷する
+  const headerFile = (mid) => path.join(app.getPath('userData'), 'notes', `${mid}-head.png`);
+  const readHeader = (mid) => fsp.readFile(headerFile(mid)).catch(() => null);
   const changed = () => getWindow()?.webContents.send('state.changed', {});
 
   /** 回のノート（なければ null） */
@@ -33,8 +37,9 @@ export function register({handle, ctx, repo, files, folders, getWindow}) {
       .listMaterials(courseId)
       .find((m) => m.source === 'note' && (m.round_id ?? null) === (roundId ?? null) && m.status === 'ok') ?? null;
 
-  // 回のノートを開く。なければ作る（A4 縦・1 ページ。紙と罫線は今のテンプレートのノートの見た目 design）。戻り：{materialId, created}
-  handle('note.open', async ({courseId, roundId, design}) => {
+  // 回のノートを開く。なければ作る（A4 縦・1 ページ。紙は paper：横罫・方眼、行の間 6・7 mm。header は上の欄に印刷する PNG）。
+  // 戻り：{materialId, created}
+  handle('note.open', async ({courseId, roundId, paper, header}) => {
     const course = repo.get('course', id(courseId) ?? bad('この授業は見つかりませんでした')) ?? bad('授業がありません');
     const term = repo.get('term', course.term_id) ?? bad('学期がありません');
     let round = null;
@@ -45,40 +50,67 @@ export function register({handle, ctx, repo, files, folders, getWindow}) {
     }
     const have = noteOf(course.id, round?.id);
     if (have) return {materialId: have.id, created: false};
-    const d = cleanDesign(design);
+    const d = cleanPaper(paper);
+    const head =
+      header instanceof Uint8Array && header.length <= 512 * 1024 && isPng(header) ? Buffer.from(header) : null;
     const label = !round ? '' : round.number > 0 ? ` 第${round.number}回` : ' その他';
-    const bytes = await createNotePdf(d, {title: `${course.name}${label} ノート`});
+    const bytes = await createNotePdf(d, {title: `${course.name}${label} ノート`, header: head});
     const r = await files.addOwn({term, course, round, name: noteName(round), data: bytes, source: 'note'});
     repo.updateMaterial(r.material.id, {pages: 1});
     repo.setSetting(`note.design.${r.material.id}`, d);
+    if (head) {
+      await fsp.mkdir(path.dirname(headerFile(r.material.id)), {recursive: true});
+      await replaceFile(headerFile(r.material.id), head);
+    }
     changed();
     return {materialId: r.material.id, created: true};
   });
 
-  // ノートの最後にページを 1 枚足す（同じ見た目）。注釈・しおりは新しい元の写しに付け替える。
-  // ファイルへの描き込みは、レンダラが開き直したあとの上書き保存（pdf.save）で行う。戻り：{pages}
-  handle('note.addPage', async ({materialId}) => {
-    const m = repo.get('material', id(materialId) ?? bad('ノートが不正です')) ?? bad('ノートがありません');
-    if (m.source !== 'note' || !/\.pdf$/i.test(m.path)) bad('ページを足せるのはノートだけです');
-    if (m.status !== 'ok') bad('ノートのファイルが見つかりません');
-    const base = await readBase(m, originalsDir()).catch(() => bad('ノートを読めませんでした'));
-    if (!base.pristine) bad('元のノートの写しが見つからないため、ページを足せません');
-    const design = cleanDesign(repo.getSetting(`note.design.${m.id}`, null) ?? {});
-    const {bytes, pages} = await appendNotePage(base.bytes, design);
+  /** ノートの元の写しを入れ替える：新しい写しを置き、注釈・しおりを付け替える（ファイルへの描き込みは次の上書き保存で） */
+  const rebase = async (m, bytes, pages) => {
     const h = sha256(Buffer.from(bytes));
     await fsp.mkdir(originalsDir(), {recursive: true});
     await replaceFile(originalPath(originalsDir(), h), Buffer.from(bytes));
     repo.rekeyAnnotations(annoKey(m), h);
     repo.updateMaterial(m.id, {base_sha256: h, pages});
+  };
+  const noteMaterial = async (materialId) => {
+    const m = repo.get('material', id(materialId) ?? bad('ノートが不正です')) ?? bad('ノートがありません');
+    if (m.source !== 'note' || !/\.pdf$/i.test(m.path)) bad('ページを足し引きできるのはノートだけです');
+    if (m.status !== 'ok') bad('ノートのファイルが見つかりません');
+    const base = await readBase(m, originalsDir()).catch(() => bad('ノートを読めませんでした'));
+    if (!base.pristine) bad('元のノートの写しが見つからないため、ページを足し引きできません');
+    return {m, base: base.bytes};
+  };
+
+  // ノートの最後にページを 1 枚足す（同じ紙・同じ上の欄）。戻り：{pages, bytes}（新しい元の写し。画面は開き直さずに最後のページだけ足す）
+  handle('note.addPage', async ({materialId}) => {
+    const {m, base} = await noteMaterial(materialId);
+    const design = repo.getSetting(`note.design.${m.id}`, null) ?? {};
+    const {bytes, pages} = await appendNotePage(base, design, {header: await readHeader(m.id)});
+    await rebase(m, bytes, pages);
     changed();
-    return {pages};
+    return {pages, bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)};
   });
 
-  // ノートを横に並べる窓で開く（PDF の編集画面の「横に並べる」。元の窓は左半分、ノートは右半分。main.js の openSideWindow）
+  // ノートの最後のページを消す（何も書いていない・付箋もない白紙のときだけ。1 ページは残す）。戻り：{pages}
+  handle('note.removePage', async ({materialId}) => {
+    const {m, base} = await noteMaterial(materialId);
+    const r = await removeLastNotePage(base).catch((e) => bad(e.message));
+    const last = r.pages + 1; // 消すページの番号
+    const key = annoKey(m);
+    if (repo.listAnnotations(key).some((a) => a.page === last) || repo.listBookmarks(key).some((b) => b.page === last))
+      bad('最後のページに書いたもの・付箋があるため消せません');
+    await rebase(m, r.bytes, r.pages);
+    changed();
+    return {pages: r.pages};
+  });
+
+  // 資料（ノート・PDF）を横に並べる窓で開く（PDF の編集画面の「横に並べる」。元の窓は左半分、こちらは右半分。main.js の openSideWindow）
   handle('window.openSide', ({materialId}) => {
-    const m = repo.get('material', id(materialId) ?? bad('ノートが不正です')) ?? bad('ノートがありません');
-    if (m.source !== 'note') bad('横に並べられるのはノートだけです');
-    if (m.status !== 'ok') bad('ノートのファイルが見つかりません');
+    const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
+    if (!/\.pdf$/i.test(m.path) || m.source === 'export') bad('横に並べられるのはノートと PDF の資料だけです');
+    if (m.status !== 'ok') bad('ファイルが見つかりません');
     ctx.openSide?.(m.id);
     return {ok: true};
   });

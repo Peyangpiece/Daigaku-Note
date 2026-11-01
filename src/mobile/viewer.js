@@ -159,6 +159,7 @@ class PhoneViewer {
     for (const a of this.r.annotations ?? []) this.addAnno(a);
     this.loadStickers();
     this.observe();
+    this.mountAddPage();
     this.bindPointer();
     let t = null;
     try {
@@ -218,6 +219,39 @@ class PhoneViewer {
       {rootMargin: '150% 0px'}
     );
     for (const p of this.pages) this.observer.observe(p.el);
+  }
+
+  /** ノート（パソコンで回に作ったもの）：最後のページの下に「＋ ページを追加」。足すと下に新しいページが増える */
+  mountAddPage() {
+    if (this.r.material?.source !== 'note') return;
+    const box = document.createElement('div');
+    box.className = 'm-addpage';
+    box.innerHTML = '<button class="m-btn" data-v="add-page">＋ ページを追加</button>';
+    this.pagesEl.append(box);
+    const btn = box.querySelector('button');
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        const r = await call('note.addPage', {materialId: this.materialId});
+        const task = pdfjs.getDocument({data: r.bytes, isEvalSupported: false, enableXfa: false});
+        (this.noteTasks ??= []).push(task);
+        const doc = await task.promise;
+        for (let n = this.pages.length + 1; n <= Math.min(r.pages, doc.numPages); n++) {
+          const page = await doc.getPage(n);
+          if (this.destroyed) return;
+          this.addPage(n, page);
+          const p = this.pages.at(-1);
+          this.pagesEl.append(box); // ボタンはいつも最後
+          this.observer?.observe(p.el);
+          p.el.scrollIntoView({block: 'center', behavior: 'smooth'});
+        }
+        this.onScroll();
+      } catch (e) {
+        toast(`ページを足せませんでした（${e.message}）`, {error: true});
+      } finally {
+        btn.disabled = false;
+      }
+    };
   }
 
   /** 描く細かさ：画面の画素の細かさ × 指で拡大した倍率（3 倍まで）。大きすぎるページは落とす */
@@ -983,6 +1017,7 @@ class PhoneViewer {
       p.canvas.width = 0;
     }
     this.task?.destroy();
+    for (const t of this.noteTasks ?? []) t.destroy();
   }
 }
 
