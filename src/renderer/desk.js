@@ -9,7 +9,7 @@
 import {isTyping} from './ui-kit.js';
 import {createRedSheet} from './red-sheet.js';
 import {state} from './store.js';
-import {dressCase} from './model3d.js';
+import {dressCase, refreshArt} from './model3d.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, isModKey, tearClip} from './desk-tools.js';
 import {DEFAULT_HIDER, eraserArt, heldPen, itemOf, stationeryState, toolArt, typeLabel} from '../shared/stationery.js';
 import {createCapture, drawMode, strokePath, touchesStroke} from '../shared/ink.js';
@@ -64,6 +64,17 @@ class Desk extends DeskTools {
     this.route = route;
     if (!mode) return this.deactivate();
     this.root.dataset.mode = mode;
+    // ホームの文房具は、光のない平らな 2D の絵（3D と同じ形・色。プレミアムの品だけ 3D。model3d.js の flatFor）。クイズは 3D
+    const flat = mode === 'home';
+    if ((this.root.dataset.flatArt === '1') !== flat) {
+      if (flat) this.root.dataset.flatArt = '1';
+      else delete this.root.dataset.flatArt;
+      if (this.active) {
+        this.renderSlots();
+        if (this.ruler) this.drawRuler();
+      }
+      refreshArt(this.root);
+    }
     if (!this.active) this.activate();
   }
   activate() {
