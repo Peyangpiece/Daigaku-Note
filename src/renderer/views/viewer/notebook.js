@@ -57,7 +57,9 @@ export const methods = {
     const nb = this.$('notebook');
     nb.hidden = side || this.isNote || !material.round_id;
     this.$('note-side').hidden = nb.hidden;
-    this.$('note-pdfs').hidden = side || !this.isNote || !this.roundPdfs().length;
+    // 並べたときのノート（右）でも「📄 資料」を出す：左の PDF を同じ回の別の PDF に替える
+    const splitNote = side && new URLSearchParams(location.search).get('side') === 'right';
+    this.$('note-pdfs').hidden = (side && !splitNote) || !this.isNote || !this.roundPdfs().length;
     if (side) {
       this.$('back').textContent = '閉じる';
       this.$('back').title = '並べるのをやめる（もう片方を窓いっぱいに出す）';
@@ -188,6 +190,21 @@ export const methods = {
   openPdfMenu(btn) {
     const list = this.roundPdfs();
     if (!list.length) return toast('この回には PDF の資料がありません');
+    // 並べているとき：押した PDF を左に出す（今の左の PDF に ✓）
+    if (this.splitSide) {
+      const now = new URLSearchParams(location.search).get('other'); // いま並べている相手（親が URL に入れる）
+      const html = list
+        .map(
+          (x) =>
+            `<button type="button" role="menuitem" data-pdf-left="${x.id}" title="左に出す（いまの左の PDF と替える）">${x.id === now ? '✓ ' : '　 '}${esc(x.name)}</button>`
+        )
+        .join('');
+      return this.openBarMenu(btn, '左に出す PDF', html, async (b) => {
+        if (!b.dataset.pdfLeft) return;
+        await this.settle();
+        this.postSplit({type: 'split-swap', id: b.dataset.pdfLeft});
+      });
+    }
     const html = list
       .map(
         (x) =>

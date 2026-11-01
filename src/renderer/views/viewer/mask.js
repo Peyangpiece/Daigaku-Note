@@ -307,5 +307,6 @@ export const methods = {
     }
     this.syncCovers();
     this.$('sheet').setAttribute('aria-pressed', String(!!this.sheet));
+    this.splitPouchState('sheet'); // 並べたとき：赤シートは左右どちらか 1 枚だけ（viewer/split.js）
   }
 };

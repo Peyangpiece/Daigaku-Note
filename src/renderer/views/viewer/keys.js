@@ -36,10 +36,12 @@ export const methods = {
         if (this.selected?.kind === 'text' || this.tool === 'text')
           this.setTextStyle({bold: !(this.selected?.kind === 'text' ? this.selected.style : this.textStyle).bold});
         else return;
-      } else if (k === 'd' && !shift) this.toggleCalc();
-      else if (k === 'd' && shift) this.addFusen();
-      else if (k === 'r' && !shift) this.toggleSheet();
-      else if (k === '/' || e.key === '?') this.openHelp(this.$('help-panel').hidden);
+      } else if (k === 'd' && !shift) {
+        if (!this.routePouch('calc')) this.toggleCalc(); // 並べたとき：電卓はポーチのある右の画面に 1 つだけ
+      } else if (k === 'd' && shift) this.addFusen();
+      else if (k === 'r' && !shift) {
+        if (!this.routePouch('sheet')) this.toggleSheet(); // 並べたとき：赤シートは左右どちらか 1 枚だけ
+      } else if (k === '/' || e.key === '?') this.openHelp(this.$('help-panel').hidden);
       else if (k === 'f' && !shift) this.openFind();
       else if (k === 'n' && shift && this.isNote)
         this.addNotePage(); // ノートにページを足す（⇧⌘N）

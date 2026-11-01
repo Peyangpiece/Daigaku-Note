@@ -291,6 +291,7 @@ class Viewer extends DeskTools {
     for (const a of r.annotations)
       if (a.page >= 1 && a.page <= this.pages.length) this.addAnno({...a, key: `k${this.seq++}`});
     this.mountAddPage();
+    this.restoreSpot(); // 並べる・並べるのをやめるなどで開き直したとき：見ていた場所から
     this.renderBookmarks();
     // 前の版のしおりは付箋に移す（v0.12.2）
     const old = (r.bookmarks ?? []).filter((b) => b.page >= 1 && b.page <= this.pages.length);
@@ -338,6 +339,7 @@ class Viewer extends DeskTools {
   };
 
   unmount() {
+    this.saveSpot(); // 見ていた場所を覚える（また開いたとき・並べたときに、同じ所から）
     // 閉じる前の変更もファイルに残す（書きかけ・保存待ちの注釈も含む。文字入れの行は画面があるうちにここで写す。変更がなければ何もしない）
     this.saveFile();
     this.flushAll();
