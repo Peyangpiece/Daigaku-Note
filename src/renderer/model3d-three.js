@@ -68,6 +68,22 @@ function tint(obj, item) {
   });
 }
 
+/**
+ * 透明の材質（赤シート ClearRed・アクリル ClearAcrylic・ガラス ClearGlass など、透過〔transmission〕で作ったもの）を半透明で描く。
+ * 透過のままだと後ろが白く写って不透明に見えるため（ペンケースの CaseBase は tint が品の色で同じようにする）
+ */
+function glassify(obj) {
+  obj.traverse((o) => {
+    const m = o.isMesh ? o.material : null;
+    if (!m || !(m.transmission > 0) || m.name === 'CaseBase') return;
+    m.transmission = 0;
+    m.transparent = true;
+    m.opacity = {ClearRed: 0.82, ClearAcrylic: 0.45, ClearGlass: 0.12}[m.name] ?? 0.3;
+    m.depthWrite = false;
+    m.side = THREE.DoubleSide;
+  });
+}
+
 /** 面光源の材質（明るさ 1 を超える色で、環境の映り込みに光として写る） */
 function lightPanel(w, h, intensity, tint = [1, 1, 1]) {
   const m = new THREE.MeshBasicMaterial();
@@ -157,6 +173,7 @@ async function loadNow(id, item) {
   const obj = gltf.scene;
   await useLookMaterials(gltf);
   tint(obj, item);
+  glassify(obj);
   obj.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = !o.material.transparent; // 透明の品は濃い影を落とさない
@@ -184,8 +201,9 @@ async function loadNow(id, item) {
   const group = new THREE.Group();
   group.add(inner);
   // ペンケースは机に置いた向きで、縦の軸のまわりに回す（ペンは軸のまわりに転がす）
-  // 机に置く物（ペンケース・消しゴム）は 'case'：置いた向きで回し、小さな絵は斜め上から
-  const kind = /^(case-|eraser$)/.test(id) ? 'case' : 'pen';
+  // 机に置く物（ペンケース・消しゴム）は 'case'：置いた向きで回し、小さな絵は斜め上から。
+  // ポーチの道具（tool-*：赤シート・電卓・メモ帳・定規・タイマー）は 'tool'：平らな物が多いので、もっと上から少し斜めに
+  const kind = /^tool-/.test(id) ? 'tool' : /^(case-|eraser$)/.test(id) ? 'case' : 'pen';
   const scene = new THREE.Scene();
   scene.add(group);
   scene.environment = envMap;
@@ -208,7 +226,7 @@ async function loadNow(id, item) {
   // 机に落ちる影（影だけを描く面。横からの絵では真横から見るので見えない）
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.ShadowMaterial({opacity: 0.22}));
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = kind === 'case' ? new THREE.Box3().setFromObject(group).min.y - 0.001 : -0.08;
+  ground.position.y = kind !== 'pen' ? new THREE.Box3().setFromObject(group).min.y - 0.001 : -0.08;
   ground.receiveShadow = true;
   scene.add(ground);
   return {scene, group, ground, kind};
@@ -234,9 +252,12 @@ export async function snapshot(id, {w = 1600, h = 224, item = null} = {}) {
   g.setSize(w, h, false);
   m.group.rotation.set(0, 0, 0);
   let cam;
-  if (m.kind === 'case') {
+  if (m.kind === 'case' || m.kind === 'tool') {
     cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 10);
-    cam.position.set(0, 1.25, 3);
+    if (m.kind === 'tool') {
+      cam.position.set(0, 2.6, 1.8); // 上から 55° くらい
+      m.group.rotation.set(0, -0.35, 0); // 少しひねって奥行きを見せる
+    } else cam.position.set(0, 1.25, 3);
     cam.lookAt(0, 0, 0);
     cam.updateMatrixWorld(true);
     // 外接箱の角をカメラから見た座標にし、縦横比を保って収める（ふちに 4% の余白）
@@ -542,5 +563,50 @@ export async function caseTray(id, {item = null, w, h, inner, radius = 18, dpr =
   g.render(scene, cam);
   const url = g.domElement.toDataURL('image/png');
   for (const d of disposables) d.dispose();
+  return url;
+}
+
+/**
+ * ページの上の定規の板：透明のアクリルの板（厚みと丸いふち・つやのある映り込み）を真上から描いた画像（data URL の PNG）。
+ * w・h は定規の大きさ（CSS の px）。目盛りは上に SVG で重ねる（ページの実寸のまま）。板は半透明で、下の字が透けて見える
+ */
+export async function rulerSlab({w, h, dpr = 1} = {}) {
+  const g = gl();
+  const scene = new THREE.Scene();
+  scene.environment = envMap;
+  scene.environmentIntensity = 0.9;
+  // 環境は回さない（平らな面がソフトボックスをそのまま映して白くなるため。ふちの丸みにだけ光が映る）
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa4ad, 0.6));
+  const bv = 3;
+  const shape = roundRect(new THREE.Shape(), bv, bv, w - 2 * bv, h - 2 * bv, 4);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: 3,
+    bevelEnabled: true,
+    bevelThickness: 2,
+    bevelSize: bv,
+    bevelSegments: 5,
+    curveSegments: 8
+  });
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0xa9d3ee,
+    roughness: 0.05,
+    metalness: 0,
+    clearcoat: 1,
+    clearcoatRoughness: 0.04,
+    transparent: true,
+    opacity: 0.26
+  });
+  scene.add(new THREE.Mesh(geo, mat));
+  const key = new THREE.DirectionalLight(0xffffff, 1.4);
+  key.position.set(w * 0.25, h * 3, 300);
+  key.target.position.set(w / 2, h / 2, 0);
+  scene.add(key, key.target);
+  const cam = new THREE.OrthographicCamera(0, w, h, 0, 1, 2000);
+  cam.position.set(0, 0, 1000);
+  g.setSize(Math.round(w * dpr), Math.round(h * dpr), false);
+  g.render(scene, cam);
+  const url = g.domElement.toDataURL('image/png');
+  geo.dispose();
+  mat.dispose();
   return url;
 }

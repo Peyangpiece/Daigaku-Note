@@ -15,6 +15,7 @@ import {
   growLabel
 } from '../shared/figures.js';
 import {growFigure, renderFigure} from './figure-view.js';
+import {dressRuler} from './model3d.js';
 import {evaluate, formatNumber} from '../shared/calc.js';
 import {
   TIMER_PRESETS,
@@ -90,7 +91,22 @@ export const tearClip = (w, d, tooth) =>
     )
     .join(', ')})`;
 
-const POUCH_ART = {
+/**
+ * ポーチの道具の絵：3D モデル（tool-*）を斜め上から描いた画像（renderer/model3d.js が入れる）。
+ * 入るまで・描けないときは平らな絵（data-model-flat）を見せる
+ */
+const pouchArt = (model, svg) =>
+  svg
+    .replace(
+      '<svg viewBox="0 0 56 40" aria-hidden="true">',
+      `<svg viewBox="0 0 56 40" aria-hidden="true" data-model="${model}"><g data-model-flat>`
+    )
+    .replace(
+      /<\/svg>$/,
+      '</g><image data-model-img x="0" y="0" width="56" height="40" preserveAspectRatio="xMidYMid meet"/></svg>'
+    );
+
+const POUCH_FLAT = {
   sheet:
     '<svg viewBox="0 0 56 40" aria-hidden="true"><rect x="8" y="5" width="40" height="30" rx="3" fill="#e60000" opacity="0.88"/><rect x="13" y="10" width="14" height="3" rx="1.5" fill="#fff" opacity="0.8"/></svg>',
   calc:
@@ -105,6 +121,7 @@ const POUCH_ART = {
   timer:
     '<svg viewBox="0 0 56 40" aria-hidden="true"><circle cx="28" cy="22" r="14" fill="#fff" stroke="#3b4252" stroke-width="2.5"/><rect x="25" y="3" width="6" height="4" rx="1" fill="#3b4252"/><path d="M28 22V13" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/><path d="M28 22L34 26" stroke="#3b4252" stroke-width="2" stroke-linecap="round"/></svg>'
 };
+const POUCH_ART = Object.fromEntries(Object.entries(POUCH_FLAT).map(([k, svg]) => [k, pouchArt(`tool-${k}`, svg)]));
 
 /**
  * 四隅のうち、ポーチ・シール帳・素材の HTML（筆箱は使う側が作る）
@@ -727,6 +744,7 @@ export class DeskTools {
       transform: `rotate(${r.angle}deg)`
     });
     r.el.querySelector('.ruler__angle').textContent = `${Math.round(((r.angle % 360) + 360) % 360)}°`;
+    dressRuler(r.el, r.len, RULER_H); // 透明のアクリルの板を 3D で描いて敷く（目盛りはこの SVG のまま）
   }
 
   dragRuler(e) {

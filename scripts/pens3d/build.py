@@ -1238,6 +1238,201 @@ def eraser():
     to_pen_axes()
 
 
+# ---- ポーチの道具（アイコンの絵に使う。机に置いた形で作り、斜め上から描く）----
+def tool_sheet():
+    """赤シート：赤い透明の PET の板（角は丸い・厚み 0.35 mm）。左下に白い印刷「大学ノート CHECK SHEET」。
+    透明の材質は名前（ClearRed）でアプリが半透明にする。L 120 × W 80 mm"""
+    red = material('ClearRed', srgb('#e60012'), roughness=0.08, transmission=1.0, ior=1.55)
+    ink = material('SheetInk', (1, 1, 1), roughness=0.5)
+    rbox('Sheet', 120.0, 80.0, 0.35, 0.0, 4.0, 0.12, red, seg_v=8, seg_e=2)
+    sheet = bpy.data.objects['Sheet']
+    t1 = flat_text('SheetText', '大学ノート', FONT_JA, 6.0, ink, align='LEFT')
+    place_on(t1, sheet, lambda x, y: (-52 + x, -28 + y, 50), (0, 0, -1), 0.03)
+    t2 = flat_text('SheetText2', 'CHECK SHEET', None, 3.6, ink, align='LEFT')
+    place_on(t2, sheet, lambda x, y: (-52 + x, -34.5 + y, 50), (0, 0, -1), 0.03)
+    to_pen_axes()
+
+
+def tool_calc():
+    """電卓：角の丸い本体（つや消しの濃い灰色）・太陽電池・くぼんだ液晶（0.）・4 列 5 行のキー（字を印刷。
+    = は橙、C は赤）。机に平らに置き、液晶を奥にする。L 76 × W 120 × H 11 mm"""
+    body = material('CalcBody', srgb('#3b4252'), roughness=0.55, coat=0.3)
+    bezel = material('CalcBezel', srgb('#23272f'), roughness=0.4)
+    solar = material('CalcSolar', srgb('#2a1d18'), roughness=0.2, metallic=0.3)
+    lcd = material('CalcLcd', srgb('#b9c7b3'), roughness=0.35)
+    seg = material('CalcDigits', srgb('#1d2421'), roughness=0.6)
+    key = material('CalcKey', srgb('#e6e9ee'), roughness=0.45)
+    key_op = material('CalcKeyOp', srgb('#9aa3b2'), roughness=0.45)
+    key_eq = material('CalcKeyEq', srgb('#f08c2c'), roughness=0.45)
+    key_c = material('CalcKeyC', srgb('#d9443f'), roughness=0.45)
+    label = material('CalcLabel', srgb('#20242b'), roughness=0.6)
+    label_w = material('CalcLabelW', (1, 1, 1), roughness=0.6)
+    W, D, H = 76.0, 120.0, 11.0  # 横 76・奥行き 120（長い向きを奥へ）
+    # 自然な向き（X が長さ）で作るので、横＝Y・奥行き＝X として作り、最後に回す
+    b = rbox('Body', D, W, H, 0.0, 6.0, 2.2, body, seg_v=8, seg_e=4)
+    top = H
+    # 液晶の枠（奥＝+X 側）と液晶、太陽電池
+    rbox('LcdBezel', 30.0, 62.0, 0.8, top - 0.3, 3.0, 0.4, bezel, seg_v=4, seg_e=2).data.transform(
+        Matrix.Translation((D / 2 - 26.0, 0, 0)))
+    rbox('Lcd', 22.0, 54.0, 0.5, top - 0.2, 1.5, 0.2, lcd, seg_v=4, seg_e=1).data.transform(
+        Matrix.Translation((D / 2 - 26.0, 0, 0)))
+    rbox('Solar', 7.0, 30.0, 0.4, top - 0.1, 1.0, 0.15, solar, seg_v=3, seg_e=1).data.transform(
+        Matrix.Translation((D / 2 - 7.5, -12.0, 0)))
+    digits = flat_text('LcdDigits', '0.', None, 14.0, seg, align='RIGHT')
+    for v in digits.data.vertices:  # 字の上を奥（+X）へ向ける：(x, y) → 画面の右が −Y、上が +X
+        x, y = v.co.x, v.co.y
+        v.co.x, v.co.y = y, -x
+    lcd_ob = bpy.data.objects['Lcd']
+    place_on(digits, lcd_ob, lambda x, y: (D / 2 - 26.0 + x, -24.0 + y, 100), (0, 0, -1), 0.03)
+    # キー（手前側に 4 列 5 行）
+    rows = [('C', '±', '%', '÷'), ('7', '8', '9', '×'), ('4', '5', '6', '−'), ('1', '2', '3', '+'),
+            ('0', '00', '.', '=')]
+    kw, kd, gap = 13.0, 10.5, 3.0
+    for r, row in enumerate(rows):
+        for c, lab in enumerate(row):
+            xk = D / 2 - 52.0 - r * (kd + gap)
+            yk = (c - 1.5) * (kw + gap)
+            mat = key_c if lab == 'C' else key_eq if lab == '=' else key_op if c == 3 or r == 0 else key
+            k = rbox(f'Key_{r}_{c}', kd, kw, 2.2, top - 0.6, 2.0, 0.9, mat, seg_v=4, seg_e=3)
+            k.data.transform(Matrix.Translation((xk, yk, 0)))
+            t = flat_text(f'KeyLabel_{r}_{c}', lab, None, 5.0, label_w if mat in (key_c, key_eq) else label)
+            for v in t.data.vertices:
+                x, y = v.co.x, v.co.y
+                v.co.x, v.co.y = y, -x
+            place_on(t, k, lambda x, y, xk=xk, yk=yk: (xk + x, yk + y, 100), (0, 0, -1), 0.03)
+    # 縦長に置く：長い向き（X）を奥（+Y）へ回す（液晶が奥、キーが手前）
+    for ob in bpy.context.scene.objects:
+        if ob.type == 'MESH':
+            ob.data.transform(Matrix.Rotation(math.pi / 2, 4, 'Z'))
+    to_pen_axes()
+
+
+def tool_memo():
+    """メモ帳：白い紙の束（ページのふちが少しずれて重なる）、奥のふちに茶色の背（のり付け）。
+    上の紙に青い罫線と赤い縦線、手前の右の角は少しめくれる。75 × 75 × 8 mm"""
+    paper = material('MemoPaper', srgb('#fffdf6'), roughness=0.8)
+    edge = material('MemoEdge', srgb('#f1eee4'), roughness=0.85)
+    spine = material('MemoSpine', srgb('#8b6f47'), roughness=0.7)
+    rule = material('MemoRule', srgb('#9cc0e3'), roughness=0.6)
+    margin = material('MemoMargin', srgb('#e8a0a0'), roughness=0.6)
+    S = 75.0
+    # 紙の束：薄い板を少しずつずらして重ねる（ふちに紙の層が見える）
+    for i in range(6):
+        z = i * 1.25
+        o = (i % 3 - 1) * 0.12
+        rbox(f'Pages_{i}', S - 0.6, S - 0.6 + o, 1.2, z, 0.6, 0.15, edge, seg_v=3, seg_e=1).data.transform(
+            Matrix.Translation((o, 0, 0)))
+    # 上の紙（細かく分けて、手前の右の角をめくる）
+    bm = bmesh.new()
+    n = 40
+    vs = [[bm.verts.new((-S / 2 + S * i / n, -S / 2 + S * j / n, 7.6)) for j in range(n + 1)] for i in range(n + 1)]
+    for i in range(n):
+        for j in range(n):
+            bm.faces.new((vs[i][j], vs[i + 1][j], vs[i + 1][j + 1], vs[i][j + 1]))
+    for i in range(n + 1):
+        for j in range(n + 1):
+            v = vs[i][j]
+            # 角（x 大・y 小）からの距離でめくる
+            d = math.hypot(S / 2 - v.co.x, v.co.y + S / 2)
+            if d < 16:
+                k = (1 - d / 16) ** 2
+                v.co.z += 6.0 * k
+                v.co.x -= 1.5 * k
+                v.co.y += 1.5 * k
+    bm.normal_update()
+    top = obj_from_bm('TopSheet', bm, paper)
+    # 罫線と縦線（上の紙に沿わせる）
+    for k in range(9):
+        yy = -S / 2 + 10 + k * 7
+        line = rounded_plate(f'Rule_{k}', S - 8, 0.45, 0.2, rule)
+        place_on(line, top, lambda x, y, yy=yy: (x, yy + y, 50), (0, 0, -1), 0.04)
+    mline = rounded_plate('Margin', 0.5, S - 12, 0.2, margin)
+    place_on(mline, top, lambda x, y: (-S / 2 + 12 + x, y - 4, 50), (0, 0, -1), 0.05)
+    # 奥のふちの背（のり付けの帯。紙の束を包む）
+    rbox('Spine', S + 0.8, 6.0, 9.0, -0.2, 1.0, 0.6, spine, seg_v=4, seg_e=2).data.transform(
+        Matrix.Translation((0, S / 2 - 2.6, 0)))
+    to_pen_axes()
+
+
+def tool_ruler():
+    """定規：透明のアクリルの板（15 cm。片方のふちは斜めに削る）に、黒い目盛り（1 mm ごと。5 mm・1 cm は長い）と
+    数字、左の端に「大学ノート」。透明の材質は名前（ClearAcrylic）でアプリが半透明にする。L 170 × W 32 × H 2.5 mm"""
+    acr = material('ClearAcrylic', srgb('#a9d3ee'), roughness=0.05, transmission=1.0, ior=1.49)
+    ink = material('RulerInk', srgb('#1f2a33'), roughness=0.5)
+    L, W, H = 170.0, 32.0, 2.5
+    r = rbox('Ruler', L, W, H, 0.0, 3.0, 0.6, acr, seg_v=6, seg_e=3)
+    # 手前（−Y）のふちを斜めに削る（目盛りの側。紙に近い所で線を引けるように）
+    for v in r.data.vertices:
+        if v.co.y < -W / 2 + 3.0 and v.co.z > H * 0.5:
+            v.co.z -= (( -W / 2 + 3.0) - v.co.y) / 3.0 * 1.4
+    ticks = []
+    x0 = -75.0
+    for i in range(151):
+        x = x0 + i
+        ln = 7.0 if i % 10 == 0 else 5.0 if i % 5 == 0 else 3.2
+        y = -W / 2 + 3.2 + ln / 2
+        ticks.append(((x, y, H + 0.01), (0, 1, 0), (0, 0, 1), ln, 0.22, 0.03))
+    blocks('Ticks', ticks, ink)
+    for c in range(16):
+        t = flat_text(f'Num_{c}', str(c), None, 3.6, ink)
+        place_on(t, r, lambda x, y, c=c: (x0 + c * 10 + x, -W / 2 + 14.0 + y, 50), (0, 0, -1), 0.03)
+    t = flat_text('RulerBrand', '大学ノート', FONT_JA, 3.4, ink, align='LEFT')
+    place_on(t, r, lambda x, y: (x0 + 2 + x, W / 2 - 6.0 + y, 50), (0, 0, -1), 0.03)
+    to_pen_axes()
+
+
+def tool_timer():
+    """タイマー（ストップウォッチ）：丸い金属のケースとクロムの縁、白い文字盤（目盛り・数字）、赤い針、
+    上のりゅうず（押しボタン）と輪。机に平らに置く。直径 56 mm・厚み 14 mm"""
+    case = material('TimerCase', srgb('#3b4252'), roughness=0.35, coat=0.6)
+    chrome = material('Chrome', (0.92, 0.92, 0.92), metallic=1.0, roughness=0.1)
+    dial = material('TimerDial', srgb('#fbfbf8'), roughness=0.5)
+    ink = material('TimerInk', srgb('#22262d'), roughness=0.5)
+    hand = material('TimerHand', srgb('#e5484d'), roughness=0.4)
+    glass = material('ClearGlass', srgb('#ffffff'), roughness=0.03, transmission=1.0, ior=1.5)
+    R = 28.0
+    lathe('Case', fillet([(0, 0.0), (R - 3, 0.0), (R, 3.0), (R, 10.0), (R - 1.0, 11.5), (0, 11.5)], 1.5), case)
+    lathe('Bezel', fillet([(0, 11.0), (R - 0.6, 11.0), (R - 0.4, 12.4), (R - 2.6, 14.0), (R - 3.6, 13.6),
+                           (R - 3.6, 12.2), (0, 12.2)], 0.5), chrome)
+    lathe('Dial', [(0, 12.25), (R - 3.5, 12.25), (R - 3.5, 12.3), (0, 12.3)], dial)
+    items = []
+    for i in range(60):
+        a = 2 * math.pi * i / 60
+        ln = 3.2 if i % 5 == 0 else 1.6
+        rr = R - 5.0 - ln / 2
+        items.append(((rr * math.cos(a), rr * math.sin(a), 12.32), (math.cos(a), math.sin(a), 0), (0, 0, 1), ln,
+                      0.5 if i % 5 == 0 else 0.3, 0.03))
+    blocks('DialTicks', items, ink)
+    dial_ob = bpy.data.objects['Dial']
+    for k, lab in enumerate(('60', '15', '30', '45')):
+        a = math.pi / 2 - k * math.pi / 2  # 上から時計回り
+        rr = R - 13.0
+        t = flat_text(f'DialNum_{k}', lab, None, 4.2, ink)
+        place_on(t, dial_ob, lambda x, y, a=a, rr=rr: (rr * math.cos(a) + x, rr * math.sin(a) + y, 50), (0, 0, -1),
+                 0.03)
+    # 針（中心から右上へ）と中心のふた
+    a = math.radians(55)
+    blocks('Hand', [((9.0 * math.cos(a), 9.0 * math.sin(a), 12.45), (math.cos(a), math.sin(a), 0), (0, 0, 1), 22.0,
+                     0.9, 0.12)], hand)
+    lathe('HandCap', fillet([(0, 12.3), (1.6, 12.3), (1.6, 12.9), (0, 12.9)], 0.3), chrome, seg=32)
+    # ガラス（文字盤の上）
+    lathe('Glass', fillet([(0, 12.6), (R - 3.4, 12.6), (R - 3.4, 13.2), (0, 13.5)], 0.3), glass)
+    # りゅうず（奥 +Y 側。押しボタン）と輪
+    cr = lathe('Crown', fillet([(0, 0.0), (3.2, 0.0), (3.4, 1.0), (3.4, 6.0), (2.2, 6.5), (2.2, 9.0), (0, 9.0)], 0.4),
+               chrome, seg=32)
+    cr.data.transform(Matrix.Rotation(-math.pi / 2, 4, 'X'))
+    cr.data.transform(Matrix.Translation((0, R - 0.5, 6.5)))
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=32, radius1=1.0, radius2=1.0, depth=2.0)
+    ring = obj_from_bm('RingProbe', bm, chrome)
+    bpy.data.objects.remove(ring)
+    path = [(4.5 * math.cos(2 * math.pi * k / 48), R + 13.0 + 4.5 * math.sin(2 * math.pi * k / 48), 6.5)
+            for k in range(49)]
+    sweep('Ring', path, 1.4, 1.4, chrome, lambda p: (0, 0, 1), round_r=0.6)
+    to_pen_axes()
+
+
+
 FAMILIES = {
     'pen-ballpoint': lambda: ballpoint(),
     'pen-ballpoint-wood': lambda: ballpoint(wood=True),
@@ -1246,6 +1441,11 @@ FAMILIES = {
     'hider': lambda: marker(hider=True),
     'pencil-mech': pencil,
     'eraser': eraser,
+    'tool-sheet': tool_sheet,
+    'tool-calc': tool_calc,
+    'tool-memo': tool_memo,
+    'tool-ruler': tool_ruler,
+    'tool-timer': tool_timer,
     'case-pouch': case_pouch,
     'case-leather': case_leather,
     'case-clear': case_clear,

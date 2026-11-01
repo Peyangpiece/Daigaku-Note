@@ -25,8 +25,8 @@ export const TYPE_LABEL = {
 };
 /** 品の種類（シャープペンシルは 'pencil'、ほかは type） */
 export const kindOf = (item) => (item?.pencil ? 'pencil' : item?.type);
-/** 品ぞろえ（CATALOG）の外の 3D モデル：消しゴム（筆箱の横にいつもある道具） */
-export const EXTRA_MODELS = ['eraser'];
+/** 品ぞろえ（CATALOG）の外の 3D モデル：消しゴム（筆箱の横にいつもある道具）とポーチの道具の絵 */
+export const EXTRA_MODELS = ['eraser', 'tool-sheet', 'tool-calc', 'tool-memo', 'tool-ruler', 'tool-timer'];
 /** 品の種類の名前 */
 export const typeLabel = (item) => TYPE_LABEL[kindOf(item)];
 /** 道具の種類 → 編集画面の注釈の種類（shared/annotation.js） */
