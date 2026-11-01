@@ -46,7 +46,7 @@ const INVOKE = [
   'note.addPage',
   'note.removePage',
   'note.setHeader',
-  'window.openSide',
+  'note.setPaper',
   'photo.add',
   'photo.data',
   'annotation.save',

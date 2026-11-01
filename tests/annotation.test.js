@@ -295,3 +295,17 @@ test('ノートを消すときの片付け：その元の PDF の注釈・しお
   repo.removeSetting('note.design.x');
   assert.equal(repo.getSetting('note.design.x', null), null);
 });
+
+test('写真を使っているか：貼りものの写真（SHA-256）を、ほかの注釈で使っていなければ片付けてよい', async () => {
+  const {db} = await openDatabase(':memory:');
+  const repo = new Repo(db);
+  const ref = 'b'.repeat(64);
+  assert.equal(repo.photoInUse(ref), false);
+  repo.saveAnnotation(
+    'pdf-a',
+    null,
+    normalizeAnnotation({kind: 'stamp', page: 1, rect: {x: 1, y: 1, w: 50, h: 40}, style: {type: 'photo', ref}})
+  );
+  assert.equal(repo.photoInUse(ref), true);
+  assert.equal(repo.photoInUse('../x'), true, '形のおかしい id は消さない側に倒す');
+});

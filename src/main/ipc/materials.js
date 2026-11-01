@@ -132,7 +132,7 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
   // 自分で入れた資料を外す（ファイルは OS のゴミ箱へ）。LMS から取った資料は外さない（次の同期でまた取ってくるため）
   handle('material.remove', async ({materialId}, e) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
-    if (m.source === 'note') return ctx.removeNote(m.id, e?.sender); // ノートは注釈・元の写しなども片付ける（ipc/notes.js）
+    if (m.source === 'note') return ctx.removeNote(m.id, e?.senderFrame); // ノートは注釈・元の写しなども片付ける（ipc/notes.js）
     if (m.source === 'folder') bad('パソコンのフォルダにあるファイルは、Finder（エクスプローラー）で消してください');
     if (m.source !== 'upload' && m.source !== 'note') bad('LMS から取った資料は外せません');
     if (m.status === 'ok') await files.trash(m.path);

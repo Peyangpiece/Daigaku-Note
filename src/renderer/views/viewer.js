@@ -239,6 +239,7 @@ class Viewer extends DeskTools {
     const r = await api['pdf.open']({materialId: this.materialId});
     if (this.destroyed) return;
     if (r?.error) return this.fail(r.error);
+    this.notePaperNow = r.paper ?? null; // ノートの今の紙（「紙を変える…」）
     this.setupNotebook(r.material);
     // ノートは「授業　第n回　題　日付　ノート」と出す（ファイルの名前は題に残す）
     const shown = this.noteName() ?? r.material.name;

@@ -8,6 +8,7 @@ import {appendNotePage, cleanPaper, createNotePdf, rebuildNotePdf, removeLastNot
 import {isPng} from '../pdf-export.js';
 import {createSerial} from '../serial.js';
 import {id, bad} from './common.js';
+import {sendAll} from '../frames.js';
 
 /** ノートのファイル名（回ごと。同じ回フォルダの中でも、自分のフォルダの中でも名前が重ならないように回を入れる） */
 export function noteName(round) {
@@ -30,7 +31,7 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
   // ノートの上の欄に印刷する画像（授業・回・題・日付。ノートごと）。足すページにも同じものを印刷する
   const headerFile = (mid) => path.join(app.getPath('userData'), 'notes', `${mid}-head.png`);
   const readHeader = (mid) => fsp.readFile(headerFile(mid)).catch(() => null);
-  const changed = () => getWindow()?.webContents.send('state.changed', {});
+  const changed = () => sendAll(getWindow()?.webContents, 'state.changed', {});
   const okHeader = (header) =>
     header instanceof Uint8Array && header.length <= 512 * 1024 && isPng(header) ? Buffer.from(header) : null;
   const saveHeader = async (mid, head, text) => {
@@ -68,9 +69,18 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
       if (have) return {materialId: have.id, created: false};
       const d = cleanPaper(paper);
       const head = okHeader(header);
-      const label = !round ? '' : round.number > 0 ? ` 第${round.number}回` : ' その他';
+      // 自分のフォルダは回を分けないので「ノート.pdf」・題も回なし（「その他」は授業の回の呼び方）
+      const folder = course.kind === 'folder';
+      const label = folder || !round ? '' : round.number > 0 ? ` 第${round.number}回` : ' その他';
       const bytes = await createNotePdf(d, {title: `${course.name}${label} ノート`, header: head});
-      const r = await files.addOwn({term, course, round, name: noteName(round), data: bytes, source: 'note'});
+      const r = await files.addOwn({
+        term,
+        course,
+        round,
+        name: folder ? 'ノート.pdf' : noteName(round),
+        data: bytes,
+        source: 'note'
+      });
       repo.updateMaterial(r.material.id, {pages: 1});
       repo.setSetting(`note.design.${r.material.id}`, d);
       await saveHeader(r.material.id, head, head ? String(headerText).slice(0, 300) : '');
@@ -112,7 +122,7 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
       await rebase(m, bytes, pages);
       changed();
       const out = {pages, bytes: asBytes(bytes)};
-      if (e?.sender) notifyOthers(e.sender, 'note.pages', {materialId: m.id, ...out});
+      if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, ...out});
       return out;
     })
   );
@@ -131,8 +141,23 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
         bad('最後のページに書いたもの・付箋があるため消せません');
       await rebase(m, r.bytes, r.pages);
       changed();
-      if (e?.sender) notifyOthers(e.sender, 'note.pages', {materialId: m.id, pages: r.pages});
+      if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, pages: r.pages});
       return {pages: r.pages};
+    })
+  );
+
+  // ノートの紙を変える（横罫・方眼、行の間 6・7 mm）。同じページ数・同じ上の欄のまま描き直す（書いたものは注釈なのでそのまま）。
+  // 戻り：{pages, bytes, paper}。同じノートを開いているほかの画面にも知らせる（note.pages の replace）
+  handle('note.setPaper', ({materialId, paper}, e) =>
+    exclusive(String(materialId), async () => {
+      const {m, base} = await noteMaterial(materialId);
+      const d = cleanPaper(paper);
+      const {bytes, pages} = await rebuildNotePdf(base, d, {header: await readHeader(m.id)});
+      repo.setSetting(`note.design.${m.id}`, d);
+      await rebase(m, bytes, pages);
+      const out = {pages, bytes: asBytes(bytes), paper: d};
+      if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, ...out, replace: true});
+      return out;
     })
   );
 
@@ -165,7 +190,22 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
       if (m.status === 'ok' && (await fsp.stat(m.path).catch(() => null))) await files.trash(m.path);
       repo.remove('material', m.id);
       if (!repo.shaInUse(key)) {
+        // 貼った写真：ほかの PDF・ノートで使っていなければ写しも消す
+        const photos = new Set();
+        for (const a of repo.listAnnotations(key)) {
+          let st = null;
+          try {
+            st = JSON.parse(a.style_json ?? 'null');
+          } catch {
+            st = null;
+          }
+          if (a.kind === 'stamp' && st?.type === 'photo' && /^[0-9a-f]{64}$/.test(st.ref ?? '')) photos.add(st.ref);
+        }
         repo.removeAnnotationsFor(key);
+        for (const ref of photos)
+          if (!repo.photoInUse(ref))
+            for (const ext of ['jpg', 'png'])
+              await fsp.rm(path.join(photosDir(), `${ref}.${ext}`), {force: true}).catch(() => {});
         await fsp.rm(originalPath(originalsDir(), key), {force: true}).catch(() => {});
       }
       await fsp.rm(headerFile(m.id), {force: true}).catch(() => {});
@@ -176,15 +216,6 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
       return {ok: true};
     });
   ctx.removeNote = removeNote;
-
-  // 資料（ノート・PDF）を横に並べる窓で開く（PDF の編集画面の「横に並べる」。元の窓は左半分、こちらは右半分。main.js の openSideWindow）
-  handle('window.openSide', ({materialId}) => {
-    const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
-    if (!/\.pdf$/i.test(m.path) || m.source === 'export') bad('横に並べられるのはノートと PDF の資料だけです');
-    if (m.status !== 'ok') bad('ファイルが見つかりません');
-    ctx.openSide?.(m.id);
-    return {ok: true};
-  });
 
   // 写真を取っておく。戻り：{id}（SHA-256。貼りもの style.ref に入れる）
   handle('photo.add', async ({bytes}) => {

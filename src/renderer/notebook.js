@@ -40,7 +40,8 @@ export function noteHeading(courseId, roundId) {
   const course = state.data?.courses?.find((c) => c.id === courseId);
   const round = (state.data?.rounds?.[courseId] ?? []).find((r) => r.id === roundId);
   const parts = [course?.name ?? ''];
-  if (round)
+  // 自分のフォルダは回を分けない（回の「その他」は出さない）
+  if (round && course?.kind !== 'folder')
     parts.push(
       round.number > 0 ? `第${round.number}回` : round.title_user || 'その他',
       round.number > 0 ? round.title_user || round.title || '' : '',
@@ -121,19 +122,18 @@ export async function openNotebook(courseId, roundId, {from = null, paper = unde
 }
 
 /**
- * 回のノートを横に並べる窓で開く（なければ作る）。元の窓は画面の左半分、ノートは右半分になり、両方に同時に書ける
+ * 回のノートを PDF の右に並べて開く（なければ作る）。同じ窓の中で左に PDF（from）、右にノートを出し、両方に同時に書ける（#/split）
  */
-export async function openNotebookSide(courseId, roundId, {paper = undefined} = {}) {
+export async function openNotebookSide(courseId, roundId, {paper = undefined, from} = {}) {
   const r = await ensureNote(courseId, roundId, paper);
   if (!r) return;
-  const w = await api['window.openSide']({materialId: r.materialId});
-  if (w?.error) toast(w.error, {error: true});
+  openSplit(from, r.materialId);
 }
 
-/** 資料（PDF）を横に並べる窓で開く（ノートから、同じ回の資料を右に並べる） */
-export async function openSide(materialId) {
-  const w = await api['window.openSide']({materialId});
-  if (w?.error) toast(w.error, {error: true});
+/** 窓の中で PDF（左）とノート（右）を並べる */
+export function openSplit(leftId, rightId) {
+  if (!leftId || !rightId || leftId === rightId) return;
+  navigate(`/split/${leftId}/${rightId}`);
 }
 
 /**

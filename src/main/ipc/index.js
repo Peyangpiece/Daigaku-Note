@@ -1,6 +1,7 @@
 // レンダラとの窓口（DESIGN-M0 §4）。handle は失敗を {error} に包んで返す。窓口は関心ごとに ipc/*.js に分かれ、ここが順に register する
 import {BrowserWindow, ipcMain} from 'electron';
 import {createSerial} from '../serial.js';
+import {sendAll} from '../frames.js';
 import * as stateIpc from './state.js';
 import * as connectionsIpc from './connections.js';
 import * as termsIpc from './terms.js';
@@ -30,10 +31,10 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
       }
     });
   };
-  // ほかの窓に知らせる（同じ資料を 2 つの窓で開いているとき。from は送ってきた窓の webContents。スマホからは from なし＝全部の窓）
+  // ほかの画面に知らせる（同じ資料を窓の中の左右に並べて開いているときなど）。from は送ってきた画面（WebFrameMain。e.senderFrame）。
+  // スマホからは from なし＝すべての窓のすべての画面
   const notifyOthers = (from, channel, payload) => {
-    for (const w of BrowserWindow.getAllWindows())
-      if (!w.isDestroyed() && w.webContents !== from) w.webContents.send(channel, payload);
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) sendAll(w.webContents, channel, payload, from);
   };
   ctx.notifyOthers = notifyOthers;
   // ノートごとの順番待ち：ページの足し引き・描き直し・消す・上書き保存を重ねない（ipc/notes.js・ipc/pdf.js）

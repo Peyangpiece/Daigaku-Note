@@ -1,18 +1,6 @@
 // 大学ノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
 // M0 の骨格：DB・設定・ジョブ・スケジューラ・IPC をつなぐ。LMS 操作とファイル操作はここ（メイン）だけで行う。
-import {
-  app,
-  BrowserWindow,
-  Menu,
-  Notification,
-  Tray,
-  dialog,
-  nativeImage,
-  nativeTheme,
-  net,
-  screen,
-  shell
-} from 'electron';
+import {app, BrowserWindow, Menu, Notification, Tray, dialog, nativeImage, nativeTheme, net, shell} from 'electron';
 import {existsSync, mkdirSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -24,6 +12,7 @@ import {createLogger} from './log.js';
 import {registerIpc} from './ipc/index.js';
 import {createDevices} from './mobile/devices.js';
 import {createMobileApi} from './mobile/api.js';
+import {sendAll} from './frames.js';
 import {createMobileServer} from './mobile/server.js';
 import {JobRunner} from './jobs.js';
 import {Scheduler} from './scheduler.js';
@@ -78,8 +67,6 @@ const primary = SELF_TEST ? false : app.requestSingleInstanceLock({build: BUILD}
 if (!primary && !SELF_TEST) app.exit(0);
 
 let win = null,
-  side = null, // 横に並べる窓（PDF の横にノートを開く。openSideWindow）
-  beforeSide = null, // 横に並べる前の元の窓の大きさ（横の窓を閉じたら戻す）：{bounds, maximized}
   tray = null;
 const ctx = {}; // repo・files・engine・registry・secrets・log・jobs・scheduler
 
@@ -105,66 +92,25 @@ function openWindow(route = null) {
   win = new BrowserWindow({
     width: 1100,
     height: 820,
-    minWidth: 640, // 横に並べたとき（openSideWindow）は画面の半分になる
+    minWidth: 640,
     minHeight: 640,
     title: '大学ノート',
     autoHideMenuBar: true,
     backgroundColor: windowBackground(),
-    webPreferences: {preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false}
+    // nodeIntegrationInSubFrames：PDF とノートを並べるとき（#/split）、左右の編集画面は窓の中の iframe（同じ index.html）。
+    // その iframe にも preload（window.daigaku）を入れる。Node は入れない（sandbox のまま）。ほかのサイトは読み込まない（guardWindow）
+    webPreferences: {
+      preload: PRELOAD,
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      nodeIntegrationInSubFrames: true
+    }
   });
   win.loadFile(RENDERER, route ? {hash: route} : undefined);
   guardWindow(win);
   win.on('closed', () => {
     win = null;
-    if (side && !side.isDestroyed()) side.close(); // 元の窓を閉じたら、横の窓も閉じる
-  });
-}
-
-/**
- * 横に並べる窓：PDF の編集画面の横に、同じ回のノート（資料 materialId）を開く（SPEC §8.6）。
- * 元の窓を画面の左半分、この窓を右半分に置く。どちらも同じ PDF の編集画面なので、両方に同時に書ける。
- * もう開いていれば、その窓でノートを開き直す
- */
-function openSideWindow(materialId) {
-  const hash = `/viewer/${materialId}`;
-  const area = screen.getDisplayMatching(
-    win && !win.isDestroyed() ? win.getBounds() : screen.getPrimaryDisplay().bounds
-  ).workArea;
-  const half = Math.floor(area.width / 2);
-  if (win && !win.isDestroyed()) {
-    if (!side || side.isDestroyed()) beforeSide = {bounds: win.getBounds(), maximized: win.isMaximized()};
-    if (win.isMaximized()) win.unmaximize();
-    if (win.isFullScreen()) win.setFullScreen(false);
-    win.setBounds({x: area.x, y: area.y, width: half, height: area.height});
-  }
-  if (side && !side.isDestroyed()) {
-    side.loadFile(RENDERER, {hash, query: {pane: 'side'}});
-    side.show();
-    side.focus();
-    return;
-  }
-  side = new BrowserWindow({
-    x: area.x + half,
-    y: area.y,
-    width: area.width - half,
-    height: area.height,
-    minWidth: 480,
-    minHeight: 480,
-    title: 'ノート — 大学ノート',
-    autoHideMenuBar: true,
-    backgroundColor: windowBackground(),
-    webPreferences: {preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false}
-  });
-  side.loadFile(RENDERER, {hash, query: {pane: 'side'}});
-  guardWindow(side);
-  side.on('closed', () => {
-    side = null;
-    // 元の窓を、横に並べる前の大きさに戻す
-    if (win && !win.isDestroyed() && beforeSide) {
-      win.setBounds(beforeSide.bounds);
-      if (beforeSide.maximized) win.maximize();
-    }
-    beforeSide = null;
   });
 }
 
@@ -180,7 +126,7 @@ function guardWindow(w) {
   // （日本語の入ったパスの書き方の違いで外れないよう、%xx を戻して比べる）
   const plain = (u) => {
     try {
-      return decodeURI(String(u).split(/[?#]/)[0]); // ? の後ろ（横に並べる窓の pane=side）と # の後ろは比べない
+      return decodeURI(String(u).split(/[?#]/)[0]); // ? の後ろ（並べた画面の pane=embed）と # の後ろは比べない
     } catch {
       return String(u).split(/[?#]/)[0];
     }
@@ -188,6 +134,10 @@ function guardWindow(w) {
   const home = plain(pathToFileURL(RENDERER).href);
   win.webContents.on('will-navigate', (e, url) => {
     if (plain(url) !== home) e.preventDefault();
+  });
+  // 窓の中の iframe（PDF とノートを並べた左右の画面）も、アプリ自身の画面だけ
+  win.webContents.on('will-frame-navigate', (e) => {
+    if (!e.isMainFrame && plain(e.url) !== home) e.preventDefault();
   });
   // 右クリックのメニュー：入力欄では切り取り・コピー・貼り付け・すべて選択、選んだ文字ではコピー
   win.webContents.on('context-menu', (_e, params) => {
@@ -396,7 +346,7 @@ app.whenReady().then(async () => {
       repo,
       files: ctx.files,
       log: (m) => log.info(m),
-      onProgress: (p) => win?.webContents.send('sync.progress', p)
+      onProgress: (p) => sendAll(win?.webContents, 'sync.progress', p)
     });
     // 同じ LMS の接続が 2 つ以上あれば 1 つにまとめる（セットアップのやり直しで増え、授業が 2 つずつ並んでいた）
     await ctx.engine
@@ -411,14 +361,13 @@ app.whenReady().then(async () => {
     const notifier = createNotifier({repo, Notification, openWindow, log: (m) => log.warn(m)});
     ctx.notifier = notifier; // スケジューラの「今日の復習」の知らせ（§12.1）
     const notify = (ch, payload) => {
-      win?.webContents.send(ch, payload);
+      sendAll(win?.webContents, ch, payload);
       notifier.onEvent(ch, payload);
     };
     ctx.backup = async () => runBackup({db, dir: path.join(userData, 'backups')});
     ctx.jobs = new JobRunner(ctx, {notify});
     ctx.scheduler = new Scheduler(ctx);
     ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify});
-    ctx.openSide = openSideWindow;
     registerIpc(ctx, {getWindow: () => win});
     // スマホ連携（docs/MOBILE.md）。オンにしてあれば、同じ Wi-Fi のスマホに向けて始める
     {
@@ -469,7 +418,7 @@ app.whenReady().then(async () => {
         onStatus: (s) => {
           ctx.status = s;
           ctx.refreshTray?.();
-          win?.webContents.send('state.changed', {status: s});
+          sendAll(win?.webContents, 'state.changed', {status: s});
         },
         log: (m) => log.info(m)
       })
@@ -485,7 +434,7 @@ app.whenReady().then(async () => {
           // 起動したとき（更新のあとも）は、同期の予定を待たずにログインまで済ませる
           ctx.jobs.enqueue('login', {});
           ctx.jobs.start();
-          win?.webContents.send('state.changed', {browser: ctx.browser});
+          sendAll(win?.webContents, 'state.changed', {browser: ctx.browser});
         });
     // Chromium（約 150 MB）は LMS をつないでいるときだけ取り込む。つないでいなければ、つないだとき（ipc.js の setup.createConnection）に取り込む
     if (connections.length) ctx.installBrowser();

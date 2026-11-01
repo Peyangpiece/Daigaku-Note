@@ -161,7 +161,7 @@ export const BAR = `
     <button type="button" class="viewer-bar__find" data-v="spread" aria-pressed="false" title="片開き（1 ページずつ）と見開き（2 ページずつ横に並べる）を切り替える">▯ 片開き</button>
     <button type="button" class="btn btn--small" data-v="notebook" hidden title="この回のノートを開く（なければ作る。ノートからは「← 資料へ」で戻れます）">📓 ノート</button>
     <button type="button" class="btn btn--small" data-v="note-pdfs" hidden aria-haspopup="menu" title="この回の PDF の資料を開く・ノートの横に並べる">📄 資料</button>
-    <button type="button" class="btn btn--small" data-v="note-side" hidden title="この回のノートを横に並べて開く（PDF は左、ノートは右。両方に同時に書けます）">◫ 横に並べる</button>
+    <button type="button" class="btn btn--small" data-v="note-side" hidden title="この回のノートを横に並べて開く（同じ窓の中で PDF は左、ノートは右。両方に同時に書けます）">◫ 横に並べる</button>
     <span class="viewer-bar__spacer"></span>
     <div class="viewer-bar__nav">
     <label class="viewer-bar__page" title="ページ番号を入れて Enter で移る">
@@ -187,6 +187,7 @@ export const BAR = `
           <dt>${key(MOD, 'B')}</dt><dd>太字（文字入れを選んでいるとき）</dd>
           <dt>${key(MOD, 'D')}</dt><dd>電卓（ポーチの中）を出す・しまう</dd>
           <dt>${key(SHIFT, MOD, 'D')}</dt><dd>今の場所に付箋</dd>
+          <dt>${key(SHIFT, MOD, 'N')}</dt><dd>ノートにページを足す（最後のページの下のほうに書いても足します）</dd>
           <dt>${key(MOD, 'R')}</dt><dd>赤シート（ポーチの中）を出す・しまう</dd>
           <dt>Tab・Enter</dt><dd>注釈を順に選ぶ・選んだ文字を直す／コメントを開く</dd>
           <dt>Delete</dt><dd>選んだ注釈を消す</dd>

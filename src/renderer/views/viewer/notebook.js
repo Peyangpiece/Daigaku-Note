@@ -14,7 +14,7 @@ import {
   notePaper,
   openNotebook,
   openNotebookSide,
-  openSide,
+  openSplit,
   removeNote,
   setNotePaper
 } from '../../notebook.js';
@@ -29,7 +29,8 @@ const PHOTO_SHARE = 0.6; // 貼ったときの大きさ：ページの幅の 6 �
 const HINT_KEY = 'note.hinted';
 
 const spreadKey = (id) => `viewer.spread.${id}`;
-const isSide = () => document.documentElement.dataset.pane === 'side';
+// 窓の中に並べた画面（#/split の左右の iframe。app.js の pane=embed）
+const isSide = () => document.documentElement.dataset.pane === 'embed';
 
 export const methods = {
   /** pdf.open の結果を受けて、ノート・見開き・戻る先のボタンを用意する（ページを並べる前に呼ぶ） */
@@ -43,13 +44,16 @@ export const methods = {
     }
     this.showSpread();
     // 同じ回のノート：資料（回に置いたもの）からだけ開ける。ノートでは、開いてきた資料へ戻るボタンと、同じ回の資料のメニュー
-    // 横に並べる窓（pane=side）では、ノートを開くボタン・戻るボタンは出さず、「← 授業へ」は「閉じる」にする
+    // 窓の中に並べた画面（pane=embed）では、ノートを開くボタン・戻るボタン・資料のメニューは出さず、「← 授業へ」は「閉じる」（並べるのをやめて、もう片方だけにする）にする
     const side = isSide();
     const nb = this.$('notebook');
     nb.hidden = side || this.isNote || !material.round_id;
     this.$('note-side').hidden = nb.hidden;
     this.$('note-pdfs').hidden = side || !this.isNote || !this.roundPdfs().length;
-    if (side) this.$('back').textContent = '閉じる';
+    if (side) {
+      this.$('back').textContent = '閉じる';
+      this.$('back').title = '並べるのをやめる（もう片方を窓いっぱいに出す）';
+    }
     const from = this.isNote && !side ? noteFrom(this.materialId) : null;
     const back = this.$('note-back');
     back.hidden = !from;
@@ -128,9 +132,11 @@ export const methods = {
     menu.innerHTML = html;
     document.body.append(menu);
     const r = btn.getBoundingClientRect();
-    const {width} = menu.getBoundingClientRect();
+    const {width, height} = menu.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - width - 8))}px`;
-    menu.style.top = `${r.bottom + 4}px`;
+    // 下に入りきらなければ、ボタンの上に出す（ノートの最後のページの下の「紙を変える…」など）
+    const below = r.bottom + 4 + height <= window.innerHeight - 8;
+    menu.style.top = `${below ? r.bottom + 4 : Math.max(8, r.top - height - 4)}px`;
     menu.querySelector('button')?.focus();
     this.barMenu = menu;
     this.barMenuFor = btn;
@@ -179,13 +185,13 @@ export const methods = {
         (x) =>
           `<div class="viewer-pdfmenu__row"><span class="viewer-pdfmenu__name" title="${esc(x.name)}">${esc(x.name)}</span>` +
           `<button type="button" role="menuitem" data-pdf-open="${x.id}">開く</button>` +
-          `<button type="button" role="menuitem" data-pdf-side="${x.id}" title="ノートの横に並べて開く（両方に同時に書けます）">◫ 横に並べる</button></div>`
+          `<button type="button" role="menuitem" data-pdf-side="${x.id}" title="同じ窓の中で、PDF を左・このノートを右に並べて開く（両方に同時に書けます）">◫ 横に並べる</button></div>`
       )
       .join('');
     this.openBarMenu(btn, '同じ回の資料', html, async (b) => {
       await this.settle();
       if (b.dataset.pdfOpen) navigate(`/viewer/${b.dataset.pdfOpen}`);
-      else if (b.dataset.pdfSide) openSide(b.dataset.pdfSide);
+      else if (b.dataset.pdfSide) openSplit(b.dataset.pdfSide, this.materialId);
     });
   },
 
@@ -197,7 +203,7 @@ export const methods = {
     const {course_id: courseId, round_id: roundId} = this.material;
     const go = async (paper) => {
       await this.settle();
-      if (side) await openNotebookSide(courseId, roundId, {paper});
+      if (side) await openNotebookSide(courseId, roundId, {paper, from: this.materialId});
       else await openNotebook(courseId, roundId, {from: this.materialId, paper});
     };
     if (hasNote(courseId, roundId)) return go(undefined);
@@ -221,6 +227,7 @@ export const methods = {
     const box = document.createElement('div');
     box.className = 'viewer-addpage';
     box.innerHTML =
+      '<button type="button" class="btn btn--small btn--quiet viewer-addpage__paper" data-v="note-paper" aria-haspopup="menu" title="このノートの紙（横罫・方眼、行の間）を変える。書いたものはそのまま">紙を変える…</button>' +
       '<button type="button" class="btn btn--small btn--quiet viewer-addpage__delete" data-v="delete-note" title="このノートを削除する（ファイルはパソコンのゴミ箱へ）">ノートを削除…</button>' +
       '<button type="button" class="btn btn--small btn--quiet" data-v="remove-page" title="最後のページを消す（何も書いていない白紙のときだけ。↶ で戻せます）">− 最後のページを消す</button>' +
       '<button type="button" class="btn btn--small" data-v="add-page" title="ノートの最後に白いページを 1 枚足す（下に増えます。↶ で取り消せます）">＋ ページを追加</button>';
@@ -231,6 +238,10 @@ export const methods = {
       if (v === 'add-page') this.addNotePage();
       else if (v === 'remove-page') this.removeNotePage();
       else if (v === 'delete-note') this.deleteNote();
+      else if (v === 'note-paper') {
+        const b = e.target.closest('[data-v]');
+        this.toggleBarMenu(b, () => this.openPaperMenu(b));
+      }
     });
     this.sizeAddPage();
   },
@@ -252,7 +263,7 @@ export const methods = {
    * ノートにページを足す：書きかけを保存してから、メインで足し、足したページだけ画面に並べる（開き直さない）。
    * record：取り消しの履歴に積む（↶ で消せる）。取り消し・やり直しから呼ぶときは false。戻り：足せたか
    */
-  async addNotePage({record = true} = {}) {
+  async addNotePage({record = true, auto = false} = {}) {
     if (this.pageBusy) return false;
     this.pageBusy = true;
     this.busyAddPage(true);
@@ -266,8 +277,12 @@ export const methods = {
       const last = await this.appendNotePages(r.bytes, r.pages);
       if (!last) return false;
       if (record) this.pushStep({notePage: 'add'});
-      last.el.scrollIntoView({block: 'center', behavior: 'smooth'});
-      toast(`ページを足しました（${this.pages.length} ページ）`);
+      // 書いている途中に足したとき（auto）は、見ている場所を動かさない
+      if (auto) toast(`下のほうまで書いたので、ページを足しました（${this.pages.length} ページ。↶ で取り消せます）`);
+      else {
+        last.el.scrollIntoView({block: 'center', behavior: 'smooth'});
+        toast(`ページを足しました（${this.pages.length} ページ）`);
+      }
       return true;
     } catch (e) {
       toast(`ページを足せませんでした（${e.message}）`, {error: true});
@@ -297,6 +312,68 @@ export const methods = {
     return last;
   },
 
+  /** ノートの最後のページの下のほう（下から 12%）まで書いたら、次の白いページを足す（ペンの線を書き終えたとき。viewer/ink.js） */
+  autoNotePage(a) {
+    if (!this.isNote || this.pageBusy || a?.page !== this.pages.length || !a.rect) return;
+    const h = this.pages.at(-1).page.getViewport({scale: 1}).height;
+    if (a.rect.y <= h * 0.12) this.addNotePage({auto: true});
+  },
+
+  /** 「紙を変える…」：横罫・方眼、行の間 6・7 mm から選ぶ（今の紙に ✓）。書いたものはそのまま */
+  openPaperMenu(btn) {
+    const cur = this.notePaperNow?.v === 2 ? `${this.notePaperNow.type}-${this.notePaperNow.gap}` : null;
+    const html =
+      (cur ? '' : '<p class="viewer-pdfmenu__note">いまは前の版の紙（テンプレートの見た目）です</p>') +
+      NOTE_PAPERS.map(
+        (p) =>
+          `<button type="button" role="menuitem" data-paper="${p.key}">${p.key === cur ? '✓ ' : '　 '}${esc(p.label)}</button>`
+      ).join('');
+    this.openBarMenu(btn, 'ノートの紙を変える', html, (b) => {
+      if (b.dataset.paper && b.dataset.paper !== cur)
+        this.changeNotePaper(NOTE_PAPERS.find((p) => p.key === b.dataset.paper));
+    });
+  },
+
+  /** ノートの紙を変える：メインで描き直し、画面のページの絵を入れ替える（書いたもの・取り消しの履歴・ペンはそのまま） */
+  async changeNotePaper(paper) {
+    if (!paper || this.pageBusy) return;
+    this.pageBusy = true;
+    this.busyAddPage(true);
+    try {
+      await this.settle();
+      const r = await api['note.setPaper']({materialId: this.materialId, paper: {type: paper.type, gap: paper.gap}});
+      if (r?.error) return toast(r.error, {error: true});
+      await this.replaceNoteDoc(r.bytes, r.pages);
+      this.notePaperNow = r.paper;
+      toast(`紙を「${paper.label}」に変えました`);
+    } catch (e) {
+      toast(`紙を変えられませんでした（${e.message}）`, {error: true});
+    } finally {
+      this.pageBusy = false;
+      if (!this.destroyed) this.busyAddPage(false);
+    }
+  },
+
+  /** 描き直したノート（bytes。全部で pages ページ）に、画面のページの絵を入れ替える（並びと書いたものはそのまま） */
+  async replaceNoteDoc(bytes, pages) {
+    if (this.destroyed) return;
+    const task = this.loadDoc(bytes);
+    (this.noteTasks ??= []).push(task);
+    const doc = await task.promise;
+    if (this.destroyed) return;
+    if (pages < this.pages.length) this.dropNotePages(pages);
+    for (const p of this.pages) {
+      if (p.num > doc.numPages) break;
+      p.renderTask?.cancel();
+      p.page = await doc.getPage(p.num);
+      p.textContent = null;
+      p.findChars = null;
+      this.sizePage(p);
+    }
+    if (pages > this.pages.length) await this.appendNotePages(bytes, pages);
+    this.markDirty();
+  },
+
   /** 画面のページを n ページまで減らす（最後から） */
   dropNotePages(n) {
     while (this.pages.length > Math.max(1, n)) {
@@ -314,9 +391,12 @@ export const methods = {
    * 足したときは新しい元の写し（bytes）が来る。消したときは pages だけ
    */
   bindNotePages() {
-    const off = api.on?.('note.pages', ({materialId, pages, bytes}) => {
+    const off = api.on?.('note.pages', ({materialId, pages, bytes, replace = false, paper = null}) => {
       if (materialId !== this.materialId || !this.isNote || this.destroyed || this.pageBusy) return;
-      if (bytes && pages > this.pages.length)
+      if (replace && bytes) {
+        if (paper) this.notePaperNow = paper;
+        this.replaceNoteDoc(bytes, pages).catch(() => {});
+      } else if (bytes && pages > this.pages.length)
         this.appendNotePages(bytes, pages)
           .then((last) => last && toast(`ほかの所でページが足されました（${this.pages.length} ページ）`))
           .catch(() => {});

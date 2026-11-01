@@ -9,6 +9,7 @@ import {annotationToClient, normalizeAnnotation, clampSize} from '../../shared/a
 import {normalizeBookmark} from '../../shared/bookmark.js';
 import {cleanAlign} from '../../shared/text-runs.js';
 import {str, id, PDFJS_DIR, PDFJS_ASSET, bad} from './common.js';
+import {sendAll} from '../frames.js';
 
 export function register({handle, ctx, repo, log, getWindow, notifyOthers = () => {}}) {
   // アプリ内の PDF ビューア（SPEC §9）。編集できるのは PDF だけ。中身はバイト列で渡し、パスはレンダラに出さない
@@ -40,6 +41,8 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
     repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
     return {
       material: {id: m.id, name: m.name, course_id: m.course_id, round_id: m.round_id, source: m.source},
+      // ノートの紙（{v: 2, type, gap}。前の版のノートは v なし）。「紙を変える…」の今の紙に ✓ を付ける
+      paper: m.source === 'note' ? repo.getSetting(`note.design.${m.id}`, null) : null,
       bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
       annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient),
       bookmarks: repo.listBookmarks(annoKey(m)).map(bookmarkToClient),
@@ -90,7 +93,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
     return {bytes: new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)};
   });
 
-  // 窓（e.sender）から書いたときは、同じ資料を開いているほかの窓にも知らせる（スマホからは mobile/api.js が知らせる）
+  // 画面（e.senderFrame）から書いたときは、同じ資料を開いているほかの画面にも知らせる（スマホからは mobile/api.js が知らせる）
   handle('annotation.save', ({materialId, annotation}, e) => {
     const m = pdfMaterial(materialId);
     const aid = annotation?.id == null ? null : (id(annotation.id) ?? bad('注釈が不正です'));
@@ -98,7 +101,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
     if (m.source === 'note' && m.pages && Number(annotation?.page) > m.pages)
       bad('そのページはもうありません（開き直してください）');
     const row = repo.saveAnnotation(annoKey(m), aid, normalizeAnnotation(annotation));
-    if (e?.sender) notifyOthers(e.sender, 'annotations.changed', {materialId: m.id, all: true});
+    if (e?.senderFrame) notifyOthers(e.senderFrame, 'annotations.changed', {materialId: m.id, all: true});
     return {annotation: annotationToClient(row)};
   });
 
@@ -111,7 +114,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
   handle('annotation.remove', ({materialId, annotationId}, e) => {
     const m = pdfMaterial(materialId);
     repo.removeAnnotation(annoKey(m), id(annotationId) ?? bad('注釈が不正です'));
-    if (e?.sender) notifyOthers(e.sender, 'annotations.changed', {materialId: m.id, all: true});
+    if (e?.senderFrame) notifyOthers(e.senderFrame, 'annotations.changed', {materialId: m.id, all: true});
     return {ok: true};
   });
 
@@ -148,7 +151,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
       images: textImages(rows, texts),
       originalsDir: originalsDir()
     });
-    if (r.changed) getWindow()?.webContents.send('state.changed', {});
+    if (r.changed) sendAll(getWindow()?.webContents, 'state.changed', {});
     const stale = repo.getSetting('pdf.stale', []);
     if (stale.includes(m.id))
       repo.setSetting(
@@ -201,7 +204,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
           status: 'ok',
           read_at: new Date().toISOString()
         });
-      win?.webContents.send('state.changed', {});
+      sendAll(win?.webContents, 'state.changed', {});
     }
     return {ok: true, name: path.basename(file)};
   });
