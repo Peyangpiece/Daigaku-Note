@@ -39,7 +39,7 @@ export function register({handle, repo, log, getWindow}) {
     const bytes = base.bytes;
     repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
     return {
-      material: {id: m.id, name: m.name, course_id: m.course_id, round_id: m.round_id},
+      material: {id: m.id, name: m.name, course_id: m.course_id, round_id: m.round_id, source: m.source},
       bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
       annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient),
       bookmarks: repo.listBookmarks(annoKey(m)).map(bookmarkToClient),

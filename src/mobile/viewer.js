@@ -396,9 +396,23 @@ class PhoneViewer {
           .filter((id) => !this.stickers.has(id))
       )
     ];
-    if (!ids.length) return;
-    const {data} = await call('sticker.data', {ids}).catch(() => ({data: {}}));
-    for (const [id, url] of Object.entries(data ?? {})) this.stickers.set(id, url);
+    // 写真（貼りもの style.type 'photo'）も同じ入れ物に入れる（id はどちらも中身の SHA-256 で重ならない）
+    const photos = [
+      ...new Set(
+        [...this.annos.values()]
+          .filter((a) => a.kind === 'stamp' && a.style.type === 'photo')
+          .map((a) => a.style.ref)
+          .filter((id) => !this.stickers.has(id))
+      )
+    ];
+    if (photos.length) {
+      const {urls} = await call('photo.data', {ids: photos}).catch(() => ({urls: {}}));
+      for (const [id, url] of Object.entries(urls ?? {})) this.stickers.set(id, url);
+    }
+    if (ids.length) {
+      const {data} = await call('sticker.data', {ids}).catch(() => ({data: {}}));
+      for (const [id, url] of Object.entries(data ?? {})) this.stickers.set(id, url);
+    }
     for (const a of this.annos.values())
       if (a.kind === 'stamp' && this.stickers.has(a.style.ref)) {
         const img = a.el.querySelector('img');

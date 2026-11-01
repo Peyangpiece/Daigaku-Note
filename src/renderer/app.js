@@ -33,6 +33,7 @@ const loadViewer = () =>
   viewerMod ? Promise.resolve(viewerMod) : import('./views/viewer.js').then((m) => (viewerMod = m));
 import {watchModels} from './model3d.js';
 import './swipe.js'; // トラックパッドの 2 本指の横スワイプで戻る・進む
+import {openNotebook} from './notebook.js';
 import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具（筆箱・ポーチ・シール帳・素材）
 
 const api = window.daigaku;
@@ -219,11 +220,19 @@ function render() {
       viewer?.unmount();
       leaveQuiz();
       leaveQuizEdit();
-      viewer = viewerMod.mountViewer(view, {
-        materialId,
-        course,
-        onBack: () => navigate(course ? `/course/${course.id}` : '/')
-      });
+      // onReload：ノートにページを足したとき、同じ資料を開き直す（after：開き直したあとにすること）
+      const mount = (after = null) =>
+        viewerMod.mountViewer(view, {
+          materialId,
+          course,
+          after,
+          onBack: () => navigate(course ? `/course/${course.id}` : '/'),
+          onReload: (next) => {
+            viewer?.unmount();
+            viewer = mount(next);
+          }
+        });
+      viewer = mount();
     }
     // PDF のまわりの紙に貼るシール（窓に固定。PDF の下に置く）。着せ替えやシールの画像が変わったら貼り直す
     document.getElementById('viewer-stickers')?.remove();
@@ -381,7 +390,11 @@ document.addEventListener('click', async (e) => {
       if (r?.error) toast(r.error, {error: true});
       else toast(el.dataset.full === '1' ? '過去の回も含めて全部確かめます（数分かかります）' : '同期を始めます');
     } else if (action === 'open-pdf') navigate(`/viewer/${el.dataset.id}`);
-    else if (action === 'open-material') {
+    else if (action === 'round-notebook') {
+      el.disabled = true;
+      await openNotebook(el.dataset.courseId, el.dataset.roundId);
+      el.disabled = false;
+    } else if (action === 'open-material') {
       const r = await api['material.open']({materialId: el.dataset.id});
       if (r?.error) toast(r.error, {error: true});
       else reload();

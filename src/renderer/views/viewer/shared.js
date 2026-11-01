@@ -128,6 +128,7 @@ export const BAR = `
   <h2 class="sr-only" data-v="title">PDF</h2>
   <div class="viewer-bar" role="toolbar" aria-label="PDF の編集">
     <button type="button" class="btn btn--small" data-v="back">← 授業へ</button>
+    <button type="button" class="btn btn--small" data-v="note-back" hidden title="ノートを開いてきた資料へ戻る">← 資料へ</button>
     <span class="viewer-bar__name" data-v="name"></span>
     <div class="seg" role="group" aria-label="ツール">
       <button type="button" data-tool="select" title="選択・移動（Esc）：押してそのまま動かす">選択</button>
@@ -154,6 +155,9 @@ export const BAR = `
     </div>
     <button type="button" class="btn btn--small" data-v="delete" hidden title="選んだ注釈を消す（Delete）">削除</button>
     <button type="button" class="viewer-bar__find" data-v="find" title="PDF の中の文字を探す（${key(MOD, 'F')}）">検索</button>
+    <button type="button" class="viewer-bar__find" data-v="photo" title="写真を貼る（ファイルを選ぶ。${key(MOD, 'V')} で貼り付け・ページへドラッグでも貼れます）">写真</button>
+    <button type="button" class="viewer-bar__find" data-v="spread" aria-pressed="false" title="片開き（1 ページずつ）と見開き（2 ページずつ横に並べる）を切り替える">片開き</button>
+    <button type="button" class="btn btn--small" data-v="notebook" hidden title="この回のノートを開く（なければ作る。ノートからは「← 資料へ」で戻れます）">📓 ノート</button>
     <span class="viewer-bar__spacer"></span>
     <div class="viewer-bar__nav">
     <label class="viewer-bar__page" title="ページ番号を入れて Enter で移る">

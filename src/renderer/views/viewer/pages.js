@@ -13,7 +13,8 @@ export const methods = {
     const cs = getComputedStyle(this.pagesEl);
     const avail = this.pagesEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 32;
     const tab = (INDEX_W - INDEX_OVER) * CSS_UNITS * 2;
-    return Math.min(2, Math.max(0.5, Math.floor((avail / (first.width + tab)) * 100) / 100));
+    const n = this.spread ? 2 : 1; // 見開きは 2 ページ分の幅に合わせる
+    return Math.min(2, Math.max(0.5, Math.floor((avail / (first.width * n + tab)) * 100) / 100));
   },
 
   layout(keepAnchor = true) {
@@ -31,6 +32,7 @@ export const methods = {
       p.rendered = false;
       if (p.visible) this.renderPage(p);
     }
+    this.sizeAddPage?.();
     for (const a of this.annos.values()) this.place(a);
     if (this.sheet) this.syncCovers();
     if (this.ruler) this.drawRuler();

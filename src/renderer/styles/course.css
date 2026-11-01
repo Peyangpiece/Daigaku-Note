@@ -190,6 +190,15 @@
   background: var(--card);
   color: var(--paper-ink);
 }
+/* 回のノート（SPEC §8.6）：付箋の資料の下に「＋ ノート」／「ノートを開く」 */
+.round-notebook {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+.file__tag--note {
+  font-weight: 700;
+}
 /* 資料の「⋯」（右クリックと同じメニュー）：マウスを乗せたとき・選んだときに右上に出す */
 .file__more {
   position: absolute;

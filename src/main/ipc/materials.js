@@ -133,7 +133,7 @@ export function register({handle, repo, jobs, files, log, folders, getWindow}) {
   handle('material.remove', async ({materialId}) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
     if (m.source === 'folder') bad('パソコンのフォルダにあるファイルは、Finder（エクスプローラー）で消してください');
-    if (m.source !== 'upload') bad('LMS から取った資料は外せません');
+    if (m.source !== 'upload' && m.source !== 'note') bad('LMS から取った資料は外せません');
     if (m.status === 'ok') await files.trash(m.path);
     repo.remove('material', m.id);
     return {ok: true};
