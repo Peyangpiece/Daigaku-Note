@@ -159,7 +159,7 @@ const slabs = new Map(); // 「幅x高さ」→ Promise<data URL>（定規の板
  * 描けないときは CSS の色のまま
  */
 export function dressRuler(el, w, h) {
-  // 平らな絵の画面（PDF の編集画面・ホーム）では 2D の定規（CSS の透明な板と目盛り）のまま。板の 3D の陰影は付けない
+  // 平らな絵の画面（PDF の編集画面・ホームとクイズの机）では 2D の定規（CSS の透明な板と目盛り）のまま。板の 3D の陰影は付けない
   if (flatFor(el, null)) {
     el.classList.remove('has-3d');
     delete el.dataset.slabKey;
@@ -186,7 +186,7 @@ export function dressRuler(el, w, h) {
 }
 
 /**
- * root の中の絵を描き直す（平らな絵と 3D を切り替えたとき。ホームとクイズで同じ机を使うため）
+ * root の中の絵を描き直す（平らな絵と 3D を切り替えたとき。机は作ったあとで平らな絵の印を付けるため）
  */
 export function refreshArt(root) {
   for (const svg of root.querySelectorAll('svg[data-model][data-model-ready]')) {
