@@ -294,6 +294,8 @@ class Viewer extends DeskTools {
     this.saveFile();
     this.flushAll();
     this.destroyed = true;
+    // 平らな絵の印を外す（root はほかの画面と同じ要素。残すと、筆箱やショップの文房具まで 2D で描いてしまう）
+    delete this.root.dataset.flatArt;
     this.offPhone?.();
     clearTimeout(this.pinchTimer);
     for (const off of this.listeners) off();
