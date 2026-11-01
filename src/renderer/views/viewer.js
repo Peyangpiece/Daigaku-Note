@@ -160,6 +160,8 @@ class Viewer extends DeskTools {
   }
 
   async start() {
+    // PDF の編集画面の文房具は、光のない平らな 2D の絵で描く（3D と同じ形・色。プレミアムの品だけ 3D のまま。model3d.js）
+    this.root.dataset.flatArt = '1';
     this.root.innerHTML = BAR;
     if (this.noteColors !== NOTE_COLORS)
       this.root.querySelector('[data-note-color]').parentElement.innerHTML = swatches(this.noteColors, 'note-color');

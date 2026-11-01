@@ -6,7 +6,7 @@
 //     文房具の詳細ページの大きな表示：ホイールやピンチで近づけて細部を見られる）
 //   - [data-model-reset]：同じ [data-model-box] の中の 3D 表示の向きと距離を戻す
 // 描けないとき（WebGL が使えない・読み込めない）は、ふつうのペン（ペンケース）の絵に置き換える
-import {CATALOG, caseArt, toolArt} from '../shared/stationery.js';
+import {CATALOG, caseArt, tierOf, toolArt} from '../shared/stationery.js';
 
 const handles = new WeakMap(); // .model-view → mount() の戻り（reset）
 
@@ -20,8 +20,16 @@ const itemOf = (el) => CATALOG.find((it) => it.id === el.dataset.item) ?? null;
 const plainArt = (item, opts) =>
   item.type === 'case' ? caseArt({...item, art: null}) : toolArt({...item, art: null}, opts);
 
+/**
+ * 平らな 2D の絵で描くか：PDF の編集画面（[data-flat-art] の中）では、光のない平らな絵にする（3D と同じ形・色）。
+ * プレミアムの品（値段帯が「高級」の品）だけは 3D のまま
+ */
+const flatFor = (el, item) =>
+  !!el?.closest?.('[data-flat-art]') && !(item?.price && tierOf(item.price).id === 'premium');
+
 const snapshot = (id, item, svg) => {
-  const key = `${id}|${item?.id ?? ''}`;
+  const flat = flatFor(svg, item);
+  const key = `${id}|${item?.id ?? ''}|${flat ? 'flat' : '3d'}`;
   if (!snaps.has(key)) {
     // 絵の縦横比に合わせる：ペンケースは 200×80、消しゴムは 64×28（どちらも斜め上から）、ペンは 200×28（真横から）
     const vb = svg?.viewBox?.baseVal;
@@ -29,7 +37,7 @@ const snapshot = (id, item, svg) => {
       vb && vb.width && Math.abs(vb.width / vb.height - 200 / 28) > 0.01
         ? {w: 1200, h: Math.round((1200 * vb.height) / vb.width)}
         : {};
-    const p = loadThree().then((m) => m.snapshot(id, {item, ...size}));
+    const p = loadThree().then((m) => m.snapshot(id, {item, flat, ...size}));
     p.catch(() => snaps.delete(key));
     snaps.set(key, p);
   }
@@ -46,6 +54,8 @@ function fallback(svg, id) {
 function hydrateArt(svg) {
   svg.dataset.modelReady = '1';
   const id = svg.dataset.model;
+  const flat = flatFor(svg, itemOf(svg));
+  if (flat) svg.dataset.flat = '1'; // 平らな絵：下の影（楕円）も出さない（CSS）
   snapshot(id, itemOf(svg), svg).then(
     (url) => {
       svg.querySelector('image[data-model-img]')?.setAttribute('href', url);
@@ -121,11 +131,12 @@ export function dressCase(side, box, item) {
     const h = side.offsetHeight;
     if (!w || !h) return;
     const inner = {x: box.offsetLeft, y: box.offsetTop, w: box.offsetWidth, h: box.offsetHeight};
-    const key = JSON.stringify([item.id, w, h, inner]);
+    const flat = flatFor(side, item);
+    const key = JSON.stringify([item.id, w, h, inner, flat]);
     if (side.dataset.trayKey === key) return;
     side.dataset.trayKey = key;
     loadThree()
-      .then((m) => m.caseTray(item.model, {item, w, h, inner, dpr: Math.min(2, window.devicePixelRatio || 1)}))
+      .then((m) => m.caseTray(item.model, {item, w, h, inner, flat, dpr: Math.min(2, window.devicePixelRatio || 1)}))
       .then(
         (url) => {
           if (side.dataset.trayKey !== key) return;
@@ -148,6 +159,8 @@ const slabs = new Map(); // 「幅x高さ」→ Promise<data URL>（定規の板
  * 描けないときは CSS の色のまま
  */
 export function dressRuler(el, w, h) {
+  // PDF の編集画面では平らな 2D の定規（CSS の透明な板と目盛り）のまま。板の 3D の陰影は付けない
+  if (flatFor(el, null)) return;
   const key = `${Math.round(w)}x${Math.round(h)}`;
   if (el.dataset.slabKey === key) return;
   el.dataset.slabKey = key;

@@ -1256,3 +1256,8 @@
   top: var(--pouch-top, 50vh);
   max-height: calc(100vh - var(--pouch-top, 50vh) - 16px);
 }
+
+/* PDF の編集画面の平らな 2D の文房具（model3d.js の flatFor）：光がないので、下の影（楕円）も出さない */
+svg[data-flat] > ellipse {
+  display: none;
+}
