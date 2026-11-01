@@ -196,6 +196,10 @@ export class DeskTools {
     return false;
   }
   onCornerClose() {}
+  /** 画面の端（left・right）から四隅の道具を出してよいか（PDF とノートを並べたとき、分かれ目の側は出さない） */
+  edgeAllowed() {
+    return true;
+  }
   cancelPointer() {}
   /** ポーチの道具を出す・しまう。扱ったら true */
   pouchAction(v) {
@@ -265,8 +269,9 @@ export class DeskTools {
     // マウス：端へ寄せたら出し、出したものから離れたらしまう
     this.on(document, 'pointermove', (e) => {
       if (e.pointerType !== 'mouse' || this.busy() || this.corner) return;
-      if (e.clientX >= document.documentElement.clientWidth - EDGE) this.openCorner(cornerAt('right', e.clientY));
-      else if (e.clientX <= EDGE) this.openCorner(cornerAt('left', e.clientY));
+      if (e.clientX >= document.documentElement.clientWidth - EDGE && this.edgeAllowed('right'))
+        this.openCorner(cornerAt('right', e.clientY));
+      else if (e.clientX <= EDGE && this.edgeAllowed('left')) this.openCorner(cornerAt('left', e.clientY));
     });
     for (const el of this.root.querySelectorAll('[data-corner]')) {
       // 出したとき、マウスはつまみ（端）にあって、まだ中に入っていないことが多い。出てくる動き（0.28 秒）の途中で
@@ -295,7 +300,8 @@ export class DeskTools {
           return;
         }
         const w = document.documentElement.clientWidth;
-        const side = e.clientX >= w - 24 ? 'right' : e.clientX <= 24 ? 'left' : null;
+        let side = e.clientX >= w - 24 ? 'right' : e.clientX <= 24 ? 'left' : null;
+        if (side && !this.edgeAllowed(side)) side = null;
         if (side && !inCorner(e)) this.edge = {pointer: e.pointerId, x: e.clientX, y: e.clientY, side};
         else if (this.corner && !inCorner(e)) this.openCorner(null);
       },
@@ -489,11 +495,13 @@ export class DeskTools {
         c.ghost = opts.ghost?.() ?? this.stampGhost(spec);
         c.ghost.classList.add('carry-ghost');
         this.root.append(c.ghost);
+        this.splitGhost?.('lift', c.ghost); // 並べたとき：影は親の画面が窓全体に描く（分かれ目をまたいでも見える）
         opts.onLift?.();
         if (this.corner === 'seal' || this.corner === 'sozai') this.openCorner(null); // 貼る所を見せる
       }
       c.ghost.style.left = `${ev.clientX - (opts.dx ?? c.ghost.offsetWidth / 2)}px`;
       c.ghost.style.top = `${ev.clientY - (opts.dy ?? c.ghost.offsetHeight / 2)}px`;
+      this.splitGhost?.('move', c.ghost);
     };
     const up = (ev) => {
       if (ev.pointerId !== c.pointer) return;
@@ -509,6 +517,7 @@ export class DeskTools {
       if (!ok) opts.onCancel?.();
     };
     c.off = () => {
+      if (c.ghost) this.splitGhost?.('end');
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
@@ -518,6 +527,12 @@ export class DeskTools {
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
+    // 押したものに指・マウスを捕まえておく（並べたとき、分かれ目の向こうへ動かしても、この画面に動きと離した所が届く）
+    try {
+      e.target?.setPointerCapture?.(e.pointerId);
+    } catch {
+      // 捕まえられなくても、この画面の中では運べる
+    }
     this.carry = c;
   }
 

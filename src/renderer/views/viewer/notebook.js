@@ -21,12 +21,20 @@ import {
 import {esc, toast, isTyping} from '../../ui-kit.js';
 import {navigate, state} from '../../store.js';
 import {KIND_OF, itemOf} from '../../../shared/stationery.js';
-import {MOD, key} from './shared.js';
+import {MOD, SHIFT, key} from './shared.js';
 
 const api = window.daigaku;
 const PHOTO_PX = 2400; // 写真の長い辺（px）。これより大きければ縮める
 const PHOTO_SHARE = 0.6; // 貼ったときの大きさ：ページの幅の 6 割（高さは半分）まで
 const HINT_KEY = 'note.hinted';
+const AUTO_KEY = 'note.autoPage'; // 最後のページの下のほうまで書いたら自動でページを足す（このパソコンに覚える。はじめは足す）
+const autoPageOn = () => {
+  try {
+    return localStorage.getItem(AUTO_KEY) !== '0';
+  } catch {
+    return true;
+  }
+};
 
 const spreadKey = (id) => `viewer.spread.${id}`;
 // 窓の中に並べた画面（#/split の左右の iframe。app.js の pane=embed）
@@ -99,7 +107,7 @@ export const methods = {
     }
     if (!seen)
       toast(
-        `ノートはペンを持って開きます。ページは右下の「＋ ページを追加」で下に増やせます。写真は貼り付け（${key(MOD, 'V')}）やドラッグでも貼れます`,
+        `ノートはペンを持って開きます。ページは右下の「＋ ページを追加」か ${key(SHIFT, MOD, 'N')} で足せます（最後のページの下のほうまで書くと自動でも足します。「紙を変える…」で切り替え）。写真は貼り付け（${key(MOD, 'V')}）やドラッグでも貼れます`,
         {action: {label: 'わかった', run: () => {}}} // 読めるように少し長く出す
       );
   },
@@ -230,7 +238,7 @@ export const methods = {
       '<button type="button" class="btn btn--small btn--quiet viewer-addpage__paper" data-v="note-paper" aria-haspopup="menu" title="このノートの紙（横罫・方眼、行の間）を変える。書いたものはそのまま">紙を変える…</button>' +
       '<button type="button" class="btn btn--small btn--quiet viewer-addpage__delete" data-v="delete-note" title="このノートを削除する（ファイルはパソコンのゴミ箱へ）">ノートを削除…</button>' +
       '<button type="button" class="btn btn--small btn--quiet" data-v="remove-page" title="最後のページを消す（何も書いていない白紙のときだけ。↶ で戻せます）">− 最後のページを消す</button>' +
-      '<button type="button" class="btn btn--small" data-v="add-page" title="ノートの最後に白いページを 1 枚足す（下に増えます。↶ で取り消せます）">＋ ページを追加</button>';
+      `<button type="button" class="btn btn--small" data-v="add-page" title="ノートの最後に白いページを 1 枚足す（下に増えます。${key(SHIFT, MOD, 'N')} でも。最後のページの下のほうまで書くと自動でも足します。↶ で取り消せます）">＋ ページを追加</button>`;
     this.pagesEl.append(box);
     this.addPageBox = box;
     this.on(box, 'click', (e) => {
@@ -314,7 +322,7 @@ export const methods = {
 
   /** ノートの最後のページの下のほう（下から 12%）まで書いたら、次の白いページを足す（ペンの線を書き終えたとき。viewer/ink.js） */
   autoNotePage(a) {
-    if (!this.isNote || this.pageBusy || a?.page !== this.pages.length || !a.rect) return;
+    if (!this.isNote || this.pageBusy || a?.page !== this.pages.length || !a.rect || !autoPageOn()) return;
     const h = this.pages.at(-1).page.getViewport({scale: 1}).height;
     if (a.rect.y <= h * 0.12) this.addNotePage({auto: true});
   },
@@ -327,8 +335,18 @@ export const methods = {
       NOTE_PAPERS.map(
         (p) =>
           `<button type="button" role="menuitem" data-paper="${p.key}">${p.key === cur ? '✓ ' : '　 '}${esc(p.label)}</button>`
-      ).join('');
+      ).join('') +
+      `<button type="button" role="menuitemcheckbox" aria-checked="${autoPageOn()}" data-auto-page>${autoPageOn() ? '✓ ' : '　 '}下まで書いたら自動でページを足す</button>`;
     this.openBarMenu(btn, 'ノートの紙を変える', html, (b) => {
+      if (b.hasAttribute('data-auto-page')) {
+        const on = !autoPageOn();
+        try {
+          localStorage.setItem(AUTO_KEY, on ? '1' : '0');
+        } catch {
+          // 覚えられなくても、このあいだは変わらない
+        }
+        return toast(on ? '下まで書いたら自動でページを足します' : '自動でページを足すのをやめました');
+      }
       if (b.dataset.paper && b.dataset.paper !== cur)
         this.changeNotePaper(NOTE_PAPERS.find((p) => p.key === b.dataset.paper));
     });

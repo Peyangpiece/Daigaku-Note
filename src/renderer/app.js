@@ -33,7 +33,15 @@ const loadViewer = () =>
   viewerMod ? Promise.resolve(viewerMod) : import('./views/viewer.js').then((m) => (viewerMod = m));
 import {watchModels} from './model3d.js';
 import './swipe.js'; // トラックパッドの 2 本指の横スワイプで戻る・進む
-import {NOTE_PAPERS, notePaper, openNotebook, removeNote, setNotePaper} from './notebook.js';
+import {
+  NOTE_PAPERS,
+  notePaper,
+  openNotebook,
+  openNotebookSide,
+  openSplit,
+  removeNote,
+  setNotePaper
+} from './notebook.js';
 import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具（筆箱・ポーチ・シール帳・素材）
 
 const api = window.daigaku;
@@ -382,9 +390,11 @@ api.on('route', (r) => navigate(r));
 api.on('zoom', (dir) => (split ? zoomSplit(dir) : viewer ? viewer.zoomStep(dir) : api.appZoom(dir)));
 
 // ---- PDF とノートを窓の中に並べる（#/split/<左の資料>/<右の資料>。SPEC §8.6） ----
-// 左右とも同じアプリの PDF の編集画面（index.html?pane=embed#/viewer/<id>）を iframe で開く。iframe ごとに自分の大きさと
-// スクロールを持つので、編集画面はそのまま使える。真ん中のつまみをドラッグで左右の幅を変える（このパソコンに覚える）
-let split = null; // {left, right, el, off}
+// 左右とも同じアプリの PDF の編集画面（index.html?pane=embed&side=left|right#/viewer/<id>）を iframe で開く。iframe ごとに自分の
+// 大きさとスクロールを持つので、編集画面はそのまま使える。真ん中のつまみをドラッグで左右の幅を変える（このパソコンに覚える）。
+// 道具は窓全体で 1 そろい（左右の画面の viewer/split.js）。ここ（親）は左右の知らせを回し、運んでいる影を窓全体に描き、
+// 閉じる前に左右へ書きかけの保存を頼む。並べた表示は #view の外（body）に置く（ほかの画面を描いても消えないように）
+let split = null; // {left, right, el, panes, active, ...}
 const SPLIT_KEY = 'split.ratio';
 const splitRatio = () => {
   try {
@@ -394,27 +404,38 @@ const splitRatio = () => {
     return 0.5;
   }
 };
-const paneUrl = (id) => `index.html?pane=embed#/viewer/${encodeURIComponent(id)}`;
+const paneUrl = (id, side) => `index.html?pane=embed&side=${side}#/viewer/${encodeURIComponent(id)}`;
+const SIDES = ['left', 'right'];
+
 function mountSplit(view, left, right) {
-  if (split && split.left === left && split.right === right && view.contains(split.el)) return;
+  if (split && split.left === left && split.right === right && !split.leaving) return;
   unmountSplit();
-  view.innerHTML = `<div class="split" style="--split: ${splitRatio() * 100}%">
-    <iframe class="split__pane" title="左の資料" src="${esc(paneUrl(left))}"></iframe>
-    <div class="split__bar" role="separator" aria-orientation="vertical" aria-label="左右の幅（ドラッグ・← → キーで変える）" tabindex="0"><span></span></div>
-    <iframe class="split__pane" title="右の資料" src="${esc(paneUrl(right))}"></iframe>
-  </div>`;
-  const el = view.querySelector('.split');
+  view.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = 'split';
+  el.style.setProperty('--split', `${splitRatio() * 100}%`);
+  el.innerHTML = `<iframe class="split__pane" title="左の資料" src="${esc(paneUrl(left, 'left'))}"></iframe>
+    <div class="split__bar" role="separator" aria-orientation="vertical" aria-label="左右の幅（ドラッグ・← → キーで変える）" aria-valuemin="25" aria-valuemax="75" tabindex="0"><span></span></div>
+    <iframe class="split__pane" title="右の資料" src="${esc(paneUrl(right, 'right'))}"></iframe>
+    <div class="split__ghost" hidden></div>`;
+  document.body.append(el);
   const bar = el.querySelector('.split__bar');
   const panes = [...el.querySelectorAll('iframe')];
-  const setRatio = (r) => {
+  const ghost = el.querySelector('.split__ghost');
+  const s = {left, right, el, panes, active: 0, titles: ['', ''], acks: null};
+  split = s;
+  const setRatio = (r, save = true) => {
     const v = Math.min(0.75, Math.max(0.25, r));
     el.style.setProperty('--split', `${v * 100}%`);
-    try {
-      localStorage.setItem(SPLIT_KEY, String(v));
-    } catch {
-      // 覚えられなくても変えられる
-    }
+    bar.setAttribute('aria-valuenow', String(Math.round(v * 100)));
+    if (save)
+      try {
+        localStorage.setItem(SPLIT_KEY, String(v));
+      } catch {
+        // 覚えられなくても変えられる
+      }
   };
+  setRatio(splitRatio(), false);
   bar.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     bar.setPointerCapture(e.pointerId);
@@ -435,39 +456,102 @@ function mountSplit(view, left, right) {
     e.preventDefault();
     setRatio(splitRatio() + (e.key === 'ArrowLeft' ? -0.05 : 0.05));
   });
-  // 左右の画面からの知らせ：「閉じる」＝並べるのをやめて、もう片方を窓いっぱいに
-  const onMessage = (e) => {
+  const send = (i, msg) => panes[i]?.contentWindow?.postMessage(msg, '*');
+  // 左右の画面からの知らせ
+  s.onMessage = (e) => {
     const i = panes.findIndex((f) => f.contentWindow === e.source);
     if (i < 0) return;
-    if (e.data?.type === 'split-active') split.active = i; // 最後に触った側（メニューの拡大・縮小の向け先）
-    if (e.data?.type !== 'split-close') return;
-    const other = i === 0 ? split?.right : split?.left;
-    navigate(other ? `/viewer/${other}` : '/');
+    const d = e.data ?? {};
+    const other = 1 - i;
+    if (d.type === 'split-active') {
+      // 最後に触った側：メニューの拡大・縮小、押して貼るシール・素材、ポーチの赤シート・定規の向け先
+      s.active = i;
+      for (const k of [0, 1]) send(k, {type: 'split-active-is', side: SIDES[i]});
+    } else if (d.type === 'split-relay') {
+      // もう片方にしてもらう。運んで離した点は、窓の中の位置に直してから渡す
+      const msg = {...d, type: 'split-do'};
+      if (d.what === 'drop') {
+        const from = panes[i].getBoundingClientRect();
+        const to = panes[other].getBoundingClientRect();
+        const dx = from.left - to.left;
+        const dy = from.top - to.top;
+        Object.assign(msg, {px: d.px + dx, py: d.py + dy, cx: d.cx + dx, cy: d.cy + dy});
+      }
+      send(other, msg);
+    } else if (d.type === 'split-ghost') {
+      // 運んでいる影：窓全体の上に描く（分かれ目をまたいでも見える）
+      if (d.phase === 'lift') {
+        ghost.innerHTML = String(d.html ?? '');
+        ghost.hidden = false;
+      } else if (d.phase === 'move') {
+        const r = panes[i].getBoundingClientRect();
+        Object.assign(ghost.style, {
+          left: `${r.left + d.x}px`,
+          top: `${r.top + d.y}px`,
+          width: `${d.w}px`,
+          height: `${d.h}px`
+        });
+      } else {
+        ghost.hidden = true;
+        ghost.innerHTML = '';
+      }
+    } else if (d.type === 'split-title') {
+      s.titles[i] = String(d.title ?? '');
+      document.title = `${s.titles.filter(Boolean).join(' ＋ ') || 'PDF とノート'} — 大学ノート`;
+    } else if (d.type === 'split-left') s.acks?.(i);
+    else if (d.type === 'split-close') {
+      // 「閉じる」：左右の書きかけを保存してから、もう片方を窓いっぱいに出す
+      const id = i === 0 ? s.right : s.left;
+      flushSplit(s).then(() => navigate(id ? `/viewer/${id}` : '/'));
+    }
   };
-  window.addEventListener('message', onMessage);
+  window.addEventListener('message', s.onMessage);
   document.title = 'PDF とノート — 大学ノート';
-  split = {left, right, el, panes, active: 0, off: () => window.removeEventListener('message', onMessage)};
 }
+
+/** 左右の画面に、書きかけ（打っている文字・保存待ち）を保存してもらう。両方の返事か 5 秒で終わる */
+function flushSplit(s) {
+  if (s.flushed) return s.flushed;
+  s.flushed = new Promise((resolve) => {
+    const waiting = new Set([0, 1]);
+    const done = () => {
+      clearTimeout(timer);
+      s.acks = null;
+      resolve();
+    };
+    const timer = setTimeout(done, 5000);
+    s.acks = (i) => {
+      waiting.delete(i);
+      if (!waiting.size) done();
+    };
+    for (const f of s.panes) f.contentWindow?.postMessage({type: 'split-leave'}, '*');
+  });
+  return s.flushed;
+}
+
+/** 並べるのをやめる：すぐ見えなくし、左右の保存が済んでから取り除く（取り除くと iframe の中は保存されずに消えるため） */
 function unmountSplit() {
   if (!split) return;
-  split.off();
-  split.el.remove();
+  const s = split;
   split = null;
+  s.leaving = true;
+  s.el.style.visibility = 'hidden';
+  s.el.style.pointerEvents = 'none';
   document.title = '大学ノート';
+  flushSplit(s).then(() => {
+    window.removeEventListener('message', s.onMessage);
+    s.el.remove();
+  });
 }
-/** メニューの拡大・縮小は、最後に触った側（なければ左）の PDF だけ */
+/** メニューの拡大・縮小は、最後に触った側の PDF だけ */
 function zoomSplit(dir) {
   split.panes[split.active]?.contentWindow?.postMessage({type: 'split-zoom', dir}, '*');
 }
-// 並べた画面の中：親からの拡大・縮小を受ける。触ったら親に知らせる（ペンで書くと iframe に焦点が移らないため）
-if (EMBED) {
+// 並べた画面の中：親からの拡大・縮小を受ける（最後に触った側は viewer/split.js が知らせる）
+if (EMBED)
   window.addEventListener('message', (e) => {
     if (e.source === window.parent && e.data?.type === 'split-zoom') viewer?.zoomStep(e.data.dir);
   });
-  const active = () => window.parent.postMessage({type: 'split-active'}, '*');
-  window.addEventListener('pointerdown', active, true);
-  window.addEventListener('keydown', active, true);
-}
 
 // 画面内のボタンは data-action で受ける（1 か所で委譲）
 document.addEventListener('click', async (e) => {
@@ -834,6 +918,17 @@ function openMaterialMenu(id, x, y) {
   if (!m || !course) return;
   const pdf = /\.pdf$/i.test(m.name) && m.source !== 'export';
   const here = m.round_id ?? 'own';
+  // 並べて開く（同じ窓の中で PDF を左、ノートを右に）：ノートには同じ回の PDF を、回の PDF には同じ回のノート（なければ作る）を
+  const sameRound = (x) => (x.round_id ?? null) === (m.round_id ?? null) && x.status === 'ok' && !x.copyOf;
+  const roundList = state.data?.materials?.[course.id] ?? [];
+  const splitPdfs =
+    m.source === 'note'
+      ? roundList.filter((x) => sameRound(x) && /\.pdf$/i.test(x.name) && !['note', 'export'].includes(x.source))
+      : [];
+  const splitNote =
+    pdf && m.source !== 'note' && m.round_id
+      ? (roundList.find((x) => sameRound(x) && x.source === 'note') ?? null)
+      : undefined;
   // 自分のフォルダの資料は、パソコンのフォルダの中の場所がそのまま並びなので、付箋のあいだでは移さない
   const moves =
     course.kind === 'folder'
@@ -846,6 +941,8 @@ function openMaterialMenu(id, x, y) {
     ['reveal', 'フォルダで表示'],
     ...(moves.length ? [['move', '別の付箋へ移す…']] : []),
     ...(m.source === 'upload' ? [['trash', 'ゴミ箱へ…']] : []),
+    ...(splitPdfs.length ? [['split-pdf', 'PDF と並べて開く…']] : []),
+    ...(splitNote !== undefined ? [['split-note', 'ノートと並べて開く']] : []),
     ...(m.source === 'note' ? [['trash-note', 'ノートを削除…']] : [])
   ];
   openMenu(m.name, items, x, y, (what) => {
@@ -853,6 +950,30 @@ function openMaterialMenu(id, x, y) {
     else if (what === 'reveal') fire('reveal-material', {id});
     else if (what === 'trash') fire('remove-material', {id, name: m.name});
     else if (what === 'trash-note') removeNote(id, m.name).catch((err) => toast(err.message, {error: true}));
+    else if (what === 'split-pdf') {
+      if (splitPdfs.length === 1) return openSplit(splitPdfs[0].id, id);
+      openMenu(
+        '並べて開く PDF',
+        splitPdfs.map((x) => [x.id, x.name]),
+        x,
+        y,
+        (pid) => openSplit(pid, id)
+      );
+    } else if (what === 'split-note') {
+      if (splitNote) return openSplit(id, splitNote.id);
+      // まだノートがなければ、紙を選んで作ってから並べる
+      const cur = notePaper().key;
+      openMenu(
+        'ノートの紙',
+        NOTE_PAPERS.map((p) => [p.key, `${p.key === cur ? '✓ ' : '　 '}${p.label}`]),
+        x,
+        y,
+        (key) => {
+          setNotePaper(key);
+          openNotebookSide(course.id, m.round_id, {paper: NOTE_PAPERS.find((p) => p.key === key), from: id});
+        }
+      );
+    }
     // 移す先は回の数だけあるので、選んでから 2 つ目のメニューで出す（ドラッグでも移せる）
     else if (what === 'move')
       openMenu(`${m.name} を移す先`, moves, x, y, (to) =>

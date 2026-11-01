@@ -177,6 +177,10 @@
   font-size: var(--fs-small);
   line-height: 20px;
   pointer-events: none;
+  max-width: calc(50% - 32px); /* 左下のノートの名前の札と重ならない（長い知らせは … で切る） */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* ノートの名前の小さな札：窓が狭くツールバーの名前を外したとき（1180 px 以下）だけ、ツールバーの左下に出す（どの回のノートか分かるように） */
 .viewer-bar__caption {
@@ -184,7 +188,7 @@
   position: absolute;
   left: var(--space-6);
   top: 100%;
-  max-width: min(60%, 420px);
+  max-width: min(calc(50% - 32px), 420px); /* 右下の保存の状態（右半分）と重ならない */
   margin-top: 4px;
   padding: 0 8px;
   overflow: hidden;
@@ -284,6 +288,14 @@
 }
 .viewer-addpage [hidden] {
   display: none;
+}
+/* 狭いとき（並べた片側など）：ボタンの字は折らず、入りきらなければボタンごと次の段へ */
+.viewer-addpage {
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
+}
+.viewer-addpage .btn {
+  white-space: nowrap;
 }
 /* 「ノートを削除…」は左の端に、目立たない赤で（足す・消すボタンから離す） */
 .viewer-addpage__paper {
@@ -1538,4 +1550,22 @@ svg[data-flat] > ellipse {
   .viewer-bar :is(button[data-v='photo'], button[data-v='export']) {
     display: none;
   }
+}
+/* 並べたとき：道具は窓全体で 1 そろい。左の画面はシール帳・素材（窓の左の端）だけ、右の画面は筆箱・ポーチ（窓の右の端）だけ。
+   左右の分かれ目には四隅の道具を出さない（viewer/split.js） */
+:root[data-split-side='left'] :is([data-corner='fude'], [data-corner='pouch']),
+:root[data-split-side='right'] :is([data-corner='seal'], [data-corner='sozai']) {
+  display: none;
+}
+/* 運んでいる貼りものの影：親の画面が窓全体の上に描く（分かれ目をまたいでも見える） */
+.split__ghost {
+  position: fixed;
+  z-index: 45;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.split__ghost > * {
+  position: static !important;
+  width: 100% !important;
+  height: 100% !important;
 }
