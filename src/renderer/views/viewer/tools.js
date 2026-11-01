@@ -35,6 +35,7 @@ export const methods = {
     if (tool !== 'eraser') this.ring?.remove();
     // しまった筆箱のつまみに、今持っているペンの色を出す
     const pen = ['ink', 'line', 'mask'].includes(tool) ? this.penItem?.color : tool === 'eraser' ? '#2f6fb5' : null;
+    queueMicrotask(() => !this.destroyed && this.syncTool()); // 並べたとき：もう片方も同じ道具に（usePen が筆箱の何本目かを決めてから）
     this.$('side')?.style.setProperty('--current', pen ?? 'transparent');
     // 開いているメモの書き方も、持った道具に合わせる
     for (const a of this.annos.values())
@@ -53,7 +54,8 @@ export const methods = {
     this.applyPin();
   },
   applyPin() {
-    const active = !!this.casePinned && window.innerWidth >= PIN_MIN_WIDTH;
+    // 並べたときの左の画面には筆箱がない（窓の右の端の 1 つだけ）ので、開いたままにもしない
+    const active = !!this.casePinned && window.innerWidth >= PIN_MIN_WIDTH && this.splitSide !== 'left';
     this.pinnedCorner = active ? 'fude' : null; // desk-tools の openCorner が、しまわない
     this.root.classList.toggle('viewer--pinned', active);
     this.$('pin').setAttribute('aria-pressed', String(!!this.casePinned));
@@ -336,6 +338,7 @@ export const methods = {
       if (t.dataset.sealTab) return this.renderSeal(t.dataset.sealTab);
       if (t.dataset.sozaiTab) return this.renderSozai(t.dataset.sozaiTab);
       // ポーチから出したら、少し見せてからしまう（筆箱のペンと同じ）
+      if (this.routePouch(t.dataset.v)) return; // 並べたとき：赤シート・定規は最後に触った側に
       if (this.pouchAction(t.dataset.v)) return;
       if (t.dataset.tool) this.setTool(t.dataset.tool);
       else if (t.dataset.refill) this.pickRefill(t.dataset.refill);

@@ -19,6 +19,11 @@ export const methods = {
    * 置いたら選択の道具にして選ぶ（すぐ動かせる・大きさを変えられる）。戻りは注釈
    */
   placeStamp(spec, at = null) {
+    // 並べたとき：押して貼る（場所なし）は、最後に触った側のページに
+    if (!at && this.splitOther()) {
+      this.relaySplit({what: 'place', spec});
+      return null;
+    }
     let p, x, y;
     if (at) ({p, x, y} = at);
     else {

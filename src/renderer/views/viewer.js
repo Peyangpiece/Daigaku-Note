@@ -43,6 +43,7 @@ import {methods as notesMethods} from './viewer/notes.js';
 import {methods as exportMethods} from './viewer/export.js';
 import {methods as keysMethods} from './viewer/keys.js';
 import {methods as findMethods} from './viewer/find.js';
+import {methods as splitMethods} from './viewer/split.js';
 import {
   api,
   FONT,
@@ -154,7 +155,7 @@ class Viewer extends DeskTools {
   /** 運んで離した点の下のページに貼る（影の真ん中をページの中の位置にして）。ページの外なら false */
   dropStamp(spec, px, py, cx, cy) {
     const p = this.pageAt(px, py);
-    if (!p) return false;
+    if (!p) return this.dropAcross(spec, px, py, cx, cy); // 並べたとき：分かれ目の向こうなら、もう片方のページに
     const box = p.el.getBoundingClientRect();
     this.placeStamp(spec, {p, x: cx - box.left, y: cy - box.top});
     return true;
@@ -223,6 +224,7 @@ class Viewer extends DeskTools {
     this.bindPhotos();
     this.bindBookmarks();
     this.bindCase();
+    this.setupSplit(); // 窓の中に並べたとき：道具は窓全体で 1 そろい（左の画面はシール帳・素材、右は筆箱・ポーチ）
     this.bindSide();
     this.renderSlots();
     this.setTool('select');
@@ -259,6 +261,7 @@ class Viewer extends DeskTools {
         align: cleanAlign(r.textStyle.align) ?? 'left'
       };
     document.title = `${shown} — 大学ノート`;
+    if (this.splitSide) this.postSplit({type: 'split-title', title: shown}); // 並べたとき：窓の題は左右の名前
     try {
       // ノートの上の欄の字が古ければ、描き直した写しで開く（書いたものは注釈なのでそのまま。ファイルへは上書き保存で）
       const fresh = await this.refreshNoteHeader();
@@ -293,7 +296,10 @@ class Viewer extends DeskTools {
     const old = (r.bookmarks ?? []).filter((b) => b.page >= 1 && b.page <= this.pages.length);
     if (old.length) this.migrateBookmarks(old).catch(() => {});
     this.updateBar();
+    // 並べたとき：ここから持っている道具を左右でそろえる（ノートが最初のペンを持つのも、もう片方へ知らせる）
+    if (this.splitSide) this.toolSyncReady = true;
     this.startNote(); // ノートは最初のペンを持って開く・初めてなら使い方を知らせる
+    this.startToolSync();
     this.bindNotePages();
     this.bindNoteRemoved();
     // スマホ連携（docs/MOBILE.md §6）：スマホで書き込んだら、この画面にも出す。まだファイルに描き込んでいなければ上書き保存する
@@ -378,7 +384,8 @@ const MIXINS = [
   exportMethods,
   keysMethods,
   findMethods,
-  notebookMethods
+  notebookMethods,
+  splitMethods
 ];
 const taken = new Set(Object.getOwnPropertyNames(Viewer.prototype));
 for (const m of MIXINS)
