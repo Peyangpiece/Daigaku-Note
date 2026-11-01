@@ -38,15 +38,15 @@ import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具�
 
 const api = window.daigaku;
 let viewer = null; // 開いている PDF ビューア。状態が変わっても描き直さない
-// 横に並べる窓（PDF の横にノートを開いた窓。main.js の openSideWindow）：ノートの編集画面だけを出す。
-// 「← 授業へ」は窓を閉じる。ログインボーナス・着せ替えの知らせは元の窓だけで出す
-const SIDE = new URLSearchParams(location.search).get('pane') === 'side';
-if (SIDE) document.documentElement.dataset.pane = 'side';
+// 窓の中に並べた画面（#/split の左右の iframe。SPEC §8.6）：PDF の編集画面だけを出す。
+// 「閉じる」は並べるのをやめて、もう片方を窓いっぱいにする（親の画面に知らせる）。ログインボーナス・着せ替えの知らせは親の画面だけで出す
+const EMBED = new URLSearchParams(location.search).get('pane') === 'embed' && window.parent !== window;
+if (EMBED) document.documentElement.dataset.pane = 'embed';
 
 // ログインボーナス（その日に初めて開いたとき 1 回。shared/points.js）。起動のあと 1 回だけ main に頼む。初回のセットアップの上には出さない
 let loginClaimed = false;
 async function claimLoginBonus() {
-  if (SIDE || loginClaimed || location.hash.startsWith('#/setup')) return;
+  if (EMBED || loginClaimed || location.hash.startsWith('#/setup')) return;
   loginClaimed = true;
   const r = await api['points.claimLogin']().catch(() => null);
   if (!r || r.error) return;
@@ -65,7 +65,7 @@ setHooks({
     render();
     await claimLoginBonus();
     // 着せ替えを入れた版に更新したあと 1 回だけ知らせる（SPEC-KISEKAE §4.4）
-    if (!SIDE && state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
+    if (!EMBED && state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
       state.data.skin.introduced = true;
       api['skin.introduced']();
       toast(
@@ -203,10 +203,22 @@ function render() {
     count.parentElement.setAttribute('aria-label', due ? `復習（今日 ${due} 問）` : '復習');
   }
   deskRoute(route); // クイズ・ホームでは四隅の道具を出す（編集画面は自分で持つ）
-  const inViewer = route.startsWith('/viewer/');
+  const inViewer = route.startsWith('/viewer/') || route.startsWith('/split/');
   app.classList.toggle('paper--viewer', inViewer);
   document.documentElement.classList.toggle('paper-canvas', inViewer);
   api.appZoom(inViewer ? 'hold' : 'release');
+  // PDF とノートを窓の中に並べる（左右とも、PDF の編集画面を iframe で開く）。状態が変わっても描き直さない
+  if (route.startsWith('/split/')) {
+    const [left, right] = route.slice('/split/'.length).split('/');
+    lastRoute = route;
+    viewer?.unmount();
+    viewer = null;
+    leaveQuiz();
+    leaveQuizEdit();
+    mountSplit(view, left, right);
+    return;
+  }
+  unmountSplit();
   // PDF ビューアは状態が変わっても描き直さない（開いたまま。閉じるときだけ unmount）
   if (route.startsWith('/viewer/')) {
     const materialId = route.slice('/viewer/'.length);
@@ -227,7 +239,9 @@ function render() {
       viewer = viewerMod.mountViewer(view, {
         materialId,
         course,
-        onBack: SIDE ? () => window.close() : () => navigate(course ? `/course/${course.id}` : '/')
+        onBack: EMBED
+          ? () => window.parent.postMessage({type: 'split-close', id: materialId}, '*')
+          : () => navigate(course ? `/course/${course.id}` : '/')
       });
     }
     // PDF のまわりの紙に貼るシール（窓に固定。PDF の下に置く）。着せ替えやシールの画像が変わったら貼り直す
@@ -365,7 +379,95 @@ document.addEventListener('submit', (e) => {
 api.on('login.required', ({label, message}) => toast(message ?? `${label} へのログインが必要です`, {error: true}));
 api.on('route', (r) => navigate(r));
 // メニューの拡大・縮小（⌘＋・⌘−・⌘0）。編集画面では PDF だけ、ほかの画面ではアプリ全体
-api.on('zoom', (dir) => (viewer ? viewer.zoomStep(dir) : api.appZoom(dir)));
+api.on('zoom', (dir) => (split ? zoomSplit(dir) : viewer ? viewer.zoomStep(dir) : api.appZoom(dir)));
+
+// ---- PDF とノートを窓の中に並べる（#/split/<左の資料>/<右の資料>。SPEC §8.6） ----
+// 左右とも同じアプリの PDF の編集画面（index.html?pane=embed#/viewer/<id>）を iframe で開く。iframe ごとに自分の大きさと
+// スクロールを持つので、編集画面はそのまま使える。真ん中のつまみをドラッグで左右の幅を変える（このパソコンに覚える）
+let split = null; // {left, right, el, off}
+const SPLIT_KEY = 'split.ratio';
+const splitRatio = () => {
+  try {
+    const v = Number(localStorage.getItem(SPLIT_KEY));
+    return v >= 0.25 && v <= 0.75 ? v : 0.5;
+  } catch {
+    return 0.5;
+  }
+};
+const paneUrl = (id) => `index.html?pane=embed#/viewer/${encodeURIComponent(id)}`;
+function mountSplit(view, left, right) {
+  if (split && split.left === left && split.right === right && view.contains(split.el)) return;
+  unmountSplit();
+  view.innerHTML = `<div class="split" style="--split: ${splitRatio() * 100}%">
+    <iframe class="split__pane" title="左の資料" src="${esc(paneUrl(left))}"></iframe>
+    <div class="split__bar" role="separator" aria-orientation="vertical" aria-label="左右の幅（ドラッグ・← → キーで変える）" tabindex="0"><span></span></div>
+    <iframe class="split__pane" title="右の資料" src="${esc(paneUrl(right))}"></iframe>
+  </div>`;
+  const el = view.querySelector('.split');
+  const bar = el.querySelector('.split__bar');
+  const panes = [...el.querySelectorAll('iframe')];
+  const setRatio = (r) => {
+    const v = Math.min(0.75, Math.max(0.25, r));
+    el.style.setProperty('--split', `${v * 100}%`);
+    try {
+      localStorage.setItem(SPLIT_KEY, String(v));
+    } catch {
+      // 覚えられなくても変えられる
+    }
+  };
+  bar.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    bar.setPointerCapture(e.pointerId);
+    el.classList.add('is-dragging'); // ドラッグの間は iframe にマウスを取られないように
+    const move = (ev) => setRatio((ev.clientX - el.getBoundingClientRect().left) / el.clientWidth);
+    const up = () => {
+      el.classList.remove('is-dragging');
+      bar.removeEventListener('pointermove', move);
+      bar.removeEventListener('pointerup', up);
+      bar.removeEventListener('pointercancel', up);
+    };
+    bar.addEventListener('pointermove', move);
+    bar.addEventListener('pointerup', up);
+    bar.addEventListener('pointercancel', up);
+  });
+  bar.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    setRatio(splitRatio() + (e.key === 'ArrowLeft' ? -0.05 : 0.05));
+  });
+  // 左右の画面からの知らせ：「閉じる」＝並べるのをやめて、もう片方を窓いっぱいに
+  const onMessage = (e) => {
+    const i = panes.findIndex((f) => f.contentWindow === e.source);
+    if (i < 0) return;
+    if (e.data?.type === 'split-active') split.active = i; // 最後に触った側（メニューの拡大・縮小の向け先）
+    if (e.data?.type !== 'split-close') return;
+    const other = i === 0 ? split?.right : split?.left;
+    navigate(other ? `/viewer/${other}` : '/');
+  };
+  window.addEventListener('message', onMessage);
+  document.title = 'PDF とノート — 大学ノート';
+  split = {left, right, el, panes, active: 0, off: () => window.removeEventListener('message', onMessage)};
+}
+function unmountSplit() {
+  if (!split) return;
+  split.off();
+  split.el.remove();
+  split = null;
+  document.title = '大学ノート';
+}
+/** メニューの拡大・縮小は、最後に触った側（なければ左）の PDF だけ */
+function zoomSplit(dir) {
+  split.panes[split.active]?.contentWindow?.postMessage({type: 'split-zoom', dir}, '*');
+}
+// 並べた画面の中：親からの拡大・縮小を受ける。触ったら親に知らせる（ペンで書くと iframe に焦点が移らないため）
+if (EMBED) {
+  window.addEventListener('message', (e) => {
+    if (e.source === window.parent && e.data?.type === 'split-zoom') viewer?.zoomStep(e.data.dir);
+  });
+  const active = () => window.parent.postMessage({type: 'split-active'}, '*');
+  window.addEventListener('pointerdown', active, true);
+  window.addEventListener('keydown', active, true);
+}
 
 // 画面内のボタンは data-action で受ける（1 か所で委譲）
 document.addEventListener('click', async (e) => {

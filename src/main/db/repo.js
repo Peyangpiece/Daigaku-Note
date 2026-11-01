@@ -616,6 +616,13 @@ export class Repo {
   shaInUse(sha) {
     return !!this.db.prepare('SELECT 1 FROM material WHERE sha256 = ? OR base_sha256 = ? LIMIT 1').get(sha, sha);
   }
+  /** 写真（SHA-256）を貼った注釈がまだあるか（ノートを消したとき、写しを片付けてよいか） */
+  photoInUse(ref) {
+    if (!/^[0-9a-f]{64}$/.test(ref ?? '')) return true;
+    return !!this.db
+      .prepare('SELECT 1 FROM annotation WHERE kind = ? AND style_json LIKE ? LIMIT 1')
+      .get('stamp', `%${ref}%`);
+  }
   /** その元の PDF の注釈・しおりを全部消す（ノートを消したとき） */
   removeAnnotationsFor(sha) {
     this.db.prepare('DELETE FROM annotation WHERE sha256 = ?').run(sha);

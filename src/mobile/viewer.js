@@ -533,8 +533,13 @@ class PhoneViewer {
     let pages;
     try {
       ({annotations: list, pages} = await call('annotation.list', {materialId: this.materialId}));
-    } catch {
-      return; // 届かないときは次の機会に
+    } catch (e) {
+      // パソコンで消した（ノートを削除したなど）：もう開けないので戻る。届かないときは次の機会に
+      if (/^資料がありません$/.test(e?.message ?? '') && !this.destroyed) {
+        toast('この資料はパソコンで削除されました');
+        this.back();
+      }
+      return;
     }
     if (this.destroyed || this.drawing || this.noteOpen) return;
     await this.syncPages(pages); // ノート：パソコンでページを足し引きしていたらそろえる

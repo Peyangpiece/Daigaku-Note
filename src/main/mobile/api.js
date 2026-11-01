@@ -39,7 +39,7 @@ export function createMobileApi({
   handlers,
   repo,
   getWindow = () => null,
-  broadcast = (ch, payload) => getWindow()?.webContents.send(ch, payload),
+  broadcast = (ch, payload) => getWindow()?.webContents.send(ch, payload), // main.js はすべての窓の画面へ（frames.js）
   now = () => new Date()
 }) {
   const call = async (ch, arg) => {

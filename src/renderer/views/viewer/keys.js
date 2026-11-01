@@ -41,6 +41,8 @@ export const methods = {
       else if (k === 'r' && !shift) this.toggleSheet();
       else if (k === '/' || e.key === '?') this.openHelp(this.$('help-panel').hidden);
       else if (k === 'f' && !shift) this.openFind();
+      else if (k === 'n' && shift && this.isNote)
+        this.addNotePage(); // ノートにページを足す（⇧⌘N）
       else if (/^[1-6]$/.test(e.key) && !shift) this.useSlot(Number(e.key) - 1);
       else return;
       return e.preventDefault();

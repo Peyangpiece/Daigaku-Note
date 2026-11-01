@@ -138,6 +138,7 @@ export const methods = {
     });
     this.record(a.key, null, this.snap(a));
     this.scheduleSave(a, 0);
+    this.autoNotePage?.(a); // ノートの最後のページの下のほうに書いたら、次のページを足す（viewer/notebook.js）
   },
 
   // マーカー（アンダーライン）：なぞった横の範囲に、文字の行の下へまっすぐな線を引く。文字のない所では、なぞった高さに引く

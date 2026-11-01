@@ -286,6 +286,9 @@
   display: none;
 }
 /* 「ノートを削除…」は左の端に、目立たない赤で（足す・消すボタンから離す） */
+.viewer-addpage__paper {
+  margin-right: 0;
+}
 .viewer-addpage__delete {
   margin-right: auto;
   color: var(--danger-ink);
@@ -300,6 +303,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+}
+.viewer-pdfmenu__note {
+  margin: 4px 12px;
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
 }
 .viewer-pdfmenu__name {
   flex: 1;
@@ -1339,7 +1347,7 @@
     content: '← 資料';
     font-size: var(--fs-small);
   }
-  :root[data-pane='side'] .viewer-bar button[data-v='back']::after {
+  :root[data-pane='embed'] .viewer-bar button[data-v='back']::after {
     content: '×';
   }
 }
@@ -1470,5 +1478,64 @@ svg[data-flat] > ellipse {
   :is(.viewer-bar, .viewer-sub) button:not(.btn) {
     min-width: 28px;
     padding: 0 5px;
+  }
+}
+
+/* ---- PDF とノートを窓の中に並べる（#/split。app.js の mountSplit）：左右の iframe と、真ん中の幅を変えるつまみ ---- */
+.split {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  /* 片側は 560 px より狭くしない（ツールバーが 1 段に収まる幅）。窓がそれより狭いときは半分ずつ */
+  --split-min: min(560px, calc(50% - 4px));
+  grid-template-columns: clamp(var(--split-min), var(--split, 50%), calc(100% - 8px - var(--split-min))) 8px minmax(
+      0,
+      1fr
+    );
+  background: var(--paper);
+}
+.split__pane {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 0;
+  background: var(--paper);
+}
+.split.is-dragging .split__pane {
+  pointer-events: none; /* ドラッグの間は iframe にマウスを取られないように */
+}
+.split__bar {
+  display: grid;
+  place-items: center;
+  cursor: col-resize;
+  background: color-mix(in srgb, var(--paper-ink) 10%, var(--paper));
+  touch-action: none;
+}
+.split__bar span {
+  width: 3px;
+  height: 40px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--paper-ink) 35%, transparent);
+}
+.split__bar:hover,
+.split__bar:focus-visible,
+.split.is-dragging .split__bar {
+  background: color-mix(in srgb, var(--accent, #2f6fb5) 25%, var(--paper));
+  outline: none;
+}
+/* 並べているあいだ、親の画面の知らせは左右の画面の上に出す */
+:root:has(.split) .toasts {
+  z-index: 50;
+}
+/* 並べたときの片側など、さらに狭いとき：ページ番号の欄（ページの下の「n / 全部」で分かる）→ 写真・書き出す（貼り付け・ドラッグ・⇧⌘E で使える）の順に外す */
+@media (max-width: 680px) {
+  .viewer-bar__page {
+    display: none;
+  }
+}
+@media (max-width: 580px) {
+  .viewer-bar :is(button[data-v='photo'], button[data-v='export']) {
+    display: none;
   }
 }
