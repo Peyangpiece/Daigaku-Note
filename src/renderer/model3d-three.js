@@ -84,6 +84,43 @@ function glassify(obj) {
   });
 }
 
+/**
+ * 光を使わない平らな塗り（2D の絵）で fn を描く：材質を、色と模様（map）だけで塗る材質に一時的に替える。
+ * 形・部品・色・印字は 3D と同じで、陰影・映り込み・つや・影がない。トーンマッピングも外し、色をそのまま出す
+ */
+function withFlat(root, fn) {
+  const swaps = [];
+  root.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    const m = o.material;
+    const flat = new THREE.MeshBasicMaterial({
+      color: m.color ? m.color.clone() : new THREE.Color(1, 1, 1),
+      map: m.map ?? null,
+      transparent: m.transparent,
+      opacity: m.opacity,
+      side: m.side,
+      depthWrite: m.depthWrite
+    });
+    swaps.push([o, m, flat]);
+    o.material = flat;
+  });
+  const g = gl();
+  const tone = g.toneMapping;
+  const shadows = g.shadowMap.enabled;
+  g.toneMapping = THREE.NoToneMapping;
+  g.shadowMap.enabled = false;
+  try {
+    return fn();
+  } finally {
+    g.toneMapping = tone;
+    g.shadowMap.enabled = shadows;
+    for (const [o, m, f] of swaps) {
+      o.material = m;
+      f.dispose();
+    }
+  }
+}
+
 /** 面光源の材質（明るさ 1 を超える色で、環境の映り込みに光として写る） */
 function lightPanel(w, h, intensity, tint = [1, 1, 1]) {
   const m = new THREE.MeshBasicMaterial();
@@ -246,7 +283,7 @@ function load(id, item = null) {
  * 横から描いた画像（data URL の PNG）。ペンは stationery.js の絵の viewBox（200×28）と同じ比率で真横から。
  * ペンケースは 200×80 で、斜め上から（ふたや上のファスナーも見える）。外接箱が画像に収まる範囲を写す
  */
-export async function snapshot(id, {w = 1600, h = 224, item = null} = {}) {
+export async function snapshot(id, {w = 1600, h = 224, item = null, flat = false} = {}) {
   const m = await load(id, item);
   const g = gl();
   g.setSize(w, h, false);
@@ -281,7 +318,8 @@ export async function snapshot(id, {w = 1600, h = 224, item = null} = {}) {
     cam.lookAt(0, 0, 0);
   }
   m.ground.visible = false;
-  g.render(m.scene, cam);
+  if (flat) withFlat(m.scene, () => g.render(m.scene, cam));
+  else g.render(m.scene, cam);
   m.ground.visible = true;
   return g.domElement.toDataURL('image/png');
 }
@@ -434,7 +472,7 @@ function scaleUV(geo, k) {
  * 開いたペンケースを真上から描いた画像（data URL の PNG）。w・h は筆箱の大きさ（CSS の px）、inner は中の
  * ペンを並べる所（筆箱の左上からの x・y・w・h）。そこを裏地の見える内側にし、まわりをケースのふちにする
  */
-export async function caseTray(id, {item = null, w, h, inner, radius = 18, dpr = 1} = {}) {
+export async function caseTray(id, {item = null, w, h, inner, radius = 18, dpr = 1, flat = false} = {}) {
   const m = await load(id, item);
   const g = gl();
   const kind = id.replace(/^case-/, '');
@@ -560,7 +598,8 @@ export async function caseTray(id, {item = null, w, h, inner, radius = 18, dpr =
   const cam = new THREE.OrthographicCamera(0, w, h, 0, 1, 2000);
   cam.position.set(0, 0, 1000);
   g.setSize(Math.round(w * dpr), Math.round(h * dpr), false);
-  g.render(scene, cam);
+  if (flat) withFlat(scene, () => g.render(scene, cam));
+  else g.render(scene, cam);
   const url = g.domElement.toDataURL('image/png');
   for (const d of disposables) d.dispose();
   return url;
