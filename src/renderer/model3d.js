@@ -141,6 +141,33 @@ export function dressCase(side, box, item) {
   t.draw();
 }
 
+const slabs = new Map(); // 「幅x高さ」→ Promise<data URL>（定規の板）
+
+/**
+ * ページの上の定規（el）に、透明のアクリルの板を 3D で描いた画像を敷く。大きさ（拡大率で変わる）ごとに 1 度だけ描く。
+ * 描けないときは CSS の色のまま
+ */
+export function dressRuler(el, w, h) {
+  const key = `${Math.round(w)}x${Math.round(h)}`;
+  if (el.dataset.slabKey === key) return;
+  el.dataset.slabKey = key;
+  if (!slabs.has(key)) {
+    const p = loadThree().then((m) =>
+      m.rulerSlab({w: Math.round(w), h: Math.round(h), dpr: Math.min(2, window.devicePixelRatio || 1)})
+    );
+    p.catch(() => slabs.delete(key));
+    slabs.set(key, p);
+  }
+  slabs.get(key).then(
+    (url) => {
+      if (el.dataset.slabKey !== key) return;
+      el.style.setProperty('--ruler-img', `url("${url}")`);
+      el.classList.add('has-3d');
+    },
+    (e) => console.warn('定規を 3D で描けません', e)
+  );
+}
+
 /** 画面に出たモデルの品を見張って描く（起動時に 1 回呼ぶ） */
 export function watchModels() {
   hydrate(document.body);

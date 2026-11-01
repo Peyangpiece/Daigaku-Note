@@ -219,10 +219,12 @@ test('シャープペンシル：書く道具としてはペン（type pen）で
   assert.equal(se.items.length, 3);
 });
 
-test('消しゴムの絵：3D モデル（eraser）の画像を入れる所と、入るまでの平らな絵がある。GLB がある', async () => {
+test('消しゴム・ポーチの道具の絵：3D モデルの画像を入れる所と、入るまでの平らな絵がある。GLB がある', async () => {
   const {existsSync} = await import('node:fs');
-  assert.ok(EXTRA_MODELS.includes('eraser'));
-  assert.ok(existsSync(new URL('../src/renderer/assets/stationery/eraser.glb', import.meta.url)));
+  for (const id of ['eraser', 'tool-sheet', 'tool-calc', 'tool-memo', 'tool-ruler', 'tool-timer']) {
+    assert.ok(EXTRA_MODELS.includes(id), id);
+    assert.ok(existsSync(new URL(`../src/renderer/assets/stationery/${id}.glb`, import.meta.url)), id);
+  }
   const art = eraserArt();
   assert.match(art, /data-model="eraser"/);
   assert.match(art, /<image data-model-img/);

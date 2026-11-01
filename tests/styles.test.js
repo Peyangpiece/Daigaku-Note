@@ -45,6 +45,7 @@ test('CSS：画面の CSS が使うトークンは tokens.css か自分の中で
     '--memo-lh',
     '--case-base',
     '--case-img',
+    '--ruler-img',
     '--curl',
     '--scale-factor',
     '--total-scale-factor',

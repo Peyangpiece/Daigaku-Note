@@ -523,6 +523,10 @@
   user-select: none;
   backdrop-filter: blur(0.5px);
 }
+.ruler.has-3d {
+  border-color: transparent;
+  background: var(--ruler-img) center / 100% 100% no-repeat;
+}
 .ruler:active {
   cursor: grabbing;
 }
