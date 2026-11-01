@@ -159,8 +159,12 @@ const slabs = new Map(); // 「幅x高さ」→ Promise<data URL>（定規の板
  * 描けないときは CSS の色のまま
  */
 export function dressRuler(el, w, h) {
-  // PDF の編集画面では平らな 2D の定規（CSS の透明な板と目盛り）のまま。板の 3D の陰影は付けない
-  if (flatFor(el, null)) return;
+  // 平らな絵の画面（PDF の編集画面・ホームとクイズの机）では 2D の定規（CSS の透明な板と目盛り）のまま。板の 3D の陰影は付けない
+  if (flatFor(el, null)) {
+    el.classList.remove('has-3d');
+    delete el.dataset.slabKey;
+    return;
+  }
   const key = `${Math.round(w)}x${Math.round(h)}`;
   if (el.dataset.slabKey === key) return;
   el.dataset.slabKey = key;
@@ -179,6 +183,18 @@ export function dressRuler(el, w, h) {
     },
     (e) => console.warn('定規を 3D で描けません', e)
   );
+}
+
+/**
+ * root の中の絵を描き直す（平らな絵と 3D を切り替えたとき。机は作ったあとで平らな絵の印を付けるため）
+ */
+export function refreshArt(root) {
+  for (const svg of root.querySelectorAll('svg[data-model][data-model-ready]')) {
+    delete svg.dataset.modelReady;
+    delete svg.dataset.flat;
+    svg.querySelector('image[data-model-img]')?.removeAttribute('href');
+  }
+  hydrate(root);
 }
 
 /** 画面に出たモデルの品を見張って描く（起動時に 1 回呼ぶ） */
