@@ -539,12 +539,19 @@ export const methods = {
    * スマホで書き込んだ（メモ・マーカー・文字隠し）あと、DB の注釈と画面をそろえる。消えたものは消し、増えたものは足し、
    * 変わったものは直す。取り消しの履歴には積まない（スマホでの操作なので）。そのあとファイルを上書き保存する
    */
-  async syncFromPhone() {
+  async syncFromPhone({all = false} = {}) {
+    // この画面で書いている・保存している途中は、終わってからそろえる（画面のほうが新しい）
+    if (this.inflight || this.editing || this.drag || this.drawing) {
+      clearTimeout(this.syncTimer);
+      this.syncTimer = setTimeout(() => !this.destroyed && this.syncFromPhone({all}).catch(() => {}), 700);
+      return;
+    }
+    const kinds = (k) => all || MOBILE_KINDS.includes(k);
     const r = await api['annotation.list']({materialId: this.materialId});
     if (this.destroyed || r?.error) return;
-    const rows = new Map(r.annotations.filter((x) => MOBILE_KINDS.includes(x.kind)).map((x) => [x.id, x]));
+    const rows = new Map(r.annotations.filter((x) => kinds(x.kind)).map((x) => [x.id, x]));
     for (const a of [...this.annos.values()]) {
-      if (!a.id || !MOBILE_KINDS.includes(a.kind) || a.timer) continue; // 保存待ちのものは画面のほうが新しい
+      if (!a.id || !kinds(a.kind) || a.timer) continue; // 保存待ちのものは画面のほうが新しい
       const row = rows.get(a.id);
       rows.delete(a.id);
       if (!row) {
@@ -562,7 +569,7 @@ export const methods = {
     }
     for (const row of rows.values())
       if (row.page >= 1 && row.page <= this.pages.length) this.addAnno({...row, key: `k${this.seq++}`});
-    this.markDirty();
+    if (!all) this.markDirty(); // ほかの窓で書いたときは、その窓がファイルに保存する（2 つの窓で同時に上書きしない）
   },
 
   annoOf(target) {

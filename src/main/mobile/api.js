@@ -31,10 +31,17 @@ const bad = (msg) => {
 const okId = (v) => (isUlid(v) ? v : bad('ID が不正です'));
 
 /**
- * @param {{handlers: Map<string, Function>, repo, getWindow, now?}} deps
+ * @param {{handlers: Map<string, Function>, repo, getWindow, broadcast?, now?}} deps
+ *   broadcast(channel, payload)：パソコンのすべての窓に知らせる（横に並べた窓にも）。なければ元の窓だけ
  * @returns {Record<string, (arg: object) => Promise<object>>}
  */
-export function createMobileApi({handlers, repo, getWindow = () => null, now = () => new Date()}) {
+export function createMobileApi({
+  handlers,
+  repo,
+  getWindow = () => null,
+  broadcast = (ch, payload) => getWindow()?.webContents.send(ch, payload),
+  now = () => new Date()
+}) {
   const call = async (ch, arg) => {
     const fn = handlers.get(ch) ?? bad(`窓口がありません：${ch}`);
     return fn(arg ?? {});
@@ -44,7 +51,7 @@ export function createMobileApi({handlers, repo, getWindow = () => null, now = (
     const stale = new Set(repo.getSetting('pdf.stale', []));
     stale.add(materialId);
     repo.setSetting('pdf.stale', [...stale]);
-    getWindow()?.webContents.send('annotations.changed', {materialId});
+    broadcast('annotations.changed', {materialId});
   };
   /** スマホで直してよい注釈か（コメント・マーカー・文字隠し） */
   const ownAnnotation = (annotationId) => {
@@ -98,9 +105,11 @@ export function createMobileApi({handlers, repo, getWindow = () => null, now = (
       const {material, bytes, annotations, bookmarks} = r;
       return {material, bytes, annotations, bookmarks};
     },
-    /** 注釈の一覧（スマホで開いている PDF に、パソコンで書いた分を取り直す） */
+    /** 注釈の一覧（スマホで開いている PDF に、パソコンで書いた分を取り直す）。ノートはページ数も（パソコンで足し引きしたとき） */
     async 'annotation.list'({materialId}) {
-      return call('annotation.list', {materialId: okId(materialId)});
+      const r = await call('annotation.list', {materialId: okId(materialId)});
+      const m = repo.get('material', materialId);
+      return m?.source === 'note' && m.pages ? {...r, pages: m.pages} : r;
     },
     async 'annotation.save'({materialId, annotation}) {
       if (!MOBILE_KINDS.includes(annotation?.kind)) bad('スマホで書けるのはコメント・マーカー・文字隠しです');
@@ -128,7 +137,14 @@ export function createMobileApi({handlers, repo, getWindow = () => null, now = (
     async 'note.addPage'({materialId}) {
       const r = await call('note.addPage', {materialId: okId(materialId)});
       changed(materialId); // ファイルへの描き込み直しは、次にパソコンで開いたとき
-      getWindow()?.webContents.send('note.pages', {materialId, pages: r.pages, bytes: r.bytes});
+      broadcast('note.pages', {materialId, pages: r.pages, bytes: r.bytes});
+      return r;
+    },
+    /** ノートの最後のページを消す（白紙のときだけ。パソコンで開いている画面からも消す） */
+    async 'note.removePage'({materialId}) {
+      const r = await call('note.removePage', {materialId: okId(materialId)});
+      changed(materialId);
+      broadcast('note.pages', {materialId, pages: r.pages});
       return r;
     },
     /** 取り込んだシールの画像（PDF に貼ったもの） */

@@ -29,15 +29,30 @@ const color = (hex) =>
 
 /** 1 ページを描く。design に v がなければ前の見た目（テンプレート）で描く。header は上の欄に置く画像（PDFImage） */
 export function drawNotePage(page, design, header = null) {
-  if (design?.v !== 2) drawLegacyPage(page, design);
+  const v2 = design?.v === 2;
+  if (!v2) drawLegacyPage(page, design);
   else drawPaper(page, cleanPaper(design));
   if (header) {
     const W = page.getWidth();
     const H = page.getHeight();
     const h = 4.4 * MM; // 字の高さは 3 mm ほど（9 pt くらい）
-    const w = Math.min(W - 24 * MM, (h * header.width) / header.height);
-    page.drawImage(header, {x: 12 * MM, y: H - 13 * MM, width: w, height: (w * header.height) / header.width});
+    // 左の端：方眼は方眼の左の端にそろえる。前の見た目で余白の縦線（25 mm）があれば線の右。ほかは 12 mm
+    const old = v2 ? null : cleanLegacy(design);
+    const x =
+      v2 && cleanPaper(design).type === 'grid'
+        ? gridLeft(W, cleanPaper(design).gap * MM)
+        : old?.margin && !['cornell', 'plain'].includes(old.type)
+          ? 28 * MM
+          : 12 * MM;
+    const w = Math.min(W - x - 12 * MM, (h * header.width) / header.height);
+    page.drawImage(header, {x, y: H - 13 * MM, width: w, height: (w * header.height) / header.width});
   }
+}
+
+/** 方眼の左の端（左右を真ん中にそろえる。左右 8 mm ずつ空けた幅に入るだけのます） */
+function gridLeft(W, gap) {
+  const cols = Math.floor((W - 16 * MM) / gap);
+  return (W - cols * gap) / 2;
 }
 
 /** 白い紙に青い罫線。横罫は上の欄の下の線から下へ gap ごと、方眼は横・縦とも gap ごと（左右は真ん中にそろえる） */
@@ -50,8 +65,8 @@ function drawPaper(page, d) {
   const bottom = FOOT_H * MM;
   const rows = Math.floor((top - bottom) / gap);
   if (d.type === 'grid') {
-    const cols = Math.floor((W - 16 * MM) / gap);
-    const left = (W - cols * gap) / 2;
+    const left = gridLeft(W, gap);
+    const cols = Math.round((W - 2 * left) / gap);
     for (let i = 1; i <= rows; i++) {
       const y = top - i * gap;
       page.drawLine({start: {x: left, y}, end: {x: left + cols * gap, y}, thickness: 0.4, color: line});
@@ -156,6 +171,25 @@ export async function appendNotePage(bytes, design, {header = null} = {}) {
   drawNotePage(doc.addPage(A4), design, await embed(doc, header));
   doc.setModificationDate(new Date());
   return {bytes: await doc.save(), pages: doc.getPageCount()};
+}
+
+/**
+ * ノートを同じページ数のまま描き直す（上の欄の字が変わったとき）。ノートの中身は紙と上の欄だけで、書いたものは注釈として別に持つので、
+ * 描き直しても書いたものは消えない。題・キーワード・作った日時は前のものを引き継ぐ。戻り：{bytes, pages}
+ */
+export async function rebuildNotePdf(bytes, design, {header = null} = {}) {
+  const old = await PDFDocument.load(bytes, {updateMetadata: false});
+  const n = old.getPageCount();
+  const doc = await PDFDocument.create({updateMetadata: false});
+  doc.setTitle(old.getTitle() ?? 'ノート');
+  doc.setCreator('大学ノート');
+  doc.setProducer('大学ノート');
+  if (old.getCreationDate()) doc.setCreationDate(old.getCreationDate());
+  doc.setModificationDate(new Date());
+  doc.setKeywords([old.getKeywords() ?? `daigaku-note:${Math.random().toString(36).slice(2)}`]);
+  const img = await embed(doc, header);
+  for (let i = 0; i < n; i++) drawNotePage(doc.addPage(A4), design, img);
+  return {bytes: await doc.save(), pages: n};
 }
 
 /** ノートの最後のページを消す（2 ページ以上のとき）。戻り：{bytes, pages} */

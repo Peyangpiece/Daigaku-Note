@@ -423,7 +423,12 @@ app.whenReady().then(async () => {
     // スマホ連携（docs/MOBILE.md）。オンにしてあれば、同じ Wi-Fi のスマホに向けて始める
     {
       const devices = createDevices({repo, secrets: ctx.secrets});
-      const api = createMobileApi({handlers: ctx.handlers, repo, getWindow: () => win});
+      const api = createMobileApi({
+        handlers: ctx.handlers,
+        repo,
+        getWindow: () => win,
+        broadcast: (ch, payload) => ctx.notifyOthers(null, ch, payload)
+      });
       const server = createMobileServer({
         devices,
         api,

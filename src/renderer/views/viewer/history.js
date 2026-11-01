@@ -89,8 +89,10 @@ export const methods = {
   undo() {
     this.finishEdit();
     this.figEditor?.close();
+    if (this.pageBusy) return; // ノートのページを足し引きしている途中
     const step = this.undoStack.pop();
     if (!step) return;
+    if (step.notePage) return this.replayPage(step, 'undo');
     for (const st of step.group ? [...step.group].reverse() : [step]) this.restore(st.key, st.before);
     this.redoStack.push(step);
     this.updateHistory();
@@ -99,10 +101,19 @@ export const methods = {
   redo() {
     this.finishEdit();
     this.figEditor?.close();
+    if (this.pageBusy) return;
     const step = this.redoStack.pop();
     if (!step) return;
+    if (step.notePage) return this.replayPage(step, 'redo');
     for (const st of step.group ?? [step]) this.restore(st.key, st.after);
     this.undoStack.push(step);
+    this.updateHistory();
+  },
+
+  /** ノートのページの足し引きの手（{notePage: 'add'|'remove'}）を取り消す・やり直す。できなければ手を元の山に戻す */
+  async replayPage(step, dir) {
+    const ok = await this.replayNotePage(step, dir);
+    (ok === (dir === 'undo') ? this.redoStack : this.undoStack).push(step);
     this.updateHistory();
   },
 

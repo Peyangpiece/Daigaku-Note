@@ -156,7 +156,9 @@ function apiWith(rows = {}) {
     ['material.uploadData', async (arg) => (calls.push(['upload', arg]), {added: arg.files.length})],
     ['quiz.answer', async (arg) => (calls.push(['answer', arg]), {ok: true})],
     ['sticker.data', async (arg) => (calls.push(['sticker', arg]), {data: {}})],
-    ['note.addPage', async (arg) => (calls.push(['addPage', arg]), {pages: 2, bytes: new Uint8Array([1])})]
+    ['note.addPage', async (arg) => (calls.push(['addPage', arg]), {pages: 2, bytes: new Uint8Array([1])})],
+    ['note.removePage', async (arg) => (calls.push(['removePage', arg]), {pages: 1})],
+    ['annotation.list', async () => ({annotations: []})]
   ]);
   const repo = {
     ...fakeRepo(),
@@ -198,6 +200,15 @@ test('窓口：ノートにページを足したら、パソコンの画面に�
   assert.deepEqual(calls, [['addPage', {materialId: M}]]);
   assert.deepEqual(sent.at(-1), ['note.pages', {materialId: M, pages: 2, bytes: new Uint8Array([1])}]);
   await assert.rejects(api['note.addPage']({materialId: 'x'}), /ID が不正/);
+  await api['note.removePage']({materialId: M});
+  assert.deepEqual(sent.at(-1), ['note.pages', {materialId: M, pages: 1}]);
+});
+
+test('窓口：ノートの注釈の一覧にはページ数も付ける（パソコンで足し引きした分をスマホでそろえる）', async () => {
+  const M = '01JABCDEFGHJKMNPQRSTVWXYZ1';
+  const {api} = apiWith({[M]: {id: M, source: 'note', pages: 3}, [ULID]: {id: ULID, source: 'upload', pages: 5}});
+  assert.equal((await api['annotation.list']({materialId: M})).pages, 3);
+  assert.equal((await api['annotation.list']({materialId: ULID})).pages, undefined);
 });
 
 test('窓口：復習の答えはいつも review として記録する', async () => {

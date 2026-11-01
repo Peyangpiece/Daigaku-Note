@@ -178,6 +178,35 @@
   line-height: 20px;
   pointer-events: none;
 }
+/* ノートの名前の小さな札：窓が狭くツールバーの名前を外したとき（1180 px 以下）だけ、ツールバーの左下に出す（どの回のノートか分かるように） */
+.viewer-bar__caption {
+  display: none;
+  position: absolute;
+  left: var(--space-6);
+  top: 100%;
+  max-width: min(60%, 420px);
+  margin-top: 4px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@media (max-width: 1180px) {
+  .viewer-bar__caption:not([hidden]) {
+    display: block;
+  }
+}
+@media (max-width: 920px) {
+  .viewer-bar__caption {
+    left: 10px;
+  }
+}
 .viewer-bar__status:empty {
   display: none;
 }
@@ -252,6 +281,9 @@
 }
 .viewer-addpage {
   gap: var(--space-2);
+}
+.viewer-addpage [hidden] {
+  display: none;
 }
 /* ノートの「📄 資料」：同じ回の PDF（開く・横に並べる） */
 .viewer-pdfmenu {

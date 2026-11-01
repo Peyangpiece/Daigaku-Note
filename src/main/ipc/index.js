@@ -1,5 +1,5 @@
 // レンダラとの窓口（DESIGN-M0 §4）。handle は失敗を {error} に包んで返す。窓口は関心ごとに ipc/*.js に分かれ、ここが順に register する
-import {ipcMain} from 'electron';
+import {BrowserWindow, ipcMain} from 'electron';
 import * as stateIpc from './state.js';
 import * as connectionsIpc from './connections.js';
 import * as termsIpc from './terms.js';
@@ -22,14 +22,20 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
     handlers.set(channel, fn);
     return ipcMain.handle(channel, async (_e, arg) => {
       try {
-        return await fn(arg ?? {});
+        return await fn(arg ?? {}, _e);
       } catch (e) {
         log.warn(`ipc ${channel}: ${e.message}`);
         return {error: e.message};
       }
     });
   };
-  const c = {handle, ctx, repo, registry, jobs, files, secrets, log, folders, getWindow, quiz: ctx.quiz};
+  // ほかの窓に知らせる（同じ資料を 2 つの窓で開いているとき。from は送ってきた窓の webContents。スマホからは from なし＝全部の窓）
+  const notifyOthers = (from, channel, payload) => {
+    for (const w of BrowserWindow.getAllWindows())
+      if (!w.isDestroyed() && w.webContents !== from) w.webContents.send(channel, payload);
+  };
+  ctx.notifyOthers = notifyOthers;
+  const c = {handle, ctx, repo, registry, jobs, files, secrets, log, folders, getWindow, notifyOthers, quiz: ctx.quiz};
   for (const m of [
     stateIpc,
     connectionsIpc,
