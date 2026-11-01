@@ -3,7 +3,7 @@
 //  - 見開き（片開き／両開き）：ツールバーの「見開き」で 2 ページずつ横に並べる（資料ごとに覚える）
 //  - 写真：ツールバーの「写真」・貼り付け（⌘V）・ページへのドラッグで貼る（貼りもの style.type 'photo'）
 //  - PDF を見ながら、同じ回のノートを「ノート」で開く（ノートからは「← 資料へ」で戻る）
-import {openNotebook, noteFrom} from '../../notebook.js';
+import {openNotebook, openNotebookSide, noteFrom} from '../../notebook.js';
 import {toast, isTyping} from '../../ui-kit.js';
 
 const api = window.daigaku;
@@ -27,9 +27,13 @@ export const methods = {
     sp.setAttribute('aria-pressed', String(this.spread));
     sp.textContent = this.spread ? '見開き' : '片開き';
     // 同じ回のノート：資料（回に置いたもの）からだけ開ける。ノートでは、開いてきた資料へ戻るボタン
+    // 横に並べる窓（pane=side）では、ノートを開くボタン・戻るボタンは出さず、「← 授業へ」は「閉じる」にする
+    const side = document.documentElement.dataset.pane === 'side';
     const nb = this.$('notebook');
-    nb.hidden = this.isNote || !material.round_id;
-    const from = this.isNote ? noteFrom(this.materialId) : null;
+    nb.hidden = side || this.isNote || !material.round_id;
+    this.$('note-side').hidden = nb.hidden;
+    if (side) this.$('back').textContent = '閉じる';
+    const from = this.isNote && !side ? noteFrom(this.materialId) : null;
     const back = this.$('note-back');
     back.hidden = !from;
     back.dataset.id = from ?? '';
@@ -87,6 +91,12 @@ export const methods = {
     sp.textContent = this.spread ? '見開き' : '片開き';
     if (this.fitting) this.fitWidth();
     else this.layout();
+  },
+
+  /** 同じ回のノートを横に並べる窓で開く（なければ作る）。この窓は左半分、ノートは右半分になり、両方に同時に書ける */
+  async openRoundNoteSide() {
+    await this.settle();
+    await openNotebookSide(this.material.course_id, this.material.round_id);
   },
 
   /** 同じ回のノートを開く（なければ作る）。ノートからは「← 資料へ」でこの資料に戻れる */

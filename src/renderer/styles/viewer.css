@@ -1205,10 +1205,96 @@
     font-size: var(--fs-small);
   }
 }
+/* 写真・片開き／見開き・ノート・横に並べる・戻る：窓が狭いとき（横に並べると画面の半分）は記号だけにする */
+@media (max-width: 1100px) {
+  .viewer-bar
+    :is(
+      button[data-v='photo'],
+      button[data-v='spread'],
+      button[data-v='notebook'],
+      button[data-v='note-side'],
+      button[data-v='back'],
+      button[data-v='note-back']
+    ) {
+    font-size: 0;
+  }
+  .viewer-bar button[data-v='photo']::after {
+    content: '📷';
+    font-size: 15px;
+  }
+  .viewer-bar button[data-v='spread']::after {
+    content: '▯';
+    font-size: 16px;
+  }
+  .viewer-bar button[data-v='spread'][aria-pressed='true']::after {
+    content: '▯▯';
+  }
+  .viewer-bar button[data-v='notebook']::after {
+    content: '📓';
+    font-size: 15px;
+  }
+  .viewer-bar button[data-v='note-side']::after {
+    content: '◫';
+    font-size: 16px;
+  }
+  .viewer-bar button[data-v='back']::after {
+    content: '←';
+    font-size: 15px;
+  }
+  .viewer-bar button[data-v='note-back']::after {
+    content: '← 資料';
+    font-size: var(--fs-small);
+  }
+  :root[data-pane='side'] .viewer-bar button[data-v='back']::after {
+    content: '×';
+  }
+}
 @media (max-width: 1000px) {
   .viewer-bar {
     gap: 6px;
     padding: 10px 16px;
+  }
+}
+/* 横に並べたとき（画面の半分）：すき間と字をさらに詰める */
+@media (max-width: 860px) {
+  .viewer-bar {
+    gap: 3px;
+    padding: 8px 10px;
+  }
+  /* 拡大・縮小は ⌘＋・⌘−・ピンチで（「↔ ページ幅」は残す）。操作の一覧は ⌘/ で開く */
+  .viewer-bar :is([data-v='zoom-label'], [data-v='zoom-in'], [data-v='zoom-out'], .viewer-bar__help) {
+    display: none;
+  }
+  .viewer-bar .btn--small {
+    padding: 2px 8px;
+  }
+  .viewer-bar :is(button[data-v='notebook'], button[data-v='note-side']) {
+    padding: 2px 6px;
+  }
+  .viewer-bar button[data-v='find'] {
+    font-size: 0;
+  }
+  .viewer-bar button[data-v='find']::after {
+    content: '🔍';
+    font-size: 14px;
+  }
+  .viewer-bar button[data-v='delete'] {
+    font-size: 0;
+  }
+  .viewer-bar button[data-v='delete']::after {
+    content: '🗑';
+    font-size: 14px;
+  }
+  .viewer-bar .seg button {
+    padding-inline: 8px;
+  }
+  .viewer-bar__page input {
+    width: 3em;
+  }
+}
+@media (max-width: 1000px) {
+  .viewer-bar {
+    gap: 6px;
   }
   .viewer-sub {
     padding: 6px 16px;

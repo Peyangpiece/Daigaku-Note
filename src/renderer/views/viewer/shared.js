@@ -158,6 +158,7 @@ export const BAR = `
     <button type="button" class="viewer-bar__find" data-v="photo" title="写真を貼る（ファイルを選ぶ。${key(MOD, 'V')} で貼り付け・ページへドラッグでも貼れます）">写真</button>
     <button type="button" class="viewer-bar__find" data-v="spread" aria-pressed="false" title="片開き（1 ページずつ）と見開き（2 ページずつ横に並べる）を切り替える">片開き</button>
     <button type="button" class="btn btn--small" data-v="notebook" hidden title="この回のノートを開く（なければ作る。ノートからは「← 資料へ」で戻れます）">📓 ノート</button>
+    <button type="button" class="btn btn--small" data-v="note-side" hidden title="この回のノートを横に並べて開く（PDF は左、ノートは右。両方に同時に書けます）">◫ 横に並べる</button>
     <span class="viewer-bar__spacer"></span>
     <div class="viewer-bar__nav">
     <label class="viewer-bar__page" title="ページ番号を入れて Enter で移る">

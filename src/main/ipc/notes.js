@@ -22,7 +22,7 @@ const photoExt = (b) =>
       ? 'png'
       : null;
 
-export function register({handle, repo, files, folders, getWindow}) {
+export function register({handle, ctx, repo, files, folders, getWindow}) {
   const originalsDir = () => path.join(app.getPath('userData'), 'originals');
   const photosDir = () => path.join(app.getPath('userData'), 'photos');
   const changed = () => getWindow()?.webContents.send('state.changed', {});
@@ -72,6 +72,15 @@ export function register({handle, repo, files, folders, getWindow}) {
     repo.updateMaterial(m.id, {base_sha256: h, pages});
     changed();
     return {pages};
+  });
+
+  // ノートを横に並べる窓で開く（PDF の編集画面の「横に並べる」。元の窓は左半分、ノートは右半分。main.js の openSideWindow）
+  handle('window.openSide', ({materialId}) => {
+    const m = repo.get('material', id(materialId) ?? bad('ノートが不正です')) ?? bad('ノートがありません');
+    if (m.source !== 'note') bad('横に並べられるのはノートだけです');
+    if (m.status !== 'ok') bad('ノートのファイルが見つかりません');
+    ctx.openSide?.(m.id);
+    return {ok: true};
   });
 
   // 写真を取っておく。戻り：{id}（SHA-256。貼りもの style.ref に入れる）

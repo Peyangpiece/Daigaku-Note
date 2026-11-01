@@ -1,6 +1,18 @@
 // 大学ノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
 // M0 の骨格：DB・設定・ジョブ・スケジューラ・IPC をつなぐ。LMS 操作とファイル操作はここ（メイン）だけで行う。
-import {app, BrowserWindow, Menu, Notification, Tray, dialog, nativeImage, nativeTheme, net, shell} from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  Notification,
+  Tray,
+  dialog,
+  nativeImage,
+  nativeTheme,
+  net,
+  screen,
+  shell
+} from 'electron';
 import {existsSync, mkdirSync, readdirSync, statSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -66,6 +78,7 @@ const primary = SELF_TEST ? false : app.requestSingleInstanceLock({build: BUILD}
 if (!primary && !SELF_TEST) app.exit(0);
 
 let win = null,
+  side = null, // 横に並べる窓（PDF の横にノートを開く。openSideWindow）
   tray = null;
 const ctx = {}; // repo・files・engine・registry・secrets・log・jobs・scheduler
 
@@ -91,7 +104,7 @@ function openWindow(route = null) {
   win = new BrowserWindow({
     width: 1100,
     height: 820,
-    minWidth: 900,
+    minWidth: 640, // 横に並べたとき（openSideWindow）は画面の半分になる
     minHeight: 640,
     title: '大学ノート',
     autoHideMenuBar: true,
@@ -99,6 +112,55 @@ function openWindow(route = null) {
     webPreferences: {preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false}
   });
   win.loadFile(RENDERER, route ? {hash: route} : undefined);
+  guardWindow(win);
+  win.on('closed', () => {
+    win = null;
+    if (side && !side.isDestroyed()) side.close(); // 元の窓を閉じたら、横の窓も閉じる
+  });
+}
+
+/**
+ * 横に並べる窓：PDF の編集画面の横に、同じ回のノート（資料 materialId）を開く（SPEC §8.6）。
+ * 元の窓を画面の左半分、この窓を右半分に置く。どちらも同じ PDF の編集画面なので、両方に同時に書ける。
+ * もう開いていれば、その窓でノートを開き直す
+ */
+function openSideWindow(materialId) {
+  const hash = `/viewer/${materialId}`;
+  const area = screen.getDisplayMatching(
+    win && !win.isDestroyed() ? win.getBounds() : screen.getPrimaryDisplay().bounds
+  ).workArea;
+  const half = Math.floor(area.width / 2);
+  if (win && !win.isDestroyed()) {
+    if (win.isMaximized()) win.unmaximize();
+    if (win.isFullScreen()) win.setFullScreen(false);
+    win.setBounds({x: area.x, y: area.y, width: half, height: area.height});
+  }
+  if (side && !side.isDestroyed()) {
+    side.loadFile(RENDERER, {hash, query: {pane: 'side'}});
+    side.show();
+    side.focus();
+    return;
+  }
+  side = new BrowserWindow({
+    x: area.x + half,
+    y: area.y,
+    width: area.width - half,
+    height: area.height,
+    minWidth: 480,
+    minHeight: 480,
+    title: 'ノート — 大学ノート',
+    autoHideMenuBar: true,
+    backgroundColor: windowBackground(),
+    webPreferences: {preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false}
+  });
+  side.loadFile(RENDERER, {hash, query: {pane: 'side'}});
+  guardWindow(side);
+  side.on('closed', () => (side = null));
+}
+
+/** 窓の守り：ほかのサイト・ファイルへ移らない、右クリックのメニュー、画面のプロセスが落ちたら開き直す */
+function guardWindow(w) {
+  const win = w;
   // ほかのサイトへは移動しない。リンクは既定のブラウザで
   win.webContents.setWindowOpenHandler(({url}) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url);
@@ -108,9 +170,9 @@ function openWindow(route = null) {
   // （日本語の入ったパスの書き方の違いで外れないよう、%xx を戻して比べる）
   const plain = (u) => {
     try {
-      return decodeURI(String(u).split('#')[0]);
+      return decodeURI(String(u).split(/[?#]/)[0]); // ? の後ろ（横に並べる窓の pane=side）と # の後ろは比べない
     } catch {
-      return String(u);
+      return String(u).split(/[?#]/)[0];
     }
   };
   const home = plain(pathToFileURL(RENDERER).href);
@@ -127,7 +189,6 @@ function openWindow(route = null) {
     ctx.log?.error(`画面が落ちました: ${d.reason}（${d.exitCode}）`);
     if (d.reason !== 'clean-exit' && d.reason !== 'killed' && win && !win.isDestroyed()) win.reload();
   });
-  win.on('closed', () => (win = null));
 }
 
 /** 右クリックのメニュー（Electron は既定では出さない）。出すものがなければ null */
@@ -347,6 +408,7 @@ app.whenReady().then(async () => {
     ctx.jobs = new JobRunner(ctx, {notify});
     ctx.scheduler = new Scheduler(ctx);
     ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify});
+    ctx.openSide = openSideWindow;
     registerIpc(ctx, {getWindow: () => win});
     // スマホ連携（docs/MOBILE.md）。オンにしてあれば、同じ Wi-Fi のスマホに向けて始める
     {

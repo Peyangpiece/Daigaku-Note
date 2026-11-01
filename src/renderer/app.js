@@ -38,11 +38,15 @@ import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具�
 
 const api = window.daigaku;
 let viewer = null; // 開いている PDF ビューア。状態が変わっても描き直さない
+// 横に並べる窓（PDF の横にノートを開いた窓。main.js の openSideWindow）：ノートの編集画面だけを出す。
+// 「← 授業へ」は窓を閉じる。ログインボーナス・着せ替えの知らせは元の窓だけで出す
+const SIDE = new URLSearchParams(location.search).get('pane') === 'side';
+if (SIDE) document.documentElement.dataset.pane = 'side';
 
 // ログインボーナス（その日に初めて開いたとき 1 回。shared/points.js）。起動のあと 1 回だけ main に頼む。初回のセットアップの上には出さない
 let loginClaimed = false;
 async function claimLoginBonus() {
-  if (loginClaimed || location.hash.startsWith('#/setup')) return;
+  if (SIDE || loginClaimed || location.hash.startsWith('#/setup')) return;
   loginClaimed = true;
   const r = await api['points.claimLogin']().catch(() => null);
   if (!r || r.error) return;
@@ -61,7 +65,7 @@ setHooks({
     render();
     await claimLoginBonus();
     // 着せ替えを入れた版に更新したあと 1 回だけ知らせる（SPEC-KISEKAE §4.4）
-    if (state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
+    if (!SIDE && state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
       state.data.skin.introduced = true;
       api['skin.introduced']();
       toast(
@@ -226,7 +230,7 @@ function render() {
           materialId,
           course,
           after,
-          onBack: () => navigate(course ? `/course/${course.id}` : '/'),
+          onBack: SIDE ? () => window.close() : () => navigate(course ? `/course/${course.id}` : '/'),
           onReload: (next) => {
             viewer?.unmount();
             viewer = mount(next);
