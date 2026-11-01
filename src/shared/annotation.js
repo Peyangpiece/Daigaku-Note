@@ -9,6 +9,7 @@
 //   ちぎった紙（memo）は body に書いた文字、style に紙の色と文字の大きさ。rect は貼った四角（大きさを変えられる）
 //   付箋（index）はページの端から外へはみ出して貼る目印。body に短い言葉、style に色
 //   図（figure）は style.params に決め事（shared/figures.js の cleanParams）、style.labels に書き換えた文字（cleanLabels）
+//   写真（photo）は style.ref に写真の SHA-256（userData/photos に置いた画像。ipc/notes.js の photo.add）
 import {WIDTH_MAX, WIDTH_MIN, boundsOf, decodePoints, encodePoints} from './ink.js';
 import {hiderColorOk} from './stationery.js';
 import {isBuiltinSticker} from './stickers.js';
@@ -16,7 +17,7 @@ import {cleanLabels, cleanParams, isFigure} from './figures.js';
 import {cleanAlign, cleanRuns} from './text-runs.js';
 
 export const KINDS = ['text', 'note', 'mask', 'ink', 'line', 'stamp'];
-export const STAMP_TYPES = ['sticker', 'figure', 'memo', 'index'];
+export const STAMP_TYPES = ['sticker', 'figure', 'memo', 'index', 'photo'];
 export const INDEX_LABEL_MAX = 12; // 付箋（インデックス）に書ける文字数
 export const INDEX_COLOR = '#f28b82';
 export const STAMP_MIN = 8; // 貼りものの一辺の最小（pt）
@@ -157,6 +158,7 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
       if (labels) cleanStyle.labels = labels;
     } else if (type === 'sticker' && (isBuiltinSticker(s.ref) || /^[0-9a-f]{64}$/.test(s.ref ?? '')))
       cleanStyle = {type, ref: s.ref};
+    else if (type === 'photo' && /^[0-9a-f]{64}$/.test(s.ref ?? '')) cleanStyle = {type, ref: s.ref};
     else throw new Error('貼りものが不正です');
     return {
       page,

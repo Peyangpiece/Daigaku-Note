@@ -602,6 +602,12 @@ export class Repo {
   removeBookmark(sha256, id) {
     this.db.prepare('DELETE FROM bookmark WHERE id = ? AND sha256 = ?').run(id, sha256);
   }
+  /** 注釈・しおりを別の元の PDF に付け替える（ノートにページを足して、元の写しのハッシュが変わったとき） */
+  rekeyAnnotations(from, to) {
+    if (!from || !to || from === to) return;
+    this.db.prepare('UPDATE annotation SET sha256 = ? WHERE sha256 = ?').run(to, from);
+    this.db.prepare('UPDATE bookmark SET sha256 = ? WHERE sha256 = ?').run(to, from);
+  }
 
   // ---- sync ----
   startSyncRun({connection_id = null, kind, course_id = null}) {

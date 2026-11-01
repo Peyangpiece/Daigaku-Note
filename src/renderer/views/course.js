@@ -50,6 +50,7 @@ export function fileCard(m, course) {
       <span class="file__name">${fileName(m.name)}</span>
       ${m.source === 'notice' ? '<span class="file__tag">お知らせ</span>' : ''}
       ${m.source === 'upload' ? '<span class="file__tag">自分で追加</span>' : ''}
+      ${m.source === 'note' ? '<span class="file__tag file__tag--note">ノート</span>' : ''}
       ${m.source === 'export' ? '<span class="file__tag">書き出し</span>' : ''}
       ${m.copyOf ? '<span class="file__tag">同じ中身の写し</span>' : ''}
       ${ok ? '' : '<span class="file__tag">見つかりません</span>'}
@@ -170,6 +171,15 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
   return `<div class="round-quiz"><button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button>${cloze}</div>`;
 }
 
+/**
+ * 回のノート（SPEC §8.6）：A4 縦の白紙のノート（PDF）。なければ「＋ ノート」で作り、あれば開く。
+ * 紙と罫線は今のテンプレートのノートの見た目。開くと PDF の編集画面で、PDF と同じように書き込める
+ */
+function notebookLine(round, list, course) {
+  const note = list.find((m) => m.source === 'note' && m.status === 'ok');
+  return `<div class="round-notebook"><button type="button" class="btn btn--small${note ? '' : ' btn--quiet'}" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="${note ? 'この回のノートを開く（PDF と同じように書き込めます）' : 'この回のノートを作る（A4 縦。紙と罫線は今のテンプレートのもの）'}">${note ? '📓 ノートを開く' : '＋ ノート'}</button></div>`;
+}
+
 function roundNote(round, list, course, today, quizzes = {}) {
   const isToday = round.date === today;
   const upcoming = !list.length && round.number > 0 && round.date && round.date > today;
@@ -206,6 +216,7 @@ function roundNote(round, list, course, today, quizzes = {}) {
       <span class="round-note__date">${esc(fmtDate(round.date))}</span>
     </header>
     ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course)).join('')}</div>` : upcoming ? '' : `<p class="round-note__none">資料なし</p>`}
+    ${notebookLine(round, list, course)}
     ${quizLine(round, list, course, quizzes.byRound?.get(round.id), quizzes.gen?.[round.id], quizzes.hasKey)}
   </section>`;
 }

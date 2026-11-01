@@ -226,7 +226,7 @@ export class FileManager {
    * 自分のファイルを授業に入れる（授業画面の「ファイルを追加」・ドラッグ）。元のファイルは残してコピーする。
    * round が null なら「自分の付箋」に置く。戻り: {result: 'saved'|'dup', material}
    */
-  async addOwn({term, course, round = null, name, data}) {
+  async addOwn({term, course, round = null, name, data, source = 'upload'}) {
     const body = Buffer.isBuffer(data) ? data : Buffer.from(data);
     const h = sha256(body);
     const same = this.repo.findMaterialByHash(course.id, h);
@@ -250,7 +250,7 @@ export class FileManager {
       layout: layoutOf(clean),
       version: 1,
       lms_modified: null,
-      source: 'upload',
+      source, // 'upload'（自分で入れたファイル）・'note'（授業の回のノート。note-pdf.js）
       status: 'ok',
       read_at: new Date().toISOString() // 自分で入れたものは未読の印を付けない
     });

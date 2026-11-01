@@ -7,6 +7,7 @@ import * as skinsIpc from './skins.js';
 import * as stationeryIpc from './stationery.js';
 import * as materialsIpc from './materials.js';
 import * as pdfIpc from './pdf.js';
+import * as notesIpc from './notes.js';
 import * as quizIpc from './quiz.js';
 import * as settingsIpc from './settings.js';
 import * as appIpc from './app.js';
@@ -37,6 +38,7 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
     stationeryIpc,
     materialsIpc,
     pdfIpc,
+    notesIpc,
     quizIpc,
     settingsIpc,
     appIpc,

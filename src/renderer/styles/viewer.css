@@ -210,6 +210,30 @@
 .viewer-pages[data-tool='note'] .pdf-page {
   cursor: copy;
 }
+/* 見開き（両開き）：2 ページずつ横に並べる。左右のページはすき間なくつなげて置く（viewer/notebook.js） */
+.viewer-pages.is-spread {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  justify-content: safe center;
+  column-gap: 0;
+  row-gap: var(--space-3);
+}
+/* ノートの「＋ ページを追加」：最後のページの右下の外（幅をページにそろえ、右に寄せる） */
+.viewer-addpage {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+  max-width: 100%;
+}
+.viewer-pages.is-spread > .viewer-addpage {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+/* 写真：四角いまま、枠いっぱいに（縦横の比は貼るときと大きさを変えるときに保つ） */
+.anno-stamp__photo {
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
 .pdf-page {
   position: relative;
   flex: none;

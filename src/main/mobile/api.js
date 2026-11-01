@@ -128,6 +128,10 @@ export function createMobileApi({handlers, repo, getWindow = () => null, now = (
     async 'sticker.data'({ids}) {
       return call('sticker.data', {ids: Array.isArray(ids) ? ids.slice(0, 200) : []});
     },
+    /** PDF・ノートに貼った写真の画像（貼りもの style.type 'photo'） */
+    async 'photo.data'({ids}) {
+      return call('photo.data', {ids: Array.isArray(ids) ? ids.slice(0, 200) : []});
+    },
     /** 写真を回のフォルダへ（中身の頭で写真か確かめ、名前は撮った日時から付ける） */
     async 'photo.upload'({courseId, roundId = null, files}) {
       if (!Array.isArray(files) || !files.length || files.length > PHOTO_COUNT_MAX)

@@ -281,6 +281,17 @@ export const methods = {
       a.el.setAttribute('aria-label', `素材：${figureOf(ref)?.name ?? '図'}（押すと書き換え）`);
       return;
     }
+    if (type === 'photo') {
+      // 写真：四角いまま、縦横の比を保って貼る
+      const img = a.el.querySelector('img');
+      img.className = 'anno-stamp__img anno-stamp__photo';
+      a.el.dataset.shape = 'square';
+      a.el.setAttribute('aria-label', '写真');
+      this.photoSrc(ref).then((url) => {
+        if (url && a.style.ref === ref) img.src = url;
+      });
+      return;
+    }
     const img = a.el.querySelector('img');
     const shape = isBuiltinSticker(ref)
       ? 'cut'

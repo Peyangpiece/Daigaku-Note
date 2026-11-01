@@ -38,6 +38,7 @@ import {methods as stampsMethods} from './viewer/stamps.js';
 import {methods as pointerMethods} from './viewer/pointer.js';
 import {methods as inkMethods} from './viewer/ink.js';
 import {methods as maskMethods} from './viewer/mask.js';
+import {methods as notebookMethods} from './viewer/notebook.js';
 import {methods as notesMethods} from './viewer/notes.js';
 import {methods as exportMethods} from './viewer/export.js';
 import {methods as keysMethods} from './viewer/keys.js';
@@ -90,11 +91,13 @@ import {
 /** pdf.js が要る補助データ（CMap など）をメインから受け取る。file:// を直接読まない */
 
 class Viewer extends DeskTools {
-  constructor(root, {materialId, course, onBack}) {
+  constructor(root, {materialId, course, onBack, onReload = null, after = null}) {
     super(root);
     this.materialId = materialId;
     this.course = course;
     this.onBack = onBack;
+    this.onReload = onReload; // 開き直す（ノートにページを足したとき。viewer/notebook.js）
+    this.after = after; // 開き直したあとにすること：{scrollEnd}
     this.tool = 'select';
     this.zoom = 1;
     this.pages = [];
@@ -168,6 +171,7 @@ class Viewer extends DeskTools {
     this.pagesEl = this.$('pages');
     this.bindBar();
     this.bindPages();
+    this.bindPhotos();
     this.bindBookmarks();
     this.bindCase();
     this.bindSide();
@@ -186,6 +190,7 @@ class Viewer extends DeskTools {
     const r = await api['pdf.open']({materialId: this.materialId});
     if (this.destroyed) return;
     if (r?.error) return this.fail(r.error);
+    this.setupNotebook(r.material);
     this.$('name').textContent = r.material.name;
     this.$('name').title = r.material.name;
     this.$('title').textContent = `PDF：${r.material.name}`;
@@ -250,6 +255,9 @@ class Viewer extends DeskTools {
     for (const p of this.pages) this.observer.observe(p.el);
     for (const a of r.annotations)
       if (a.page >= 1 && a.page <= this.pages.length) this.addAnno({...a, key: `k${this.seq++}`});
+    this.mountAddPage();
+    // ページを足して開き直したとき：足したページ（最後）を見せる
+    if (this.after?.scrollEnd) this.pages.at(-1)?.el.scrollIntoView({block: 'center'});
     this.renderBookmarks();
     // 前の版のしおりは付箋に移す（v0.12.2）
     const old = (r.bookmarks ?? []).filter((b) => b.page >= 1 && b.page <= this.pages.length);
@@ -332,7 +340,8 @@ const MIXINS = [
   notesMethods,
   exportMethods,
   keysMethods,
-  findMethods
+  findMethods,
+  notebookMethods
 ];
 const taken = new Set(Object.getOwnPropertyNames(Viewer.prototype));
 for (const m of MIXINS)
