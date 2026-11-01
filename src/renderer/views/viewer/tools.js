@@ -358,12 +358,12 @@ export const methods = {
       else if (t.dataset.v === 'fit') this.fitWidth();
       else if (t.dataset.v === 'back') this.onBack();
       else if (t.dataset.v === 'note-back' && t.dataset.id) navigate(`/viewer/${t.dataset.id}`);
-      else if (t.dataset.v === 'notebook') this.openRoundNote();
-      else if (t.dataset.v === 'note-side') this.openRoundNoteSide();
+      else if (t.dataset.v === 'notebook') this.roundNote(t, false);
+      else if (t.dataset.v === 'note-side') this.roundNote(t, true);
       else if (t.dataset.v === 'spread') this.toggleSpread();
       else if (t.dataset.v === 'photo') this.photoInput?.click();
       else if (t.dataset.v === 'rotate') this.rotatePhoto();
-      else if (t.dataset.v === 'note-pdfs') this.pdfMenu ? this.closePdfMenu() : this.openPdfMenu(t);
+      else if (t.dataset.v === 'note-pdfs') this.toggleBarMenu(t, () => this.openPdfMenu(t));
       else if (t.dataset.v === 'bookmarks') this.openBookmarks(this.$('bookmark-panel').hidden);
       else if (t.dataset.v === 'bookmark-add') this.addFusen();
       else if (t.dataset.v === 'undo') this.undo();

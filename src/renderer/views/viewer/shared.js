@@ -130,6 +130,7 @@ export const BAR = `
     <button type="button" class="btn btn--small" data-v="back">← 授業へ</button>
     <button type="button" class="btn btn--small" data-v="note-back" hidden title="ノートを開いてきた資料へ戻る">← 資料へ</button>
     <span class="viewer-bar__name" data-v="name"></span>
+    <span class="viewer-bar__caption" data-v="caption" hidden></span>
     <div class="seg" role="group" aria-label="ツール">
       <button type="button" data-tool="select" title="選択・移動（Esc）：押してそのまま動かす">選択</button>
       <button type="button" data-tool="text" title="文字入れ（${key(MOD, 'T')}）：文字の上を押すと打つ・なぞると範囲を選ぶ。箱のふち（すぐ外側）を押して動かす">文字</button>

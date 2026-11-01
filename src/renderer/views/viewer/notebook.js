@@ -5,10 +5,22 @@
 //  - 見開き（片開き／両開き）：ツールバーのボタンで 2 ページずつ横に並べる（資料ごとに覚える）
 //  - 写真：ツールバーの「写真」・貼り付け（⌘V）・ページへのドラッグで貼る（貼りもの style.type 'photo'）。選ぶと「↻ 回す」
 //  - PDF を見ながら、同じ回のノートを「ノート」で開く（ノートからは「← 資料へ」で戻る）
-import {noteHeading, noteFrom, openNotebook, openNotebookSide, openSide} from '../../notebook.js';
+import {
+  NOTE_PAPERS,
+  hasNote,
+  headingPng,
+  noteFrom,
+  noteHeading,
+  notePaper,
+  openNotebook,
+  openNotebookSide,
+  openSide,
+  setNotePaper
+} from '../../notebook.js';
 import {esc, toast, isTyping} from '../../ui-kit.js';
 import {navigate, state} from '../../store.js';
 import {KIND_OF, itemOf} from '../../../shared/stationery.js';
+import {MOD, key} from './shared.js';
 
 const api = window.daigaku;
 const PHOTO_PX = 2400; // 写真の長い辺（px）。これより大きければ縮める
@@ -43,11 +55,29 @@ export const methods = {
     back.dataset.id = from ?? '';
   },
 
-  /** ノートの名前（ツールバー・窓の題）：「経済学原論　第3回　…　ノート」。分からなければファイルの名前のまま */
+  /** ノートの名前（ツールバー・窓の題）：「経済学原論　第3回　…　ノート」。ノートでなければ・分からなければ null（ファイルの名前のまま） */
   noteName() {
     const m = this.material;
-    const head = m?.course_id ? noteHeading(m.course_id, m.round_id) : '';
+    if (!this.isNote || !m?.course_id) return null;
+    const head = noteHeading(m.course_id, m.round_id);
     return head ? `${head}　ノート` : null;
+  },
+
+  /**
+   * ノートの上の欄の字が今の授業・回・題・日付と違えば、メインでノートを描き直す（回の題や日付が同期で変わったとき）。
+   * ページを並べる前に呼ぶ。戻り：描き直した元の写し（bytes）か null（そのまま）
+   */
+  async refreshNoteHeader() {
+    const m = this.material;
+    if (!this.isNote || !m?.course_id) return null;
+    const text = noteHeading(m.course_id, m.round_id);
+    if (!text) return null;
+    try {
+      const r = await api['note.setHeader']({materialId: this.materialId, text, header: await headingPng(text)});
+      return r?.changed ? r.bytes : null;
+    } catch {
+      return null; // 描き直せなくても、前の欄のまま開ける
+    }
   },
 
   /** ページを並べたあと：ノートなら、最初のペンを持つ・初めてなら使い方を知らせる */
@@ -64,7 +94,7 @@ export const methods = {
     }
     if (!seen)
       toast(
-        'ノートはペンを持って開きます。ページは右下の「＋ ページを追加」で下に増やせます。写真は貼り付け（⌘V）やドラッグでも貼れます',
+        `ノートはペンを持って開きます。ページは右下の「＋ ページを追加」で下に増やせます。写真は貼り付け（${key(MOD, 'V')}）やドラッグでも貼れます`,
         {action: {label: 'わかった', run: () => {}}} // 読めるように少し長く出す
       );
   },
@@ -84,16 +114,66 @@ export const methods = {
     );
   },
 
-  /** 「📄 資料」：同じ回の PDF を開く・横に並べる（小さなメニュー） */
-  openPdfMenu(btn) {
-    this.closePdfMenu();
-    const list = this.roundPdfs();
-    if (!list.length) return toast('この回には PDF の資料がありません');
+  /**
+   * ツールバーのボタンの下に小さなメニューを出す（「📄 資料」・ノートの紙を選ぶ）。html はメニューの中身、onPick(押したボタン)。
+   * 外を押す・Esc で閉じる（Esc はメニューだけ閉じ、持っている道具はそのまま）
+   */
+  openBarMenu(btn, label, html, onPick) {
+    this.closeBarMenu();
     const menu = document.createElement('div');
     menu.className = 'card-menu viewer-pdfmenu';
     menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', '同じ回の資料');
-    menu.innerHTML = list
+    menu.setAttribute('aria-label', label);
+    menu.innerHTML = html;
+    document.body.append(menu);
+    const r = btn.getBoundingClientRect();
+    const {width} = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - width - 8))}px`;
+    menu.style.top = `${r.bottom + 4}px`;
+    menu.querySelector('button')?.focus();
+    this.barMenu = menu;
+    this.barMenuFor = btn;
+    menu.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      this.closeBarMenu();
+      onPick(b);
+    };
+    const off = (e) => {
+      if (e.type === 'keydown') {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        e.preventDefault();
+        this.closeBarMenu();
+      } else if (!menu.contains(e.target) && !btn.contains(e.target)) this.closeBarMenu();
+    };
+    setTimeout(() => {
+      document.addEventListener('pointerdown', off, true);
+      document.addEventListener('keydown', off, true);
+    });
+    this.offBarMenu = () => {
+      document.removeEventListener('pointerdown', off, true);
+      document.removeEventListener('keydown', off, true);
+    };
+  },
+  closeBarMenu() {
+    this.offBarMenu?.();
+    this.offBarMenu = null;
+    this.barMenu?.remove();
+    this.barMenu = null;
+    this.barMenuFor = null;
+  },
+  /** ツールバーのボタンでメニューを開く・同じボタンをもう一度押すと閉じる */
+  toggleBarMenu(btn, open) {
+    if (this.barMenu && this.barMenuFor === btn) this.closeBarMenu();
+    else open();
+  },
+
+  /** 「📄 資料」：同じ回の PDF を開く・横に並べる */
+  openPdfMenu(btn) {
+    const list = this.roundPdfs();
+    if (!list.length) return toast('この回には PDF の資料がありません');
+    const html = list
       .map(
         (x) =>
           `<div class="viewer-pdfmenu__row"><span class="viewer-pdfmenu__name" title="${esc(x.name)}">${esc(x.name)}</span>` +
@@ -101,44 +181,36 @@ export const methods = {
           `<button type="button" role="menuitem" data-pdf-side="${x.id}" title="ノートの横に並べて開く（両方に同時に書けます）">◫ 横に並べる</button></div>`
       )
       .join('');
-    document.body.append(menu);
-    const r = btn.getBoundingClientRect();
-    const {width} = menu.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - width - 8))}px`;
-    menu.style.top = `${r.bottom + 4}px`;
-    menu.querySelector('button')?.focus();
-    this.pdfMenu = menu;
-    menu.onclick = async (e) => {
-      const b = e.target.closest('button');
-      if (!b) return;
-      this.closePdfMenu();
+    this.openBarMenu(btn, '同じ回の資料', html, async (b) => {
       await this.settle();
       if (b.dataset.pdfOpen) navigate(`/viewer/${b.dataset.pdfOpen}`);
       else if (b.dataset.pdfSide) openSide(b.dataset.pdfSide);
-    };
-    // 外を押す・Esc で閉じる
-    const off = (e) => {
-      if (e.type === 'keydown') {
-        if (e.key !== 'Escape') return;
-        e.stopPropagation(); // メニューだけ閉じる（持っている道具はそのまま）
-        e.preventDefault();
-        this.closePdfMenu();
-      } else if (!menu.contains(e.target) && !btn.contains(e.target)) this.closePdfMenu();
-    };
-    setTimeout(() => {
-      document.addEventListener('pointerdown', off, true);
-      document.addEventListener('keydown', off, true);
     });
-    this.offPdfMenu = () => {
-      document.removeEventListener('pointerdown', off, true);
-      document.removeEventListener('keydown', off, true);
-    };
   },
-  closePdfMenu() {
-    this.offPdfMenu?.();
-    this.offPdfMenu = null;
-    this.pdfMenu?.remove();
-    this.pdfMenu = null;
+
+  /**
+   * 同じ回のノートを開く・横に並べる（「📓 ノート」「◫ 横に並べる」）。まだノートがなければ、授業画面の「＋ ノート」と同じく紙を選んでから作る
+   * （選んだ紙は次の初期値）。あれば、すぐ開く
+   */
+  roundNote(btn, side) {
+    const {course_id: courseId, round_id: roundId} = this.material;
+    const go = async (paper) => {
+      await this.settle();
+      if (side) await openNotebookSide(courseId, roundId, {paper});
+      else await openNotebook(courseId, roundId, {from: this.materialId, paper});
+    };
+    if (hasNote(courseId, roundId)) return go(undefined);
+    const cur = notePaper().key;
+    const html = NOTE_PAPERS.map(
+      (p) =>
+        `<button type="button" role="menuitem" data-paper="${p.key}">${p.key === cur ? '✓ ' : '　 '}${esc(p.label)}</button>`
+    ).join('');
+    this.toggleBarMenu(btn, () =>
+      this.openBarMenu(btn, 'ノートの紙', html, (b) => {
+        setNotePaper(b.dataset.paper);
+        go(NOTE_PAPERS.find((p) => p.key === b.dataset.paper));
+      })
+    );
   },
 
   /** ノートの最後のページの右下の外に「＋ ページを追加」（2 ページ以上なら「− 最後のページを消す」も）を置く（ページを並べたあと） */
@@ -148,8 +220,8 @@ export const methods = {
     const box = document.createElement('div');
     box.className = 'viewer-addpage';
     box.innerHTML =
-      '<button type="button" class="btn btn--small btn--quiet" data-v="remove-page" title="最後のページを消す（何も書いていない白紙のときだけ）">− 最後のページを消す</button>' +
-      '<button type="button" class="btn btn--small" data-v="add-page" title="ノートの最後に白いページを 1 枚足す（下に増えます）">＋ ページを追加</button>';
+      '<button type="button" class="btn btn--small btn--quiet" data-v="remove-page" title="最後のページを消す（何も書いていない白紙のときだけ。↶ で戻せます）">− 最後のページを消す</button>' +
+      '<button type="button" class="btn btn--small" data-v="add-page" title="ノートの最後に白いページを 1 枚足す（下に増えます。↶ で取り消せます）">＋ ページを追加</button>';
     this.pagesEl.append(box);
     this.addPageBox = box;
     this.on(box, 'click', (e) => {
@@ -175,22 +247,28 @@ export const methods = {
 
   /**
    * ノートにページを足す：書きかけを保存してから、メインで足し、足したページだけ画面に並べる（開き直さない）。
-   * 足したページの PDF（新しい元の写し）を pdf.js で読み、そのページだけ使う
+   * record：取り消しの履歴に積む（↶ で消せる）。取り消し・やり直しから呼ぶときは false。戻り：足せたか
    */
-  async addNotePage() {
-    if (this.pageBusy) return;
+  async addNotePage({record = true} = {}) {
+    if (this.pageBusy) return false;
     this.pageBusy = true;
     this.busyAddPage(true);
     try {
       await this.settle();
       const r = await api['note.addPage']({materialId: this.materialId});
-      if (r?.error) return toast(r.error, {error: true});
+      if (r?.error) {
+        toast(r.error, {error: true});
+        return false;
+      }
       const last = await this.appendNotePages(r.bytes, r.pages);
-      if (!last) return;
+      if (!last) return false;
+      if (record) this.pushStep({notePage: 'add'});
       last.el.scrollIntoView({block: 'center', behavior: 'smooth'});
       toast(`ページを足しました（${this.pages.length} ページ）`);
+      return true;
     } catch (e) {
       toast(`ページを足せませんでした（${e.message}）`, {error: true});
+      return false;
     } finally {
       this.pageBusy = false;
       if (!this.destroyed) this.busyAddPage(false);
@@ -216,41 +294,67 @@ export const methods = {
     return last;
   },
 
-  /** スマホでノートにページを足したとき：開いているこの画面にも足す */
+  /** 画面のページを n ページまで減らす（最後から） */
+  dropNotePages(n) {
+    while (this.pages.length > Math.max(1, n)) {
+      const p = this.pages.pop();
+      this.observer?.unobserve(p.el);
+      p.renderTask?.cancel();
+      p.el.remove();
+    }
+    this.numberPages();
+    this.sizeAddPage();
+  },
+
+  /**
+   * ほかの窓・スマホでノートのページを足し引きしたとき（note.pages）：開いているこの画面もそろえる。
+   * 足したときは新しい元の写し（bytes）が来る。消したときは pages だけ
+   */
   bindNotePages() {
     const off = api.on?.('note.pages', ({materialId, pages, bytes}) => {
       if (materialId !== this.materialId || !this.isNote || this.destroyed || this.pageBusy) return;
-      this.appendNotePages(bytes, pages)
-        .then((last) => last && toast(`スマホでページが足されました（${this.pages.length} ページ）`))
-        .catch(() => {});
+      if (bytes && pages > this.pages.length)
+        this.appendNotePages(bytes, pages)
+          .then((last) => last && toast(`ほかの所でページが足されました（${this.pages.length} ページ）`))
+          .catch(() => {});
+      else if (pages < this.pages.length) {
+        this.dropNotePages(pages);
+        this.dropStepsAfter(pages);
+        this.markDirty();
+      }
     });
     if (off) this.listeners.push(off);
   },
 
-  /** ノートの最後のページを消す（何も書いていない・付箋もない白紙のときだけ。1 ページは残す） */
-  async removeNotePage() {
-    if (this.pageBusy || this.pages.length < 2) return;
+  /**
+   * ノートの最後のページを消す（何も書いていない・付箋もない白紙のときだけ。1 ページは残す）。
+   * record：取り消しの履歴に積む（↶ で白いページが戻る）。取り消しから呼ぶときは false（後ろのやり直しの手は捨てない）。戻り：消せたか
+   */
+  async removeNotePage({record = true} = {}) {
+    if (this.pageBusy || this.pages.length < 2) return false;
     const n = this.pages.length;
-    if ([...this.annos.values()].some((a) => !a.removed && a.page === n))
-      return toast('最後のページに書いたもの・貼ったものがあるため消せません（先に消してください）', {error: true});
+    if ([...this.annos.values()].some((a) => !a.removed && a.page === n)) {
+      toast('最後のページに書いたもの・貼ったものがあるため消せません（先に消してください）', {error: true});
+      return false;
+    }
     this.pageBusy = true;
     this.busyAddPage(true);
     try {
       await this.settle();
       const r = await api['note.removePage']({materialId: this.materialId});
-      if (r?.error) return toast(r.error, {error: true});
-      if (this.destroyed) return;
-      while (this.pages.length > r.pages) {
-        const p = this.pages.pop();
-        this.observer?.unobserve(p.el);
-        p.renderTask?.cancel();
-        p.el.remove();
+      if (r?.error) {
+        toast(r.error, {error: true});
+        return false;
       }
-      this.dropStepsAfter(r.pages);
-      this.numberPages();
-      this.sizeAddPage();
+      if (this.destroyed) return false;
+      this.dropNotePages(r.pages);
+      if (record) {
+        this.dropStepsAfter(r.pages);
+        this.pushStep({notePage: 'remove'});
+      }
       this.markDirty();
       toast(`最後のページを消しました（${this.pages.length} ページ）`);
+      return true;
     } finally {
       this.pageBusy = false;
       if (!this.destroyed) this.busyAddPage(false);
@@ -264,6 +368,15 @@ export const methods = {
     this.undoStack = (this.undoStack ?? []).filter(keep);
     this.redoStack = (this.redoStack ?? []).filter(keep);
     this.updateHistory();
+  },
+
+  /**
+   * 取り消し・やり直しのページの足し引き（history.js）：dir は 'undo' か 'redo'。
+   * 足した手を取り消す＝最後のページを消す、消した手を取り消す＝白いページを足す。戻り：できたか
+   */
+  async replayNotePage(step, dir) {
+    const add = (step.notePage === 'add') === (dir === 'redo');
+    return add ? this.addNotePage({record: false}) : this.removeNotePage({record: false});
   },
 
   /** 片開き・見開きのボタン：今の状態を絵（▯・▯▯）で出し、押すとどうなるかを題に書く */
@@ -289,18 +402,6 @@ export const methods = {
     this.showSpread();
     if (this.fitting) this.fitWidth();
     else this.layout();
-  },
-
-  /** 同じ回のノートを横に並べる窓で開く（なければ作る）。この窓は左半分、ノートは右半分になり、両方に同時に書ける */
-  async openRoundNoteSide() {
-    await this.settle();
-    await openNotebookSide(this.material.course_id, this.material.round_id);
-  },
-
-  /** 同じ回のノートを開く（なければ作る）。ノートからは「← 資料へ」でこの資料に戻れる */
-  async openRoundNote() {
-    await this.settle();
-    await openNotebook(this.material.course_id, this.material.round_id, {from: this.materialId});
   },
 
   // ---- 写真 ----

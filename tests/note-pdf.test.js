@@ -1,9 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PDFDocument} from 'pdf-lib';
-import {A4, appendNotePage, cleanLegacy, cleanPaper, createNotePdf, removeLastNotePage} from '../src/main/note-pdf.js';
+import {
+  A4,
+  appendNotePage,
+  cleanLegacy,
+  cleanPaper,
+  createNotePdf,
+  rebuildNotePdf,
+  removeLastNotePage
+} from '../src/main/note-pdf.js';
 import {NOTE_TYPES} from '../src/shared/skin.js';
 import {normalizeAnnotation} from '../src/shared/annotation.js';
+import {createSerial} from '../src/main/serial.js';
 
 // 1×1 の PNG（上の欄に印刷する画像の代わり）
 const PNG = Buffer.from(
@@ -77,4 +86,42 @@ test('写真の貼りもの：style.ref は写真の SHA-256 だけ', () => {
       style: {type: 'photo', ref: '../x'}
     })
   );
+});
+
+test('描き直し：同じページ数・同じ題のまま、中身（ハッシュ）は変わる', async () => {
+  const d = cleanPaper({type: 'grid', gap: 7});
+  const one = await createNotePdf(d, {title: '経済学原論 第3回 ノート', header: PNG});
+  const two = await appendNotePage(one, d, {header: PNG});
+  const re = await rebuildNotePdf(two.bytes, d, {header: PNG});
+  assert.equal(re.pages, 2);
+  const doc = await PDFDocument.load(re.bytes);
+  assert.equal(doc.getPageCount(), 2);
+  assert.equal(doc.getTitle(), '経済学原論 第3回 ノート');
+  assert.notDeepEqual(Buffer.from(re.bytes), Buffer.from(two.bytes));
+});
+
+test('順番待ち：同じ鍵は 1 つずつ（前が失敗しても次は動く）、別の鍵は待たない', async () => {
+  const serial = createSerial();
+  const log = [];
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const a = serial('n1', async () => {
+    log.push('a+');
+    await wait(30);
+    log.push('a-');
+    throw new Error('x');
+  });
+  const b = serial('n1', async () => {
+    log.push('b+');
+    await wait(5);
+    log.push('b-');
+    return 2;
+  });
+  const c = serial('n2', async () => {
+    log.push('c');
+    return 3;
+  });
+  await assert.rejects(a, /x/);
+  assert.equal(await b, 2);
+  assert.equal(await c, 3);
+  assert.deepEqual(log, ['a+', 'c', 'a-', 'b+', 'b-']);
 });

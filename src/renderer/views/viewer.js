@@ -245,6 +245,10 @@ class Viewer extends DeskTools {
     this.$('name').textContent = shown;
     this.$('name').title = shown === r.material.name ? shown : `${shown}（${r.material.name}）`;
     this.$('title').textContent = `${this.isNote ? 'ノート' : 'PDF'}：${shown}`;
+    if (this.isNote && shown !== r.material.name) {
+      this.$('caption').textContent = shown;
+      this.$('caption').hidden = false;
+    }
     // 文字入れの書式：この PDF で最後に使ったもの（なければ同じ授業で最後に使ったもの）を引き継ぐ
     if (r.textStyle && typeof r.textStyle === 'object')
       this.textStyle = {
@@ -255,7 +259,11 @@ class Viewer extends DeskTools {
       };
     document.title = `${shown} — 大学ノート`;
     try {
-      this.task = this.loadDoc(r.bytes);
+      // ノートの上の欄の字が古ければ、描き直した写しで開く（書いたものは注釈なのでそのまま。ファイルへは上書き保存で）
+      const fresh = await this.refreshNoteHeader();
+      if (this.destroyed) return;
+      if (fresh) this.headerRedrawn = true;
+      this.task = this.loadDoc(fresh ?? r.bytes);
       this.doc = await this.task.promise;
     } catch (e) {
       return this.fail(
@@ -287,10 +295,11 @@ class Viewer extends DeskTools {
     this.startNote(); // ノートは最初のペンを持って開く・初めてなら使い方を知らせる
     this.bindNotePages();
     // スマホ連携（docs/MOBILE.md §6）：スマホで書き込んだら、この画面にも出す。まだファイルに描き込んでいなければ上書き保存する
-    this.offPhone = api.on('annotations.changed', ({materialId}) => {
-      if (materialId === this.materialId && !this.destroyed) this.syncFromPhone().catch(() => {});
+    // 横に並べたもう 1 つの窓で同じ資料に書いたとき（all）も、すべての種類をそろえる
+    this.offPhone = api.on('annotations.changed', ({materialId, all = false}) => {
+      if (materialId === this.materialId && !this.destroyed) this.syncFromPhone({all}).catch(() => {});
     });
-    if (r.stale) this.markDirty();
+    if (r.stale || this.headerRedrawn) this.markDirty();
     if (r.rebased)
       toast(
         'この PDF の元の写しが見つからないため（別のパソコンへ移したときなど）、前の書き込みは PDF に描き込まれた形で残しました。アプリでは動かせません',
@@ -329,6 +338,7 @@ class Viewer extends DeskTools {
     delete this.root.dataset.flatArt;
     this.offPhone?.();
     clearTimeout(this.pinchTimer);
+    clearTimeout(this.syncTimer);
     for (const off of this.listeners) off();
     this.observer?.disconnect();
     this.barObserver?.disconnect();
@@ -344,7 +354,7 @@ class Viewer extends DeskTools {
     for (const p of this.pages) p.renderTask?.cancel();
     this.task?.destroy();
     for (const t of this.noteTasks ?? []) t.destroy(); // ノートに足したページの PDF
-    this.closePdfMenu();
+    this.closeBarMenu();
     document.title = '大学ノート';
   }
 }

@@ -52,7 +52,7 @@ export function noteHeading(courseId, roundId) {
 /**
  * ノートの上の欄に印刷する画像（PNG）：薄い青の字で授業・回・題・日付。PDF に日本語のフォントを入れないよう、画面のフォントで描く
  */
-async function headingPng(text) {
+export async function headingPng(text) {
   if (!text) return null;
   const px = 72; // 字の大きさ（画像の px。PDF では 5.2 mm の高さに縮める）
   const font = `500 ${px}px 'Noto Sans JP', sans-serif`;
@@ -70,6 +70,13 @@ async function headingPng(text) {
   return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
 }
 
+/** 回のノートがもうあるか（PDF の編集画面の「📓 ノート」「◫ 横に並べる」：なければ紙を選んでから作る） */
+export function hasNote(courseId, roundId) {
+  return (state.data?.materials?.[courseId] ?? []).some(
+    (m) => m.source === 'note' && (m.round_id ?? null) === (roundId ?? null) && m.status === 'ok' && !m.copyOf
+  );
+}
+
 /** PDF の編集画面から開いたノートの、戻り先の資料（このパソコンの今の窓のあいだだけ覚える） */
 export const noteFrom = (noteId) => {
   try {
@@ -81,11 +88,13 @@ export const noteFrom = (noteId) => {
 
 /** 回のノートを用意する（なければ作る）。戻り：{materialId, created} か null（失敗。知らせは出した） */
 async function ensureNote(courseId, roundId, paper = notePaper()) {
+  const text = noteHeading(courseId, roundId);
   const r = await api['note.open']({
     courseId,
     roundId,
     paper: {type: paper.type, gap: paper.gap},
-    header: await headingPng(noteHeading(courseId, roundId))
+    header: await headingPng(text),
+    headerText: text
   });
   if (r?.error) {
     toast(r.error, {error: true});
@@ -114,8 +123,8 @@ export async function openNotebook(courseId, roundId, {from = null, paper = unde
 /**
  * 回のノートを横に並べる窓で開く（なければ作る）。元の窓は画面の左半分、ノートは右半分になり、両方に同時に書ける
  */
-export async function openNotebookSide(courseId, roundId) {
-  const r = await ensureNote(courseId, roundId);
+export async function openNotebookSide(courseId, roundId, {paper = undefined} = {}) {
+  const r = await ensureNote(courseId, roundId, paper);
   if (!r) return;
   const w = await api['window.openSide']({materialId: r.materialId});
   if (w?.error) toast(w.error, {error: true});

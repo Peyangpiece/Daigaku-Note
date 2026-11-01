@@ -337,6 +337,7 @@ a {
   display: flex;
   justify-content: flex-end;
   width: 100%;
+  gap: 8px;
   padding: 4px 0 8px;
 }
 .m-pages:is([data-tool='line'], [data-tool='mask']) .m-page {
@@ -674,4 +675,7 @@ a {
 }
 .m-wrong p {
   margin: 0;
+}
+.m-addpage [hidden] {
+  display: none;
 }

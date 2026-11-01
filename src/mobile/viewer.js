@@ -211,6 +211,7 @@ class PhoneViewer {
       (entries) => {
         for (const e of entries) {
           const p = this.pages[Number(e.target.dataset.page) - 1];
+          if (!p) continue; // 消したページ
           p.visible = e.isIntersecting;
           if (p.visible) this.renderPage(p);
           else this.release(p);
@@ -221,37 +222,103 @@ class PhoneViewer {
     for (const p of this.pages) this.observer.observe(p.el);
   }
 
-  /** ノート（パソコンで回に作ったもの）：最後のページの下に「＋ ページを追加」。足すと下に新しいページが増える */
+  /**
+   * ノート（パソコンで回に作ったもの）：最後のページの下に「− 最後のページを消す」（2 ページ以上・白紙のとき）と「＋ ページを追加」。
+   * 足すと下に新しいページが増える。パソコンで足し引きした分は、取り直し（refresh）のときにそろえる
+   */
   mountAddPage() {
     if (this.r.material?.source !== 'note') return;
     const box = document.createElement('div');
     box.className = 'm-addpage';
-    box.innerHTML = '<button class="m-btn" data-v="add-page">＋ ページを追加</button>';
+    box.innerHTML =
+      '<button class="m-btn" data-v="remove-page">− 最後のページを消す</button><button class="m-btn" data-v="add-page">＋ ページを追加</button>';
     this.pagesEl.append(box);
-    const btn = box.querySelector('button');
-    btn.onclick = async () => {
-      btn.disabled = true;
+    this.addBox = box;
+    const [del, add] = box.querySelectorAll('button');
+    this.showAddPage();
+    add.onclick = async () => {
+      add.disabled = del.disabled = true;
       try {
         const r = await call('note.addPage', {materialId: this.materialId});
-        const task = pdfjs.getDocument({data: r.bytes, isEvalSupported: false, enableXfa: false});
-        (this.noteTasks ??= []).push(task);
-        const doc = await task.promise;
-        for (let n = this.pages.length + 1; n <= Math.min(r.pages, doc.numPages); n++) {
-          const page = await doc.getPage(n);
-          if (this.destroyed) return;
-          this.addPage(n, page);
-          const p = this.pages.at(-1);
-          this.pagesEl.append(box); // ボタンはいつも最後
-          this.observer?.observe(p.el);
-          p.el.scrollIntoView({block: 'center', behavior: 'smooth'});
-        }
-        this.onScroll();
+        const last = await this.appendPages(r.bytes, r.pages);
+        last?.el.scrollIntoView({block: 'center', behavior: 'smooth'});
       } catch (e) {
         toast(`ページを足せませんでした（${e.message}）`, {error: true});
       } finally {
-        btn.disabled = false;
+        add.disabled = del.disabled = false;
+        this.showAddPage();
       }
     };
+    del.onclick = async () => {
+      const n = this.pages.length;
+      if ([...this.annos.values()].some((a) => a.page === n))
+        return toast('最後のページに書いたものがあるため消せません', {error: true});
+      add.disabled = del.disabled = true;
+      try {
+        const r = await call('note.removePage', {materialId: this.materialId});
+        this.dropPages(r.pages);
+      } catch (e) {
+        toast(e.message, {error: true});
+      } finally {
+        add.disabled = del.disabled = false;
+        this.showAddPage();
+      }
+    };
+  }
+
+  /** 「− 最後のページを消す」は 2 ページ以上のときだけ */
+  showAddPage() {
+    const del = this.addBox?.querySelector('[data-v="remove-page"]');
+    if (del) del.hidden = this.pages.length < 2;
+  }
+
+  /** 新しい元の写し（bytes。全部で pages ページ）から、まだ並べていないページを足す。戻り：最後に足したページ */
+  async appendPages(bytes, pages) {
+    if (pages <= this.pages.length) return null;
+    const task = pdfjs.getDocument({data: bytes, isEvalSupported: false, enableXfa: false});
+    (this.noteTasks ??= []).push(task);
+    const doc = await task.promise;
+    let last = null;
+    for (let n = this.pages.length + 1; n <= Math.min(pages, doc.numPages); n++) {
+      const page = await doc.getPage(n);
+      if (this.destroyed || this.pages.length >= n) return null;
+      this.addPage(n, page);
+      last = this.pages.at(-1);
+      if (this.addBox) this.pagesEl.append(this.addBox); // ボタンはいつも最後
+      this.observer?.observe(last.el);
+    }
+    this.onScroll();
+    this.showAddPage();
+    return last;
+  }
+
+  /** ページを n ページまで減らす（パソコン・スマホで最後のページを消したとき） */
+  dropPages(n) {
+    while (this.pages.length > Math.max(1, n)) {
+      const p = this.pages.pop();
+      this.observer?.unobserve(p.el);
+      p.renderTask?.cancel();
+      p.canvas.width = 0;
+      p.el.remove();
+    }
+    this.onScroll();
+    this.showAddPage();
+  }
+
+  /** パソコンでノートのページ数が変わっていたらそろえる（増えたときは PDF を取り直して足す） */
+  async syncPages(pages) {
+    if (!pages || this.r.material?.source !== 'note' || this.pageSyncing) return;
+    if (pages < this.pages.length) return this.dropPages(pages);
+    if (pages === this.pages.length) return;
+    this.pageSyncing = true;
+    try {
+      const r = await call('pdf.open', {materialId: this.materialId});
+      await this.appendPages(r.bytes, pages);
+    } catch {
+      // 次の取り直しで
+    } finally {
+      this.pageSyncing = false;
+    }
   }
 
   /** 描く細かさ：画面の画素の細かさ × 指で拡大した倍率（3 倍まで）。大きすぎるページは落とす */
@@ -463,12 +530,15 @@ class PhoneViewer {
   async refresh() {
     if (this.destroyed || this.drawing || this.noteOpen || this.busy) return;
     let list;
+    let pages;
     try {
-      ({annotations: list} = await call('annotation.list', {materialId: this.materialId}));
+      ({annotations: list, pages} = await call('annotation.list', {materialId: this.materialId}));
     } catch {
       return; // 届かないときは次の機会に
     }
     if (this.destroyed || this.drawing || this.noteOpen) return;
+    await this.syncPages(pages); // ノート：パソコンでページを足し引きしていたらそろえる
+    if (this.destroyed) return;
     const seen = new Set();
     for (const row of list) {
       seen.add(row.id);

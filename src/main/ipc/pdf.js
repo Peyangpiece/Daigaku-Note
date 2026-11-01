@@ -10,7 +10,7 @@ import {normalizeBookmark} from '../../shared/bookmark.js';
 import {cleanAlign} from '../../shared/text-runs.js';
 import {str, id, PDFJS_DIR, PDFJS_ASSET, bad} from './common.js';
 
-export function register({handle, repo, log, getWindow}) {
+export function register({handle, repo, log, getWindow, notifyOthers = () => {}}) {
   // アプリ内の PDF ビューア（SPEC §9）。編集できるのは PDF だけ。中身はバイト列で渡し、パスはレンダラに出さない
   const pdfMaterial = (materialId) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
@@ -90,10 +90,15 @@ export function register({handle, repo, log, getWindow}) {
     return {bytes: new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)};
   });
 
-  handle('annotation.save', ({materialId, annotation}) => {
+  // 窓（e.sender）から書いたときは、同じ資料を開いているほかの窓にも知らせる（スマホからは mobile/api.js が知らせる）
+  handle('annotation.save', ({materialId, annotation}, e) => {
     const m = pdfMaterial(materialId);
     const aid = annotation?.id == null ? null : (id(annotation.id) ?? bad('注釈が不正です'));
+    // ノートは消したページに書かない（スマホで消す前の画面のまま書いたときなど）
+    if (m.source === 'note' && m.pages && Number(annotation?.page) > m.pages)
+      bad('そのページはもうありません（開き直してください）');
     const row = repo.saveAnnotation(annoKey(m), aid, normalizeAnnotation(annotation));
+    if (e?.sender) notifyOthers(e.sender, 'annotations.changed', {materialId: m.id, all: true});
     return {annotation: annotationToClient(row)};
   });
 
@@ -103,9 +108,10 @@ export function register({handle, repo, log, getWindow}) {
     return {annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient)};
   });
 
-  handle('annotation.remove', ({materialId, annotationId}) => {
+  handle('annotation.remove', ({materialId, annotationId}, e) => {
     const m = pdfMaterial(materialId);
     repo.removeAnnotation(annoKey(m), id(annotationId) ?? bad('注釈が不正です'));
+    if (e?.sender) notifyOthers(e.sender, 'annotations.changed', {materialId: m.id, all: true});
     return {ok: true};
   });
 
