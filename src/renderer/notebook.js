@@ -37,3 +37,14 @@ export async function openNotebook(courseId, roundId, {from = null} = {}) {
   }
   navigate(`/viewer/${r.materialId}`);
 }
+
+/**
+ * 回のノートを横に並べる窓で開く（なければ作る）。元の窓は画面の左半分、ノートは右半分になり、両方に同時に書ける
+ */
+export async function openNotebookSide(courseId, roundId) {
+  const r = await api['note.open']({courseId, roundId, design: noteDesign()});
+  if (r?.error) return toast(r.error, {error: true});
+  if (r.created) await reload();
+  const w = await api['window.openSide']({materialId: r.materialId});
+  if (w?.error) toast(w.error, {error: true});
+}

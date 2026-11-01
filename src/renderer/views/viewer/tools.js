@@ -358,6 +358,7 @@ export const methods = {
       else if (t.dataset.v === 'back') this.onBack();
       else if (t.dataset.v === 'note-back' && t.dataset.id) navigate(`/viewer/${t.dataset.id}`);
       else if (t.dataset.v === 'notebook') this.openRoundNote();
+      else if (t.dataset.v === 'note-side') this.openRoundNoteSide();
       else if (t.dataset.v === 'spread') this.toggleSpread();
       else if (t.dataset.v === 'photo') this.photoInput?.click();
       else if (t.dataset.v === 'bookmarks') this.openBookmarks(this.$('bookmark-panel').hidden);

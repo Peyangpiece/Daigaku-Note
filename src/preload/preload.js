@@ -44,6 +44,7 @@ const INVOKE = [
   'pdf.textStyle',
   'note.open',
   'note.addPage',
+  'window.openSide',
   'photo.add',
   'photo.data',
   'annotation.save',
