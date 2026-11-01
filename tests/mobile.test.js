@@ -155,7 +155,8 @@ function apiWith(rows = {}) {
     ['annotation.remove', async (arg) => (calls.push(['remove', arg]), {ok: true})],
     ['material.uploadData', async (arg) => (calls.push(['upload', arg]), {added: arg.files.length})],
     ['quiz.answer', async (arg) => (calls.push(['answer', arg]), {ok: true})],
-    ['sticker.data', async (arg) => (calls.push(['sticker', arg]), {data: {}})]
+    ['sticker.data', async (arg) => (calls.push(['sticker', arg]), {data: {}})],
+    ['note.addPage', async (arg) => (calls.push(['addPage', arg]), {pages: 2, bytes: new Uint8Array([1])})]
   ]);
   const repo = {
     ...fakeRepo(),
@@ -187,6 +188,16 @@ test('窓口：スマホで書けるのはコメント・マーカー・文字�
   assert.deepEqual(repo.getSetting('pdf.stale', []), [M]);
   assert.deepEqual(sent, [['annotations.changed', {materialId: M}]]);
   await assert.rejects(api['annotation.save']({materialId: 'x', annotation: {kind: 'note'}}), /ID が不正/);
+});
+
+test('窓口：ノートにページを足したら、パソコンの画面に足したページを渡す', async () => {
+  const {api, calls, sent} = apiWith();
+  const M = '01JABCDEFGHJKMNPQRSTVWXYZ1';
+  const r = await api['note.addPage']({materialId: M});
+  assert.equal(r.pages, 2);
+  assert.deepEqual(calls, [['addPage', {materialId: M}]]);
+  assert.deepEqual(sent.at(-1), ['note.pages', {materialId: M, pages: 2, bytes: new Uint8Array([1])}]);
+  await assert.rejects(api['note.addPage']({materialId: 'x'}), /ID が不正/);
 });
 
 test('窓口：復習の答えはいつも review として記録する', async () => {

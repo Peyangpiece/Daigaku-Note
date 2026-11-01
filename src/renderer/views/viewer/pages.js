@@ -17,21 +17,24 @@ export const methods = {
     return Math.min(2, Math.max(0.5, Math.floor((avail / (first.width * n + tab)) * 100) / 100));
   },
 
+  /** 1 ページの大きさを今の拡大率に合わせる（描き直しは見えているときだけ。ノートに足したページにも使う） */
+  sizePage(p) {
+    p.viewport = p.page.getViewport({scale: this.zoom * CSS_UNITS});
+    p.el.style.width = `${Math.floor(p.viewport.width)}px`;
+    p.el.style.height = `${Math.floor(p.viewport.height)}px`;
+    p.el.style.setProperty('--scale-factor', String(p.viewport.scale)); // pdf.js の文字の層が字の大きさに使う
+    p.el.style.setProperty('--total-scale-factor', String(p.viewport.scale));
+    p.ink.setAttribute('transform', `matrix(${p.viewport.transform.join(',')})`);
+    p.rendered = false;
+    if (p.visible) this.renderPage(p);
+  },
+
   layout(keepAnchor = true) {
     // 拡大率を変えても見ていた場所を保つ
     const anchor = keepAnchor ? this.pages.find((p) => p.el.getBoundingClientRect().bottom > 0) : null;
     const before = anchor?.el.getBoundingClientRect();
     const frac = before && before.height ? -before.top / before.height : 0;
-    for (const p of this.pages) {
-      p.viewport = p.page.getViewport({scale: this.zoom * CSS_UNITS});
-      p.el.style.width = `${Math.floor(p.viewport.width)}px`;
-      p.el.style.height = `${Math.floor(p.viewport.height)}px`;
-      p.el.style.setProperty('--scale-factor', String(p.viewport.scale)); // pdf.js の文字の層が字の大きさに使う
-      p.el.style.setProperty('--total-scale-factor', String(p.viewport.scale));
-      p.ink.setAttribute('transform', `matrix(${p.viewport.transform.join(',')})`);
-      p.rendered = false;
-      if (p.visible) this.renderPage(p);
-    }
+    for (const p of this.pages) this.sizePage(p);
     this.sizeAddPage?.();
     for (const a of this.annos.values()) this.place(a);
     if (this.sheet) this.syncCovers();
@@ -187,6 +190,7 @@ export const methods = {
   onIntersect(entries) {
     for (const e of entries) {
       const p = this.pages[Number(e.target.dataset.page) - 1];
+      if (!p) continue; // 消したページ（ノートの最後のページ）
       p.visible = e.isIntersecting;
       if (p.visible && !p.rendered) this.renderPage(p);
       else if (!p.visible && p.rendered) {

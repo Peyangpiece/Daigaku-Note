@@ -8,7 +8,7 @@ import {hash32} from '../../shared/hash.js';
 import {orderRounds} from '../../shared/rounds.js';
 import {addDays} from '../../shared/holidays.js';
 import {canRename, state} from '../store.js';
-import {extOf, fileArt, kindOf} from './file-art.js';
+import {extOf, fileArt, kindOf, noteArt} from './file-art.js';
 import {bookmarkLook, fixedSticker, skinOf, stickerLayer} from '../skin.js';
 import {roundColorIndex} from '../../shared/skin.js';
 import {features} from '../../shared/profile.js';
@@ -41,7 +41,7 @@ export function fileCard(m, course) {
   const drag = ok && !m.copyOf;
   return `<div class="file${ok ? '' : ' file--missing'}"${drag ? ` draggable="true" data-drag-material="${esc(m.id)}"` : ''} data-material="${esc(m.id)}"${m.copyOf ? ' data-copy="1"' : ''}>
     <button class="file__open" data-action="${action}" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}${m.bookmarks ? `（付箋 ${m.bookmarks}）` : ''}${m.copyOf ? `（「${esc(m.copyOf)}」と同じ中身。書き込みも同じものが出ます）` : ''}">
-      <span class="file__art">${fileArt(m.name, {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}${fixedSticker(
+      <span class="file__art">${m.source === 'note' ? noteArt() : fileArt(m.name, {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}${fixedSticker(
         sk.stickers.find((st) => st.place === 'file' && st.kind === kind),
         state.data,
         {x: 0.12, y: 0.16, base: 30}
@@ -50,7 +50,7 @@ export function fileCard(m, course) {
       <span class="file__name">${fileName(m.name)}</span>
       ${m.source === 'notice' ? '<span class="file__tag">お知らせ</span>' : ''}
       ${m.source === 'upload' ? '<span class="file__tag">自分で追加</span>' : ''}
-      ${m.source === 'note' ? '<span class="file__tag file__tag--note">ノート</span>' : ''}
+
       ${m.source === 'export' ? '<span class="file__tag">書き出し</span>' : ''}
       ${m.copyOf ? '<span class="file__tag">同じ中身の写し</span>' : ''}
       ${ok ? '' : '<span class="file__tag">見つかりません</span>'}
@@ -172,12 +172,12 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
 }
 
 /**
- * 回のノート（SPEC §8.6）：A4 縦の白紙のノート（PDF）。なければ「＋ ノート」で作り、あれば開く。
- * 紙と罫線は今のテンプレートのノートの見た目。開くと PDF の編集画面で、PDF と同じように書き込める
+ * 回のノート（SPEC §8.6）：A4 縦の白紙のノート（PDF）。まだなければ「＋ ノート」（押すと紙を選んで作る）。
+ * 作ったあとは、付箋の資料の並びに青い表紙のノートとして出る（押すと開く）
  */
 function notebookLine(round, list, course) {
-  const note = list.find((m) => m.source === 'note' && m.status === 'ok');
-  return `<div class="round-notebook"><button type="button" class="btn btn--small${note ? '' : ' btn--quiet'}" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="${note ? 'この回のノートを開く（PDF と同じように書き込めます）' : 'この回のノートを作る（A4 縦。紙と罫線は今のテンプレートのもの）'}">${note ? '📓 ノートを開く' : '＋ ノート'}</button></div>`;
+  if (list.some((m) => m.source === 'note' && m.status === 'ok')) return '';
+  return `<div class="round-notebook"><button type="button" class="btn btn--small btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="この回のノートを作る（A4 縦。白い紙に青い罫線。横罫・方眼と行の間を選べます）" aria-haspopup="menu">＋ ノート</button></div>`;
 }
 
 function roundNote(round, list, course, today, quizzes = {}) {

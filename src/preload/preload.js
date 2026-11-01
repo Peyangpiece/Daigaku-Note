@@ -44,6 +44,7 @@ const INVOKE = [
   'pdf.textStyle',
   'note.open',
   'note.addPage',
+  'note.removePage',
   'window.openSide',
   'photo.add',
   'photo.data',
@@ -95,7 +96,8 @@ const ON = [
   'login.required',
   'route',
   'zoom',
-  'annotations.changed'
+  'annotations.changed',
+  'note.pages'
 ];
 
 const api = {};

@@ -18,6 +18,10 @@
   box-shadow: var(--card-shadow);
   font-size: var(--fs-small);
 }
+/* ボタンは字の幅より縮めない（縮むと隣と重なる。狭い窓では下の @media で記号だけにする） */
+.viewer-bar > button:not(.viewer-bar__held) {
+  flex-shrink: 0;
+}
 :is(.viewer-bar, .viewer-sub) button:not(.btn) {
   min-width: 32px;
   height: 32px;
@@ -228,6 +232,49 @@
 .viewer-pages.is-spread > .viewer-addpage {
   grid-column: 1 / -1;
   justify-self: center;
+}
+/* 見開きの綴じ目：左のページの右の端と、右のページの左の端に薄い影（押しても下に通す） */
+.viewer-pages.is-spread > .pdf-page::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  pointer-events: none;
+}
+.viewer-pages.is-spread > .pdf-page[data-odd]::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.12), transparent);
+}
+.viewer-pages.is-spread > .pdf-page:not([data-odd])::after {
+  left: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.12), transparent);
+}
+.viewer-addpage {
+  gap: var(--space-2);
+}
+/* ノートの「📄 資料」：同じ回の PDF（開く・横に並べる） */
+.viewer-pdfmenu {
+  position: fixed;
+  z-index: 60;
+  max-width: min(460px, calc(100vw - 16px));
+}
+.viewer-pdfmenu__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.viewer-pdfmenu__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 var(--space-2);
+}
+.viewer-pdfmenu__row > button {
+  flex: none;
+  width: auto;
 }
 /* 写真：四角いまま、枠いっぱいに（縦横の比は貼るときと大きさを変えるときに保つ） */
 .anno-stamp__photo {
@@ -1205,14 +1252,16 @@
     font-size: var(--fs-small);
   }
 }
-/* 写真・片開き／見開き・ノート・横に並べる・戻る：窓が狭いとき（横に並べると画面の半分）は記号だけにする */
-@media (max-width: 1100px) {
+/* 写真・片開き／見開き・ノート・資料・横に並べる・戻る：窓が狭いとき（横に並べると画面の半分）は記号だけにする */
+@media (max-width: 1180px) {
   .viewer-bar
     :is(
       button[data-v='photo'],
       button[data-v='spread'],
       button[data-v='notebook'],
       button[data-v='note-side'],
+      button[data-v='note-pdfs'],
+      button[data-v='rotate'],
       button[data-v='back'],
       button[data-v='note-back']
     ) {
@@ -1237,6 +1286,14 @@
     content: '◫';
     font-size: 16px;
   }
+  .viewer-bar button[data-v='note-pdfs']::after {
+    content: '📄';
+    font-size: 15px;
+  }
+  .viewer-bar button[data-v='rotate']::after {
+    content: '↻';
+    font-size: 16px;
+  }
   .viewer-bar button[data-v='back']::after {
     content: '←';
     font-size: 15px;
@@ -1256,7 +1313,7 @@
   }
 }
 /* 横に並べたとき（画面の半分）：すき間と字をさらに詰める */
-@media (max-width: 860px) {
+@media (max-width: 920px) {
   .viewer-bar {
     gap: 3px;
     padding: 8px 10px;
@@ -1268,7 +1325,7 @@
   .viewer-bar .btn--small {
     padding: 2px 8px;
   }
-  .viewer-bar :is(button[data-v='notebook'], button[data-v='note-side']) {
+  .viewer-bar :is(button[data-v='notebook'], button[data-v='note-side'], button[data-v='note-pdfs']) {
     padding: 2px 6px;
   }
   .viewer-bar button[data-v='find'] {
@@ -1370,4 +1427,11 @@
 /* PDF の編集画面の平らな 2D の文房具（model3d.js の flatFor）：光がないので、下の影（楕円）も出さない */
 svg[data-flat] > ellipse {
   display: none;
+}
+/* もっと狭いとき（小さな画面で横に並べたとき）：ボタンの左右の余白を詰める */
+@media (max-width: 760px) {
+  :is(.viewer-bar, .viewer-sub) button:not(.btn) {
+    min-width: 28px;
+    padding: 0 5px;
+  }
 }

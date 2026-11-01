@@ -118,6 +118,7 @@ export function renderFolder({data}, course) {
     <div class="course-actions">
       <button class="btn btn--primary" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
       <button class="btn" data-action="folder-reveal" data-course-id="${esc(course.id)}">フォルダを開く</button>
+      ${round && !list.some((m) => m.source === 'note' && m.status === 'ok') ? `<button type="button" class="btn btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" aria-haspopup="menu" title="このフォルダのノートを作る（A4 縦。白い紙に青い罫線。横罫・方眼と行の間を選べます）">＋ ノート</button>` : ''}
       <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（読み直す・置き場所・ホームから外す）" title="ほかの操作">⋯</button>
     </div>
     <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です（開くたびに読み直します）。ファイルを消すときは、パソコンのフォルダで消してください。</p>

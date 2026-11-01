@@ -124,6 +124,13 @@ export function createMobileApi({handlers, repo, getWindow = () => null, now = (
     async 'quiz.answer'({questionId, answer, seconds}) {
       return call('quiz.answer', {questionId: okId(questionId), answer, seconds, mode: 'review'});
     },
+    /** ノートの最後にページを 1 枚足す（ノートだけ。パソコンで開いている画面にも足したページを出す） */
+    async 'note.addPage'({materialId}) {
+      const r = await call('note.addPage', {materialId: okId(materialId)});
+      changed(materialId); // ファイルへの描き込み直しは、次にパソコンで開いたとき
+      getWindow()?.webContents.send('note.pages', {materialId, pages: r.pages, bytes: r.bytes});
+      return r;
+    },
     /** 取り込んだシールの画像（PDF に貼ったもの） */
     async 'sticker.data'({ids}) {
       return call('sticker.data', {ids: Array.isArray(ids) ? ids.slice(0, 200) : []});

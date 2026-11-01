@@ -333,6 +333,12 @@ a {
 }
 /* 書く道具のとき：1 本指はなぞる（ページは動かない）。2 本指の拡大は pinch-zoom の分かるブラウザだけ（分からなければ none のまま）。
    メモ・消すは押すだけなのでページも動かせる */
+.m-addpage {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 4px 0 8px;
+}
 .m-pages:is([data-tool='line'], [data-tool='mask']) .m-page {
   touch-action: none;
   touch-action: pinch-zoom;

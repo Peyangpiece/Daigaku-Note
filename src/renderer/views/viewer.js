@@ -91,13 +91,11 @@ import {
 /** pdf.js が要る補助データ（CMap など）をメインから受け取る。file:// を直接読まない */
 
 class Viewer extends DeskTools {
-  constructor(root, {materialId, course, onBack, onReload = null, after = null}) {
+  constructor(root, {materialId, course, onBack}) {
     super(root);
     this.materialId = materialId;
     this.course = course;
     this.onBack = onBack;
-    this.onReload = onReload; // 開き直す（ノートにページを足したとき。viewer/notebook.js）
-    this.after = after; // 開き直したあとにすること：{scrollEnd}
     this.tool = 'select';
     this.zoom = 1;
     this.pages = [];
@@ -162,6 +160,57 @@ class Viewer extends DeskTools {
     return true;
   }
 
+  /** PDF のバイト列を pdf.js で読む（読み込みの task を返す） */
+  loadDoc(bytes) {
+    return pdfjs.getDocument({
+      data: bytes,
+      BinaryDataFactory: IpcBinaryDataFactory,
+      useWorkerFetch: false,
+      cMapUrl: 'cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'standard_fonts/',
+      wasmUrl: 'wasm/',
+      isEvalSupported: false,
+      enableXfa: false
+    });
+  }
+
+  /** i ページ目（pdf.js の page）の要素を作り、ページの並びの最後に足す（ノートの「＋ ページを追加」でも使う） */
+  makePage(i, page) {
+    const el = document.createElement('div');
+    el.className = 'pdf-page';
+    el.dataset.page = String(i);
+    if (i % 2) el.dataset.odd = '1'; // 見開きの左のページ（綴じ目の影を右に）
+    // 絵（canvas）の上に、見えない文字の層（pdf.js の TextLayer。選択・コピー・読み上げ）、その上に注釈の層
+    el.innerHTML = `<canvas class="pdf-page__canvas" role="presentation"></canvas><div class="pdf-page__text"></div><div class="pdf-page__layer"><svg class="pdf-page__ink" aria-hidden="true"><g></g></svg></div><span class="pdf-page__num muted"></span>`;
+    if (this.addPageBox && this.addPageBox.isConnected) this.pagesEl.insertBefore(el, this.addPageBox);
+    else this.pagesEl.append(el);
+    const p = {
+      num: i,
+      page,
+      el,
+      canvas: el.querySelector('canvas'),
+      text: el.querySelector('.pdf-page__text'),
+      textContent: null, // 文字の層のもと（1 回だけ読む）
+      layer: el.querySelector('.pdf-page__layer'),
+      ink: el.querySelector('.pdf-page__ink g'), // ペンの線（PDF の座標のまま描き、拡大は g の変換で合わせる）
+      viewport: null,
+      rendered: false,
+      visible: false
+    };
+    this.pages.push(p);
+    this.numberPages();
+    return p;
+  }
+
+  /** ページの下の「n / 全部」とツールバーのページ数を、今のページ数に合わせる */
+  numberPages() {
+    const n = this.pages.length;
+    for (const p of this.pages) p.el.querySelector('.pdf-page__num').textContent = `${p.num} / ${n}`;
+    this.$('page').max = String(n);
+    this.$('page-count').textContent = `/ ${n}`;
+  }
+
   async start() {
     // PDF の編集画面の文房具は、光のない平らな 2D の絵で描く（3D と同じ形・色。プレミアムの品だけ 3D のまま。model3d.js）
     this.root.dataset.flatArt = '1';
@@ -191,9 +240,11 @@ class Viewer extends DeskTools {
     if (this.destroyed) return;
     if (r?.error) return this.fail(r.error);
     this.setupNotebook(r.material);
-    this.$('name').textContent = r.material.name;
-    this.$('name').title = r.material.name;
-    this.$('title').textContent = `PDF：${r.material.name}`;
+    // ノートは「授業　第n回　題　日付　ノート」と出す（ファイルの名前は題に残す）
+    const shown = this.noteName() ?? r.material.name;
+    this.$('name').textContent = shown;
+    this.$('name').title = shown === r.material.name ? shown : `${shown}（${r.material.name}）`;
+    this.$('title').textContent = `${this.isNote ? 'ノート' : 'PDF'}：${shown}`;
     // 文字入れの書式：この PDF で最後に使ったもの（なければ同じ授業で最後に使ったもの）を引き継ぐ
     if (r.textStyle && typeof r.textStyle === 'object')
       this.textStyle = {
@@ -202,19 +253,9 @@ class Viewer extends DeskTools {
         color: /^#[0-9a-f]{6}$/i.test(r.textStyle.color ?? '') ? r.textStyle.color.toLowerCase() : this.textStyle.color,
         align: cleanAlign(r.textStyle.align) ?? 'left'
       };
-    document.title = `${r.material.name} — 大学ノート`;
+    document.title = `${shown} — 大学ノート`;
     try {
-      this.task = pdfjs.getDocument({
-        data: r.bytes,
-        BinaryDataFactory: IpcBinaryDataFactory,
-        useWorkerFetch: false,
-        cMapUrl: 'cmaps/',
-        cMapPacked: true,
-        standardFontDataUrl: 'standard_fonts/',
-        wasmUrl: 'wasm/',
-        isEvalSupported: false,
-        enableXfa: false
-      });
+      this.task = this.loadDoc(r.bytes);
       this.doc = await this.task.promise;
     } catch (e) {
       return this.fail(
@@ -228,25 +269,7 @@ class Viewer extends DeskTools {
     for (let i = 1; i <= this.doc.numPages; i++) {
       const page = await this.doc.getPage(i);
       if (this.destroyed) return;
-      const el = document.createElement('div');
-      el.className = 'pdf-page';
-      el.dataset.page = String(i);
-      // 絵（canvas）の上に、見えない文字の層（pdf.js の TextLayer。選択・コピー・読み上げ）、その上に注釈の層
-      el.innerHTML = `<canvas class="pdf-page__canvas" role="presentation"></canvas><div class="pdf-page__text"></div><div class="pdf-page__layer"><svg class="pdf-page__ink" aria-hidden="true"><g></g></svg></div><span class="pdf-page__num muted">${i} / ${this.doc.numPages}</span>`;
-      this.pagesEl.append(el);
-      this.pages.push({
-        num: i,
-        page,
-        el,
-        canvas: el.querySelector('canvas'),
-        text: el.querySelector('.pdf-page__text'),
-        textContent: null, // 文字の層のもと（1 回だけ読む）
-        layer: el.querySelector('.pdf-page__layer'),
-        ink: el.querySelector('.pdf-page__ink g'), // ペンの線（PDF の座標のまま描き、拡大は g の変換で合わせる）
-        viewport: null,
-        rendered: false,
-        visible: false
-      });
+      this.makePage(i, page);
     }
     this.observer = new IntersectionObserver((entries) => this.onIntersect(entries), {rootMargin: '1200px 0px'});
     this.zoom = this.fitZoom();
@@ -256,13 +279,13 @@ class Viewer extends DeskTools {
     for (const a of r.annotations)
       if (a.page >= 1 && a.page <= this.pages.length) this.addAnno({...a, key: `k${this.seq++}`});
     this.mountAddPage();
-    // ページを足して開き直したとき：足したページ（最後）を見せる
-    if (this.after?.scrollEnd) this.pages.at(-1)?.el.scrollIntoView({block: 'center'});
     this.renderBookmarks();
     // 前の版のしおりは付箋に移す（v0.12.2）
     const old = (r.bookmarks ?? []).filter((b) => b.page >= 1 && b.page <= this.pages.length);
     if (old.length) this.migrateBookmarks(old).catch(() => {});
     this.updateBar();
+    this.startNote(); // ノートは最初のペンを持って開く・初めてなら使い方を知らせる
+    this.bindNotePages();
     // スマホ連携（docs/MOBILE.md §6）：スマホで書き込んだら、この画面にも出す。まだファイルに描き込んでいなければ上書き保存する
     this.offPhone = api.on('annotations.changed', ({materialId}) => {
       if (materialId === this.materialId && !this.destroyed) this.syncFromPhone().catch(() => {});
@@ -320,6 +343,8 @@ class Viewer extends DeskTools {
     cancelAnimationFrame(this.inkFrame);
     for (const p of this.pages) p.renderTask?.cancel();
     this.task?.destroy();
+    for (const t of this.noteTasks ?? []) t.destroy(); // ノートに足したページの PDF
+    this.closePdfMenu();
     document.title = '大学ノート';
   }
 }
