@@ -25,6 +25,7 @@ import {
   typeLabel,
   cartPoints,
   cartTotal,
+  CASE_INFO,
   caseArt,
   itemOf,
   listed,
@@ -78,6 +79,7 @@ function spec(item) {
   if (item.refills)
     return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格`;
   if (item.experimental) return `${esc(item.maker)}・${item.mm} mm`;
+  if (item.type === 'case') return CASE_INFO[item.style]?.short ?? '';
   if (item.pencil) return `芯 ${item.mm} mm・${item.lead}`;
   if (item.type === 'pen') return item.even ? `${item.mm} mm・筆圧なし（太さが一定）` : `${item.mm} mm`;
   if (item.type === 'marker') return item.thick ? '太め' : 'ふつう';
@@ -246,6 +248,7 @@ function seriesCard(series, s) {
   const sub = [it.maker ?? '大学ノート'];
   if (series.items.length > 1) sub.push(it.name);
   else if (it.refills) sub.push(`2&1・替え芯 ${it.refill} 規格`);
+  else if (it.type === 'case') sub.push(CASE_INFO[it.style]?.short ?? '');
   else if (it.pencil) sub.push(`芯 ${it.mm} mm・${it.lead}`);
   else if (it.type === 'pen') sub.push(it.even ? `${it.mm} mm・筆圧なし` : `${it.mm} mm`);
   else if (it.type === 'marker') sub.push(it.thick ? '太め' : 'ふつう');
@@ -410,6 +413,10 @@ function detail(s, id) {
       ]);
   } else if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
   else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
+  else if (it.type === 'case' && CASE_INFO[it.style]) {
+    const c = CASE_INFO[it.style];
+    rows.push(['素材', c.material], ['つくり', c.build], ['大きさ', `${c.size}（長さ × 幅 × 高さ）`]);
+  }
   if (it.art === 'model') rows.push(['見た目', '3D モデル（実物の形と材質）']);
   const samples = it.refills
     ? `<ul class="fb-refills">${it.refills
