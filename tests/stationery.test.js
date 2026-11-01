@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CASE_INFO,
   CATALOG,
   EXTRA_MODELS,
   eraserArt,
@@ -229,6 +230,19 @@ test('消しゴム・ポーチの道具の絵：3D モデルの画像を入れ�
   assert.match(art, /data-model="eraser"/);
   assert.match(art, /<image data-model-img/);
   assert.match(art, /data-model-flat/);
+});
+
+test('ペンケース：帆布の筆箱の色ちがいは 1 枚の札（シリーズ）。どの形にも素材・つくり・大きさの説明がある', () => {
+  const se = shopSeries().find((x) => x.id === 'case-pouch');
+  assert.equal(se.name, '帆布の筆箱');
+  assert.deepEqual(
+    se.items.map((it) => it.id),
+    ['case-canvas-navy', 'case-pastel-pink', 'case-sage']
+  );
+  for (const it of CATALOG.filter((x) => x.type === 'case')) {
+    const c = CASE_INFO[it.style];
+    assert.ok(c?.short && c.material && c.build && /mm/.test(c.size), it.id);
+  }
 });
 
 test('ペンケースは 3D モデル（形の種類ごとの GLB。色は base・trim で塗る）。描けないときはペンケースの絵', async () => {

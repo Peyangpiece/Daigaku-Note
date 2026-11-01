@@ -103,8 +103,9 @@ const hider = (id, name, color) => ({
   art: 'model',
   model: 'hider'
 });
-// ペンケースも 3D モデル（形の種類ごとの GLB：case-pouch・case-tin・case-leather・case-clear。色は base・trim で塗る）
-const pencase = (id, name, style, base, trim) => ({
+// ペンケースも 3D モデル（形の種類ごとの GLB：case-pouch・case-tin・case-leather・case-clear。色は base・trim で塗る）。
+// 同じ形の色ちがい（帆布の筆箱）は series でまとめ、ショップでは 1 枚の札にする
+const pencase = (id, name, style, base, trim, series = undefined) => ({
   id,
   type: 'case',
   name,
@@ -113,8 +114,39 @@ const pencase = (id, name, style, base, trim) => ({
   trim,
   price: 0,
   art: 'model',
-  model: `case-${style}`
+  model: `case-${style}`,
+  ...(series ? {series} : {})
 });
+/**
+ * ペンケースの説明（形の種類ごと。寸法は scripts/pens3d/build.py の 3D モデルの寸法。長さ × 幅 × 高さ）。
+ * short はショップの札の一言
+ */
+export const CASE_INFO = {
+  pouch: {
+    short: '帆布・ファスナー',
+    material: '帆布（太い綿糸の平織り）',
+    build: '舟形の袋。コイルのファスナー・両端の縁取り・輪のタブ・正面の織りネーム',
+    size: '約 200 × 72 × 62 mm'
+  },
+  tin: {
+    short: '金属の缶・かぶせぶた',
+    material: '金属（塗装した缶）',
+    build: '角の丸い浅い箱とかぶせぶた。後ろに蝶番、ふたに「大学ノート」の印刷',
+    size: '約 197 × 65 × 26 mm'
+  },
+  leather: {
+    short: 'シボ革・真ちゅうのファスナー',
+    material: '革（自然なシボ）',
+    build: 'ふっくらした箱形。真ちゅうのファスナー・両側の生成りのステッチ・革の引き手・型押しの「大学ノート」',
+    size: '約 195 × 60 × 50 mm'
+  },
+  clear: {
+    short: '透明・中が見える',
+    material: '透明の樹脂',
+    build: '平たいポーチ。色の付いた樹脂のファスナー。中のペンが外から見える',
+    size: '約 205 × 34 × 84 mm'
+  }
+};
 /** 既製品の見た目のペン（実験）。art で絵を分ける。ゲルインク（サラサ）は少し太く濃い線。price はその品の定価（税込） */
 const maker = (id, name, makerName, art, color, body, accent, price, series) => ({
   id,
@@ -197,11 +229,11 @@ export const CATALOG = [
   pencil('pencil-navy-05', 'シャープペンシル 0.5（紺）', '0.5', '#24365c', '#55575c'),
   pencil('pencil-black-03', 'シャープペンシル 0.3', '0.3', '#2c2d30', '#7d1a1e'),
   pencil('pencil-black-07', 'シャープペンシル 0.7', '0.7', '#2c2d30', '#183a7f'),
-  pencase('case-canvas-navy', '帆布の筆箱（紺）', 'pouch', '#2e3f66', '#d9d2c3'),
+  pencase('case-canvas-navy', '帆布の筆箱（紺）', 'pouch', '#2e3f66', '#d9d2c3', 'case-pouch'),
   pencase('case-tin-silver', '缶ペンケース（銀）', 'tin', '#c9ced6', '#8a929e'),
   pencase('case-leather-brown', '革のペンケース（茶）', 'leather', '#8a5a3b', '#e8c9a0'),
-  pencase('case-pastel-pink', 'パステルの筆箱（桃）', 'pouch', '#f6c9d6', '#ffffff'),
-  pencase('case-sage', 'くすみグリーンの筆箱', 'pouch', '#a9bfa8', '#f3efe4'),
+  pencase('case-pastel-pink', '帆布の筆箱（桃）', 'pouch', '#f6c9d6', '#ffffff', 'case-pouch'),
+  pencase('case-sage', '帆布の筆箱（くすみグリーン）', 'pouch', '#a9bfa8', '#f3efe4', 'case-pouch'),
   pencase('case-clear', 'クリアケース', 'clear', '#e9f3f8', '#9fb7c4'),
   // 既製品の見た目のペン（試作。メーカーの許しを得ていないので、正式な公開の前に見直す。
   // α 版のあいだはショップに出す：MAKER_ITEMS_LISTED）
@@ -518,7 +550,8 @@ const SERIES_INFO = {
   hider: {name: '文字隠しペン'},
   'pencil-05': {name: 'シャープペンシル 0.5'},
   'pencil-03': {name: 'シャープペンシル 0.3'},
-  'pencil-07': {name: 'シャープペンシル 0.7'}
+  'pencil-07': {name: 'シャープペンシル 0.7'},
+  'case-pouch': {name: '帆布の筆箱'}
 };
 /** 品のシリーズの id（series がなければ品の id） */
 export const seriesIdOf = (item) => item.series ?? item.id;
