@@ -1,6 +1,6 @@
 // 授業の回のノート（SPEC §8.6）を開く。なければ作る（A4 縦の白紙の PDF。白い紙に青い罫線。横罫・方眼、行の間 6・7 mm）。
 // 授業ページの回の付箋の「＋ ノート」（紙を選ぶ）と、PDF の編集画面の「ノート」「横に並べる」（前に選んだ紙）から使う
-import {toast} from './ui-kit.js';
+import {confirmDialog, toast} from './ui-kit.js';
 import {navigate, reload, state} from './store.js';
 
 const api = window.daigaku;
@@ -134,4 +134,25 @@ export async function openNotebookSide(courseId, roundId, {paper = undefined} = 
 export async function openSide(materialId) {
   const w = await api['window.openSide']({materialId});
   if (w?.error) toast(w.error, {error: true});
+}
+
+/**
+ * ノートを削除する（確かめてから）。ファイルはパソコンのゴミ箱へ移し、アプリの中の書き込み・付箋・紙の設定は消す。
+ * 書いたものは上書き保存でファイルに描き込まれているので、ゴミ箱から戻せば中身は見られる。戻り：削除したか
+ */
+export async function removeNote(id, name) {
+  const label = String(name ?? 'ノート').replace(/\.pdf$/i, '');
+  const ok = await confirmDialog(
+    `「${label}」を削除しますか？ ファイルはパソコンのゴミ箱へ移します（書いたものはファイルに描き込まれたまま残ります）。アプリの中の書き込み・付箋は元に戻せません。`,
+    {ok: '削除する', danger: true}
+  );
+  if (!ok) return false;
+  const r = await api['material.remove']({materialId: id});
+  if (r?.error) {
+    toast(r.error, {error: true});
+    return false;
+  }
+  toast('ノートを削除しました（ファイルはパソコンのゴミ箱にあります）');
+  await reload();
+  return true;
 }

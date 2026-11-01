@@ -279,3 +279,19 @@ test('貼りもの：図の決め事と書き換えた文字を整えて残す',
     ref: 'fig-cube'
   });
 });
+
+test('ノートを消すときの片付け：その元の PDF の注釈・しおりだけ消す。使っている資料があるかを確かめられる', async () => {
+  const {db} = await openDatabase(':memory:');
+  const repo = new Repo(db);
+  repo.saveAnnotation('note-sha', null, normalizeAnnotation(text()));
+  repo.saveBookmark('note-sha', null, {page: 1, y: 0, name: '付箋'});
+  repo.saveAnnotation('other', null, normalizeAnnotation(text()));
+  repo.removeAnnotationsFor('note-sha');
+  assert.equal(repo.listAnnotations('note-sha').length, 0);
+  assert.equal(repo.listBookmarks('note-sha').length, 0);
+  assert.equal(repo.listAnnotations('other').length, 1, 'ほかの PDF の注釈は残す');
+  assert.equal(repo.shaInUse('nobody'), false);
+  repo.setSetting('note.design.x', {v: 2});
+  repo.removeSetting('note.design.x');
+  assert.equal(repo.getSetting('note.design.x', null), null);
+});

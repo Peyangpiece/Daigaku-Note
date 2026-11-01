@@ -33,7 +33,7 @@ const loadViewer = () =>
   viewerMod ? Promise.resolve(viewerMod) : import('./views/viewer.js').then((m) => (viewerMod = m));
 import {watchModels} from './model3d.js';
 import './swipe.js'; // トラックパッドの 2 本指の横スワイプで戻る・進む
-import {NOTE_PAPERS, notePaper, openNotebook, setNotePaper} from './notebook.js';
+import {NOTE_PAPERS, notePaper, openNotebook, removeNote, setNotePaper} from './notebook.js';
 import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具（筆箱・ポーチ・シール帳・素材）
 
 const api = window.daigaku;
@@ -743,12 +743,14 @@ function openMaterialMenu(id, x, y) {
     ['open', '開く'],
     ['reveal', 'フォルダで表示'],
     ...(moves.length ? [['move', '別の付箋へ移す…']] : []),
-    ...(m.source === 'upload' ? [['trash', 'ゴミ箱へ…']] : [])
+    ...(m.source === 'upload' ? [['trash', 'ゴミ箱へ…']] : []),
+    ...(m.source === 'note' ? [['trash-note', 'ノートを削除…']] : [])
   ];
   openMenu(m.name, items, x, y, (what) => {
     if (what === 'open') fire(pdf ? 'open-pdf' : 'open-material', {id});
     else if (what === 'reveal') fire('reveal-material', {id});
     else if (what === 'trash') fire('remove-material', {id, name: m.name});
+    else if (what === 'trash-note') removeNote(id, m.name).catch((err) => toast(err.message, {error: true}));
     // 移す先は回の数だけあるので、選んでから 2 つ目のメニューで出す（ドラッグでも移せる）
     else if (what === 'move')
       openMenu(`${m.name} を移す先`, moves, x, y, (to) =>

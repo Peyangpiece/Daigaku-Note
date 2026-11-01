@@ -349,6 +349,9 @@ export class Repo {
     const r = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
     return r ? JSON.parse(r.value) : fallback;
   }
+  removeSetting(key) {
+    this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+  }
   setSetting(key, value) {
     this.db
       .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
@@ -607,6 +610,16 @@ export class Repo {
     if (!from || !to || from === to) return;
     this.db.prepare('UPDATE annotation SET sha256 = ? WHERE sha256 = ?').run(to, from);
     this.db.prepare('UPDATE bookmark SET sha256 = ? WHERE sha256 = ?').run(to, from);
+  }
+
+  /** その SHA-256 を中身・元の写しに使っている資料があるか（ノートを消すとき、注釈と元の写しを片付けてよいか） */
+  shaInUse(sha) {
+    return !!this.db.prepare('SELECT 1 FROM material WHERE sha256 = ? OR base_sha256 = ? LIMIT 1').get(sha, sha);
+  }
+  /** その元の PDF の注釈・しおりを全部消す（ノートを消したとき） */
+  removeAnnotationsFor(sha) {
+    this.db.prepare('DELETE FROM annotation WHERE sha256 = ?').run(sha);
+    this.db.prepare('DELETE FROM bookmark WHERE sha256 = ?').run(sha);
   }
 
   // ---- sync ----

@@ -15,6 +15,7 @@ import {
   openNotebook,
   openNotebookSide,
   openSide,
+  removeNote,
   setNotePaper
 } from '../../notebook.js';
 import {esc, toast, isTyping} from '../../ui-kit.js';
@@ -220,6 +221,7 @@ export const methods = {
     const box = document.createElement('div');
     box.className = 'viewer-addpage';
     box.innerHTML =
+      '<button type="button" class="btn btn--small btn--quiet viewer-addpage__delete" data-v="delete-note" title="このノートを削除する（ファイルはパソコンのゴミ箱へ）">ノートを削除…</button>' +
       '<button type="button" class="btn btn--small btn--quiet" data-v="remove-page" title="最後のページを消す（何も書いていない白紙のときだけ。↶ で戻せます）">− 最後のページを消す</button>' +
       '<button type="button" class="btn btn--small" data-v="add-page" title="ノートの最後に白いページを 1 枚足す（下に増えます。↶ で取り消せます）">＋ ページを追加</button>';
     this.pagesEl.append(box);
@@ -228,6 +230,7 @@ export const methods = {
       const v = e.target.closest('[data-v]')?.dataset.v;
       if (v === 'add-page') this.addNotePage();
       else if (v === 'remove-page') this.removeNotePage();
+      else if (v === 'delete-note') this.deleteNote();
     });
     this.sizeAddPage();
   },
@@ -377,6 +380,36 @@ export const methods = {
   async replayNotePage(step, dir) {
     const add = (step.notePage === 'add') === (dir === 'redo');
     return add ? this.addNotePage({record: false}) : this.removeNotePage({record: false});
+  },
+
+  /**
+   * このノートを削除する（確かめてから）。先に書いたものをファイルに描き込んで保存し、削除したら授業の画面へ戻る
+   * （横に並べた窓なら閉じる）。ほかの窓で同じノートを開いていれば、その窓も閉じる（note.removed）
+   */
+  async deleteNote() {
+    if (!this.isNote || this.pageBusy) return;
+    await this.settle();
+    await this.saveFile();
+    this.fileBlocked = true; // 消している間・消したあとに上書き保存しない
+    const ok = await removeNote(this.materialId, this.material?.name);
+    if (!ok) {
+      this.fileBlocked = false;
+      return;
+    }
+    this.fileDirty = false;
+    this.onBack();
+  },
+
+  /** ほかの窓・授業の画面でこのノートが削除されたとき：保存を止めて閉じる */
+  bindNoteRemoved() {
+    const off = api.on?.('note.removed', ({materialId}) => {
+      if (materialId !== this.materialId || this.destroyed) return;
+      this.fileBlocked = true;
+      this.fileDirty = false;
+      toast('このノートは削除されました');
+      this.onBack();
+    });
+    if (off) this.listeners.push(off);
   },
 
   /** 片開き・見開きのボタン：今の状態を絵（▯・▯▯）で出し、押すとどうなるかを題に書く */
