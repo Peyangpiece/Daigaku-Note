@@ -2,13 +2,9 @@
 # build.py の FAMILIES に足して使う（python3 scripts/pens3d/build.py --only jetstream など）。
 # 向きと決まりは build.py と同じ：ペン先が原点、軸は +Z、クリップは −Y（正面 +X に印字）。
 #
-# 寸法は各社・販売店の仕様（2026 年 11 月に確かめた）から。載っていない細部（口金の形・クリップの長さなど）は写真の比率から決めた：
-#   ジェットストリーム（SXN-150-05）：全長 139.6・軸径 11.3（クリップを含む厚さ 14.8）
-#   サラサクリップ 0.5（JJ15）：最大径 11.0・全長 およそ 141（長さの公表値は見つからず、写真の比率から）
-#   カランダッシュ 849：全長 128（収納時）・軸径 9（六角）
-#   パーカー ジョッター：全長 およそ 129・軸径 およそ 9.7
-#   LAMY 2000 ボールペン：全長 140（クリップまで）・最大径 11.9・握るところ 10.0
-#   カヴェコ スペシャル ボールペン：全長 144・径 10（八角・アルミ）
+# 寸法は各社・販売店の仕様（2026 年 11 月に確かめた）から。公表値は下の PUBLISHED にまとめ、書き出すたびに 0.1 mm まで照合する
+# （全長はボールの先から天まで）。公表されていない細部（口金の形・クリップの厚みなど）は写真の比率から決めた推定で、
+# 実測で差し替える（MEASURE.md の表）
 # 材質の名前：品の色で塗るもの（Body・Accent・Grip・Print・Ink。renderer/model3d-three.js の tint）と、
 # 塗らないもの（Chrome・Steel・Makrolon・…）を分ける。透明の部品は ClearBarrel など（アプリが半透明で描く）
 import math
@@ -244,10 +240,10 @@ def jetstream():
     lathe('Barrel', fillet([(0, 41.2), (5.3, 41.2), (5.45, 41.9), (5.5, 46), (R, 80), (R, 112), (5.55, 114.2), (5.2, 115),
                             (0, 115)], 0.4), M['body'])
     # 天冠（クリップの付け根。少し太い）とノック
-    lathe('TopCap', fillet([(0, 114.6), (5.5, 114.6), (5.75, 115.4), (5.75, 128.6), (5.3, 130.2), (0, 130.2)], 0.6),
+    lathe('TopCap', fillet([(0, 114.6), (5.5, 114.6), (5.65, 115.4), (5.65, 128.6), (5.25, 130.2), (0, 130.2)], 0.6),
           M['body'])
     # ノック：なめらかな筒で、天はわずかに丸い
-    lathe('Knock', fillet([(0, 129.8), (3.5, 129.8), (3.55, 130.4), (3.5, 137.6), (3.2, 138.9), (2.2, 139.5), (0, 139.6)],
+    lathe('Knock', fillet([(0, 129.8), (3.5, 129.8), (3.55, 130.4), (3.5, 137.5), (3.2, 138.8), (2.2, 139.4), (0, 139.475)],
                           0.5), M['body'])
     # クリップ：幅 4.8、天冠の上から 44 mm 下りる。先は軸へ触れる玉
     # 樹脂の厚いクリップ（成形品：幅 5.0・厚み 2.2。付け根は天冠に埋まり、表に細い稜線、先は軸へ触れるふくらみ）
@@ -380,16 +376,16 @@ def parker_jotter():
     lathe('Barrel', fillet([(0, 3.8), (1.2, 3.8), (1.35, 4.1), (2.4, 8.0), (3.6, 13.0), (4.45, 18.0), (4.78, 22.0),
                             (4.85, 25.0), (4.85, 84.6), (4.7, 85.0), (0, 85.0)], 0.4), M['ss'])
     # 継ぎ目の輪（つやのある銀）
-    lathe('Ring', fillet([(0, 84.8), (4.75, 84.8), (4.95, 85.0), (4.95, 86.4), (4.75, 86.6), (0, 86.6)], 0.12),
+    lathe('Ring', fillet([(0, 84.8), (4.7, 84.8), (4.85, 85.0), (4.85, 86.4), (4.7, 86.6), (0, 86.6)], 0.12),
           M['chrome'])
     # 上の部品（ステンレス）
     lathe('Upper', fillet([(0, 86.4), (4.75, 86.4), (4.85, 86.8), (4.85, 119.0), (0, 119.0)], 0.3), M['ss'])
     # 天冠（つやのある銀）：クリップの付け根を押さえ、肩で細くなる
-    lathe('TopCap', fillet([(0, 118.6), (4.9, 118.6), (4.98, 119.0), (4.98, 120.0), (4.6, 121.3), (3.75, 122.2),
+    lathe('TopCap', fillet([(0, 118.6), (4.8, 118.6), (4.85, 119.0), (4.85, 120.0), (4.5, 121.3), (3.75, 122.2),
                             (0, 122.2)], 0.35), M['chrome'])
     # ノック：なめらかな銀の筒（根元に細い溝）。天は平らで縁が丸い
     lathe('Knock', fillet([(0, 121.8), (3.25, 121.8), (3.3, 122.4), (3.3, 123.0), (3.12, 123.2), (3.12, 123.4), (3.3, 123.6),
-                           (3.3, 128.0), (3.0, 128.9), (2.0, 129.2), (0, 129.25)], 0.2), M['chrome'], seg=96)
+                           (3.3, 127.7), (3.0, 128.55), (2.0, 128.83), (0, 128.875)], 0.2), M['chrome'], seg=96)
     # 矢のクリップ（1 枚の板）：付け根は幅の広い矢羽根、細い軸、ペン先の向きの矢じり。付け根は天冠の下に入る
     outline = [(87.4, 0.0), (91.6, 1.9), (92.7, 1.55), (92.2, 0.95), (106.6, 0.95), (108.4, 1.85), (120.4, 1.85),
                (120.4, -1.85), (108.4, -1.85), (106.6, -0.95), (92.2, -0.95), (92.7, -1.55), (91.6, -1.9)]
@@ -419,8 +415,8 @@ def parker_jotter():
 # ---- LAMY 2000 ボールペン ----
 def lamy_2000():
     """マクロロン（ガラス繊維入りの樹脂）のヘアラインの黒い軸。真ん中がふくらむ葉巻の形（最大 11.9・握る所 10.0）。
-    先はヘアラインのステンレスの円すい、天はステンレスの細い筒のノック。クリップはステンレスのむくの幅広の板で先が四角。
-    全長 140（クリップまで）"""
+    先はヘアラインのステンレスの円すい、天はステンレスの細い筒のノック。クリップはステンレスの幅広の板で先が四角。
+    全長 137.4（販売店の表記は 136〜138）"""
     M = metals()
     rough, nrm = hairline_maps('Makrolon', 0.58, amp=0.03, seed=3)
     M['mak'] = material('Makrolon', srgb('#1c1c1d'), roughness=0.58, rough_map=rough, normal_map=nrm,
@@ -488,7 +484,7 @@ def kaweco_special():
 
     zk = [133.4 + i * 0.07 for i in range(109)]
     lathe_fn('Knob', zk, knurl(kb, 0.22, 40, 0.9), M['alu'], seg=480)
-    lathe('Dome', fillet([(0, 140.9), (2.8, 140.9), (2.85, 141.6), (2.5, 143.2), (1.5, 143.85), (0, 144.0)], 0.35),
+    lathe('Dome', fillet([(0, 140.9), (2.8, 140.9), (2.85, 141.6), (2.5, 143.1), (1.5, 143.73), (0, 143.875)], 0.35),
           M['alu'], seg=96)
     # 印字（正面の面）：筆記体のロゴと Germany
     face_text('Print_brand', 'KawecoSpecial', FONT_SCRIPT, 3.0, 96.0, ap, 0.0, M['print'], lift=0.05)
@@ -503,3 +499,70 @@ MAKER_FAMILIES = {
     'lamy-2000': lamy_2000,
     'kaweco-special': kaweco_special,
 }
+
+
+# ---- 公表された寸法との照合（書き出すたびに確かめる）----
+# 値は (下限, 上限) mm。出所が 1 つの値は幅なし。公表されていない部位は scripts/pens3d/MEASURE.md の実測の表で決める
+PUBLISHED = {
+    'jetstream': {'length': (139.6, 139.6), 'diameter': (11.3, 11.3)},  # 三菱鉛筆 SXN-150-05 の仕様
+    'sarasa-clip': {'diameter': (11.0, 11.0)},  # ゼブラ JJ15 の仕様（最大径）
+    'caran-849': {'length': (127.0, 130.0)},  # 販売店の表記（127 mm・13 cm）。径の確かな公表値は見つからない
+    'parker-jotter': {'length': (129.0, 129.0), 'diameter': (9.7, 9.7)},  # 販売店の表記
+    'lamy-2000': {'length': (136.0, 138.0), 'diameter': (11.9, 11.9), 'grip': (10.0, 10.0)},  # 販売店の表記
+    'kaweco-special': {'length': (144.0, 144.0), 'flats': (10.0, 10.0)},  # 販売店の表記（八角の辺から辺）
+}
+
+
+GRIP_Z = {'lamy-2000': 24.0}  # 握る所の径を測る高さ（ペン先から）
+
+
+def radius_at(z):
+    """高さ z での軸の半径（クリップと印字を除く。外から軸へ向けて 24 方向から光線を当て、いちばん外の当たり）"""
+    from mathutils.bvhtree import BVHTree
+    dg = bpy.context.evaluated_depsgraph_get()
+    best = 0.0
+    for ob in bpy.context.scene.objects:
+        if ob.type != 'MESH' or ob.name.startswith(('Clip', 'Print', 'Logo', 'Flag')):
+            continue
+        bvh = BVHTree.FromObject(ob, dg)
+        for k in range(24):
+            a = 2 * math.pi * k / 24
+            o = Vector((30 * math.cos(a), 30 * math.sin(a), z))
+            hit = bvh.ray_cast(o, -Vector((math.cos(a), math.sin(a), 0)))[0]
+            if hit is not None:
+                best = max(best, math.hypot(hit.x, hit.y))
+    return best
+
+
+def measure(name):
+    """組み上がったモデルの寸法（mm）：全長（ボールの先から天まで）・最大径（クリップと印字を除く）・握る所の径・八角の辺から辺"""
+    zs, rmax, flats = [], 0.0, []
+    for ob in bpy.context.scene.objects:
+        if ob.type != 'MESH':
+            continue
+        M = ob.matrix_world
+        body = not ob.name.startswith(('Clip', 'Print', 'Logo', 'Flag'))
+        for v in ob.data.vertices:
+            p = M @ v.co
+            zs.append(p.z)
+            if body:
+                r = math.hypot(p.x, p.y)
+                rmax = max(rmax, r)
+                if ob.name == 'Barrel' and abs(p.z - 70.0) < 2.0:
+                    flats.append(r)
+    return {'length': max(zs) - min(zs), 'diameter': 2 * rmax, 'grip': 2 * radius_at(GRIP_Z.get(name, 25.0)),
+            'flats': 2 * min(flats) if flats else None}
+
+
+def check(name, tol=0.1):
+    """公表値と比べる。外れていれば止める（0.1 mm まで）"""
+    got = measure(name)
+    bad = []
+    for key, (lo, hi) in PUBLISHED.get(name, {}).items():
+        v = got[key]
+        ok = v is not None and lo - tol <= v <= hi + tol
+        print(f'  {name} {key}: {v:.2f} mm（公表 {lo}' + (f'〜{hi}' if hi != lo else '') + f'）{"" if ok else " ← 外れ"}')
+        if not ok:
+            bad.append(key)
+    if bad:
+        raise SystemExit(f'{name}: 公表値から外れている：{", ".join(bad)}')
