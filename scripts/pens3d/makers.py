@@ -309,36 +309,68 @@ def sarasa_clip():
 
 
 # ---- カランダッシュ 849 ボールペン ----
-def caran_849():
-    """六角形のアルミ軸（辺から辺まで 9。品の色 Body の塗装）。先は六角のまま細って小さな金属の先へ。
-    天は軸と同じ色の六角のノック（白い四角のロゴ）。クリップは付け根が山形に広い板ばね。全長 128（収納時）"""
+def caran_849(premium=False):
+    """六角形のアルミ軸（辺から辺まで 9。品の色 Body）。先は円すいに削られ、六角の面と円すいの境が
+    鉛筆を削ったときのような波の形になる。天は軸と同じ色の六角のノック（白い四角のロゴ）。クリップは付け根の広い板ばね。
+    全長 128（販売店の表記）。
+    premium（849 プレミアム。ブリュットロゼなど）：軸はヘアラインのアルマイト（金属の色）、クリップとノックの頭は
+    つやのある金属の品の色（Accent）。ふつう（849 クラシック）：つやのある塗装の軸と銀のクリップ"""
     M = metals()
-    M['body'] = material('Body', srgb('#c8102e'), roughness=0.2, coat=0.8, coat_rough=0.04)
+    if premium:
+        rough, nrm = hairline_maps('Caran', 0.34, amp=0.06, seed=11)
+        M['body'] = material('Body', srgb('#e2ab8d'), metallic=0.55, roughness=0.42, rough_map=rough, normal_map=nrm,
+                             normal_strength=0.45)
+        M['clip'] = material('Accent', srgb('#e9a98b'), metallic=1.0, roughness=0.12)
+    else:
+        M['body'] = material('Body', srgb('#c8102e'), roughness=0.2, coat=0.8, coat_rough=0.04)
+        M['clip'] = material('Steel', (0.88, 0.88, 0.88), metallic=1.0, roughness=0.24)
     M['print'] = material('PrintW', (0.96, 0.96, 0.96), roughness=0.4)
-    M['steel'] = material('Steel', (0.88, 0.88, 0.88), metallic=1.0, roughness=0.24)
     tip(M, z_end=2.2, r_end=0.85, ball=0.3)
     lathe('TipCollar', fillet([(0, 2.0), (0.85, 2.0), (1.05, 2.6), (1.15, 3.6), (0, 3.6)], 0.15), M['chrome'], seg=96)
     ap = 4.5
     phase = math.radians(-90)  # 辺の 1 つがクリップ（−Y）を向く
     rf = poly_radius(6, ap, 0.55, phase)
-    # 軸：先の 28 mm は六角のまま細る（細長い円すいの六角）。天の端は少し面取り
-    zf = [3.4, 4.2, 5.5, 7.5, 10.0, 13.0, 16.5, 20.0, 24.0, 28.0, 31.5]
-    kf = [0.25, 0.29, 0.34, 0.42, 0.52, 0.63, 0.75, 0.86, 0.94, 0.99, 1.0]
-    zs = zf + [31.5 + (115.0 - 31.5) * i / 40 for i in range(1, 41)] + [115.5, 115.9, 116.2]
+    # 先：六角の軸を円すい（半径が 1 mm 進むごとに 0.142 mm 太る）で削る。円すいの半径が六角の辺の距離（4.5）を超えると
+    # 面の真ん中から六角が現れ、角の距離（5.2）を超えると全部が六角になる。その間（z 28〜33）、境は面ごとの弧＝波の形
+    k_cone = 0.142
 
-    def k(z):
-        if z <= 31.5:
-            return float(np.interp(z, zf, kf))
-        if z > 115.0:
-            return 1.0 - 0.05 * (z - 115.0) / 1.2
-        return 1.0
+    def cone(z):
+        return 1.2 + (z - 3.4) * k_cone
 
-    lathe_fn('Barrel', zs, lambda z, a: rf(a) * k(z), M['body'], seg=192)
-    # ノック：軸と同じ色の、ひと回り細い六角（角が丸い）。天は面取り
+    def end(z):
+        return 1.0 - 0.05 * (z - 115.0) / 1.2 if z > 115.0 else 1.0
+
+    def r(z, a):
+        return min(rf(a) * end(z), cone(z))
+
+    z_wave0, z_wave1 = 3.4 + (ap - 0.15 - 1.2) / k_cone, 3.4 + (5.25 - 1.2) / k_cone
+    zs = [3.4 + (z_wave0 - 3.4) * i / 24 for i in range(24)]
+    zs += [z_wave0 + (z_wave1 - z_wave0) * i / 100 for i in range(100)]
+    zs += [z_wave1 + (115.0 - z_wave1) * i / 36 for i in range(36)] + [115.0, 115.5, 115.9, 116.2]
+    ob = lathe_fn('Barrel', zs, r, M['body'], seg=384)
+    # 六角の面と円すいの境を角として描く（なめらかにつながないので、波の線がくっきり出る）
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    for f in bm.faces:
+        c = f.calc_center_median()
+        f.tag = cone(c.z) < rf(math.atan2(c.y, c.x)) * end(c.z) - 1e-4
+    for e in bm.edges:
+        if len(e.link_faces) == 2 and e.link_faces[0].tag != e.link_faces[1].tag:
+            e.smooth = False
+    bm.to_mesh(ob.data)
+    bm.free()
+    # ノック：軸と同じ色の、ひと回り細い六角（角が丸い）。プレミアムは天につやのある丸い頭
     rk = poly_radius(6, 3.75, 0.6, phase)
-    zk = [116.0, 116.4, 126.8, 127.5, 127.9, 128.0]
-    kk = [0.93, 1.0, 1.0, 0.94, 0.8, 0.62]
-    lathe_fn('Knock', zk, lambda z, a: rk(a) * float(np.interp(z, zk, kk)), M['body'], seg=192)
+    if premium:
+        zk = [116.0, 116.4, 125.9, 126.3]
+        kk = [0.93, 1.0, 1.0, 0.92]
+        lathe_fn('Knock', zk, lambda z, a: rk(a) * float(np.interp(z, zk, kk)), M['body'], seg=192)
+        lathe('KnockCap', fillet([(0, 126.1), (3.0, 126.1), (3.05, 126.5), (3.05, 127.3), (2.6, 127.8), (0, 127.85)],
+                                 0.3), M['clip'], seg=96)
+    else:
+        zk = [116.0, 116.4, 126.65, 127.35, 127.75, 127.85]
+        kk = [0.93, 1.0, 1.0, 0.94, 0.8, 0.62]
+        lathe_fn('Knock', zk, lambda z, a: rk(a) * float(np.interp(z, zk, kk)), M['body'], seg=192)
     # クリップ：軸の平らな面（−Y）の上に乗る板ばね。付け根は幅の広い四角の頭（幅 5.2）で、肩で細り、細い棒（幅 2.2）が下りる
     outline = [(117.2, -2.6), (117.2, 2.6), (112.0, 2.6), (108.6, 1.1)]
     outline += [(81.8 + 1.1 * math.sin(math.radians(a)), 1.1 * math.cos(math.radians(a))) for a in range(0, -181, -15)]
@@ -347,14 +379,17 @@ def caran_849():
     def inner(z):
         return float(np.interp(z, [80.6, 82.0, 108.0, 116.0, 117.2], [ap + 0.02, ap + 0.06, ap + 0.32, ap + 0.06, ap]))
 
-    bent_plate('Clip', outline, 0.75, M['steel'], inner)
+    bent_plate('Clip', outline, 0.75, M['clip'], inner)
     # 付け根は天の端で内へ折れ、ノックの下に入る
-    sweep('ClipBend', [(0, -3.0, 116.85), (0, -(ap + 0.4), 116.85)], 5.2, 0.7, M['steel'], lambda p: (0, 0, 1),
+    sweep('ClipBend', [(0, -3.0, 116.85), (0, -(ap + 0.4), 116.85)], 5.2, 0.7, M['clip'], lambda p: (0, 0, 1),
           round_r=0.25)
-    # 印字（クリップの隣の面＝正面寄りの面）：社名と SWISS MADE。ノックの同じ向きの面に白い四角のロゴ
+    # 印字（クリップの隣の面＝正面寄りの面）。ノックの同じ向きの面に白い四角のロゴ
     face = math.radians(-30)
-    face_text('Print_brand', "CARAN d'ACHE", FONT_SERIF_B, 2.2, 62.0, ap, face, M['print'], lift=0.05)
-    face_text('Print_swiss', 'SWISS MADE', FONT_SANS, 1.2, 88.0, ap, face, M['print'], lift=0.05)
+    if premium:  # クリップの頭の下に小さく「849 CARAN d'ACHE」
+        face_text('Print_brand', "849  CARAN d'ACHE", FONT_SERIF_B, 1.6, 97.0, ap, face, M['print'], lift=0.05)
+    else:
+        face_text('Print_brand', "CARAN d'ACHE", FONT_SERIF_B, 2.2, 62.0, ap, face, M['print'], lift=0.05)
+        face_text('Print_swiss', 'SWISS MADE', FONT_SANS, 1.2, 88.0, ap, face, M['print'], lift=0.05)
     c, s = math.cos(face), math.sin(face)
     flat_plate('Logo', rounded_rect(119.6, 123.0, -1.7, 1.7, 0.3), 0.06, M['print'], (c * 3.8, s * 3.8, 0), face)
 
@@ -495,6 +530,7 @@ MAKER_FAMILIES = {
     'jetstream': jetstream,
     'sarasa-clip': sarasa_clip,
     'caran-849': caran_849,
+    'caran-849-premium': lambda: caran_849(premium=True),
     'parker-jotter': parker_jotter,
     'lamy-2000': lamy_2000,
     'kaweco-special': kaweco_special,
@@ -506,7 +542,8 @@ MAKER_FAMILIES = {
 PUBLISHED = {
     'jetstream': {'length': (139.6, 139.6), 'diameter': (11.3, 11.3)},  # 三菱鉛筆 SXN-150-05 の仕様
     'sarasa-clip': {'diameter': (11.0, 11.0)},  # ゼブラ JJ15 の仕様（最大径）
-    'caran-849': {'length': (127.0, 130.0)},  # 販売店の表記（127 mm・13 cm）。径の確かな公表値は見つからない
+    'caran-849': {'length': (128.0, 128.0), 'flats': (9.0, 9.0)},  # 販売店の表記（収納時 128 mm・軸径 9 mm）
+    'caran-849-premium': {'length': (128.0, 128.0), 'flats': (9.0, 9.0)},
     'parker-jotter': {'length': (129.0, 129.0), 'diameter': (9.7, 9.7)},  # 販売店の表記
     'lamy-2000': {'length': (136.0, 138.0), 'diameter': (11.9, 11.9), 'grip': (10.0, 10.0)},  # 販売店の表記
     'kaweco-special': {'length': (144.0, 144.0), 'flats': (10.0, 10.0)},  # 販売店の表記（八角の辺から辺）
