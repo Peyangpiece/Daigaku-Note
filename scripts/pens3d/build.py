@@ -1433,6 +1433,8 @@ def tool_timer():
 
 
 
+CHECK = None  # 寸法の照合（__main__ で makers を読んだら入る）
+
 FAMILIES = {
     'pen-ballpoint': lambda: ballpoint(),
     'pen-ballpoint-wood': lambda: ballpoint(wood=True),
@@ -1456,6 +1458,8 @@ FAMILIES = {
 def build(name, out):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     FAMILIES[name]()
+    if CHECK and name in CHECK.PUBLISHED:  # 既製品は公表された寸法と照合する（makers.py）
+        CHECK.check(name)
     # mm → m
     for ob in bpy.context.scene.objects:
         ob.scale = (0.001, 0.001, 0.001)
@@ -1527,6 +1531,7 @@ if __name__ == '__main__':
     import makers  # 既製品のペン（makers.py。build の部品を使うので、ここで読む）
 
     FAMILIES.update(makers.MAKER_FAMILIES)
+    CHECK = makers
     for name in FAMILIES:
         if a.only and name != a.only:
             continue

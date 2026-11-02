@@ -18,7 +18,9 @@ sudo apt install fonts-ipafont-gothic                            # 印字の和�
 sudo apt install fonts-liberation fonts-freefont-ttf              # 既製品の印字の英字（makers.py）
 /tmp/bl/bin/python scripts/pens3d/build.py                       # 公式の品 16 と既製品 6 の GLB をここへ書き出す
 /tmp/bl/bin/python scripts/pens3d/build.py --only pen-ballpoint-wood --preview /tmp/pv   # 1 つだけ・確かめの絵も
-/tmp/bl/bin/python scripts/pens3d/build.py --only lamy-2000                              # 既製品のモデル（makers.py）も同じ
+/tmp/bl/bin/python scripts/pens3d/build.py --only lamy-2000                              # 既製品のモデル（makers.py）も同じ。公表値との照合も出る
 ```
 
 色は GLB に入れず、アプリが材質の名前（Body・Accent・Grip・Print など）で品ごとに塗る（`src/renderer/model3d-three.js` の `tint`。仕様は SPEC §9.8「3D モデルの見た目」）。
+
+既製品のモデルの寸法の出所と、実物を測って合わせる手順は `scripts/pens3d/MEASURE.md`。
