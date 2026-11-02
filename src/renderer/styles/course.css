@@ -202,6 +202,28 @@
 .round-notebook__del {
   margin-left: auto;
 }
+/* 名前のない付箋の題：薄く「タイトルを入力」（押すと名前を入れられる） */
+.round-note__placeholder {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--paper-ink) 38%, transparent);
+  font: inherit;
+  font-weight: 700;
+  cursor: text;
+}
+.round-note__placeholder:hover,
+.round-note__placeholder:focus-visible {
+  color: color-mix(in srgb, var(--paper-ink) 60%, transparent);
+}
+/* 見出しの横の「⋯」（上の段のボタンをまとめたメニュー）は右端へ */
+.page-nav .course-actions__more {
+  margin-left: auto;
+}
+.course-status {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-small);
+}
 .file__tag--note {
   font-weight: 700;
 }

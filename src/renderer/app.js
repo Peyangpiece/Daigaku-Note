@@ -607,7 +607,10 @@ document.addEventListener('click', async (e) => {
         async (key) => {
           setNotePaper(key);
           el.disabled = true;
-          await openNotebook(el.dataset.courseId, el.dataset.roundId, {paper: NOTE_PAPERS.find((p) => p.key === key)});
+          await openNotebook(el.dataset.courseId, el.dataset.roundId, {
+            paper: NOTE_PAPERS.find((p) => p.key === key),
+            sub: el.dataset.sub || ''
+          });
           el.disabled = false;
         }
       );
@@ -1081,6 +1084,7 @@ function openCourseMenu(id, x, y) {
   if (!course) return;
   const items = [];
   if (course.kind === 'folder') {
+    items.push(['reveal', 'フォルダを開く（パソコンのフォルダ）']);
     items.push(['scan', '読み直す（パソコンで足した・消したファイルを反映）']);
     if (features(state.data.settings).terms)
       items.push(
@@ -1090,7 +1094,10 @@ function openCourseMenu(id, x, y) {
     items.push(['delete', 'フォルダを削除…']);
   } else {
     const conn = state.data.connections.find((c) => c.id === course.connection_id);
-    if (conn && conn.kind !== 'manual') items.push(['full', '過去の回も全部確かめる（数分かかります）']);
+    if (conn && conn.kind !== 'manual') {
+      items.push(['sync', 'この授業を同期']);
+      items.push(['full', '過去の回も全部確かめる（数分かかります）']);
+    }
     if (course.lms_url) items.push(['lms', `${conn?.label || 'LMS'} で開く`]);
     const quizzes = state.data.quizzes?.[id] ?? [];
     if (!state.data.quiz?.key?.set && !quizzes.length && features(state.data.settings).quiz)
@@ -1099,6 +1106,8 @@ function openCourseMenu(id, x, y) {
   }
   openMenu(course.name, items, x, y, (what) => {
     if (what === 'scan') fire('folder-scan', {courseId: id});
+    else if (what === 'reveal') fire('folder-reveal', {courseId: id});
+    else if (what === 'sync') fire('sync', {courseId: id});
     else if (what.startsWith('scope:')) fire('folder-scope', {courseId: id, scope: what.slice(6)});
     else if (what === 'full') fire('sync', {courseId: id, full: '1'});
     else if (what === 'lms') fire('open-external', {url: course.lms_url});
