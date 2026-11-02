@@ -132,15 +132,16 @@ def clip_path(z_top, z_bottom, off_root, off_mid, off_end, n=60, bump=0.0):
     return pts
 
 
-def face_text(name, text, font, size, z_start, apothem, face, mat, lift=0.04):
+def face_text(name, text, font, size, z_start, apothem, face, mat, lift=0.04, shift=0.0):
     """多角形の軸の平らな面（中心からの距離 apothem・向き face）に置く印字。
-    円柱に巻くと面の端で字が面の中へ沈むので、巻いたあと面の平面へ移す（弧の長さはそのまま）"""
+    円柱に巻くと面の端で字が面の中へ沈むので、巻いたあと面の平面へ移す（弧の長さはそのまま）。
+    shift は面の上で横（角度の増える向き）へずらす量（mm。2 行の字に使う）"""
     ob = wrapped_text(name, text, font, size, z_start, apothem, face, mat, lift=0.0)
     c, s = math.cos(face), math.sin(face)
     for v in ob.data.vertices:
         x, y = v.co.x, v.co.y
         n, t = x * c + y * s, -x * s + y * c
-        arc = apothem * math.atan2(t, n)
+        arc = apothem * math.atan2(t, n) + shift
         v.co.x = c * (apothem + lift) - s * arc
         v.co.y = s * (apothem + lift) + c * arc
     return ob
@@ -309,54 +310,194 @@ def sarasa_clip():
 
 
 # ---- カランダッシュ 849 ボールペン ----
-def caran_849():
-    """六角形のアルミ軸（辺から辺まで 9。品の色 Body の塗装）。先は六角のまま細って小さな金属の先へ。
-    天は軸と同じ色の六角のノック（白い四角のロゴ）。クリップは付け根が山形に広い板ばね。全長 128（収納時）"""
+def grain_maps(name, rough_base, amp=0.08, seed=13, px=512, tile=6.0):
+    """細かい粒のつや消し（ブラストのアルマイト）。粒は 0.03〜0.05 mm。つなぎ目なく繰り返す（1 枚が tile mm 四方）"""
+    rng = np.random.default_rng(seed)
+    n = rng.normal(size=(px, px))
+    from build import gblur
+    h = gblur(n, 0.9)
+    h /= h.std() + 1e-12
+    rough = np.clip(rough_base + amp * h, 0, 1)
+    return (save_image(f'{name}Rough', rough, 'Non-Color', 'JPEG'),
+            save_image(f'{name}Normal', normal_map(0.0012 * h, tile / px, 1.0), 'Non-Color', 'PNG'))
+
+
+def wrap_uv(ob, tile):
+    """回転体（lathe_fn）に UV を付ける：u は円周の長さ、v は z（どちらも tile mm で 1）。角度のつなぎ目をまたぐ面は直す"""
+    me = ob.data
+    uv = me.uv_layers.new(name='UVMap')
+    for p in me.polygons:
+        us = []
+        for li in p.loop_indices:
+            co = me.vertices[me.loops[li].vertex_index].co
+            a = math.atan2(co.y, co.x) % (2 * math.pi)
+            us.append((li, a, co.z, math.hypot(co.x, co.y)))
+        amax = max(a for _, a, _, _ in us)
+        for li, a, z, r in us:
+            if amax - a > math.pi:
+                a += 2 * math.pi
+            uv.data[li].uv = (a * 4.6 / tile, z / tile)
+
+
+def channel(name, z0, z1, off, width, prof, mat):
+    """クリップの板（断面 prof＝(横, 高さ) の閉じた形）を z0〜z1 に沿って押し出す。off(z) は板の下の面の中心からの距離、
+    width(z) は横の倍率。クリップは −Y の向き"""
+    bm = bmesh.new()
+    n = 90
+    rings = []
+    for i in range(n + 1):
+        z = z0 + (z1 - z0) * i / n
+        o, w = off(z), width(z)
+        rings.append([bm.verts.new((v * w, -(o + h), z)) for v, h in prof])
+    m = len(prof)
+    for i in range(n):
+        for k in range(m):
+            bm.faces.new((rings[i][k], rings[i][(k + 1) % m], rings[i + 1][(k + 1) % m], rings[i + 1][k]))
+    f0 = bm.faces.new(list(reversed(rings[0])))
+    f1 = bm.faces.new(rings[-1])
+    bmesh.ops.triangulate(bm, faces=[f0, f1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    return obj_from_bm(name, bm, mat, smooth=False)
+
+
+def caran_849(premium=False):
+    """カランダッシュ 849。角の丸い六角のアルミ軸（辺から辺まで 9）。先は円すいに削られ、六角の面と円すいの境が
+    鉛筆を削ったときのような波の形になる。天の端は大きく面取りし、丸い金属のノック（周りに CARAN d'ACHE の刻印）。
+    クリップは、軸の半周に巻き付く板（サドル。ペン先側の縁は山形）から U 字に折り返す、山形の屋根の断面の板。
+    印字は「849 CARAN d'ACHE」と枠で囲んだ「SWISS / MADE」。全長 128（販売店の表記）。
+    寸法の比率は、カランダッシュの 3D ビュー（849 プレミアム）の画面から取った（軸の辺から辺 9 mm を物差しにした推定）。
+    premium（ブリュットロゼなど）：軸は細かい粒のつや消しのアルマイト、クリップとノックはつやのある金属の品の色（Accent）。
+    ふつう（クラシック）：つやのある塗装の軸、銀のクリップ"""
     M = metals()
-    M['body'] = material('Body', srgb('#c8102e'), roughness=0.2, coat=0.8, coat_rough=0.04)
+    if premium:
+        rough, nrm = grain_maps('Caran', 0.46, amp=0.1)
+        M['body'] = material('Body', srgb('#d7b4a0'), metallic=0.6, roughness=0.46, rough_map=rough, normal_map=nrm,
+                             normal_strength=0.6)
+        M['clip'] = material('Accent', srgb('#d9a88c'), metallic=0.85, roughness=0.28)
+        M['cap'] = M['clip']
+        M['engrave'] = material('Engrave', srgb('#6e4f40'), metallic=0.8, roughness=0.5)
+    else:
+        M['body'] = material('Body', srgb('#c8102e'), roughness=0.2, coat=0.8, coat_rough=0.04)
+        M['clip'] = material('Steel', (0.88, 0.88, 0.88), metallic=1.0, roughness=0.2)
+        M['cap'] = M['body']
     M['print'] = material('PrintW', (0.96, 0.96, 0.96), roughness=0.4)
-    M['steel'] = material('Steel', (0.88, 0.88, 0.88), metallic=1.0, roughness=0.24)
+    M['pin'] = material('Pin', (0.05, 0.04, 0.04), roughness=0.6)
     tip(M, z_end=2.2, r_end=0.85, ball=0.3)
     lathe('TipCollar', fillet([(0, 2.0), (0.85, 2.0), (1.05, 2.6), (1.15, 3.6), (0, 3.6)], 0.15), M['chrome'], seg=96)
     ap = 4.5
+    E = 124.85  # 軸の天の端（ノックの頭 3.0 mm と合わせて、ボールの先から 128.0）
     phase = math.radians(-90)  # 辺の 1 つがクリップ（−Y）を向く
     rf = poly_radius(6, ap, 0.55, phase)
-    # 軸：先の 28 mm は六角のまま細る（細長い円すいの六角）。天の端は少し面取り
-    zf = [3.4, 4.2, 5.5, 7.5, 10.0, 13.0, 16.5, 20.0, 24.0, 28.0, 31.5]
-    kf = [0.25, 0.29, 0.34, 0.42, 0.52, 0.63, 0.75, 0.86, 0.94, 0.99, 1.0]
-    zs = zf + [31.5 + (115.0 - 31.5) * i / 40 for i in range(1, 41)] + [115.5, 115.9, 116.2]
+    # 先：六角の軸を円すい（1 mm 進むごとに半径が 0.142 mm 太る）で削る。円すいの半径が辺までの距離（4.5）を超えると
+    # 面の真ん中から六角が現れ、角までの距離（5.1）を超えると全部が六角になる。その間、境は面ごとの弧＝波の形
+    k_cone = 0.142
 
-    def k(z):
-        if z <= 31.5:
-            return float(np.interp(z, zf, kf))
-        if z > 115.0:
-            return 1.0 - 0.05 * (z - 115.0) / 1.2
-        return 1.0
+    def cone(z):
+        return 1.2 + (z - 3.4) * k_cone
 
-    lathe_fn('Barrel', zs, lambda z, a: rf(a) * k(z), M['body'], seg=192)
-    # ノック：軸と同じ色の、ひと回り細い六角（角が丸い）。天は面取り
-    rk = poly_radius(6, 3.75, 0.6, phase)
-    zk = [116.0, 116.4, 126.8, 127.5, 127.9, 128.0]
-    kk = [0.93, 1.0, 1.0, 0.94, 0.8, 0.62]
-    lathe_fn('Knock', zk, lambda z, a: rk(a) * float(np.interp(z, zk, kk)), M['body'], seg=192)
-    # クリップ：軸の平らな面（−Y）の上に乗る板ばね。付け根は幅の広い四角の頭（幅 5.2）で、肩で細り、細い棒（幅 2.2）が下りる
-    outline = [(117.2, -2.6), (117.2, 2.6), (112.0, 2.6), (108.6, 1.1)]
-    outline += [(81.8 + 1.1 * math.sin(math.radians(a)), 1.1 * math.cos(math.radians(a))) for a in range(0, -181, -15)]
-    outline += [(108.6, -1.1), (112.0, -2.6)]
+    def end(z):  # 天の端の面取り（1.3 mm で辺の距離が 0.84 倍に）
+        return 1.0 - 0.16 * ((z - (E - 1.3)) / 1.3) ** 1.6 if z > E - 1.3 else 1.0
 
-    def inner(z):
-        return float(np.interp(z, [80.6, 82.0, 108.0, 116.0, 117.2], [ap + 0.02, ap + 0.06, ap + 0.32, ap + 0.06, ap]))
+    def r(z, a):
+        return min(rf(a) * end(z), cone(z))
 
-    bent_plate('Clip', outline, 0.75, M['steel'], inner)
-    # 付け根は天の端で内へ折れ、ノックの下に入る
-    sweep('ClipBend', [(0, -3.0, 116.85), (0, -(ap + 0.4), 116.85)], 5.2, 0.7, M['steel'], lambda p: (0, 0, 1),
-          round_r=0.25)
-    # 印字（クリップの隣の面＝正面寄りの面）：社名と SWISS MADE。ノックの同じ向きの面に白い四角のロゴ
+    z_wave0, z_wave1 = 3.4 + (ap - 0.15 - 1.2) / k_cone, 3.4 + (5.25 - 1.2) / k_cone
+    zs = [3.4 + (z_wave0 - 3.4) * i / 24 for i in range(24)]
+    zs += [z_wave0 + (z_wave1 - z_wave0) * i / 100 for i in range(100)]
+    zs += [z_wave1 + (E - 1.3 - z_wave1) * i / 40 for i in range(40)] + [E - 1.3 + 1.3 * i / 8 for i in range(9)]
+    ob = lathe_fn('Barrel', zs, r, M['body'], seg=384)
+    if premium:
+        wrap_uv(ob, 6.0)
+    # 六角の面と円すいの境を角として描く（なめらかにつながないので、波の線がくっきり出る）
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    for f in bm.faces:
+        c = f.calc_center_median()
+        f.tag = cone(c.z) < rf(math.atan2(c.y, c.x)) * end(c.z) - 1e-4
+    for e in bm.edges:
+        if len(e.link_faces) == 2 and e.link_faces[0].tag != e.link_faces[1].tag:
+            e.smooth = False
+    bm.to_mesh(ob.data)
+    bm.free()
+    # ノック：丸い金属の頭（径 6.9・出ている長さ 3.0。天の縁は丸く、天は平ら）。周りに CARAN d'ACHE の刻印
+    lathe('KnockCap', fillet([(0, E - 0.6), (3.45, E - 0.6), (3.45, E + 2.45), (3.2, E + 3.0), (0, E + 3.0)], 0.45),
+          M['cap'], seg=128)
+    if premium:
+        circ_text('Print_knock', "CARAN d'ACHE", FONT_SERIF_B, 1.9, E + 1.25, 3.45, math.radians(-60), M['engrave'],
+                  lift=0.01)
+    # クリップの付け根（サドル）：クリップの面と両隣の面（軸の半周）に巻き付く厚さ 0.5 の板。
+    # ノック側の縁は E−9.4 でまっすぐ、ペン先側の縁は山形（クリップの面の真ん中で E−14.0、半周の端で E−20.8）。端の角は丸い耳
+    z_hi = E - 9.4
+
+    def z_lo(a):  # a はクリップの向きからの角度（ラジアン、0〜π/2）
+        return E - 14.0 - (20.8 - 14.0) * abs(a) / (math.pi / 2)
+
+    bm = bmesh.new()
+    na, nz, t = 120, 10, 0.5
+    grid = []
+    for i in range(na + 1):
+        a = -math.pi / 2 + math.pi * (i / na - 0.5)  # −π〜0（クリップは −π/2）
+        rel = a + math.pi / 2
+        d_end = min(i, na - i) / na * math.pi * ap  # 端からの弧の長さ（mm）
+        rr = 0.9  # 耳の角の丸み
+        cut = rr - math.sqrt(max(0.0, rr * rr - (rr - d_end) ** 2)) if d_end < rr else 0.0
+        lo, hi = z_lo(rel) + cut, z_hi - cut
+        row = []
+        for j in range(nz + 1):
+            z = lo + (hi - lo) * j / nz
+            base = rf(a) - 0.02
+            row.append((bm.verts.new((base * math.cos(a), base * math.sin(a), z)),
+                        bm.verts.new(((base + t) * math.cos(a), (base + t) * math.sin(a), z))))
+        grid.append(row)
+    for i in range(na):
+        for j in range(nz):
+            bm.faces.new((grid[i][j][1], grid[i + 1][j][1], grid[i + 1][j + 1][1], grid[i][j + 1][1]))
+            bm.faces.new((grid[i][j + 1][0], grid[i + 1][j + 1][0], grid[i + 1][j][0], grid[i][j][0]))
+    for i in range(na):  # ペン先側とノック側の縁
+        for j in (0, nz):
+            q = (grid[i][j][0], grid[i + 1][j][0], grid[i + 1][j][1], grid[i][j][1])
+            bm.faces.new(q if j == 0 else tuple(reversed(q)))
+    for i in (0, na):  # 両端の縁
+        for j in range(nz):
+            q = (grid[i][j][0], grid[i][j][1], grid[i][j + 1][1], grid[i][j + 1][0])
+            bm.faces.new(q if i == 0 else tuple(reversed(q)))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    obj_from_bm('ClipSaddle', bm, M['clip'], smooth=True)
+    # クリップの板：山形の屋根の断面（幅 3.2・高さ 1.0、裏は溝）。U 字の折り返し（E−9.4）から軸から浮いて
+    # ペン先へ伸び（板の下の面は軸の面から 1.4 浮く）、先の 4 mm で細って軸の面へ下りる。先は E−45.5
+    prof = [(-1.6, 0.0), (-1.6, 0.5), (0.0, 1.0), (1.6, 0.5), (1.6, 0.0), (1.32, 0.0), (1.32, 0.38), (0.0, 0.72),
+            (-1.32, 0.38), (-1.32, 0.0)]
+    z_tip, z_root = E - 45.5, E - 9.0
+
+    def off(z):
+        return float(np.interp(z, [z_tip, z_tip + 1.5, z_tip + 5.0, z_root], [ap + 0.05, ap + 0.55, ap + 1.25, ap + 1.4]))
+
+    def wid(z):
+        return float(np.interp(z, [z_tip, z_tip + 3.5, z_root], [0.45, 1.0, 1.0]))
+
+    channel('Clip', z_tip, z_root, off, wid, prof, M['clip'])
+    # U 字の折り返し：板の根元（高さ ap+1.4）から丸く曲がって（半径 0.7）サドルの上（ap+0.5）へ下りる
+    cz, cy, rad = z_root, ap + 1.275, 0.625  # 板の厚みの真ん中（ap+1.9）からサドルの上（ap+0.65）へ
+    path = [(0, -(cy + rad * math.cos(math.pi * k / 16)), cz + rad * math.sin(math.pi * k / 16)) for k in range(17)]
+    sweep('ClipBend', path, 3.2, 0.3, M['clip'], lambda p: (0, p.y + cy, p.z - cz), round_r=0.12)
+    # 折り返しの軸（ばねのピン）の穴：両横に小さな暗い丸
+    for sgn in (1, -1):
+        pin = lathe(f'ClipPin{"LR"[sgn < 0]}', [(0, -0.05), (0.32, -0.05), (0.32, 0.05), (0, 0.05)], M['pin'], seg=24)
+        pin.rotation_euler = (0, math.pi / 2, 0)
+        pin.location = (sgn * 1.62, -cy, cz)
+    # 印字（クリップの隣の面＝正面寄りの面）：849 CARAN d'ACHE、天の近くに枠で囲んだ SWISS / MADE
     face = math.radians(-30)
-    face_text('Print_brand', "CARAN d'ACHE", FONT_SERIF_B, 2.2, 62.0, ap, face, M['print'], lift=0.05)
-    face_text('Print_swiss', 'SWISS MADE', FONT_SANS, 1.2, 88.0, ap, face, M['print'], lift=0.05)
+    face_text('Print_849', '849', FONT_SANS, 1.15, E - 34.7, ap, face, M['print'], lift=0.04)
+    face_text('Print_brand', "CARAN d'ACHE", FONT_SERIF_B, 1.6, E - 31.5, ap, face, M['print'], lift=0.04)
+    zc, half, lw = E - 5.3, 1.45, 0.11
     c, s = math.cos(face), math.sin(face)
-    flat_plate('Logo', rounded_rect(119.6, 123.0, -1.7, 1.7, 0.3), 0.06, M['print'], (c * 3.8, s * 3.8, 0), face)
+    for k, (u0, u1, v0, v1) in enumerate(((zc - half, zc + half, half - lw, half), (zc - half, zc + half, -half, -half + lw),
+                                          (zc - half, zc - half + lw, -half, half), (zc + half - lw, zc + half, -half, half))):
+        flat_plate(f'Print_box{k}', rounded_rect(u0, u1, v0, v1, 0.0, 1), 0.04, M['print'], (c * (ap + 0.04), s * (ap + 0.04), 0),
+                   face)
+    # 2 行（字の箱の中心が 0.08 mm 下へずれるので、その分を引いて ±0.45 mm に置く）
+    face_text('Print_swiss', 'SWISS', FONT_SANS, 0.86, zc - 1.15, ap, face, M['print'], lift=0.04, shift=-0.53)
+    face_text('Print_made', 'MADE', FONT_SANS, 0.86, zc - 1.0, ap, face, M['print'], lift=0.04, shift=0.37)
 
 
 # ---- パーカー ジョッター ステンレススチール CT ----
@@ -495,6 +636,7 @@ MAKER_FAMILIES = {
     'jetstream': jetstream,
     'sarasa-clip': sarasa_clip,
     'caran-849': caran_849,
+    'caran-849-premium': lambda: caran_849(premium=True),
     'parker-jotter': parker_jotter,
     'lamy-2000': lamy_2000,
     'kaweco-special': kaweco_special,
@@ -506,7 +648,8 @@ MAKER_FAMILIES = {
 PUBLISHED = {
     'jetstream': {'length': (139.6, 139.6), 'diameter': (11.3, 11.3)},  # 三菱鉛筆 SXN-150-05 の仕様
     'sarasa-clip': {'diameter': (11.0, 11.0)},  # ゼブラ JJ15 の仕様（最大径）
-    'caran-849': {'length': (127.0, 130.0)},  # 販売店の表記（127 mm・13 cm）。径の確かな公表値は見つからない
+    'caran-849': {'length': (128.0, 128.0), 'flats': (9.0, 9.0)},  # 販売店の表記（収納時 128 mm・軸径 9 mm）
+    'caran-849-premium': {'length': (128.0, 128.0), 'flats': (9.0, 9.0)},
     'parker-jotter': {'length': (129.0, 129.0), 'diameter': (9.7, 9.7)},  # 販売店の表記
     'lamy-2000': {'length': (136.0, 138.0), 'diameter': (11.9, 11.9), 'grip': (10.0, 10.0)},  # 販売店の表記
     'kaweco-special': {'length': (144.0, 144.0), 'flats': (10.0, 10.0)},  # 販売店の表記（八角の辺から辺）
