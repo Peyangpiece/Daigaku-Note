@@ -329,6 +329,89 @@ export async function snapshot(id, {w = 1600, h = 224, item = null, flat = false
 }
 
 /**
+ * ショップの一覧の札の絵：詳細ページの 3D 表示と同じカメラ（少し上から）・光で描いたペンを、外接で切り取った画像。
+ * 向きは、クリップが上を向いている範囲（軸のまわりに ±60°）で、ペンの写る所がいちばん明るく見える角度を選ぶ
+ * （15° おきに小さく描いて、写った画素の明るさの平均で比べる）。机の影は描かない。
+ * 戻り値：{url（data URL の PNG）, w, h（切り取った大きさ。画素）}。ペン以外の品は null
+ */
+export async function shot(id, {item = null, w = 1600, h = 640} = {}) {
+  const m = await load(id, item);
+  if (m.kind !== 'pen') return null;
+  const g = gl();
+  const cam = new THREE.PerspectiveCamera(26, w / h, 0.01, 20);
+  const halfW = Math.tan((cam.fov / 2) * (Math.PI / 180)) * cam.aspect;
+  const d = Math.max(0.8, 0.5 / 0.9 / halfW);
+  cam.position.set(0.06 * d, 0.22 * d, d); // 詳細ページの 3D 表示と同じ位置（mount の fit）
+  cam.lookAt(0, 0, 0);
+  const keep = m.group.rotation.clone(); // 3D 表示と同じモデルを使うので、回した向きを戻す
+  const groundWas = m.ground.visible;
+  m.ground.visible = false;
+  const read = (cw, ch) => {
+    const c = document.createElement('canvas');
+    c.width = cw;
+    c.height = ch;
+    const x = c.getContext('2d', {willReadFrequently: true});
+    x.drawImage(g.domElement, 0, 0);
+    return {c, data: x.getImageData(0, 0, cw, ch).data};
+  };
+  const brightness = (data) => {
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const a = data[i + 3];
+      if (a < 128) continue;
+      sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      n++;
+    }
+    return n ? sum / n : 0;
+  };
+  let best = 0;
+  let bestL = -1;
+  try {
+    g.setSize(400, Math.round((400 * h) / w), false);
+    for (let deg = -60; deg <= 60; deg += 15) {
+      m.group.rotation.set((deg * Math.PI) / 180, 0, 0);
+      g.render(m.scene, cam);
+      const L = brightness(read(g.domElement.width, g.domElement.height).data);
+      if (L > bestL + 0.5 || (Math.abs(L - bestL) <= 0.5 && Math.abs(deg) < Math.abs(best))) {
+        bestL = L;
+        best = deg;
+      }
+    }
+    m.group.rotation.set((best * Math.PI) / 180, 0, 0);
+    g.setSize(w, h, false);
+    g.render(m.scene, cam);
+    const {c, data} = read(w, h);
+    // 写った所（不透明の画素）の外接で切り取る（ふちに 2 画素の余白）
+    let x0 = w;
+    let y0 = h;
+    let x1 = -1;
+    let y1 = -1;
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++)
+        if (data[(y * w + x) * 4 + 3] > 8) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+    if (x1 < 0) return null;
+    x0 = Math.max(0, x0 - 2);
+    y0 = Math.max(0, y0 - 2);
+    const cw = Math.min(w, x1 + 3) - x0;
+    const ch = Math.min(h, y1 + 3) - y0;
+    const out = document.createElement('canvas');
+    out.width = cw;
+    out.height = ch;
+    out.getContext('2d').drawImage(c, x0, y0, cw, ch, 0, 0, cw, ch);
+    return {url: out.toDataURL('image/png'), w: cw, h: ch, roll: best};
+  } finally {
+    m.group.rotation.copy(keep);
+    m.ground.visible = groundWas;
+  }
+}
+
+/**
  * el の中に、ドラッグで回せる 3D 表示を作る。見えている間だけ描き、el が画面から消えたらやめる。
  * zoom: ホイール・ピンチで近づける（大きな表示用）。戻り値：{reset()} 向きと距離を戻す
  */

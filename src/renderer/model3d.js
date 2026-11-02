@@ -1,7 +1,9 @@
 // 文房具の 3D モデル（GLB）の表示（SPEC §9.8「3D モデルの見た目」）。
 // three.js は大きいので、モデルの品が画面に出たときにだけ読み込む（model3d-three.js）。
 // 画面に出た要素を見張り、
-//   - svg[data-model]（stationery.js の toolArt）：モデルを横から描いた画像を <image> に入れる（小さな表示。筆箱・一覧）
+//   - svg[data-model]（stationery.js の toolArt）：モデルを横から描いた画像を <image> に入れる（小さな表示。筆箱・一覧）。
+//     data-model-shot があれば（ショップの一覧の札）、詳細ページの 3D 表示と同じ見え方で、クリップが上でいちばん明るい
+//     向きのペンを切り取った画像を入れる
 //   - .model-view[data-model]：ドラッグで回せる 3D 表示を中に作る（わたしの筆箱の札。data-model-zoom="1" なら
 //     文房具の詳細ページの大きな表示：ホイールやピンチで近づけて細部を見られる）
 //   - [data-model-reset]：同じ [data-model-box] の中の 3D 表示の向きと距離を戻す
@@ -51,7 +53,38 @@ function fallback(svg, id) {
   svg.outerHTML = plainArt(item, {label: !!svg.querySelector('title')});
 }
 
-function hydrateArt(svg) {
+const shots = new Map(); // 「model id|品の id」→ Promise<{url, w, h}>（ショップの一覧の札の絵）
+
+/** ショップの一覧の札：3D 表示と同じ見え方で切り取った画像を入れ、SVG の縦横比をその画像に合わせる */
+function hydrateShot(svg) {
+  svg.dataset.modelReady = '1';
+  const id = svg.dataset.model;
+  const item = itemOf(svg);
+  const key = `${id}|${item?.id ?? ''}`;
+  if (!shots.has(key)) {
+    const p = loadThree().then((m) => m.shot(id, {item}));
+    p.catch(() => shots.delete(key));
+    shots.set(key, p);
+  }
+  shots.get(key).then(
+    (r) => {
+      if (!r) return hydrateArt(svg, true); // ペンでない品は横から描いた絵
+      const vh = Math.round((200 * r.h) / r.w);
+      svg.setAttribute('viewBox', `0 0 200 ${vh}`);
+      const img = svg.querySelector('image[data-model-img]');
+      img?.setAttribute('height', String(vh));
+      img?.setAttribute('href', r.url);
+      svg.classList.add('is-shot');
+    },
+    (e) => {
+      console.warn('3D モデルを描けません', id, e);
+      fallback(svg, id);
+    }
+  );
+}
+
+function hydrateArt(svg, force = false) {
+  if (svg.dataset.modelShot && !force) return hydrateShot(svg);
   svg.dataset.modelReady = '1';
   const id = svg.dataset.model;
   const flat = flatFor(svg, itemOf(svg));

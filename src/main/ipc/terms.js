@@ -1,9 +1,9 @@
-// IPC の窓口：学期・授業・回（term.*・course.update・round.update）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
+// IPC の窓口：学期・授業・回（term.*・course.update・round.add・round.update）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
 import {dialog} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {renameCourse} from '../folders.js';
-import {mergeAutoTerms, removeTerm, saveTerm, syncRoundDates} from '../terms.js';
+import {addRound, mergeAutoTerms, removeTerm, saveTerm, syncRoundDates} from '../terms.js';
 import {parseCalendar} from '../../shared/calendar.js';
 import {calendarText} from '../calendar-pdf.js';
 import {str, id, bad} from './common.js';
@@ -77,6 +77,14 @@ export function register({handle, ctx, repo, files, getWindow}) {
     const course = repo.updateCourse(cid, allowed);
     if (allowed.weekday) syncRoundDates(repo, course.term_id); // 曜日を変えたら回の日付もその曜日の授業回に
     return {course};
+  });
+
+  // 付箋（回）を足す：授業の画面の「＋ 付箋」。番号は今ある回の次、題は title（空なら番号だけ）。日付は今日にして、
+  // 今週の付箋として並ぶようにする（曜日を決めた授業は、学期の設定を変えたときに学期の授業回の日付へそろう）。
+  // パソコンの授業フォルダの中に、回のフォルダ（第NN回_題）も作る。自分のフォルダ（下のフォルダが付箋）には使わない
+  handle('round.add', async ({courseId, title}) => {
+    const cid = id(courseId) ?? bad('この授業は見つかりませんでした');
+    return {round: await addRound({repo, files}, cid, str(title, 200) ?? '')};
   });
 
   // 回の名前（付箋の題）：自分で変える。空なら LMS の題に戻す

@@ -684,12 +684,12 @@ const METAL = (id) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
  * ボールペンはノック式：金属のペン先・透けた先の部品・すべり止めのグリップ・軸・金属のクリップ・ノック。
  * 軸の色・グリップ（accent）・インクの色（ペン先とグリップの下の輪）が品ごとに変わる
  */
-export function toolArt(item, {label = true} = {}) {
+export function toolArt(item, {label = true, shot = false} = {}) {
   const title = label ? `<title>${esc(item.name)}</title>` : '';
   const g = `st-${item.id}`; // グラデーションの id（品ごと）
   const open = `<svg class="st-art st-art--${item.type === 'pen' ? 'pen' : 'marker'}" viewBox="0 0 200 28" aria-hidden="${label ? 'false' : 'true'}" role="img">${title}`;
   if (item.art === 'model')
-    return `${open.replace('<svg ', `<svg data-model="${esc(item.model)}" data-item="${esc(item.id)}" `)}${modelArt()}</svg>`;
+    return `${open.replace('<svg ', `<svg data-model="${esc(item.model)}" data-item="${esc(item.id)}"${shot ? ' data-model-shot="1"' : ''} `)}${shot ? SHOT_IMG : modelArt()}</svg>`;
   if (item.type === 'pen') {
     const ridges = Array.from(
       {length: 12},
@@ -733,6 +733,8 @@ export function toolArt(item, {label = true} = {}) {
  * 3D モデルの品の絵：影の上に、モデルを横から描いた画像を置く（画像は renderer/model3d.js が GLB から描いて href に入れる。
  * 入るまでは影だけ）。横向き・左がペン先・上がクリップで、ほかの絵と同じ向き
  */
+/** ショップの一覧の札（shot）：3D 表示から切り取った画像だけ（影の楕円は描かない。縦横比は画像が入ったときに合わせる） */
+const SHOT_IMG = '<image data-model-img x="0" y="0" width="200" height="28" preserveAspectRatio="xMidYMid meet"/>';
 const modelArt = () =>
   `<ellipse cx="104" cy="23.5" rx="92" ry="2.2" fill="#000" opacity="0.12"/><image data-model-img x="0" y="0" width="200" height="28" preserveAspectRatio="xMidYMid meet"/>`;
 

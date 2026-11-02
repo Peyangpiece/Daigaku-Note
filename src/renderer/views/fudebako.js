@@ -255,7 +255,7 @@ function seriesCard(series, s) {
   else if (it.type === 'hider') sub.push('赤シートで隠れる');
   return `<article class="shop-card shop-card--${tier.id}${owned ? ' is-owned' : ''}" data-series="${esc(series.id)}">
     ${ribbons(it)}
-    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'case' ? caseArt(it) : toolArt(it)}</button>
+    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'case' ? caseArt(it) : toolArt(it, {shot: true})}</button>
     <button type="button" class="shop-card__name" data-action="nav" data-route="${detailRoute(it)}">${esc(series.name)}</button>
     <div class="muted shop-card__spec">${sub.map(esc).join('・')}</div>
     <div class="shop-card__foot">${priceTag(it, owned)}${dots(series, it)}</div>

@@ -295,6 +295,7 @@ export function renderCourse({data, progress}, courseId) {
     </nav>
     <div class="course-actions">
       <button class="btn btn--primary" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
+      <button type="button" class="btn" data-action="round-add" data-course-id="${esc(course.id)}" title="新しい付箋（回）を足します。名前はあとから ✎ で変えられます">＋ 付箋</button>
       ${syncable ? `<button class="btn" data-action="sync" data-course-id="${esc(courseId)}" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : 'この授業を同期'}</button>` : ''}
       ${more ? `<button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作" title="ほかの操作">⋯</button>` : ''}
       <span class="muted" id="sync-status" role="status">${esc(status)}</span>
