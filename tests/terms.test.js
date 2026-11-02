@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
-import {cleanLabel, newTermId, saveTerm, syncRoundDates} from '../src/main/terms.js';
+import {addRound, cleanLabel, newTermId, saveTerm, syncRoundDates} from '../src/main/terms.js';
 
 async function setup(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'dn-terms-'));
@@ -186,4 +186,25 @@ test('回の日付を学期の設定にそろえる：前の設定での日付�
   assert.equal(repo.get('round', r1.id).date, '2026-09-25', '第 1 回は学年暦の ① の日');
   assert.equal(repo.get('round', r5.id).date, '2026-10-23', '第 5 回は ⑤ の日（10/30 の休講は飛ばす）');
   assert.equal(repo.get('round', r0.id).date, null, '第 0 回（回のない資料）は変えない');
+});
+
+test('付箋（回）を足す：今ある回の次の番号・今日の日付で、回のフォルダも作る。自分のフォルダには足さない', async (t) => {
+  const {root, repo} = await setup(t);
+  const term = await saveTerm({repo, rootDir: root}, fall);
+  const course = repo.createCourse({term_id: term.id, name: '手作りの授業', folder_name: '手作りの授業'});
+  repo.createRound({course_id: course.id, number: 1, title: '導入', folder_name: '第01回_導入'});
+  const files = {roundDir: (tm, c, r) => path.join(root, tm.folder, c.folder_name, r.folder_name)};
+  const r = await addRound({repo, files}, course.id, '  中間のまとめ ', '2026-11-02');
+  assert.equal(r.number, 2);
+  assert.equal(r.title_user, '中間のまとめ');
+  assert.equal(r.folder_name, '第02回_中間のまとめ');
+  assert.equal(r.date, '2026-11-02', '今週の付箋として並ぶように今日の日付');
+  assert.ok((await stat(path.join(root, term.folder, '手作りの授業', '第02回_中間のまとめ'))).isDirectory());
+  const r3 = await addRound({repo, files}, course.id, '', '2026-11-02');
+  assert.equal(r3.number, 3);
+  assert.equal(r3.title_user, null, '名前なしなら番号だけ');
+  assert.equal(r3.folder_name, '第03回');
+  const folder = repo.createCourse({term_id: term.id, name: 'ゼミ', folder_name: '@folder-x', kind: 'folder'});
+  await assert.rejects(() => addRound({repo, files}, folder.id), /中のフォルダ/);
+  await assert.rejects(() => addRound({repo, files}, 'nope'), /見つかりません/);
 });

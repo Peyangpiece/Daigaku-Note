@@ -6,7 +6,8 @@ import path from 'node:path';
 import {promises as fsp} from 'node:fs';
 import {defaultTermDates, termFolder, termId, termRoundDates} from '../shared/term.js';
 import {cleanCalendar, cleanClassDates} from '../shared/calendar.js';
-import {PERIOD_PRESETS} from '../shared/schedule.js';
+import {PERIOD_PRESETS, todayJst} from '../shared/schedule.js';
+import {roundFolderName} from '../shared/naming.js';
 
 export const ROUNDS = [15, 14, 8, 7];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -188,4 +189,36 @@ export async function mergeAutoTerms({repo, rootDir}, row) {
       repo.remove('term', t.id);
     });
   }
+}
+
+/**
+ * 付箋（回）を足す：授業の画面の「＋ 付箋」。番号は今ある回の次、題は title（空なら番号だけ）。日付は今日にして、
+ * 今週の付箋として並ぶようにする（曜日を決めた授業は、学期の設定を変えたときに学期の授業回の日付へそろう）。
+ * パソコンの授業フォルダの中に、回のフォルダ（第NN回_題）も作る。自分のフォルダ（下のフォルダが付箋）には使わない
+ */
+export async function addRound({repo, files}, courseId, title = '', today = todayJst()) {
+  const course = repo.get('course', courseId);
+  if (!course) throw new Error('この授業は見つかりませんでした');
+  if (course.kind === 'folder') throw new Error('フォルダの付箋は、中のフォルダごとに並びます');
+  const rounds = repo.listRounds(courseId);
+  const number = rounds.reduce((n, r) => Math.max(n, r.number), 0) + 1;
+  if (number > 99) throw new Error('付箋はこれ以上足せません（99 回まで）');
+  const clean = String(title ?? '')
+    .trim()
+    .slice(0, 80);
+  const round = repo.createRound({
+    course_id: courseId,
+    number,
+    title: null,
+    title_user: clean || null,
+    folder_name: roundFolderName(
+      number,
+      clean,
+      rounds.map((r) => r.folder_name)
+    ),
+    date: today
+  });
+  const term = repo.get('term', course.term_id);
+  if (term && files) await fsp.mkdir(files.roundDir(term, course, round), {recursive: true}).catch(() => {});
+  return round;
 }

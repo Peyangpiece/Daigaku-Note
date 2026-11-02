@@ -789,6 +789,11 @@ button.fb-card {
 .shop-card__stage .st-art--case {
   height: 72px;
 }
+/* 3D 表示から切り取った絵：縦横比は画像に合わせる（高さは画像が入ってから決まる） */
+.shop-card__stage .st-art.is-shot {
+  height: auto;
+  max-height: 84px;
+}
 .shop-card__name {
   padding: 0;
   border: 0;

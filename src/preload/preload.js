@@ -27,6 +27,7 @@ const INVOKE = [
   'folder.reveal',
   'folder.update',
   'folder.renameSub',
+  'round.add',
   'round.update',
   'quiz.setKey',
   'quiz.removeKey',

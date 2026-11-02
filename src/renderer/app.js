@@ -628,6 +628,16 @@ document.addEventListener('click', async (e) => {
       });
       if (r?.ok) await api['sync.run']({connectionId: el.dataset.id});
       reload();
+    } else if (action === 'round-add') {
+      // 付箋（回）を足して、すぐ名前を入れられるようにする（空のままなら「第N回」だけ）
+      const r = await api['round.add']({courseId: el.dataset.courseId});
+      if (r?.error) return toast(r.error, {error: true});
+      await reload();
+      const btn = document.querySelector(`[data-drop="${CSS.escape(r.round.id)}"] .rename-btn`);
+      if (btn) {
+        btn.closest('.round-note')?.scrollIntoView({block: 'center'});
+        renameFrom(btn);
+      }
     } else if (action === 'upload') {
       const r = await api['material.upload']({courseId: el.dataset.courseId});
       if (r?.error) toast(r.error, {error: true});
