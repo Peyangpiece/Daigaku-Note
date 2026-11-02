@@ -521,6 +521,15 @@ function mountSplit(view, left, right) {
   };
   window.addEventListener('message', s.onMessage);
   document.title = 'PDF とノート — 大学ノート';
+  // 窓が狭いと、左右それぞれのツールバーが 1 段に収まらない（片側 560 px）。この窓のあいだに 1 回だけ知らせる
+  try {
+    if (window.innerWidth < 1128 && !sessionStorage.getItem('split.narrowHinted')) {
+      sessionStorage.setItem('split.narrowHinted', '1');
+      toast('窓を広げると（横 1128 px 以上）、左右のツールバーが 1 段に収まって使いやすくなります');
+    }
+  } catch {
+    // 覚えられなくても並べられる
+  }
 }
 
 /** 左右の画面に、書きかけ（打っている文字・保存待ち）を保存してもらう。両方の返事か 5 秒で終わる */
