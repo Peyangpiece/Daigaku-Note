@@ -305,6 +305,7 @@ export function renderCourse({data, progress}, courseId) {
     <div class="round-notes">
       ${own.length ? ownNote(course, own) : ''}
       ${now.map(note).join('')}
+      <button type="button" class="round-note-add" data-action="round-add" data-course-id="${esc(course.id)}" title="新しい付箋（回）を足します。足すとすぐ名前を入れられます"><span aria-hidden="true">＋</span>付箋を足す</button>
       ${past.length ? `<h3 class="round-notes__divider">これまでの回</h3>${past.map(note).join('')}` : ''}
       ${order.other.map(note).join('')}
     </div>
