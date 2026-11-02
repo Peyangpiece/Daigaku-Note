@@ -299,8 +299,8 @@ export const CATALOG = [
     'カランダッシュ',
     'caran-849-premium',
     '#1f1f22',
-    '#e2ab8d',
-    '#e9a98b',
+    '#d7b4a0',
+    '#d9a88c',
     6490,
     'caran-849',
     {mm: '1.0', line: '黒・中字（M）相当'}
