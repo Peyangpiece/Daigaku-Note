@@ -280,6 +280,31 @@
   font-size: var(--fs-small);
 }
 /* 振り分け前が空のとき：ファイルを落とせる細い帯 */
+.round-note-add {
+  /* 今の付箋の並びの最後に置く、付箋を足すための点線の札（授業の画面の「＋ 付箋」と同じ） */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 200px;
+  border: 2px dashed color-mix(in srgb, var(--paper-ink) 25%, transparent);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--paper-ink-weak);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.round-note-add span {
+  font-size: 28px;
+  line-height: 1;
+}
+.round-note-add:hover,
+.round-note-add:focus-visible {
+  border-color: color-mix(in srgb, var(--paper-ink) 45%, transparent);
+  color: var(--paper-ink);
+}
 .own-drop {
   max-width: 920px;
   margin: 0 0 var(--space-3);
