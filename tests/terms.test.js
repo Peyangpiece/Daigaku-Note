@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
-import {addRound, cleanLabel, newTermId, saveTerm, syncRoundDates} from '../src/main/terms.js';
+import {addRound, cleanLabel, newTermId, removeRound, saveTerm, syncRoundDates} from '../src/main/terms.js';
 
 async function setup(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'dn-terms-'));
@@ -207,4 +207,49 @@ test('付箋（回）を足す：今ある回の次の番号・今日の日付�
   const folder = repo.createCourse({term_id: term.id, name: 'ゼミ', folder_name: '@folder-x', kind: 'folder'});
   await assert.rejects(() => addRound({repo, files}, folder.id), /中のフォルダ/);
   await assert.rejects(() => addRound({repo, files}, 'nope'), /見つかりません/);
+});
+
+test('自分で足した付箋だけ消せる：中の資料は「振り分け前」へ移し、LMS の回とクイズのある付箋は消さない', async (t) => {
+  const {root, repo} = await setup(t);
+  const term = await saveTerm({repo, rootDir: root}, fall);
+  const course = repo.createCourse({term_id: term.id, name: '手作りの授業', folder_name: '手作りの授業'});
+  const lms = repo.createRound({course_id: course.id, number: 1, title: '導入', folder_name: '第01回_導入'});
+  const moved = [];
+  const files = {
+    roundDir: (tm, c, r) => path.join(root, tm.folder, c.folder_name, r.folder_name),
+    relocate: async ({material, round}) => {
+      moved.push(material.id);
+      return repo.updateMaterial(material.id, {round_id: round?.id ?? null});
+    }
+  };
+  const r = await addRound({repo, files}, course.id, 'まとめ', '2026-11-02');
+  assert.equal(r.user_made, 1);
+  const m = repo.createMaterial({
+    course_id: course.id,
+    round_id: r.id,
+    name: 'a.pdf',
+    path: path.join(root, 'a.pdf'),
+    sha256: 'x'.repeat(64),
+    size: 1,
+    source: 'upload',
+    status: 'ok'
+  });
+  await assert.rejects(() => removeRound({repo, files}, lms.id), /LMS の回/);
+  const out = await removeRound({repo, files}, r.id);
+  assert.equal(out.moved, 1);
+  assert.deepEqual(moved, [m.id]);
+  assert.equal(repo.get('material', m.id).round_id, null, '振り分け前へ');
+  assert.equal(repo.get('round', r.id), null);
+  await assert.rejects(
+    () => stat(path.join(root, term.folder, '手作りの授業', '第02回_まとめ')),
+    /ENOENT/,
+    '空の回のフォルダも片付ける'
+  );
+  const r2 = await addRound({repo, files}, course.id, '', '2026-11-02');
+  repo.db
+    .prepare(
+      "INSERT INTO quiz (id, round_id, title, status, source_json, created_at, updated_at) VALUES ('q1', ?, 't', 'ready', '[]', 'x', 'x')"
+    )
+    .run(r2.id);
+  await assert.rejects(() => removeRound({repo, files}, r2.id), /クイズ/);
 });

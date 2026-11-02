@@ -216,9 +216,40 @@ export async function addRound({repo, files}, courseId, title = '', today = toda
       clean,
       rounds.map((r) => r.folder_name)
     ),
-    date: today
+    date: today,
+    user_made: 1
   });
   const term = repo.get('term', course.term_id);
   if (term && files) await fsp.mkdir(files.roundDir(term, course, round), {recursive: true}).catch(() => {});
   return round;
+}
+
+/**
+ * 自分で足した付箋（回）を消す。LMS の回は消さない（次の同期でまた出てくるため）。クイズのある付箋は消さない
+ * （問題・答えの記録まで消えてしまうため）。中の資料・ノートは「振り分け前」へ移し（ファイルも移す）、
+ * 空になった回のフォルダは片付ける。戻りは {moved: 移した資料の数}
+ */
+export async function removeRound({repo, files}, roundId) {
+  const round = repo.get('round', roundId);
+  if (!round) throw new Error('付箋が見つかりませんでした');
+  if (!round.user_made) throw new Error('LMS の回の付箋は消せません（自分で足した付箋だけ消せます）');
+  const db = repo.db;
+  if (db.prepare('SELECT 1 FROM quiz WHERE round_id = ? LIMIT 1').get(round.id))
+    throw new Error('クイズのある付箋は消せません');
+  const course = repo.get('course', round.course_id);
+  const term = repo.get('term', course.term_id);
+  let moved = 0;
+  for (const m of repo.listMaterials(course.id).filter((x) => x.round_id === round.id)) {
+    if (m.status === 'ok' && term && files) {
+      await files.relocate({term, course, material: m, round: null});
+      moved++;
+    } else repo.updateMaterial(m.id, {round_id: null});
+  }
+  repo.transaction(() => {
+    db.prepare('DELETE FROM round_note WHERE round_id = ?').run(round.id);
+    db.prepare('DELETE FROM round WHERE id = ?').run(round.id);
+  });
+  // 空の回のフォルダだけ片付ける（ほかのアプリで入れたファイルが残っていれば、フォルダは消さない）
+  if (term && files) await fsp.rmdir(files.roundDir(term, course, round)).catch(() => {});
+  return {moved};
 }

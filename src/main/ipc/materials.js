@@ -60,10 +60,15 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
   // ファイルの場所はレンダラから受け取らない：「ファイルを追加」はメインで選ぶ窓を開き、ドラッグは中身（バイト列）と名前だけを受け取る
   const MAX_UPLOAD = 300 * 1024 * 1024;
 
-  const placeFor = (courseId, roundId) => {
+  const placeFor = (courseId, roundId, sub = '') => {
     const course = repo.get('course', id(courseId) ?? bad('この授業は見つかりませんでした')) ?? bad('授業がありません');
     const term = repo.get('term', course.term_id) ?? bad('学期がありません');
-    if (course.kind === 'folder') return {course, term, round: folders.roundOf(course)}; // フォルダの中にコピーする
+    if (course.kind === 'folder') {
+      // フォルダの中にコピーする。sub（付箋＝下のフォルダ）があれば、その下のフォルダへ
+      const s = str(sub, 1000) ?? '';
+      const dir = s ? folders.subPath(course, s) : course.dir;
+      return {course: {...course, dir}, term, round: folders.roundOf(course)};
+    }
     const round = roundId ? (repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません')) : null;
     if (round && round.course_id !== course.id) bad('別の授業の回には入れられません');
     return {course, term, round};
@@ -96,8 +101,8 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
     return out;
   };
 
-  handle('material.upload', async ({courseId, roundId = null}) => {
-    const place = placeFor(courseId, roundId);
+  handle('material.upload', async ({courseId, roundId = null, sub = ''}) => {
+    const place = placeFor(courseId, roundId, sub);
     const r = await dialog.showOpenDialog({
       title: `${place.course.name} に入れるファイル`,
       properties: ['openFile', 'multiSelections']
@@ -112,8 +117,8 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
     return addAll(place, items);
   });
 
-  handle('material.uploadData', async ({courseId, roundId = null, files: list}) => {
-    const place = placeFor(courseId, roundId);
+  handle('material.uploadData', async ({courseId, roundId = null, sub = '', files: list}) => {
+    const place = placeFor(courseId, roundId, sub);
     if (!Array.isArray(list) || !list.length || list.length > 50) bad('ファイルが不正です');
     const items = list.map((f) => {
       const name = str(f?.name, 255) ?? bad('ファイル名が不正です');
@@ -178,6 +183,41 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
         str(name, 200) ?? ''
       ))
     };
+  });
+
+  // 自分のフォルダに付箋（下のフォルダ）を足す：パソコンのフォルダの中にフォルダを作る
+  handle('folder.addSub', async ({courseId, name}) => {
+    const c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));
+    try {
+      return {ok: true, ...(await folders.addSub(c.id, str(name, 200) ?? ''))};
+    } catch (e) {
+      bad(e.message);
+    }
+  });
+
+  // 自分のフォルダの付箋（下のフォルダ）を消す：パソコンのフォルダを中のファイルごと OS のゴミ箱へ移し、読み直す
+  handle('folder.removeSub', async ({courseId, sub}) => {
+    const c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));
+    const p = folders.subPath(c, str(sub, 1000) ?? bad('付箋が不正です'));
+    if (!(await fsp.stat(p).catch(() => null))?.isDirectory()) bad('フォルダが見つかりません');
+    await files.trash(p);
+    return {ok: true, ...(await folders.scan(c.id))};
+  });
+
+  // 自分のフォルダを消す：パソコンのフォルダを中のファイルごと OS のゴミ箱へ移し、アプリの記録（資料・クイズ）も消す。
+  // ゴミ箱から戻せば、フォルダの中身は戻る（アプリには登録し直す）
+  handle('folder.remove', async ({courseId}) => {
+    const c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));
+    if ((await fsp.stat(c.dir).catch(() => null))?.isDirectory()) await files.trash(c.dir);
+    repo.removeCourseDeep(c.id);
+    for (const key of ['folder.copies', 'folder.subs']) {
+      const map = repo.getSetting(key, {}) ?? {};
+      if (map[c.id]) {
+        delete map[c.id];
+        repo.setSetting(key, map);
+      }
+    }
+    return {ok: true};
   });
 
   handle('folder.reveal', async ({courseId}) => {

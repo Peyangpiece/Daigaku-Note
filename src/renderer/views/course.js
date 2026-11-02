@@ -176,8 +176,16 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
  * 作ったあとは、付箋の資料の並びに青い表紙のノートとして出る（押すと開く）
  */
 function notebookLine(round, list, course) {
-  if (list.some((m) => m.source === 'note' && m.status === 'ok')) return '';
-  return `<div class="round-notebook"><button type="button" class="btn btn--small btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="この回のノートを作る（A4 縦。白い紙に青い罫線。横罫・方眼と行の間を選べます）" aria-haspopup="menu">＋ ノート</button></div>`;
+  const note = list.some((m) => m.source === 'note' && m.status === 'ok')
+    ? ''
+    : `<button type="button" class="btn btn--small btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="この回のノートを作る（A4 縦。白い紙に青い罫線。横罫・方眼と行の間を選べます）" aria-haspopup="menu">＋ ノート</button>`;
+  // 付箋にファイルを入れる（パソコンのファイルを選ぶ。元のファイルは残る）。ドラッグでも入れられる
+  const file = `<button type="button" class="btn btn--small btn--quiet" data-action="upload" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="この付箋にファイルを入れます（コピーします。元のファイルは残ります）">＋ ファイル</button>`;
+  // 自分で足した付箋だけ消せる（LMS の回は次の同期でまた出るため消さない）
+  const del = round.user_made
+    ? `<button type="button" class="btn btn--small btn--quiet round-notebook__del" data-action="round-remove" data-round-id="${esc(round.id)}" data-name="${esc(round.title_user || `第${round.number}回`)}" data-files="${list.length}" title="この付箋を消します（中の資料は「振り分け前」へ移します）">付箋を消す</button>`
+    : '';
+  return `<div class="round-notebook">${note}${file}${del}</div>`;
 }
 
 function roundNote(round, list, course, today, quizzes = {}) {
@@ -243,6 +251,7 @@ export function renderCourse({data, progress}, courseId) {
   const now = order.current.filter((r) => !weekEnd || hasFiles(r) || (r.date && r.date <= weekEnd));
   // 今週に回がない週（休み・学期の前）は、次の回を先頭に出す
   if (weekEnd && !now.length && order.current.length) now.push(order.current[0]);
+  // これからの回も、今週の回のあとに付箋で並べる（全部の回が付箋で見える。前は畳んだ一覧だった）
   const later = order.current.filter((r) => !now.includes(r));
   const past = order.past.slice().reverse();
   // 同期できるのは LMS の接続がある授業だけ（LMS を使わない授業・接続を削除した授業には同期のボタンを出さない）
@@ -262,15 +271,6 @@ export function renderCourse({data, progress}, courseId) {
   );
   const own = materials.filter((m) => !m.round_id);
   const note = (r) => roundNote(r, byRound.get(r.id) ?? [], course, today, quizInfo);
-  // これからの回：回・名前・日付の 1 行ずつ（ファイルを落とせば、その回に入る）
-  const laterList = later.length
-    ? `<details class="later-rounds" id="later-rounds"><summary>これからの回 ${later.length}</summary><ul>${later
-        .map(
-          (r) =>
-            `<li data-drop="${esc(r.id)}" data-course-id="${esc(course.id)}"><strong>第${r.number}回</strong> <span>${esc(r.title_user || r.title || '')}</span> <span class="muted">${esc(fmtDate(r.date))}</span></li>`
-        )
-        .join('')}</ul></details>`
-    : '';
   const last = data.lastSync;
   const lastText = last
     ? `前回の同期 ${new Date(last.finished_at).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'})}`
@@ -305,10 +305,10 @@ export function renderCourse({data, progress}, courseId) {
     <div class="round-notes">
       ${own.length ? ownNote(course, own) : ''}
       ${now.map(note).join('')}
+      ${later.map(note).join('')}
       <button type="button" class="round-note-add" data-action="round-add" data-course-id="${esc(course.id)}" title="新しい付箋（回）を足します。足すとすぐ名前を入れられます"><span aria-hidden="true">＋</span>付箋を足す</button>
       ${past.length ? `<h3 class="round-notes__divider">これまでの回</h3>${past.map(note).join('')}` : ''}
       ${order.other.map(note).join('')}
     </div>
-    ${laterList}
     ${shown.length ? '' : `<div class="empty"><p>${syncable ? 'まだ回がありません。同期すると、回ごとの付箋がここに並びます。' : 'ファイルは上の「振り分け前」へドラッグするか、「ファイルを追加…」で入れます。'}</p></div>`}`;
 }

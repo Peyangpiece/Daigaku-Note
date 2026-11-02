@@ -3,7 +3,7 @@ import {dialog} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {renameCourse} from '../folders.js';
-import {addRound, mergeAutoTerms, removeTerm, saveTerm, syncRoundDates} from '../terms.js';
+import {addRound, removeRound, mergeAutoTerms, removeTerm, saveTerm, syncRoundDates} from '../terms.js';
 import {parseCalendar} from '../../shared/calendar.js';
 import {calendarText} from '../calendar-pdf.js';
 import {str, id, bad} from './common.js';
@@ -85,6 +85,16 @@ export function register({handle, ctx, repo, files, getWindow}) {
   handle('round.add', async ({courseId, title}) => {
     const cid = id(courseId) ?? bad('この授業は見つかりませんでした');
     return {round: await addRound({repo, files}, cid, str(title, 200) ?? '')};
+  });
+
+  // 自分で足した付箋（回）を消す（中の資料は「振り分け前」へ）
+  handle('round.remove', async ({roundId}) => {
+    const rid = id(roundId) ?? bad('付箋が不正です');
+    try {
+      return {ok: true, ...(await removeRound({repo, files}, rid))};
+    } catch (e) {
+      bad(e.message);
+    }
   });
 
   // 回の名前（付箋の題）：自分で変える。空なら LMS の題に戻す
