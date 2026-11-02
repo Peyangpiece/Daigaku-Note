@@ -347,3 +347,34 @@ test('自分のフォルダ：中身が同じファイルが 2 か所にあれ�
   await folders.scan(c.id);
   assert.equal(repo.getSetting('folder.copies', {})[c.id], undefined);
 });
+
+test('付箋（下のフォルダ）を足す・ファイルのない下のフォルダも覚える・その下のフォルダへファイルを入れる・フォルダごと記録を消す', async (t) => {
+  const {repo, folders, files, live} = await setup(t);
+  const c = await folders.create({name: 'ゼミ', scope: 'always', mode: 'new'});
+  const a = await folders.addSub(c.id, '発表');
+  assert.equal(a.sub, '発表');
+  const b = await folders.addSub(c.id, '発表');
+  assert.equal(b.sub, '発表 (2)', '同じ名前は (2)');
+  assert.deepEqual(
+    repo.getSetting('folder.subs', {})[c.id],
+    ['発表', '発表 (2)'],
+    '空の下のフォルダも付箋に出すため覚える'
+  );
+  assert.throws(() => folders.subPath(c, '../外'), /不正/);
+  // 付箋の「＋ ファイル」：その下のフォルダへコピーする
+  const term = repo.get('term', c.term_id);
+  const r = await files.addOwn({
+    term,
+    course: {...c, dir: folders.subPath(c, '発表')},
+    round: folders.roundOf(c),
+    name: 'スライド.pdf',
+    data: Buffer.from('%PDF-1.4 x')
+  });
+  assert.equal(r.result, 'saved');
+  assert.equal(path.dirname(r.material.path), path.join(c.dir, '発表'));
+  await folders.scan(c.id);
+  assert.equal(live(c.id).length, 1);
+  repo.removeCourseDeep(c.id);
+  assert.equal(repo.get('course', c.id), null);
+  assert.equal(repo.listMaterials(c.id).length, 0);
+});

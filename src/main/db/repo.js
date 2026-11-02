@@ -69,7 +69,7 @@ export const COLUMNS = {
     'created_at',
     'updated_at'
   ],
-  round: ['id', 'course_id', 'number', 'title', 'title_user', 'folder_name', 'date', 'lms_ref'],
+  round: ['id', 'course_id', 'number', 'title', 'title_user', 'folder_name', 'date', 'lms_ref', 'user_made'],
   round_note: ['round_id', 'body', 'updated_at'],
   material: [
     'id',
@@ -509,6 +509,27 @@ export class Repo {
   }
   findRound(courseId, number) {
     return this.db.prepare('SELECT * FROM round WHERE course_id = ? AND number = ?').get(courseId, number) ?? null;
+  }
+  /**
+   * 授業（フォルダ）の記録を全部消す：回・資料・回のメモ・クイズ（問題・答えの記録・復習の段階・API の使用量）。
+   * 注釈は中身（SHA-256）に結び付くので残す。パソコンのファイルは呼ぶ側で片付ける
+   */
+  removeCourseDeep(courseId) {
+    const db = this.db;
+    this.transaction(() => {
+      const rounds = 'SELECT id FROM round WHERE course_id = ?';
+      const quizzes = `SELECT id FROM quiz WHERE round_id IN (${rounds})`;
+      const questions = `SELECT id FROM question WHERE quiz_id IN (${quizzes})`;
+      db.prepare(`DELETE FROM srs WHERE question_id IN (${questions})`).run(courseId);
+      db.prepare(`DELETE FROM attempt WHERE question_id IN (${questions})`).run(courseId);
+      db.prepare(`DELETE FROM question WHERE quiz_id IN (${quizzes})`).run(courseId);
+      db.prepare(`DELETE FROM ai_usage WHERE quiz_id IN (${quizzes})`).run(courseId);
+      db.prepare(`DELETE FROM quiz WHERE round_id IN (${rounds})`).run(courseId);
+      db.prepare(`DELETE FROM round_note WHERE round_id IN (${rounds})`).run(courseId);
+      db.prepare('DELETE FROM material WHERE course_id = ?').run(courseId);
+      db.prepare('DELETE FROM round WHERE course_id = ?').run(courseId);
+      db.prepare('DELETE FROM course WHERE id = ?').run(courseId);
+    });
   }
   createRound(row) {
     return this.insert('round', {id: ulid(), ...row});

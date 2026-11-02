@@ -638,8 +638,48 @@ document.addEventListener('click', async (e) => {
         btn.closest('.round-note')?.scrollIntoView({block: 'center'});
         renameFrom(btn);
       }
+    } else if (action === 'round-remove') {
+      // 自分で足した付箋を消す（中の資料・ノートは「振り分け前」へ移す）
+      if (
+        !(await confirmDialog(
+          `付箋「${el.dataset.name}」を消しますか？${el.dataset.files === '0' ? '' : '\n中の資料とノートは「振り分け前」へ移します。'}`,
+          {ok: '消す', danger: true}
+        ))
+      )
+        return;
+      const r = await api['round.remove']({roundId: el.dataset.roundId});
+      if (r?.error) return toast(r.error, {error: true});
+      toast(r.moved ? `付箋を消しました（${r.moved} 件を「振り分け前」へ移しました）` : '付箋を消しました');
+      await reload();
+    } else if (action === 'sub-add') {
+      // 自分のフォルダに付箋（下のフォルダ）を足して、すぐ名前を変えられるようにする
+      const r = await api['folder.addSub']({courseId: el.dataset.courseId});
+      if (r?.error) return toast(r.error, {error: true});
+      await reload();
+      const btn = document.querySelector(`.round-note--folder[data-sub="${CSS.escape(r.sub)}"] .rename-btn`);
+      if (btn) {
+        btn.closest('.round-note')?.scrollIntoView({block: 'center'});
+        renameFrom(btn);
+      }
+    } else if (action === 'sub-remove') {
+      if (
+        !(await confirmDialog(
+          `付箋「${el.dataset.name}」を消しますか？\nパソコンのフォルダ「${el.dataset.sub}」を中のファイルごとゴミ箱へ移します。`,
+          {ok: '消す', danger: true}
+        ))
+      )
+        return;
+      const r = await api['folder.removeSub']({courseId: el.dataset.courseId, sub: el.dataset.sub});
+      if (r?.error) return toast(r.error, {error: true});
+      toast('付箋を消しました（フォルダはパソコンのゴミ箱にあります）');
+      await reload();
     } else if (action === 'upload') {
-      const r = await api['material.upload']({courseId: el.dataset.courseId});
+      // 付箋の「＋ ファイル」は、その回（自分のフォルダは、その下のフォルダ）へ入れる
+      const r = await api['material.upload']({
+        courseId: el.dataset.courseId,
+        roundId: el.dataset.roundId || null,
+        sub: el.dataset.sub || ''
+      });
       if (r?.error) toast(r.error, {error: true});
       else if (!r.canceled) uploaded(r);
     } else if (action === 'finish-setup') {
@@ -909,7 +949,26 @@ function openMenu(label, items, x, y, onPick) {
     onPick(what);
   };
 }
-/** フォルダのメニュー（右クリック・カードの「⋯」）：開く・名前を変える・着せ替え・ホームから外す */
+/** 自分のフォルダを消す：確かめてから、パソコンのフォルダを中のファイルごとゴミ箱へ移し、アプリの記録も消す */
+async function deleteFolder(course) {
+  if (
+    !(await confirmDialog(
+      `「${course.name}」を削除しますか？\nパソコンのフォルダ（${course.dirName ?? ''}）を中のファイルごとゴミ箱へ移し、このフォルダのクイズの記録も消します。ゴミ箱から戻せばファイルは戻ります（大学ノートには登録し直します）`,
+      {ok: '削除する', danger: true}
+    ))
+  )
+    return false;
+  const r = await api['folder.remove']({courseId: course.id});
+  if (r?.error) {
+    toast(r.error, {error: true});
+    return false;
+  }
+  toast(`「${course.name}」を削除しました（パソコンのゴミ箱にあります）`);
+  await reload();
+  return true;
+}
+
+/** フォルダのメニュー（右クリック・カードの「⋯」）：開く・名前を変える・着せ替え・ホームから外す・（自分のフォルダは）削除 */
 function openCardMenu(card, x, y) {
   const course = state.data?.courses.find((c) => c.id === card.dataset.id);
   if (!course) return;
@@ -917,7 +976,8 @@ function openCardMenu(card, x, y) {
     ['open', '開く'],
     ...(canRename(course) ? [['rename', '名前を変える…']] : []),
     ['skin', '着せ替え…'],
-    ['remove', 'ホームから外す']
+    ['remove', 'ホームから外す'],
+    ...(course.kind === 'folder' ? [['delete', 'フォルダを削除…']] : [])
   ];
   openMenu(course.name, items, x, y, (what) => {
     if (what === 'open') navigate(`/course/${course.id}`);
@@ -925,7 +985,8 @@ function openCardMenu(card, x, y) {
     else if (what === 'skin') {
       const r = card.getBoundingClientRect();
       openSkinPicker(course, card, r.right + 8, r.top);
-    } else removeCourse(course).catch((err) => toast(err.message, {error: true}));
+    } else if (what === 'delete') deleteFolder(course).catch((err) => toast(err.message, {error: true}));
+    else removeCourse(course).catch((err) => toast(err.message, {error: true}));
   });
 }
 /** メニューの項目から、画面のボタンと同じ操作を動かす（data-action の処理をそのまま使う） */
@@ -1026,6 +1087,7 @@ function openCourseMenu(id, x, y) {
         course.scope === 'always' ? ['scope:term', '今学期のフォルダにする'] : ['scope:always', 'マイフォルダにする']
       );
     items.push(['hide', 'ホームから外す']);
+    items.push(['delete', 'フォルダを削除…']);
   } else {
     const conn = state.data.connections.find((c) => c.id === course.connection_id);
     if (conn && conn.kind !== 'manual') items.push(['full', '過去の回も全部確かめる（数分かかります）']);
@@ -1041,6 +1103,10 @@ function openCourseMenu(id, x, y) {
     else if (what === 'full') fire('sync', {courseId: id, full: '1'});
     else if (what === 'lms') fire('open-external', {url: course.lms_url});
     else if (what === 'quiz') navigate('/settings?focus=quiz');
+    else if (what === 'delete')
+      deleteFolder(course)
+        .then((done) => done && navigate('/'))
+        .catch((err) => toast(err.message, {error: true}));
     else if (what === 'hide')
       course.kind === 'folder'
         ? fire('folder-hide', {courseId: id})
@@ -1193,6 +1259,7 @@ document.addEventListener('drop', async (e) => {
     const r = await api['material.uploadData']({
       courseId: note.dataset.courseId,
       roundId: place === 'own' ? null : place,
+      sub: note.dataset.sub || '', // 自分のフォルダの付箋（下のフォルダ）へ落としたら、その下のフォルダへ
       files
     });
     if (r?.error) toast(r.error, {error: true});

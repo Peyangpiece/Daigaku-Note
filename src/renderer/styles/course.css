@@ -193,8 +193,14 @@
 /* 回のノート（SPEC §8.6）：付箋の資料の下に「＋ ノート」／「ノートを開く」 */
 .round-notebook {
   display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   justify-content: flex-start;
   margin-top: 10px;
+}
+/* 付箋を消す：ほかのボタンと離して右へ */
+.round-notebook__del {
+  margin-left: auto;
 }
 .file__tag--note {
   font-weight: 700;

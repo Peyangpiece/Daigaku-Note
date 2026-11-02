@@ -73,6 +73,7 @@ const hashFile = (file) =>
 /** フォルダの中のファイル（下のフォルダも MAX_DEPTH 段まで）。多すぎるときは MAX_FILES で打ち切り、truncated を立てる */
 export async function listFiles(dir, {max = MAX_FILES} = {}) {
   const out = [];
+  const dirs = []; // 下のフォルダ（フォルダからの相対パス。空のフォルダも付箋で出すため）
   let truncated = false;
   const walk = async (d, depth) => {
     const entries = await fsp.readdir(d, {withFileTypes: true}).catch(() => []);
@@ -81,6 +82,7 @@ export async function listFiles(dir, {max = MAX_FILES} = {}) {
       if (SKIP.test(e.name)) continue;
       const p = path.join(d, e.name);
       if (e.isDirectory()) {
+        dirs.push(path.relative(dir, p).split(path.sep).join('/'));
         if (depth < MAX_DEPTH) await walk(p, depth + 1);
       } else if (e.isFile()) {
         if (out.length >= max) {
@@ -93,7 +95,7 @@ export async function listFiles(dir, {max = MAX_FILES} = {}) {
     }
   };
   await walk(dir, 0);
-  return {files: out, truncated};
+  return {files: out, dirs, truncated};
 }
 
 export function createFolders({repo, rootDir, today = () => todayJst(), log = () => {}}) {
@@ -183,7 +185,11 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
     const st = await fsp.stat(course.dir).catch(() => null);
     if (!st?.isDirectory()) return {added: 0, removed: 0, truncated: false, missing: true};
     const round = roundOf(course);
-    const {files, truncated} = await listFiles(course.dir);
+    const {files, dirs, truncated} = await listFiles(course.dir);
+    // 下のフォルダの一覧を覚える（ファイルのない下のフォルダも付箋で出す。state.js が画面へ渡す）
+    const subsBefore = repo.getSetting('folder.subs', {}) ?? {};
+    if (JSON.stringify(subsBefore[course.id] ?? []) !== JSON.stringify(dirs))
+      repo.setSetting('folder.subs', {...subsBefore, [course.id]: dirs});
     const known = repo.listMaterials(course.id);
     const byPath = new Map(known.map((m) => [m.path, m]));
     const present = new Set(files.map((f) => f.path));
@@ -319,5 +325,23 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
     return {added, failed};
   }
 
-  return {create, scan, rename, renameSub, importCourses, roundOf, folderCourse, termNow};
+  /** 下のフォルダ sub（相対パス）の、パソコンでの場所。フォルダの外を指していれば断る */
+  const subPath = (c, sub) => {
+    const p = path.resolve(c.dir, String(sub ?? ''));
+    if (!p.startsWith(path.resolve(c.dir) + path.sep)) throw err('フォルダが不正です');
+    return p;
+  };
+  /** 付箋（下のフォルダ）を足す：フォルダの直下に name のフォルダを作る（同じ名前があれば (2) を足す）。戻りは {sub} */
+  async function addSub(courseId, name) {
+    const c = folderCourse(courseId);
+    const clean = sanitizeSegment(String(name ?? '').trim() || '新しい付箋', {max: 80});
+    if (!clean) throw err('フォルダの名前に使えない文字があります');
+    const taken = new Set(await fsp.readdir(c.dir).catch(() => []));
+    const sub = uniqueName(clean, (x) => taken.has(x));
+    await fsp.mkdir(path.join(c.dir, sub));
+    await scan(c.id);
+    return {sub};
+  }
+
+  return {create, scan, rename, renameSub, addSub, subPath, importCourses, roundOf, folderCourse, termNow};
 }

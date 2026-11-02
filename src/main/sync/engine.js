@@ -448,6 +448,7 @@ export class SyncEngine {
         }
       }
       if (lmsRef && lmsRef !== row.lms_ref) patch.lms_ref = lmsRef;
+      if (row.user_made) patch.user_made = 0; // 自分で足した付箋と同じ番号の回が LMS に出てきた：LMS の回として扱う（消せなくなる）
       // 回の日付はいつも学期の設定（学年暦の授業回・休講日・振替授業日）どおりに（前の設定での日付を残さない）
       const want = date ?? dates[number - 1] ?? null;
       if (number >= 1 && course.weekday && row.date !== want) patch.date = want;

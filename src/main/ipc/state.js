@@ -61,6 +61,7 @@ export function register({handle, ctx, repo}) {
     const maskCounts = repo.maskCounts();
     // 自分のフォルダの中の同じ中身の写し（folders.js の scan が覚える）：元の資料と同じ id で、写しの場所にも出す（開くと元の資料）
     const copies = repo.getSetting('folder.copies', {}) ?? {};
+    const folderSubs = repo.getSetting('folder.subs', {}) ?? {};
     const copiesOf = (c, list) =>
       c.kind === 'folder'
         ? (copies[c.id] ?? []).flatMap((x) => {
@@ -85,7 +86,10 @@ export function register({handle, ctx, repo}) {
       connections,
       terms,
       currentTermId: currentTerm(terms, today)?.id ?? terms.at(-1)?.id ?? null,
-      courses: courses.map(({dir, ...c}) => (c.kind === 'folder' ? {...c, dirName: path.basename(dir ?? '')} : c)),
+      // 自分のフォルダは、下のフォルダの一覧（subs：相対パス。空のフォルダも付箋で出す）も渡す
+      courses: courses.map(({dir, ...c}) =>
+        c.kind === 'folder' ? {...c, dirName: path.basename(dir ?? ''), subs: folderSubs[c.id] ?? []} : c
+      ),
       rounds,
       materials,
       settings: {
