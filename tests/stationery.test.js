@@ -273,8 +273,15 @@ test('既製品の見た目のペン：α 版のあいだはショップに出�
   const st = stationeryState({owned: ['maker-sarasa-red'], slots: ['maker-sarasa-red', null, null, null, null, null]});
   assert.ok(st.owned.includes('maker-sarasa-red'));
   assert.equal(st.slots[0], 'maker-sarasa-red');
-  assert.match(toolArt(js), /JETSTREAM/);
-  assert.match(toolArt(itemOf('maker-sarasa-red')), /SARASA/);
+  // 既製品の見た目は 3D モデル（GLB）。モデルのファイルがそろっている
+  const {existsSync} = await import('node:fs');
+  for (const it of CATALOG.filter((x) => x.experimental)) {
+    assert.equal(it.art, 'model', it.id);
+    assert.ok(existsSync(new URL(`../src/renderer/assets/stationery/${it.model}.glb`, import.meta.url)), it.model);
+    assert.match(toolArt(it), new RegExp(`data-model="${it.model}"`));
+  }
+  assert.equal(itemOf('maker-sarasa-red').model, 'sarasa-clip');
+  assert.equal(itemOf('maker-sarasa-red').width, 1.25, 'ゲルインクの線は少し太い');
 });
 
 test('多機能ペン（サクラクラフトラボ 004）：3 本の芯を回して使い、選んだ芯は設定に残る', async () => {

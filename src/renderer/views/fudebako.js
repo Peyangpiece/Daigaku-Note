@@ -78,7 +78,7 @@ function sample(item) {
 function spec(item) {
   if (item.refills)
     return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格`;
-  if (item.experimental) return `${esc(item.maker)}・${item.mm} mm`;
+  if (item.experimental) return `${esc(item.maker)}・${item.line ? esc(item.line) : `${item.mm} mm`}`;
   if (item.type === 'case') return CASE_INFO[item.style]?.short ?? '';
   if (item.pencil) return `芯 ${item.mm} mm・${item.lead}`;
   if (item.type === 'pen') return item.even ? `${item.mm} mm・筆圧なし（太さが一定）` : `${item.mm} mm`;

@@ -8,3 +8,4 @@ dist/
 *.sqlite-wal
 *.sqlite-shm
 secrets.json
+__pycache__/
