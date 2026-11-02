@@ -22,8 +22,9 @@ export const methods = {
     const mod = IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
     if (mod && !e.altKey) {
       const shift = e.shiftKey;
-      if (k === 'z' && !shift) this.undo();
-      else if ((k === 'z' && shift) || (k === 'y' && !shift)) this.redo();
+      // 並べたとき：最後に触った側がもう片方なら、そちらで取り消す・やり直す（もう片方へ貼ったシールなど）
+      if (k === 'z' && !shift) this.routeUndo('undo') || this.undo();
+      else if ((k === 'z' && shift) || (k === 'y' && !shift)) this.routeUndo('redo') || this.redo();
       else if (k === 'e' && shift) this.openExport();
       else if (k === 'e') this.setTool('eraser');
       else if (k === 's' && !shift) this.saveFile({manual: true});

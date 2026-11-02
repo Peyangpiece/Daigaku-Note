@@ -11,6 +11,10 @@
 import {KIND_OF, itemOf} from '../../../shared/stationery.js';
 
 const PEN_TOOLS = ['ink', 'line', 'mask'];
+const IS_MAC = /Mac/.test(navigator.platform);
+const isUndoKey = (e) =>
+  (IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) && !e.altKey && ['z', 'y'].includes(e.key.toLowerCase());
+const SPOT_MAX_AGE = 2 * 3600 * 1000; // 見ていた場所を覚えておく長さ
 const POUCH = ['sheet', 'ruler', 'calc', 'memo', 'timer'];
 const FLOATS = {calc: 'calc', 'memo-pad': 'memo', timer: 'timer'}; // 浮かぶ窓の class → ポーチの道具
 const SEAL_HINT =
@@ -41,6 +45,8 @@ export const methods = {
     // 触った側を親に知らせる（四隅の道具・浮かぶ道具を押したときは数えない：そこから貼る先は、その前に触った側）
     const touch = (e) => {
       if (e.target?.closest?.('[data-corner], .float-tool')) return;
+      // 取り消す・やり直す（⌘Z・⇧⌘Z・⌘Y）は最後に触った側を変えない（その側の操作を取り消すため。onKey が回す）
+      if (e.type === 'keydown' && isUndoKey(e)) return;
       if (!this.splitActive) {
         this.splitActive = true; // 親の返事を待たずに（貼り付け ⌘V はキーのすぐあと）
         this.postSplit({type: 'split-active'});
@@ -67,6 +73,36 @@ export const methods = {
   /** もう片方の画面にしてもらう（親が回す）。what：place・drop・pouch・tool */
   relaySplit(msg) {
     this.postSplit({...msg, type: 'split-relay'});
+    // 貼ったもの・出したものがもう片方の画面へ行ったことを、読み上げにも伝える（目で見る印は上の色の線）
+    const where = this.splitSide === 'left' ? '右' : '左';
+    const said = {
+      place: `${where}の画面のページに貼りました`,
+      drop: `${where}の画面のページに貼りました`,
+      undo: `${where}の画面の操作を取り消しました`,
+      redo: `${where}の画面の操作をやり直しました`
+    }[msg.what];
+    if (said) this.announce(said);
+  },
+
+  /** 読み上げにだけ伝える（画面には出さない） */
+  announce(text) {
+    let el = this.root.querySelector('[data-v="split-live"]');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'sr-only';
+      el.dataset.v = 'split-live';
+      el.setAttribute('aria-live', 'polite');
+      this.root.append(el);
+    }
+    el.textContent = '';
+    requestAnimationFrame(() => (el.textContent = text));
+  },
+
+  /** 取り消す・やり直す：並べていて最後に触ったのがもう片方なら、そちらで（貼ったシールなどは、そちらの画面の操作）。回したら true */
+  routeUndo(what) {
+    if (!this.splitOther()) return false;
+    this.relaySplit({what});
+    return true;
   },
 
   /** もう片方から回ってきたこと */
@@ -75,6 +111,8 @@ export const methods = {
     else if (d.what === 'tool-ask') this.syncTool();
     else if (d.what === 'place') this.placeStamp(d.spec);
     else if (d.what === 'drop') this.dropStamp(d.spec, d.px, d.py, d.cx, d.cy);
+    else if (d.what === 'undo') this.undo();
+    else if (d.what === 'redo') this.redo();
     else if (d.what === 'pouch') this.togglePouchHere(d.v);
     else if (d.what === 'pouch-state') {
       this.remotePouch[d.v] = d.on;
@@ -230,6 +268,19 @@ export const methods = {
     if (!this.pages?.length) return;
     try {
       localStorage.setItem(`viewer.spot.${this.materialId}`, JSON.stringify({...this.currentSpot(), t: Date.now()}));
+      // 古くなった場所は片付ける（資料ごとに増えていかないように）
+      const now = Date.now();
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (!k?.startsWith('viewer.spot.')) continue;
+        let t = 0;
+        try {
+          t = JSON.parse(localStorage.getItem(k))?.t ?? 0;
+        } catch {
+          t = 0;
+        }
+        if (now - t > SPOT_MAX_AGE) localStorage.removeItem(k);
+      }
     } catch {
       // 覚えられなくても開ける（はじめから見る）
     }
@@ -243,7 +294,7 @@ export const methods = {
     } catch {
       s = null;
     }
-    if (!s || Date.now() - (s.t ?? 0) > 2 * 3600 * 1000) return;
+    if (!s || Date.now() - (s.t ?? 0) > SPOT_MAX_AGE) return;
     const p = this.pages[Math.min(this.pages.length, Math.max(1, s.page)) - 1];
     if (!p) return;
     const top = this.root.querySelector('.viewer-bar').getBoundingClientRect().bottom + 8;
