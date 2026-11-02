@@ -7,7 +7,7 @@ import {annoKey, readBase, replaceFile, originalPath} from '../pdf-save.js';
 import {appendNotePage, cleanPaper, createNotePdf, rebuildNotePdf, removeLastNotePage} from '../note-pdf.js';
 import {isPng} from '../pdf-export.js';
 import {createSerial} from '../serial.js';
-import {id, bad} from './common.js';
+import {id, bad, str} from './common.js';
 import {sendAll} from '../frames.js';
 
 /** ノートのファイル名（回ごと。同じ回フォルダの中でも、自分のフォルダの中でも名前が重ならないように回を入れる） */
@@ -54,25 +54,35 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
 
   // 回のノートを開く。なければ作る（A4 縦・1 ページ。紙は paper：横罫・方眼、行の間 6・7 mm。header は上の欄に印刷する PNG）。
   // 戻り：{materialId, created}
-  handle('note.open', async ({courseId, roundId, paper, header, headerText = ''}) => {
-    const course = repo.get('course', id(courseId) ?? bad('この授業は見つかりませんでした')) ?? bad('授業がありません');
+  handle('note.open', async ({courseId, roundId, sub = '', paper, header, headerText = ''}) => {
+    let course = repo.get('course', id(courseId) ?? bad('この授業は見つかりませんでした')) ?? bad('授業がありません');
     const term = repo.get('term', course.term_id) ?? bad('学期がありません');
     let round = null;
+    // 自分のフォルダの付箋（下のフォルダ sub）のノートは、その下のフォルダに置く（付箋ごとに 1 冊）
+    const subDir =
+      course.kind === 'folder' ? (str(sub, 1000) ? folders.subPath(course, str(sub, 1000)) : course.dir) : null;
     if (course.kind === 'folder') round = folders.roundOf(course);
     else {
       round = repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません');
       if (round.course_id !== course.id) bad('別の授業の回です');
     }
     // 同じ回のノートを 2 冊作らない（続けて押したとき）
-    return exclusive(`open:${course.id}:${round?.id ?? ''}`, async () => {
-      const have = noteOf(course.id, round?.id);
+    const folderCourse = course;
+    if (subDir) course = {...course, dir: subDir};
+    return exclusive(`open:${course.id}:${round?.id ?? ''}:${subDir ?? ''}`, async () => {
+      const have = subDir
+        ? (repo
+            .listMaterials(course.id)
+            .find((m) => m.source === 'note' && m.status === 'ok' && path.dirname(m.path) === subDir) ?? null)
+        : noteOf(course.id, round?.id);
       if (have) return {materialId: have.id, created: false};
       const d = cleanPaper(paper);
       const head = okHeader(header);
       // 自分のフォルダは回を分けないので「ノート.pdf」・題も回なし（「その他」は授業の回の呼び方）
       const folder = course.kind === 'folder';
       const label = folder || !round ? '' : round.number > 0 ? ` 第${round.number}回` : ' その他';
-      const bytes = await createNotePdf(d, {title: `${course.name}${label} ノート`, header: head});
+      const subName = subDir && subDir !== folderCourse.dir ? ` ${path.basename(subDir)}` : '';
+      const bytes = await createNotePdf(d, {title: `${course.name}${label}${subName} ノート`, header: head});
       const r = await files.addOwn({
         term,
         course,

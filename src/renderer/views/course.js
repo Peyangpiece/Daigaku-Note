@@ -11,7 +11,6 @@ import {canRename, state} from '../store.js';
 import {extOf, fileArt, kindOf, noteArt} from './file-art.js';
 import {bookmarkLook, fixedSticker, skinOf, stickerLayer} from '../skin.js';
 import {roundColorIndex} from '../../shared/skin.js';
-import {features} from '../../shared/profile.js';
 
 const fmtDate = (d) =>
   d
@@ -95,7 +94,7 @@ function ownNote(course, list) {
 // クイズを作る回を選ぶ（1 つでも複数でも）。回ごとに 1 つのクイズを作り、テストは「回を選んでテスト」で回をまたいで解く
 function makePicker(makeable, byRound) {
   if (!makeable.length) return '';
-  return `<details class="test-panel__range test-panel__make" id="qm-box"><summary>回を選んでクイズを作る</summary>
+  return `<details class="test-panel__range test-panel__make" id="qm-box" open><summary>回を選んでクイズを作る</summary>
     <div class="test-panel__rounds">${makeable
       .map((r) => {
         const z = byRound.get(r.id);
@@ -225,7 +224,7 @@ function roundNote(round, list, course, today, quizzes = {}) {
     </header>
     ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course)).join('')}</div>` : upcoming ? '' : `<p class="round-note__none">資料なし</p>`}
     ${notebookLine(round, list, course)}
-    ${quizLine(round, list, course, quizzes.byRound?.get(round.id), quizzes.gen?.[round.id], quizzes.hasKey)}
+    ${quizzes.byRound?.get(round.id) || quizzes.gen?.[round.id] ? quizLine(round, list, course, quizzes.byRound?.get(round.id), quizzes.gen?.[round.id], quizzes.hasKey) : ''}
   </section>`;
 }
 
@@ -244,7 +243,12 @@ export function renderCourse({data, progress}, courseId) {
   const shown = rounds.filter((r) => r.number > 0 || byRound.get(r.id)?.length);
   // 並び：今週の回（と、もう資料のある先の回）→ これまでの回（新しい順）→ その他 → これからの回（資料のない先の回。畳む）。
   // 先の空の回が 10 枚以上並んで、資料のある前の回が下に追いやられないように
-  const order = orderRounds(shown, today);
+  // 自分で足した付箋は日付の並びに入れず、いちばん後ろに足した順（番号順）で並べる
+  const mine = shown.filter((r) => r.user_made).sort((a, b) => a.number - b.number);
+  const order = orderRounds(
+    shown.filter((r) => !r.user_made),
+    today
+  );
   const hasFiles = (r) => (byRound.get(r.id) ?? []).length > 0;
   // 回の日付が分からない授業（日付のない回だけ）は、今までどおり全部並べる
   const weekEnd = order.monday ? addDays(order.monday, 6) : null;
@@ -284,31 +288,24 @@ export function renderCourse({data, progress}, courseId) {
         : syncable
           ? lastText
           : '';
-  // ⋯：めったに使わない操作（過去の回も全部確かめる・LMS で開く・クイズを使う）
-  const quizSetup = !(quizInfo.hasKey || quizzes.length || !features(data.settings).quiz);
-  const more = syncable || course.lms_url || quizSetup;
   return `
     <nav class="page-nav page-nav--stickers">
       ${stickerLayer(skinOf(data, course).stickers, 'heading', data)}
       <button class="btn" data-action="nav" data-route="/">← ホーム</button>
       <h2 class="ja-wrap" data-rename-box><span data-rename-target>${jaWrap(course.name)}</span>${canRename(course) ? ` <button type="button" class="rename-btn" data-action="rename" data-what="course" data-id="${esc(course.id)}" title="名前を変える" aria-label="授業の名前を変える">✎</button>` : ''} <span class="muted">${esc(slot)}</span></h2>
+      <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（同期・LMS で開く・ホームから外す）" title="ほかの操作">⋯</button>
     </nav>
-    <div class="course-actions">
-      <button class="btn btn--primary" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
-      <button type="button" class="btn" data-action="round-add" data-course-id="${esc(course.id)}" title="新しい付箋（回）を足します。名前はあとから ✎ で変えられます">＋ 付箋</button>
-      ${syncable ? `<button class="btn" data-action="sync" data-course-id="${esc(courseId)}" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : 'この授業を同期'}</button>` : ''}
-      ${more ? `<button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作" title="ほかの操作">⋯</button>` : ''}
-      <span class="muted" id="sync-status" role="status">${esc(status)}</span>
-    </div>
+    ${status ? `<p class="muted course-status" id="sync-status" role="status">${esc(status)}</p>` : '<p class="sr-only" id="sync-status" role="status"></p>'}
     ${testPanel(course, quizzes, makeable, quizInfo.byRound, quizInfo.hasKey)}
     ${own.length ? '' : ownNote(course, own)}
     <div class="round-notes">
       ${own.length ? ownNote(course, own) : ''}
       ${now.map(note).join('')}
       ${later.map(note).join('')}
-      <button type="button" class="round-note-add" data-action="round-add" data-course-id="${esc(course.id)}" title="新しい付箋（回）を足します。足すとすぐ名前を入れられます"><span aria-hidden="true">＋</span>付箋を足す</button>
       ${past.length ? `<h3 class="round-notes__divider">これまでの回</h3>${past.map(note).join('')}` : ''}
       ${order.other.map(note).join('')}
+      ${mine.map(note).join('')}
+      <button type="button" class="round-note-add" data-action="round-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します。いちばん後ろに、足した順に並びます"><span aria-hidden="true">＋</span>付箋を足す</button>
     </div>
-    ${shown.length ? '' : `<div class="empty"><p>${syncable ? 'まだ回がありません。同期すると、回ごとの付箋がここに並びます。' : 'ファイルは上の「振り分け前」へドラッグするか、「ファイルを追加…」で入れます。'}</p></div>`}`;
+    ${shown.length ? '' : `<div class="empty"><p>${syncable ? 'まだ回がありません。右上の「⋯」の「この授業を同期」で、回ごとの付箋がここに並びます。' : 'ファイルは上の「振り分け前」へドラッグするか、「＋ 付箋を足す」で付箋を作って入れます。'}</p></div>`}`;
 }

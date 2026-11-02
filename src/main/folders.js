@@ -295,6 +295,11 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
     const dest = path.join(path.dirname(from), to);
     if (!(await renameFolder(from, dest))) return {added: 0, removed: 0, truncated: false, missing: false};
     movePaths(repo, c.id, from, dest);
+    // 足した順の記録も新しい名前に（並びの場所はそのまま）
+    const added = repo.getSetting('folder.added', {}) ?? {};
+    const rel = path.relative(c.dir, dest).split(path.sep).join('/');
+    if (added[c.id]?.includes(String(sub)))
+      repo.setSetting('folder.added', {...added, [c.id]: added[c.id].map((x) => (x === String(sub) ? rel : x))});
     return scan(c.id);
   }
 
@@ -339,9 +344,25 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
     const taken = new Set(await fsp.readdir(c.dir).catch(() => []));
     const sub = uniqueName(clean, (x) => taken.has(x));
     await fsp.mkdir(path.join(c.dir, sub));
+    // 足した順に後ろへ並べるため、足した順を覚える（state.js が画面へ渡す）
+    const added = repo.getSetting('folder.added', {}) ?? {};
+    repo.setSetting('folder.added', {...added, [c.id]: [...(added[c.id] ?? []).filter((x) => x !== sub), sub]});
     await scan(c.id);
     return {sub};
   }
 
-  return {create, scan, rename, renameSub, addSub, subPath, importCourses, roundOf, folderCourse, termNow};
+  /**
+   * 最初の付箋（フォルダの直下のファイル）を消す：直下のファイルを trash（OS のゴミ箱へ）に渡し、付箋を隠す
+   * （下のフォルダはそのまま）。あとで直下にファイルが入れば、また出る。戻りは scan の結果
+   */
+  async function removeRoot(courseId, trash) {
+    const c = folderCourse(courseId);
+    const entries = await fsp.readdir(c.dir, {withFileTypes: true}).catch(() => []);
+    for (const e of entries) if (e.isFile() && !SKIP.test(e.name)) await trash(path.join(c.dir, e.name));
+    const hidden = repo.getSetting('folder.rootHidden', {}) ?? {};
+    repo.setSetting('folder.rootHidden', {...hidden, [c.id]: true});
+    return scan(c.id);
+  }
+
+  return {create, scan, rename, renameSub, addSub, removeRoot, subPath, importCourses, roundOf, folderCourse, termNow};
 }

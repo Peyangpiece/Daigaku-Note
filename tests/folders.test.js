@@ -378,3 +378,28 @@ test('付箋（下のフォルダ）を足す・ファイルのない下のフ�
   assert.equal(repo.get('course', c.id), null);
   assert.equal(repo.listMaterials(c.id).length, 0);
 });
+
+test('足した付箋は足した順を覚える・名前を変えても場所はそのまま・最初の付箋を消すと直下のファイルだけゴミ箱へ', async (t) => {
+  const {repo, folders} = await setup(t);
+  const c = await folders.create({name: '研究', scope: 'always', mode: 'new'});
+  await writeFile(path.join(c.dir, 'メモ.txt'), 'a');
+  await mkdir(path.join(c.dir, '既存'));
+  await writeFile(path.join(c.dir, '既存', 'b.txt'), 'b');
+  await folders.addSub(c.id, 'ゼット');
+  await folders.addSub(c.id, 'アルファ');
+  assert.deepEqual(repo.getSetting('folder.added', {})[c.id], ['ゼット', 'アルファ'], '名前順ではなく足した順');
+  await folders.renameSub(c.id, 'ゼット', 'ベータ');
+  assert.deepEqual(
+    repo.getSetting('folder.added', {})[c.id],
+    ['ベータ', 'アルファ'],
+    '名前を変えても並びの場所はそのまま'
+  );
+  const trashed = [];
+  await folders.removeRoot(c.id, async (f) => {
+    trashed.push(path.basename(f));
+    await rm(f);
+  });
+  assert.deepEqual(trashed, ['メモ.txt'], '直下のファイルだけ（下のフォルダは残す）');
+  assert.equal(repo.getSetting('folder.rootHidden', {})[c.id], true);
+  assert.deepEqual((await readdir(c.dir)).sort(), ['アルファ', 'ベータ', '既存'].sort());
+});

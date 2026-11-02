@@ -67,6 +67,14 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
       // フォルダの中にコピーする。sub（付箋＝下のフォルダ）があれば、その下のフォルダへ
       const s = str(sub, 1000) ?? '';
       const dir = s ? folders.subPath(course, s) : course.dir;
+      if (!s) {
+        // 最初の付箋（直下）へ入れるなら、消して隠していた付箋をまた出す
+        const hidden = repo.getSetting('folder.rootHidden', {}) ?? {};
+        if (hidden[course.id]) {
+          delete hidden[course.id];
+          repo.setSetting('folder.rootHidden', hidden);
+        }
+      }
       return {course: {...course, dir}, term, round: folders.roundOf(course)};
     }
     const round = roundId ? (repo.get('round', id(roundId) ?? bad('回が不正です')) ?? bad('回がありません')) : null;
@@ -198,9 +206,14 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
   // 自分のフォルダの付箋（下のフォルダ）を消す：パソコンのフォルダを中のファイルごと OS のゴミ箱へ移し、読み直す
   handle('folder.removeSub', async ({courseId, sub}) => {
     const c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));
+    // 最初の付箋（sub が空＝フォルダの直下）：直下のファイルをゴミ箱へ移し、付箋を隠す
+    if (!(str(sub, 1000) ?? '')) return {ok: true, ...(await folders.removeRoot(c.id, (f) => files.trash(f)))};
     const p = folders.subPath(c, str(sub, 1000) ?? bad('付箋が不正です'));
     if (!(await fsp.stat(p).catch(() => null))?.isDirectory()) bad('フォルダが見つかりません');
     await files.trash(p);
+    const added = repo.getSetting('folder.added', {}) ?? {};
+    if (added[c.id])
+      repo.setSetting('folder.added', {...added, [c.id]: added[c.id].filter((x) => x !== str(sub, 1000))});
     return {ok: true, ...(await folders.scan(c.id))};
   });
 
@@ -210,7 +223,7 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
     const c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));
     if ((await fsp.stat(c.dir).catch(() => null))?.isDirectory()) await files.trash(c.dir);
     repo.removeCourseDeep(c.id);
-    for (const key of ['folder.copies', 'folder.subs']) {
+    for (const key of ['folder.copies', 'folder.subs', 'folder.added', 'folder.rootHidden']) {
       const map = repo.getSetting(key, {}) ?? {};
       if (map[c.id]) {
         delete map[c.id];

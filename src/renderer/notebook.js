@@ -88,11 +88,12 @@ export const noteFrom = (noteId) => {
 };
 
 /** 回のノートを用意する（なければ作る）。戻り：{materialId, created} か null（失敗。知らせは出した） */
-async function ensureNote(courseId, roundId, paper = notePaper()) {
+async function ensureNote(courseId, roundId, paper = notePaper(), sub = '') {
   const text = noteHeading(courseId, roundId);
   const r = await api['note.open']({
     courseId,
     roundId,
+    sub, // 自分のフォルダの付箋（下のフォルダ）のノート
     paper: {type: paper.type, gap: paper.gap},
     header: await headingPng(text),
     headerText: text
@@ -109,8 +110,8 @@ async function ensureNote(courseId, roundId, paper = notePaper()) {
 }
 
 /** 回のノートを開く（なければ作る）。from は戻り先の資料の id（PDF の編集画面から開いたとき）。paper は作るときの紙 */
-export async function openNotebook(courseId, roundId, {from = null, paper = undefined} = {}) {
-  const r = await ensureNote(courseId, roundId, paper);
+export async function openNotebook(courseId, roundId, {from = null, paper = undefined, sub = ''} = {}) {
+  const r = await ensureNote(courseId, roundId, paper, sub);
   if (!r) return;
   try {
     if (from) sessionStorage.setItem(`note.from.${r.materialId}`, from);

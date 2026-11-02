@@ -95,38 +95,55 @@ export function renderFolder({data}, course) {
   const sk = skinOf(data, course);
   const colorOf = (i) =>
     sk.sticky.round === 'default' ? `var(--pop${roundColorIndex(i + 1) + 1})` : sk.sticky.round[roundColorIndex(i + 1)];
+  // 付箋の並び：最初の付箋（フォルダの直下）→ もとからある下のフォルダ（名前順）→ 足した付箋（足した順）。
   // ファイルのない下のフォルダ（足したばかりの付箋など）も付箋で出す
-  const parts = groups(list);
-  if (!parts.some(([k]) => k === '')) parts.unshift(['', []]);
-  for (const sub of course.subs ?? []) if (!parts.some(([k]) => k === sub)) parts.push([sub, []]);
-  parts.sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b, 'ja')));
-  const notes = parts
-    .map(
-      (
-        [sub, ms],
-        i
-      ) => `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i)}" data-drop="own" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" aria-label="${esc(sub || course.name)} のファイル">
-      <header class="round-note__head" data-rename-box><span class="round-note__round">${sub ? '📁 ' : ''}<span data-rename-target>${esc(sub ? sub.split('/').pop() : course.name)}</span></span>
-        <button type="button" class="rename-btn" data-action="rename" data-what="${sub ? 'sub' : 'folder'}" data-id="${esc(course.id)}" data-sub="${esc(sub)}" data-value="${esc(sub ? sub.split('/').pop() : course.name)}" title="${sub ? 'フォルダの名前を変える（パソコンのフォルダの名前も変わります）' : 'フォルダの名前を変える'}" aria-label="名前を変える">✎</button></header>
+  const bySub = new Map(groups(list));
+  const added = (course.added ?? []).filter((x) => (course.subs ?? []).includes(x) || bySub.has(x));
+  const others = [...new Set([...(course.subs ?? []), ...bySub.keys()])]
+    .filter((x) => x !== '' && !added.includes(x))
+    .sort((x, y) => x.localeCompare(y, 'ja'));
+  // 最初の付箋は、消したあと（直下のファイルがない間）は出さない
+  const root = bySub.get('') ?? [];
+  const order = [...(course.rootHidden && !root.length ? [] : ['']), ...others, ...added];
+  const hasNote = (ms) => ms.some((m) => m.source === 'note' && m.status === 'ok');
+  const titleOf = (sub) => (sub ? sub.split('/').pop() : (round?.title_user ?? ''));
+  const notes = order
+    .map((sub, i) => {
+      const ms = bySub.get(sub) ?? [];
+      const title = titleOf(sub);
+      // 最初の付箋の題は空のまま（薄く「タイトルを入力」）。押すと名前を入れられる（回 0 の title_user）
+      const rename = sub
+        ? `data-action="rename" data-what="sub" data-id="${esc(course.id)}" data-sub="${esc(sub)}" data-value="${esc(title)}"`
+        : `data-action="rename" data-what="round" data-id="${esc(round?.id ?? '')}" data-value="${esc(title)}"`;
+      const head = title
+        ? `<span class="round-note__round">${sub ? '📁 ' : ''}<span data-rename-target>${esc(title)}</span></span>
+        <button type="button" class="rename-btn" ${rename} title="${sub ? '付箋の名前を変える（パソコンのフォルダの名前も変わります）' : '付箋の名前を変える'}" aria-label="名前を変える">✎</button>`
+        : `<button type="button" class="round-note__placeholder" ${rename} data-rename-target title="付箋の名前を入れる">タイトルを入力</button>`;
+      return `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i)}" data-drop="own" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" aria-label="${esc(title || 'この付箋')} のファイル">
+      <header class="round-note__head" data-rename-box>${head}</header>
       ${ms.length ? `<div class="round-note__files">${ms.map((m) => fileCard(m, course)).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグして入れます。</p>'}
-      <div class="round-notebook"><button type="button" class="btn btn--small btn--quiet" data-action="upload" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" title="この付箋（${esc(sub || course.name)}）にファイルを入れます（コピーします。元のファイルは残ります）">＋ ファイル</button>${sub ? `<button type="button" class="btn btn--small btn--quiet round-notebook__del" data-action="sub-remove" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" data-name="${esc(sub.split('/').pop())}" title="この付箋を消します（パソコンのフォルダを中のファイルごとゴミ箱へ）">付箋を消す</button>` : ''}</div>
-      ${i === 0 && round ? quizLine(round, list, course, quiz, gen, !!data.quiz?.key?.set, 'このフォルダ', {hintWhenNoKey: features(data.settings).quiz}) : ''}
-    </section>`
-    )
+      <div class="round-notebook">${
+        hasNote(ms) || !round
+          ? ''
+          : `<button type="button" class="btn btn--small btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" data-sub="${esc(sub)}" aria-haspopup="menu" title="この付箋のノートを作る（A4 縦。白い紙に青い罫線。横罫・方眼と行の間を選べます）">＋ ノート</button>`
+      }<button type="button" class="btn btn--small btn--quiet" data-action="upload" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" title="この付箋にファイルを入れます（コピーします。元のファイルは残ります）">＋ ファイル</button><button type="button" class="btn btn--small btn--quiet round-notebook__del" data-action="sub-remove" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" data-name="${esc(title || 'この付箋')}" title="${sub ? 'この付箋を消します（パソコンのフォルダを中のファイルごとゴミ箱へ）' : 'この付箋を消します（フォルダの直下のファイルをゴミ箱へ。下のフォルダの付箋はそのまま）'}">付箋を消す</button></div>
+    </section>`;
+    })
     .join('');
+  // クイズは付箋の中ではなく上に出す（このフォルダの資料から作る）
+  const quizArea = round
+    ? quizLine(round, list, course, quiz, gen, !!data.quiz?.key?.set, 'このフォルダ', {
+        hintWhenNoKey: features(data.settings).quiz
+      })
+    : '';
   return `
     <nav class="page-nav page-nav--stickers">
       ${stickerLayer(sk.stickers, 'heading', data)}
       <button class="btn" data-action="nav" data-route="/">← ホーム</button>
       <h2 class="ja-wrap">${jaWrap(course.name)} <span class="muted">${esc(scopeLabel(course))}</span></h2>
+      <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（フォルダを開く・読み直す・置き場所・ホームから外す・削除）" title="ほかの操作">⋯</button>
     </nav>
-    <div class="course-actions">
-      <button class="btn btn--primary" data-action="upload" data-course-id="${esc(course.id)}">ファイルを追加…</button>
-      <button type="button" class="btn" data-action="sub-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します（パソコンのフォルダの中にフォルダを作ります）">＋ 付箋</button>
-      <button class="btn" data-action="folder-reveal" data-course-id="${esc(course.id)}">フォルダを開く</button>
-      ${round && !list.some((m) => m.source === 'note' && m.status === 'ok') ? `<button type="button" class="btn btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" aria-haspopup="menu" title="このフォルダのノートを作る（A4 縦。白い紙に青い罫線。横罫・方眼と行の間を選べます）">＋ ノート</button>` : ''}
-      <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（読み直す・置き場所・ホームから外す）" title="ほかの操作">⋯</button>
-    </div>
-    <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です（開くたびに読み直します）。ファイルを消すときは、パソコンのフォルダで消してください。</p>
-    <div class="round-notes round-notes--folder">${notes}<button type="button" class="round-note-add" data-action="sub-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します（パソコンのフォルダの中にフォルダを作ります）"><span aria-hidden="true">＋</span>付箋を足す</button></div>`;
+    ${quizArea ? `<section class="test-panel test-panel--folder" aria-label="このフォルダのクイズ">${quizArea}</section>` : ''}
+    <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です（開くたびに読み直します）。</p>
+    <div class="round-notes round-notes--folder">${notes}<button type="button" class="round-note-add" data-action="sub-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します。いちばん後ろに、足した順に並びます（パソコンのフォルダの中にフォルダを作ります）"><span aria-hidden="true">＋</span>付箋を足す</button></div>`;
 }
