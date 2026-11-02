@@ -1524,6 +1524,9 @@ if __name__ == '__main__':
     ap.add_argument('--preview', default=None)
     ap.add_argument('--only', default=None)
     a = ap.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else sys.argv[1:])
+    import makers  # 既製品のペン（makers.py。build の部品を使うので、ここで読む）
+
+    FAMILIES.update(makers.MAKER_FAMILIES)
     for name in FAMILIES:
         if a.only and name != a.only:
             continue
