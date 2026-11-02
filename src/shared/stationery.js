@@ -319,11 +319,11 @@ export const CATALOG = [
   ),
   maker(
     'maker-parker-jotter',
-    'パーカー ジョッター ステンレススチール CT',
+    'パーカー ジョッター コアライン ボンドストリートブラック CT',
     'パーカー',
     'parker-jotter',
     '#1f1f22',
-    '#c9ccd1',
+    '#2a2a2c',
     '#e8e8e8',
     2750,
     'parker-jotter',
