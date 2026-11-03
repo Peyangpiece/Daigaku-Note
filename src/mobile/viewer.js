@@ -4,7 +4,7 @@
 import * as pdfjs from '/m/pdfjs/legacy/build/pdf.min.mjs';
 import {call} from './client.js';
 import {esc, sheet, toast} from './ui.js';
-import {decodePoints, inkMode, strokePath} from '/m/shared/ink.js';
+import {decodePoints, feelOf, inkMode, strokePath} from '/m/shared/ink.js';
 import {
   DEFAULT_NOTE_COLOR,
   DEFAULT_SIZE,
@@ -405,7 +405,10 @@ class PhoneViewer {
     if (a.kind === 'ink') {
       a.el = document.createElementNS(SVG_NS, 'path');
       a.el.setAttribute('fill', a.style.color);
-      a.el.setAttribute('d', strokePath(decodePoints(a.body) ?? [], a.style.width, {pressure: inkMode(a.style)}));
+      a.el.setAttribute(
+        'd',
+        strokePath(decodePoints(a.body) ?? [], a.style.width, {pressure: inkMode(a.style), feel: feelOf(a.style)})
+      );
       if (hidesUnderRedSheet(a.style.color)) a.el.dataset.red = '1';
       p.ink.append(a.el);
       this.annos.set(a.id, a);
@@ -899,7 +902,7 @@ class PhoneViewer {
             }
             const path = document.createElementNS(SVG_NS, 'path');
             path.setAttribute('fill', s.c);
-            path.setAttribute('d', strokePath(pts, s.w * NOTE_INK_SCALE, {pressure: inkMode(s)}));
+            path.setAttribute('d', strokePath(pts, s.w * NOTE_INK_SCALE, {pressure: inkMode(s), feel: feelOf(s)}));
             svg.append(path);
           }
           svg.setAttribute('viewBox', `0 0 ${w + 8} ${h + 8}`);

@@ -309,3 +309,47 @@ test('写真を使っているか：貼りものの写真（SHA-256）を、ほ�
   assert.equal(repo.photoInUse(ref), true);
   assert.equal(repo.photoInUse('../x'), true, '形のおかしい id は消さない側に倒す');
 });
+
+test('ペンの線の書き味（feel）を残す。筆圧なしの線には入れない（v0.16.22）', async () => {
+  const {encodePoints} = await import('../src/shared/ink.js');
+  const body = encodePoints([
+    [10, 10, 0.5],
+    [20, 20, 0.5],
+    [30, 25, 0.5]
+  ]);
+  const ink = (style) =>
+    JSON.parse(normalizeAnnotation({page: 1, kind: 'ink', rect: {x: 0, y: 0, w: 1, h: 1}, body, style}).style_json);
+  assert.deepEqual(ink({color: '#222222', width: 1.5, feel: {th: 0.5, ts: 0.6, te: 0.9, st: 0.2}}).feel, {
+    th: 0.5,
+    ts: 0.6,
+    te: 0.9
+  });
+  assert.equal(
+    ink({color: '#222222', width: 1.5, pressure: 'even', feel: {th: 0.5, ts: 0.6, te: 0.9}}).feel,
+    undefined
+  );
+  assert.equal(ink({color: '#222222', width: 1.5, feel: 'x'}).feel, undefined);
+  const note = JSON.parse(
+    normalizeAnnotation({
+      page: 1,
+      kind: 'note',
+      rect: {x: 0, y: 0, w: 20, h: 20},
+      body: '',
+      style: {
+        color: '#ffe14d',
+        ink: [
+          {
+            p: encodePoints([
+              [1, 1, 0.5],
+              [5, 5, 0.5]
+            ]),
+            c: '#222222',
+            w: 1.1,
+            f: {th: 0.5, ts: 0.6, te: 0.9}
+          }
+        ]
+      }
+    }).style_json
+  );
+  assert.deepEqual(note.ink[0].f, {th: 0.5, ts: 0.6, te: 0.9}, 'メモの手書きの線は f');
+});

@@ -330,7 +330,13 @@ test('多機能ペン（サクラクラフトラボ 004）：3 本の芯を回�
   assert.equal(red.color, '#d0202e');
   assert.equal(red.refill.id, 'red');
   assert.equal(red.id, it.id, '持っても品の id は変わらない（筆箱の場所と照らす）');
-  assert.equal(heldPen(itemOf('pen-black-05'), 'red'), itemOf('pen-black-05'), 'ふつうのペンはそのまま');
+  const plain = heldPen(itemOf('pen-black-05'), 'red');
+  assert.equal(plain.refill, undefined, 'ふつうのペンに芯はない');
+  assert.deepEqual(
+    [plain.color, plain.size, plain.width],
+    ['#222222', '0.5', 1.1],
+    'ふつうのペンは品の色・はじめの太さ'
+  );
   const sharp = heldPen(it, 'sharp');
   assert.ok(sharp.refill.sharp && sharp.width < it.width * 1.3 && sharp.color !== it.color, 'シャープは灰色');
   // 選んだ芯は設定に残る。持っていない品・ない芯は捨てる
@@ -421,4 +427,43 @@ test('ポーチと、ポーチの電卓・タイマー：はじめは 1 つず�
   // ポーチの道具は筆箱の 6 本には入らない・ポイントで買える
   assert.throws(() => arrange(mine, {slots: ['calc-card', null, null, null, null, null]}), /持っていない文房具/);
   assert.ok(CATALOG.filter((it) => isGear(it) && !STARTER.includes(it.id)).every((it) => it.points > 0));
+});
+
+test('ペンの太さ：どのペンも 0.3・0.5・0.7 から選べ、選んだ太さはペンごとに残る', async () => {
+  const {PEN_SIZES, arrange, defaultSize, heldPen, stationeryState} = await import('../src/shared/stationery.js');
+  assert.deepEqual(PEN_SIZES, ['0.3', '0.5', '0.7']);
+  assert.equal(defaultSize(itemOf('pen-black-038')), '0.3', '0.38 は 0.3 から');
+  assert.equal(defaultSize(itemOf('pen-black-07')), '0.7');
+  assert.equal(defaultSize(itemOf('maker-caran-849-black')), '0.7', '1.0 は 0.7 から');
+  const pen = itemOf('pen-black-05');
+  const w = (s) => heldPen(pen, null, s).width;
+  assert.ok(w('0.3') < w('0.5') && w('0.5') < w('0.7'), '細い順');
+  assert.equal(heldPen(pen, null, '0.9').size, '0.5', '選べない太さははじめの太さ');
+  assert.equal(heldPen(itemOf('marker-yellow'), null, '0.3').size, undefined, 'マーカーには太さを選ばない');
+  const st = arrange(null, {sizes: {'pen-black-05': '0.7'}});
+  assert.deepEqual(st.sizes, {'pen-black-05': '0.7'});
+  assert.throws(() => arrange(null, {sizes: {'pen-black-05': '0.4'}}), /太さ/);
+  assert.throws(() => arrange(null, {sizes: {'maker-lamy-2000': '0.5'}}), /太さ/, '持っていないペン');
+  assert.deepEqual(stationeryState({sizes: {'pen-black-05': '0.3', nope: '0.5', 'pen-red-05': 'x'}}).sizes, {
+    'pen-black-05': '0.3'
+  });
+});
+
+test('書き味：型番ごとに決まり、同じ型番の色ちがいは同じ。型番が違えば違う', async () => {
+  const {CATALOG, heldPen, penFeel} = await import('../src/shared/stationery.js');
+  const pens = CATALOG.filter((it) => it.type === 'pen' && !it.refills);
+  const key = (f) => JSON.stringify([f.th, f.ts, f.te, f.st, f.w]);
+  const bySeries = new Map();
+  for (const it of pens) {
+    const k = key(penFeel(it));
+    if (bySeries.has(it.series)) assert.equal(bySeries.get(it.series), k, `${it.id} は ${it.series} と同じ書き味`);
+    bySeries.set(it.series, k);
+  }
+  assert.equal(new Set(bySeries.values()).size, bySeries.size, 'シリーズ（型番）ごとに違う書き味');
+  const multi = itemOf('maker-craftlab-004');
+  assert.equal(key(penFeel(multi, multi.refills[0])), key(penFeel(multi, multi.refills[1])), '同じ 4C の芯は同じ');
+  assert.notEqual(key(penFeel(multi, multi.refills[0])), key(penFeel(multi, multi.refills[2])), 'シャープの芯は別');
+  assert.deepEqual(heldPen(itemOf('pen-black-05')).feel, heldPen(itemOf('pen-red-05')).feel);
+  assert.equal(heldPen(itemOf('pencil-black-05')).width, 1.3, 'シャープペンシル 0.5 の線は前の版と同じ');
+  assert.equal(heldPen(itemOf('maker-sarasa-black')).width, 1.25, 'ゲルインクは少し太い（前の版と同じ）');
 });

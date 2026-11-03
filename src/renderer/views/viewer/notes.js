@@ -7,6 +7,8 @@ import {
   createCapture,
   decodePoints,
   drawMode,
+  feelStyle,
+  streamlineOf,
   encodePoints,
   modeStyle,
   strokePath,
@@ -37,7 +39,10 @@ export const methods = {
     ];
     const draw = () => {
       if (!d) return;
-      d.path.setAttribute('d', strokePath(d.cap.points, d.pen.width * NOTE_INK_SCALE, {pressure: d.pressure}));
+      d.path.setAttribute(
+        'd',
+        strokePath(d.cap.points, d.pen.width * NOTE_INK_SCALE, {pressure: d.pressure, feel: d.pen.feel})
+      );
     };
     // 消しゴム：なぞったところに触れた線を消す。ひとなぞりで消した分は 1 手で取り消せる
     let erasing = null;
@@ -76,7 +81,7 @@ export const methods = {
         path,
         pressure: drawMode(pen, e.pointerType),
         box: svg.getBoundingClientRect(),
-        cap: createCapture({minGap: 0.3, streamline: e.pointerType === 'pen' ? 0.2 : 0.4})
+        cap: createCapture({minGap: 0.3, streamline: streamlineOf(pen.feel, e.pointerType)})
       };
       svg.setPointerCapture(e.pointerId);
       const [x, y, pr] = point(e, d.box, d.pressure);
@@ -116,7 +121,13 @@ export const methods = {
       d = null;
       if (!points.length) return;
       const before = this.snap(a);
-      const stroke = {p: encodePoints(points), c: pen.color, w: pen.width, ...modeStyle(pressure)};
+      const stroke = {
+        p: encodePoints(points),
+        c: pen.color,
+        w: pen.width,
+        ...modeStyle(pressure),
+        ...feelStyle(pen.feel, pressure, 'f')
+      };
       a.style = {...a.style, ink: [...(a.style.ink ?? []), stroke]};
       this.applyNotePop(a);
       this.record(a.key, before, this.snap(a));

@@ -10,7 +10,7 @@
 //   付箋（index）はページの端から外へはみ出して貼る目印。body に短い言葉、style に色
 //   図（figure）は style.params に決め事（shared/figures.js の cleanParams）、style.labels に書き換えた文字（cleanLabels）
 //   写真（photo）は style.ref に写真の SHA-256（userData/photos に置いた画像。ipc/notes.js の photo.add）
-import {WIDTH_MAX, WIDTH_MIN, boundsOf, decodePoints, encodePoints} from './ink.js';
+import {WIDTH_MAX, WIDTH_MIN, boundsOf, cleanFeel, decodePoints, encodePoints} from './ink.js';
 import {hiderColorOk} from './stationery.js';
 import {isBuiltinSticker} from './stickers.js';
 import {cleanLabels, cleanParams, isFigure} from './figures.js';
@@ -73,6 +73,8 @@ function cleanNoteInk(ink) {
       w: Number.isNaN(w) ? 1.1 : Math.min(WIDTH_MAX, Math.max(WIDTH_MIN, round2(w)))
     };
     if (s.pressure === false || s.pressure === 'even') stroke.pressure = s.pressure;
+    const f = cleanFeel(s.f);
+    if (f && stroke.pressure !== 'even') stroke.f = f; // ペンの書き味（v0.16.22）
     out.push(stroke);
   }
   return out;
@@ -125,6 +127,8 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
     const cleanStyle = {color: isHex(s.color) ? s.color.toLowerCase() : DEFAULT_TEXT_COLOR, width: width(s.width, 1.1)};
     // 筆圧の取れない道具で書いた（false）・筆圧を使わないペンで書いた（'even'）。太さの変え方が違う（shared/ink.js）
     if (s.pressure === false || s.pressure === 'even') cleanStyle.pressure = s.pressure;
+    const f = cleanFeel(s.feel);
+    if (f && cleanStyle.pressure !== 'even') cleanStyle.feel = f; // ペンの書き味（v0.16.22。shared/ink.js）
     const b = boundsOf(points, cleanStyle.width);
     return {
       page,

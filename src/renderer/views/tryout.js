@@ -10,8 +10,8 @@
 //   色の計算（フィルタ）だけで見え方を作ると、線のふちや色によって字や線がうっすら透けるため、描き分けて確実に隠す
 // 付箋の右下はめくれていて、押すか左上へ引くと、はがれて下の新しい紙になる。書いた線はこの画面を開いている間だけ覚える（保存しない）
 import {esc} from '../ui-kit.js';
-import {createCapture, drawMode, strokePath} from '../../shared/ink.js';
-import {TOOL_TYPES, fadesUnderRedSheet, itemOf, needsRedSheet} from '../../shared/stationery.js';
+import {createCapture, drawMode, streamlineOf, strokePath} from '../../shared/ink.js';
+import {TOOL_TYPES, fadesUnderRedSheet, heldPen, itemOf, needsRedSheet} from '../../shared/stationery.js';
 
 const SIZE = 300; // 付箋の座標（75mm 角の付箋を 1 = 0.25mm で）
 const RULE = {top: 38, gap: 28}; // 罫線の位置（7mm おき）
@@ -32,8 +32,9 @@ let sheetAt = {x: 0, y: 0}; // 赤シートを動かした量（px）
 /** 書く線の色・太さ・書き方。多機能ペンは選んだ芯（シャープも） */
 function inkOf(item) {
   if (item.type === 'pen') {
-    const r = item.refills?.find((x) => x.id === noteOf(item.id).refill) ?? item.refills?.[0] ?? item;
-    return {kind: 'pen', color: r.color, width: r.width * PEN_SCALE};
+    // 太さは品のはじめの太さ、書き味は型番のもの（PDF の編集画面と同じ。shared/stationery.js の heldPen）
+    const h = heldPen(item, noteOf(item.id).refill);
+    return {kind: 'pen', color: h.color, width: h.width * PEN_SCALE, feel: h.feel};
   }
   if (item.type === 'marker') return {kind: 'line', color: item.color, width: item.width * MARKER_SCALE};
   return {kind: 'line', color: item.color, width: HIDER_WIDTH, hider: true};
@@ -63,7 +64,8 @@ const linePath = (points) => {
 };
 /** 線の SVG（ボールペンは塗りつぶした輪郭、マーカー・文字隠しペンは太さの決まった線を乗算で） */
 function strokeSvg(ink, points, pressure) {
-  if (ink.kind === 'pen') return `<path fill="${ink.color}" d="${strokePath(points, ink.width, {pressure})}"/>`;
+  if (ink.kind === 'pen')
+    return `<path fill="${ink.color}" d="${strokePath(points, ink.width, {pressure, feel: ink.feel})}"/>`;
   return `<path class="ts-hl" stroke="${ink.color}" stroke-width="${ink.width}" d="${linePath(points)}"/>`;
 }
 /**
@@ -73,7 +75,7 @@ function strokeSvg(ink, points, pressure) {
 function seenSvg(ink, points, pressure) {
   if (ink.hider) return `<path class="ts-cover" stroke-width="${ink.width}" d="${linePath(points)}"/>`;
   if (ink.kind !== 'pen' || fadesUnderRedSheet(ink.color)) return '';
-  return `<path fill="#1a1a1a" d="${strokePath(points, ink.width, {pressure})}"/>`;
+  return `<path fill="#1a1a1a" d="${strokePath(points, ink.width, {pressure, feel: ink.feel})}"/>`;
 }
 
 /** 試し書きの欄（道具の詳細ページ。ペンケースには出さない） */
@@ -171,7 +173,7 @@ function startInk(e, svg) {
     el: group.lastElementChild,
     rect: svg.getBoundingClientRect(),
     pressure: drawMode(item, e.pointerType), // 筆圧を使わないペンは 'even'
-    cap: createCapture({minGap: 0.4, streamline: e.pointerType === 'pen' ? 0.2 : 0.4}),
+    cap: createCapture({minGap: 0.4, streamline: streamlineOf(ink.feel, e.pointerType)}),
     frame: 0
   };
   const add = (ev) => {

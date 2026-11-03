@@ -12,7 +12,7 @@ import {state} from './store.js';
 import {dressCase, refreshArt} from './model3d.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, isModKey, tearClip} from './desk-tools.js';
 import {DEFAULT_HIDER, eraserArt, heldPen, itemOf, stationeryState, toolArt, typeLabel} from '../shared/stationery.js';
-import {createCapture, drawMode, strokePath, touchesStroke} from '../shared/ink.js';
+import {createCapture, drawMode, streamlineOf, strokePath, touchesStroke} from '../shared/ink.js';
 import {growFigure, openFigureEditor, renderFigure} from './figure-view.js';
 import {figureSize, growsWithSize} from '../shared/figures.js';
 
@@ -162,7 +162,7 @@ class Desk extends DeskTools {
   hold(what) {
     if (typeof what === 'number') {
       const it = itemOf(this.st.slots[what]);
-      this.held = it ? {item: heldPen(it, this.st.refills?.[it.id]), i: what} : null;
+      this.held = it ? {item: heldPen(it, this.st.refills?.[it.id], this.st.sizes?.[it.id]), i: what} : null;
     } else this.held = what;
     for (const b of this.root.querySelectorAll('[data-slot]'))
       b.setAttribute('aria-pressed', String(this.held?.i === Number(b.dataset.slot)));
@@ -210,7 +210,7 @@ class Desk extends DeskTools {
       if (d?.kind === 'ink') {
         const points = d.cap.finish(...at(ev), ev.pressure > 0 ? ev.pressure : 0.5);
         if (points.length) {
-          d.el.setAttribute('d', strokePath(points, d.width, {pressure: d.pressure}));
+          d.el.setAttribute('d', strokePath(points, d.width, {pressure: d.pressure, feel: d.feel}));
           this.strokes.push({el: d.el, points, width: d.width});
         } else d.el.remove();
       }
@@ -227,7 +227,8 @@ class Desk extends DeskTools {
         el,
         width: look.width,
         pressure: this.held.item.type === 'pen' ? drawMode(this.held.item, e.pointerType) : false,
-        cap: createCapture({minGap: 0.3, streamline: e.pointerType === 'pen' ? 0.2 : 0.4}),
+        feel: this.held.item.feel ?? null, // ペンの書き味（型番ごと）
+        cap: createCapture({minGap: 0.3, streamline: streamlineOf(this.held.item.feel, e.pointerType)}),
         rule: this.held.item.type === 'pen' ? this.rulerEdgeAt(e.clientX, e.clientY) : null
       };
     }
@@ -249,7 +250,7 @@ class Desk extends DeskTools {
       return;
     }
     d.cap.add(x, y, d.pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
-    d.el.setAttribute('d', strokePath(d.cap.points, d.width, {pressure: d.pressure}));
+    d.el.setAttribute('d', strokePath(d.cap.points, d.width, {pressure: d.pressure, feel: d.feel}));
   }
 
   // ---- 貼りもの（下書きの層に置く。ドラッグで動かし、× で外す） ----

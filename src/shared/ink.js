@@ -126,15 +126,42 @@ export function outlinePath(outline, {flipY = false} = {}) {
 }
 
 /**
- * 書き味の設定（ペンの種類ごとの太さの変わり方）。pressure は 3 とおり：
- * true（筆圧の取れる道具：ペンタブ・スタイラス）・false（指・マウス：速さで太さを変える）・
- * 'even'（筆圧を使わないペン：どこも同じ太さ。書き始め・書き終わりも細くしない）
+ * 書き味（feel。v0.16.22）：ペンの型番ごとの線の性格。線の style に入れて保存し、画面と PDF で同じ形に描く。
+ * th：筆圧で太さが変わる強さ（0〜0.9）、ts・te：書き始め・書き終わりを細くする長さ（線の太さの何倍か。0〜5）、
+ * st：手ぶれ補正（なめらかにする強さ。0〜0.8。書くときだけ使い、保存しない）
+ * FEEL_DEFAULT は前の版の線と同じ（feel のない線はこれで描く）
  */
-export function strokeOptions(width, {pressure = true} = {}) {
+export const FEEL_DEFAULT = {th: 0.35, ts: 1.2, te: 1.5, st: 0.2};
+const FEEL_RANGE = {th: [0, 0.9], ts: [0, 5], te: [0, 5], st: [0, 0.8]};
+/** 書き味を決まった範囲に収める（形が違えば null）。保存する 3 つ（th・ts・te）だけを返す */
+export function cleanFeel(f) {
+  if (!f || typeof f !== 'object') return null;
+  const out = {};
+  for (const k of ['th', 'ts', 'te']) {
+    const v = Number(f[k]);
+    if (!Number.isFinite(v)) return null;
+    out[k] = round2(Math.min(FEEL_RANGE[k][1], Math.max(FEEL_RANGE[k][0], v)));
+  }
+  return out;
+}
+/** 保存した線の書き味（style.feel・メモの線の f） */
+export const feelOf = (style) => cleanFeel(style?.feel ?? style?.f);
+/** 書くときの手ぶれ補正：ペン先（スタイラス）は書き味の st、指・マウスは少し強め */
+export const streamlineOf = (feel, pointerType) =>
+  Math.min(FEEL_RANGE.st[1], (feel?.st ?? FEEL_DEFAULT.st) + (pointerType === 'pen' ? 0 : 0.2));
+
+/**
+ * 書き味の設定（太さの変わり方）。pressure は 3 とおり：
+ * true（筆圧の取れる道具：ペンタブ・スタイラス）・false（指・マウス：速さで太さを変える）・
+ * 'even'（筆圧を使わないペン：どこも同じ太さ。書き始め・書き終わりも細くしない）。feel はペンの書き味（なければ前の版と同じ）
+ */
+export function strokeOptions(width, {pressure = true, feel = null} = {}) {
   if (pressure === 'even') return {size: width, thinning: 0, taperStart: 0, taperEnd: 0};
+  const f = cleanFeel(feel) ?? FEEL_DEFAULT;
+  // 指・マウス：筆圧の代わりに速さで変えるので、筆圧の効きは弱め、入り・抜きは長め（前の版の 0.25・2 倍・3 倍と同じ割合）
   return pressure
-    ? {size: width, thinning: 0.35, taperStart: width * 1.2, taperEnd: width * 1.5}
-    : {size: width, thinning: 0.25, taperStart: width * 2, taperEnd: width * 3};
+    ? {size: width, thinning: f.th, taperStart: width * f.ts, taperEnd: width * f.te}
+    : {size: width, thinning: f.th * (0.25 / 0.35), taperStart: width * f.ts * (2 / 1.2), taperEnd: width * f.te * 2};
 }
 
 /** 保存した線の書き味（style.pressure）→ strokePath の pressure。'even'（筆圧なし）・false（筆圧の取れない道具）・true */
@@ -143,10 +170,15 @@ export const inkMode = (style) => (style?.pressure === 'even' ? 'even' : style?.
 export const drawMode = (item, pointerType) => (item?.even ? 'even' : pointerType === 'pen');
 /** 線の style に入れる書き味（true は入れない。前の版と同じ形） */
 export const modeStyle = (mode) => (mode === true ? {} : {pressure: mode});
+/** 線の style に入れるペンの書き味（feel）。筆圧なしの線（even）は太さが変わらないので入れない。key はメモの線では f */
+export const feelStyle = (feel, mode, key = 'feel') => {
+  const f = mode === 'even' ? null : cleanFeel(feel);
+  return f ? {[key]: f} : {};
+};
 
-/** 線のパス（SVG）。points・幅・筆圧が取れたかから一度に作る */
-export function strokePath(points, width, {pressure = true, flipY = false} = {}) {
-  return outlinePath(strokeOutline(points, strokeOptions(width, {pressure})), {flipY});
+/** 線のパス（SVG）。points・幅・筆圧が取れたか・書き味から一度に作る */
+export function strokePath(points, width, {pressure = true, flipY = false, feel = null} = {}) {
+  return outlinePath(strokeOutline(points, strokeOptions(width, {pressure, feel})), {flipY});
 }
 
 /**

@@ -530,12 +530,93 @@ export function refillOf(item, refillId) {
   if (!Array.isArray(item?.refills) || !item.refills.length) return null;
   return item.refills.find((r) => r.id === refillId) ?? item.refills[0];
 }
-/** 持って書くときのペン：多機能ペンは選んだ芯の色・太さにした品（refill に芯）。ふつうのペンはそのまま */
-export function heldPen(item, refillId) {
-  const r = refillOf(item, refillId);
-  if (!r) return item;
-  return {...item, color: r.color, width: r.width, mm: r.mm, refill: r};
+/**
+ * ペンの太さ（v0.16.22）：どのペンも 0.3・0.5・0.7 から選ぶ（設定 stationery.sizes に、ペンごとに残す）。
+ * 線の太さ（pt）は、選んだ太さの基準（ボールペンの線）に、書き味の濃さ（w：ゲルインク・鉛筆は少し太い）を掛ける
+ */
+export const PEN_SIZES = ['0.3', '0.5', '0.7'];
+const SIZE_WIDTH = {0.3: 0.75, 0.5: 1.1, 0.7: 1.5};
+/** 品のはじめの太さ：字幅に近いもの（0.38 → 0.3、1.0 → 0.7） */
+export const defaultSize = (item) => {
+  const mm = Number(item?.refill?.mm ?? item?.mm ?? 0.5);
+  return PEN_SIZES.reduce((a, b) => (Math.abs(Number(b) - mm) < Math.abs(Number(a) - mm) ? b : a), '0.5');
+};
+/**
+ * 書き味（型番ごと。同じ型番の色ちがいは同じ書き味）。th・ts・te・st は shared/ink.js の feel、w は線の濃さ（太さの倍率）。
+ * name・note は筆箱・ツールバーに出す一言
+ */
+export const FEELS = {
+  'pen-05': {name: 'ふつうの油性', note: '筆圧にほどよく応える', th: 0.35, ts: 1.2, te: 1.5, st: 0.2, w: 1},
+  'pen-038': {name: 'かための細字', note: '太さがあまり変わらず、くっきり', th: 0.2, ts: 0.8, te: 1, st: 0.15, w: 1},
+  'pen-07': {name: 'やわらかい太字', note: '押すと太く、抜きが長い', th: 0.5, ts: 1.6, te: 2.2, st: 0.25, w: 1},
+  'pen-art': {name: 'しっとり', note: '入りと抜きがやわらかい', th: 0.4, ts: 1.6, te: 2, st: 0.3, w: 1},
+  'pen-even': {name: '筆圧なし', note: 'どこも同じ太さ', th: 0, ts: 0, te: 0, st: 0.3, w: 1},
+  'pencil-05': {
+    name: '鉛筆らしい',
+    note: '筆圧で濃さと太さが大きく変わる',
+    th: 0.55,
+    ts: 0.6,
+    te: 0.9,
+    st: 0.15,
+    w: 1.18
+  },
+  'pencil-03': {name: '細い芯', note: '筆圧に敏感で、とがった線', th: 0.45, ts: 0.5, te: 0.7, st: 0.12, w: 1.15},
+  'pencil-07': {name: '太い芯', note: '筆圧で大きく太る', th: 0.65, ts: 0.8, te: 1.1, st: 0.18, w: 1.2},
+  jetstream: {name: '低粘度の油性', note: '軽く、抜きが長くのびる', th: 0.28, ts: 0.9, te: 2, st: 0.3, w: 1},
+  sarasa: {name: 'ゲルインク', note: '濃く、入りから太い', th: 0.3, ts: 0.5, te: 0.8, st: 0.25, w: 1.14},
+  'caran-849': {name: 'なめらかな中字', note: '重めで安定した線', th: 0.32, ts: 1, te: 1.3, st: 0.4, w: 1.05},
+  'parker-jotter': {name: 'かための中字', note: '太さが変わりにくい', th: 0.24, ts: 1.1, te: 1.4, st: 0.32, w: 1},
+  'lamy-2000': {name: 'しなやか', note: '筆圧にやさしく応える', th: 0.4, ts: 1.3, te: 1.7, st: 0.42, w: 1.02},
+  'kaweco-special': {name: 'きびきび', note: '入りが短く、止めがはっきり', th: 0.3, ts: 0.6, te: 1, st: 0.22, w: 1},
+  '4C': {name: '4C の油性', note: '細めで軽い', th: 0.33, ts: 1, te: 1.6, st: 0.32, w: 1},
+  sharp: {name: '鉛筆らしい', note: '筆圧で濃さと太さが大きく変わる', th: 0.55, ts: 0.6, te: 0.9, st: 0.15, w: 1.18}
+};
+const hashOf = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+/** 型番の鍵：多機能ペンは芯の規格（品の refill。シャープの芯は sharp）、ほかはシリーズ（なければ id） */
+function feelKey(item, refill) {
+  if (refill) return refill.sharp ? 'sharp' : (itemOf(item.id)?.refill ?? item.id);
+  return item?.series || item?.id;
 }
+/** その品（と芯）の書き味。表にない型番は、鍵から決まった値にする（同じ型番ならいつも同じ） */
+export function penFeel(item, refill = null) {
+  const key = feelKey(item, refill);
+  if (FEELS[key]) return FEELS[key];
+  const h = hashOf(key);
+  const pick = (lo, hi, n) => Math.round((lo + (((h >>> n) % 100) / 100) * (hi - lo)) * 100) / 100;
+  return {
+    name: 'ふつう',
+    note: '',
+    th: pick(0.25, 0.45, 0),
+    ts: pick(0.8, 1.6, 3),
+    te: pick(1, 2, 6),
+    st: pick(0.15, 0.4, 9),
+    w: 1
+  };
+}
+/** 線の太さ（pt）：選んだ太さ × 書き味の濃さ */
+export const sizeWidth = (size, feel) =>
+  Math.round((SIZE_WIDTH[size] ?? SIZE_WIDTH['0.5']) * (feel?.w ?? 1) * 100) / 100;
+
+/**
+ * 持って書くときのペン：多機能ペンは選んだ芯の色にした品（refill に芯）。太さは選んだ太さ（size。なければ品のはじめの太さ）、
+ * 書き味（feel）は型番のもの。ペンでない道具（マーカー・文字隠し）はそのまま
+ */
+export function heldPen(item, refillId, size = null) {
+  const r = refillOf(item, refillId);
+  const base = r ? {...item, color: r.color, width: r.width, mm: r.mm, refill: r} : item;
+  if (item?.type !== 'pen') return base;
+  const s = PEN_SIZES.includes(size) ? size : defaultSize(base);
+  const f = penFeel(item, r);
+  return {
+    ...base,
+    size: s,
+    width: sizeWidth(s, f),
+    feel: {th: f.th, ts: f.ts, te: f.te, st: f.st},
+    feelName: f.name,
+    feelNote: f.note
+  };
+}
+
 /** 次の芯（回転式：最後の芯の次は最初へ） */
 export function nextRefill(item, refillId) {
   const r = refillOf(item, refillId);
@@ -620,7 +701,12 @@ export function stationeryState(raw) {
       const it = itemOf(id);
       if (has.has(id) && it?.refills?.some((x) => x.id === rid)) refills[id] = rid;
     }
-  return {owned, slots, ...gear, refills};
+  // ペンの太さ（v0.16.22）：{ペンの id: '0.3' | '0.5' | '0.7'}。持っているペンだけ
+  const sizes = {};
+  if (r.sizes && typeof r.sizes === 'object')
+    for (const [id, s] of Object.entries(r.sizes))
+      if (has.has(id) && itemOf(id)?.type === 'pen' && PEN_SIZES.includes(s)) sizes[id] = s;
+  return {owned, slots, ...gear, refills, sizes};
 }
 
 /** 円もポイントも要らない品を入手する（カートを通らない近道。いまははじめから持っている品だけが当たる）。入手できなければ Error */
@@ -680,7 +766,7 @@ export function purchase(raw, ids, payment = null, {now = new Date(), orderId = 
 }
 
 /** 筆箱の中身・ペンケース・多機能ペンの芯を変える。持っていない品は入れられない（Error） */
-export function arrange(raw, {slots, refills, ...picked} = {}) {
+export function arrange(raw, {slots, refills, sizes, ...picked} = {}) {
   const st = stationeryState(raw);
   const has = new Set(st.owned);
   if (slots !== undefined) {
@@ -703,11 +789,17 @@ export function arrange(raw, {slots, refills, ...picked} = {}) {
     for (const [id, rid] of Object.entries(refills))
       if (!has.has(id) || !itemOf(id)?.refills?.some((x) => x.id === rid)) throw new Error('その芯はありません');
   }
+  if (sizes !== undefined) {
+    if (!sizes || typeof sizes !== 'object') throw new Error('太さの指定が不正です');
+    for (const [id, s] of Object.entries(sizes))
+      if (!has.has(id) || itemOf(id)?.type !== 'pen' || !PEN_SIZES.includes(s)) throw new Error('その太さは選べません');
+  }
   return stationeryState({
     ...st,
     ...(slots !== undefined ? {slots} : {}),
     ...gear,
-    ...(refills !== undefined ? {refills: {...st.refills, ...refills}} : {})
+    ...(refills !== undefined ? {refills: {...st.refills, ...refills}} : {}),
+    ...(sizes !== undefined ? {sizes: {...st.sizes, ...sizes}} : {})
   });
 }
 
