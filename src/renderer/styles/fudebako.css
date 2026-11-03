@@ -1134,3 +1134,15 @@ button.fb-card {
   grid-column: 2 / -1;
   white-space: normal;
 }
+/* 持ち物のポーチ：中の道具と使い方 */
+.fb-pouch .fb-card__art svg {
+  width: 100%;
+  height: auto;
+  max-height: 90px;
+}
+.fb-pouch__hint {
+  margin-top: var(--space-2);
+}
+.fb-back {
+  justify-self: center;
+}

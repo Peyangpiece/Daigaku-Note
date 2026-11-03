@@ -1,4 +1,5 @@
-// 筆箱のページ（SPEC §15）。上の切り替えタブの「筆箱」。
+// 持ち物のページ（SPEC §15）。上の切り替えボタンの「持ち物」。ページの中は「筆箱」「ポーチ」の 2 つ。右上の「ショップ」からショップへ。
+// 「ポーチ」：ポーチの道具（赤シート・電卓・メモ帳・定規・タイマー）と使い方。
 // 「わたしの筆箱」：筆箱に入れる 6 本（編集画面の PDF の横に出る）とペンケースを選ぶ。持っている文房具の一覧。
 // 「ショップ」：上に「新しく入りました」の帯、検索と絞り込み、シリーズ（同じ品の色ちがい）ごとの札。色は札の右下の丸で選ぶ。
 //   ポイントの品（公式の品）は白い札にグレーの枠、円の品は値段帯（shared/stationery.js の TIERS）で札の紙を変える。
@@ -14,6 +15,7 @@ import {navigate, refresh, state} from '../store.js';
 import {cart} from '../cart.js';
 import {strokePath} from '../../shared/ink.js';
 import {tryout} from './tryout.js';
+import {POUCH_ART} from '../desk-tools.js';
 import {EARN, dayOf, pt} from '../../shared/points.js';
 import {
   PAYMENT_METHODS,
@@ -108,12 +110,18 @@ const art = (item, {big = false, foot = true} = {}) =>
 const detailRoute = (item) => `/fudebako/item/${encodeURIComponent(item.id)}`;
 const SHOP = '/fudebako?tab=shop';
 
-function tabs(shop) {
-  // 画面の切り替え（アドレスが変わる）なので tab ではなく、いまいる画面を aria-current で示す
-  return `<nav class="fb-tabs" aria-label="筆箱の画面">
-    <button type="button" class="fb-tab" aria-current="${shop ? 'false' : 'page'}" data-action="nav" data-route="/fudebako">わたしの筆箱</button>
-    <button type="button" class="fb-tab" aria-current="${shop ? 'page' : 'false'}" data-action="nav" data-route="${SHOP}">ショップ</button>
+const POUCH = '/fudebako?tab=pouch';
+
+/** 持ち物の切り替え（筆箱・ポーチ）。画面の切り替え（アドレスが変わる）なので、いまいる画面を aria-current で示す */
+function tabs(pouch) {
+  return `<nav class="fb-tabs" aria-label="持ち物">
+    <button type="button" class="fb-tab" aria-current="${pouch ? 'false' : 'page'}" data-action="nav" data-route="/fudebako">筆箱</button>
+    <button type="button" class="fb-tab" aria-current="${pouch ? 'page' : 'false'}" data-action="nav" data-route="${POUCH}">ポーチ</button>
   </nav>`;
+}
+/** 右上のショップへのボタン（持ち物のページ。前はカートのボタンがあった場所） */
+function shopButton() {
+  return `<button type="button" class="shop-cart" data-action="nav" data-route="${SHOP}">${ICON.bag} ショップ</button>`;
 }
 /** いまのポイントの残高 */
 const balance = () => state.data?.points?.balance ?? 0;
@@ -130,8 +138,26 @@ const ICON = {
   search:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>',
   coin: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#f5c542" stroke="#b8860b" stroke-width="1.6"/><text x="12" y="16.2" text-anchor="middle" font-size="11" font-weight="700" fill="#7a5600" font-family="sans-serif">P</text></svg>',
-  cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11h11l2-7H7"/><circle cx="9.5" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/></svg>'
+  cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11h11l2-7H7"/><circle cx="9.5" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/></svg>',
+  bag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>'
 };
+
+// ポーチの道具（desk-tools.js の四隅のポーチと同じもの）。PDF の編集画面の右下から出す
+const POUCH_TOOLS = [
+  ['sheet', '赤シート', '赤い字とマーカーの所を隠して、暗記の確かめに'],
+  ['calc', '電卓', '式を入れて計算できる'],
+  ['memo', 'メモ帳', '書いてちぎると、ページに貼れる'],
+  ['ruler', '定規', 'ふちに沿ってまっすぐな線が引ける'],
+  ['timer', 'タイマー', '時間になると音で知らせる']
+];
+/** ポーチ：中の道具と、何に使うか */
+function pouchPage() {
+  return `<div class="fb-grid fb-pouch">${POUCH_TOOLS.map(
+    ([k, name, what]) => `<div class="fb-card"><div class="fb-card__art">${POUCH_ART[k]}</div>
+      <div class="fb-card__name">${name}</div><div class="muted fb-card__spec">${what}</div></div>`
+  ).join('')}</div>
+    <p class="muted fb-pouch__hint">PDF を開いた画面・ホーム・クイズの右下の「ポーチ」から使えます。</p>`;
+}
 
 /** わたしの筆箱：ペンケースの中に 6 本。押した場所に、下の一覧から入れる */
 function mine(s) {
@@ -175,7 +201,7 @@ function mine(s) {
     <div class="fb-case" style="--case-base: ${kase.base}; --case-trim: ${kase.trim}">
       <div class="fb-case__art">${caseArt(kase)}</div>
       <div class="fb-case__slots">${slots}</div>
-      <p class="muted fb-case__hint">筆箱のペンは、PDF の編集画面の横に出ます（キーの 1〜6 でも持てます）。場所を押してから、下の一覧で「入れる」を押すと入れ替わります。</p>
+      <p class="muted fb-case__hint">PDF を開いた画面の横に出ます（1〜6 キーでも持てます）。場所を選んで、下の一覧の「入れる」で入れ替えます。</p>
     </div>
     <section class="fb-group"><h3>ペンケース</h3><div class="fb-grid fb-grid--cases">
       ${cases
@@ -188,8 +214,7 @@ function mine(s) {
         )
         .join('')}
     </div></section>
-    ${list}
-    <p class="fb-more"><button type="button" class="btn" data-action="nav" data-route="${SHOP}">ショップへ →</button></p>`;
+    ${list}`;
 }
 
 // ---- ショップ ----
@@ -375,7 +400,7 @@ function buyButtons(s, it) {
   const at = s.slots.indexOf(null);
   return at >= 0
     ? `<button type="button" class="btn btn--primary" data-fb="put" data-id="${it.id}" data-at="${at}">筆箱の ${at + 1} 本目に入れる</button>
-      <button type="button" class="btn" data-action="nav" data-route="/fudebako">わたしの筆箱で選ぶ</button>`
+      <button type="button" class="btn" data-action="nav" data-route="/fudebako">筆箱で選ぶ</button>`
     : swapButtons(s, it);
 }
 /** 筆箱がいっぱいのとき：何本目と入れ替えるかのボタン（丸は今そこにある品のインクの色。出した品は持ち物に残る） */
@@ -591,7 +616,7 @@ function orderPage(s, id) {
       <ul class="shop-rows">${rows}</ul>
       <dl class="shop-total">${o.points ? `<dt class="shop-total__sum">合計（ポイント）</dt><dd class="shop-total__sum">${pt(o.points)}</dd>` : ''}${o.total || !o.points ? `<dt class="shop-total__sum">合計（円）</dt><dd class="shop-total__sum">${yen(o.total)}</dd>` : ''}</dl>
       <p class="muted">買った文房具は「わたしの筆箱」に入りました。筆箱に入れると PDF の編集画面で使えます。</p>
-      <p class="shop-done__act"><button type="button" class="btn btn--primary" data-action="nav" data-route="/fudebako">わたしの筆箱へ</button><button type="button" class="btn" data-action="nav" data-route="${SHOP}">ショップへ戻る</button></p>
+      <p class="shop-done__act"><button type="button" class="btn btn--primary" data-action="nav" data-route="/fudebako">持ち物の筆箱へ</button><button type="button" class="btn" data-action="nav" data-route="${SHOP}">ショップへ戻る</button></p>
     </div>`;
 }
 
@@ -632,7 +657,9 @@ function pointsPage() {
 
 /** 筆箱のページ（#/fudebako、ショップは #/fudebako?tab=shop、カート #/fudebako/cart、レジ #/fudebako/checkout、注文 #/fudebako/order/<id>、ポイント #/fudebako/points） */
 export function renderFudebako(_state, route) {
-  const isShop = new URLSearchParams(route.split('?')[1] ?? '').get('tab') === 'shop';
+  const tab = new URLSearchParams(route.split('?')[1] ?? '').get('tab');
+  const isShop = tab === 'shop';
+  const isPouch = tab === 'pouch';
   const item = route.match(/^\/fudebako\/item\/([^?]+)/);
   const order = route.match(/^\/fudebako\/order\/([^?]+)/);
   const isCart = /^\/fudebako\/cart(\?|$)/.test(route);
@@ -653,9 +680,15 @@ export function renderFudebako(_state, route) {
             ? pointsPage()
             : isShop
               ? shop(s)
-              : mine(s);
+              : isPouch
+                ? pouchPage()
+                : mine(s);
+  // 持ち物（筆箱・ポーチ）は右上にショップへのボタン。ショップの中は「← 持ち物」とカート
+  const head = inShop
+    ? `<div class="fb-head"><h2>ショップ</h2><button type="button" class="btn btn--small fb-back" data-action="nav" data-route="/fudebako">← 持ち物</button><div class="fb-head__side">${pointsButton()}${cartButton()}</div></div>`
+    : `<div class="fb-head"><h2>持ち物</h2>${tabs(isPouch)}<div class="fb-head__side">${pointsButton()}${shopButton()}</div></div>`;
   return `<div class="fudebako">
-    <div class="fb-head"><h2>筆箱</h2>${tabs(inShop)}<div class="fb-head__side">${pointsButton()}${cartButton()}</div></div>
+    ${head}
     ${body}
   </div>`;
 }
