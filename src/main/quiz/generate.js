@@ -123,7 +123,7 @@ export function costOf(model, usage) {
 
 /** API の失敗を、画面に出す言葉に（SPEC §11.8） */
 export function friendlyAiError(e, Anthropic) {
-  if (e?.code && /^(no-|limit|refusal|quiz-)/.test(e.code)) return e.message;
+  if (e?.code && /^(no-|limit|refusal|quiz-|cli-)/.test(e.code)) return e.message;
   if (Anthropic && e instanceof Anthropic.AuthenticationError) return 'API キーを確かめてください（設定 → クイズ）';
   if (Anthropic && e instanceof Anthropic.PermissionDeniedError)
     return 'この API キーではクイズを作れません（設定 → クイズ）';

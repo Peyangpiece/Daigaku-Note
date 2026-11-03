@@ -1,24 +1,52 @@
 // クイズの窓口（SPEC §11）。生成は 1 件ずつ（同期のジョブとは別の列。同期中でも待たずに作る）、答えの記録と復習の段階、API キー。
 import {DEFAULT_MIX, TYPES, grade} from '../../shared/quiz.js';
 import {schedule, reviewQueue, nextDue} from '../../shared/srs.js';
+import fs from 'node:fs';
 import {DEFAULT_MODEL, MODELS, friendlyAiError, generateQuiz} from './generate.js';
+import {CLI_ENGINES, ENGINES, createCliClient, detectClis} from './cli.js';
 
 const KEY = 'ai:anthropic';
 const err = (message) => Object.assign(new Error(message), {code: 'quiz-service'});
 
-export function createQuizService({repo, secrets, log = () => {}, notify = () => {}, anthropic = null}) {
+export function createQuizService({
+  repo,
+  secrets,
+  log = () => {},
+  notify = () => {},
+  anthropic = null,
+  detect = detectClis,
+  cliClient = createCliClient
+}) {
   const loadSdk = async () => anthropic ?? (await import('@anthropic-ai/sdk')).default;
   const state = new Map(); // roundId -> {state: 'queued'|'running'|'failed', message}
   let chain = Promise.resolve();
 
   const settings = () => ({
+    engine: ENGINES[repo.getSetting('quiz.engine')] ? repo.getSetting('quiz.engine') : 'api', // クイズを作る AI（cli.js の ENGINES）
     model: MODELS[repo.getSetting('quiz.model')] ? repo.getSetting('quiz.model') : DEFAULT_MODEL,
     mix: {...DEFAULT_MIX, ...(repo.getSetting('quiz.mix') ?? {})},
     perDay: repo.getSetting('quiz.perDay', 30),
     perMonthUsd: repo.getSetting('quiz.perMonthUsd', 5)
   });
 
+  /** このパソコンの Claude Code・Codex（探したときに覚えた場所）。ファイルがもうなければ null */
+  const cliOf = (engine) => {
+    const c = (repo.getSetting('quiz.cli', {}) ?? {})[engine];
+    return c?.path && fs.existsSync(c.path) ? c : null;
+  };
+
   async function client() {
+    const {engine} = settings();
+    if (engine !== 'api') {
+      const c =
+        cliOf(engine) ??
+        (() => {
+          throw err(
+            `${ENGINES[engine].label} がこのパソコンに見つかりません（設定 → クイズ で探し直すか、ほかの AI を選んでください）`
+          );
+        })();
+      return cliClient({engine, file: c.path, log});
+    }
     const key = await secrets.get(KEY);
     if (!key?.apiKey) throw err('クイズを作るには Claude API キーが必要です（設定 → クイズ）');
     const Anthropic = await loadSdk();
@@ -52,7 +80,8 @@ export function createQuizService({repo, secrets, log = () => {}, notify = () =>
         {repo, client: c, log},
         {
           roundId,
-          model: s.model,
+          // Codex は自分の設定のモデルを使う（記録には codex と残す）
+          model: s.engine === 'codex' ? 'codex' : s.model,
           mix: s.mix,
           limits: {perDay: s.perDay, perMonthUsd: s.perMonthUsd},
           onProgress: (m) => setState(roundId, {state: 'running', message: m})
@@ -86,9 +115,39 @@ export function createQuizService({repo, secrets, log = () => {}, notify = () =>
     return {ok: true, last4: k.slice(-4)};
   }
 
+  /**
+   * クイズを作れるか（set）と、その中身。set は選んだ AI で作れるとき true（API キーがある、または Claude Code・Codex が見つかる）。
+   * apiKey は API キーを保存してあるか（AI を切り替えてもキーは残す）
+   */
   async function keyInfo() {
     const key = await secrets.get(KEY);
-    return key?.apiKey ? {set: true, last4: key.apiKey.slice(-4)} : {set: false};
+    const {engine} = settings();
+    const apiKey = !!key?.apiKey;
+    return {
+      set: engine === 'api' ? apiKey : !!cliOf(engine),
+      engine,
+      apiKey,
+      ...(apiKey ? {last4: key.apiKey.slice(-4)} : {})
+    };
+  }
+
+  /** このパソコンの Claude Code・Codex を探して覚える。戻りは {engine: {path, version} | null} */
+  async function detectCli() {
+    const found = await detect();
+    repo.setSetting('quiz.cli', found);
+    log(
+      `[quiz] AI のコマンドを探しました：${CLI_ENGINES.map((e) => `${e}=${found[e] ? found[e].version : 'なし'}`).join('・')}`
+    );
+    return found;
+  }
+
+  /** クイズを作る AI を選ぶ。Claude Code・Codex は見つかっているときだけ */
+  function setEngine(engine) {
+    if (!ENGINES[engine]) throw err('知らない AI の種類です');
+    if (engine !== 'api' && !cliOf(engine))
+      throw err(`${ENGINES[engine].label} がこのパソコンに見つかりません。入れてから「探す」を押してください`);
+    repo.setSetting('quiz.engine', engine);
+    return {ok: true};
   }
 
   /** 答えを記録し、復習の段階を進める。戻りは {ok, a}（正解を返して画面に出す） */
@@ -134,10 +193,23 @@ export function createQuizService({repo, secrets, log = () => {}, notify = () =>
       ...repo.aiUsageSummary(),
       ...s,
       models: Object.fromEntries(Object.entries(MODELS).map(([id, m]) => [id, m.label])),
+      engines: Object.fromEntries(Object.entries(ENGINES).map(([id, e]) => [id, e.label])),
+      cli: repo.getSetting('quiz.cli', null), // 探した結果（まだ探していなければ null）
       types: TYPES,
       generating: Object.fromEntries(state)
     };
   }
 
-  return {generate, setKey, keyInfo, removeKey: () => secrets.remove(KEY), answer, review, status, settings};
+  return {
+    generate,
+    setKey,
+    keyInfo,
+    removeKey: () => secrets.remove(KEY),
+    detectCli,
+    setEngine,
+    answer,
+    review,
+    status,
+    settings
+  };
 }

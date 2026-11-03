@@ -314,3 +314,32 @@ textarea.input {
   grid-template-columns: repeat(5, 1fr);
   gap: var(--space-1);
 }
+
+/* 設定 → クイズ：クイズを作る AI（Claude API キー・Claude Code・Codex） */
+.qz-engines {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  border: 0;
+}
+.qz-engines legend {
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+.qz-engine {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--paper-ink) 4%, transparent);
+  cursor: pointer;
+}
+.qz-engine input {
+  margin-top: 4px;
+}
+.qz-engine--off {
+  opacity: 0.55;
+  cursor: default;
+}

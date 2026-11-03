@@ -20,13 +20,27 @@ export function register({handle, repo, log, quiz}) {
   handle('quiz.setKey', async ({apiKey, consent}) => {
     if (consent !== true) bad('AI に送る内容への同意が要ります');
     const r = await quiz.setKey(str(apiKey, 300) ?? bad('API キーを入れてください'));
-    repo.setSetting('quiz.consent', {version: AI_CONSENT_VERSION, at: new Date().toISOString()});
+    quiz.setEngine('api'); // キーを入れたら、作る AI も API キーにする
+    repo.setSetting('quiz.consent', {version: AI_CONSENT_VERSION, at: new Date().toISOString(), engine: 'api'});
     return r;
   });
 
   handle('quiz.removeKey', async () => {
     await quiz.removeKey();
-    repo.setSetting('quiz.consent', null); // 取り消し：キーといっしょに同意も消す
+    // 取り消し：API キーで作っていたなら、キーといっしょに同意も消す（Claude Code・Codex への同意は残す）
+    if (quiz.settings().engine === 'api') repo.setSetting('quiz.consent', null);
+    return {ok: true};
+  });
+
+  // このパソコンの Claude Code・Codex を探す（設定 → クイズ を開いたときと「探す」）
+  handle('quiz.detectCli', () => quiz.detectCli());
+
+  // クイズを作る AI を選ぶ。送り先（Claude API・Claude Code は Anthropic、Codex は OpenAI）への同意といっしょに記録する
+  handle('quiz.setEngine', ({engine, consent}) => {
+    const e = str(engine, 20) ?? bad('AI の種類が不正です');
+    if (consent !== true) bad('AI に送る内容への同意が要ります');
+    quiz.setEngine(e);
+    repo.setSetting('quiz.consent', {version: AI_CONSENT_VERSION, at: new Date().toISOString(), engine: e});
     return {ok: true};
   });
 
@@ -48,8 +62,12 @@ export function register({handle, repo, log, quiz}) {
   });
 
   handle('quiz.generate', ({roundIds}) => {
-    if (repo.getSetting('quiz.consent', null)?.version !== AI_CONSENT_VERSION)
+    const consent = repo.getSetting('quiz.consent', null);
+    if (consent?.version !== AI_CONSENT_VERSION)
       bad('AI に送る内容の説明が変わりました。設定 → クイズ で内容を確かめて同意し直してください');
+    // 同意は送り先ごと（前の版の記録には engine がない＝API キー）
+    if ((consent.engine ?? 'api') !== quiz.settings().engine)
+      bad('選んだ AI に送ることへの同意がありません。設定 → クイズ で同意してください');
     return {queued: quiz.generate(ids(roundIds))};
   });
 

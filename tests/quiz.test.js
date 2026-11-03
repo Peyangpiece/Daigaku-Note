@@ -9,6 +9,7 @@ import {checkQuestion, checkQuiz, choicesOf, findQuote, grade, parseNumber} from
 import {scrub, pptxPages, unzip} from '../src/main/quiz/extract.js';
 import {SCHEMA, costOf, generateQuiz} from '../src/main/quiz/generate.js';
 import {createQuizService} from '../src/main/quiz/service.js';
+import {createCliClient} from '../src/main/quiz/cli.js';
 
 const TEXT = `原価企画とは、製品の企画・設計段階において目標原価を設定し、それを達成するための活動である。
 目標原価は、予定販売価格から目標利益を差し引いて求める。予定販売価格が 1,000 円、目標利益が 200 円なら目標原価は 800 円である。
@@ -382,4 +383,49 @@ test('API キーがなければ作らずに知らせる', async (t) => {
   const fin = events.find(([ch]) => ch === 'quiz.finished');
   assert.equal(fin[1].ok, false);
   assert.equal(fin[1].message, 'クイズを作るには Claude API キーが必要です（設定 → クイズ）');
+});
+
+test('このパソコンの Claude Code で作る：探した場所を覚え、選ぶと API キーなしで作れる', async (t) => {
+  const {repo} = await setup(t);
+  const bin = path.join(await mkdtemp(path.join(tmpdir(), 'dn-cli-')), 'claude');
+  await writeFile(bin, '');
+  const runner = async (_file, args) => {
+    const schema = JSON.parse(args[args.indexOf('--json-schema') + 1]);
+    const out = schema.required.includes('qs')
+      ? {title: '原価企画', qs: [Q.choice, Q.tf]}
+      : {
+          answers: [
+            {i: 0, answer: '企画・設計段階'},
+            {i: 1, answer: '×'}
+          ]
+        };
+    return {
+      code: 0,
+      stdout: JSON.stringify({type: 'result', subtype: 'success', is_error: false, structured_output: out}),
+      stderr: ''
+    };
+  };
+  const events = [];
+  const svc = createQuizService({
+    repo,
+    secrets: {get: async () => null},
+    notify: (ch, p) => events.push([ch, p]),
+    detect: async () => ({'claude-code': {path: bin, version: '2.1.316'}, codex: null}),
+    cliClient: (o) => createCliClient({...o, runner})
+  });
+  assert.deepEqual(await svc.keyInfo(), {set: false, engine: 'api', apiKey: false});
+  assert.throws(() => svc.setEngine('codex'), /見つかりません/);
+  await svc.detectCli();
+  assert.equal(svc.status().cli['claude-code'].version, '2.1.316');
+  svc.setEngine('claude-code');
+  assert.deepEqual(await svc.keyInfo(), {set: true, engine: 'claude-code', apiKey: false});
+  svc.generate(['r3']);
+  for (let i = 0; i < 50 && !events.some(([ch]) => ch === 'quiz.finished'); i++)
+    await new Promise((r) => setTimeout(r, 20));
+  const fin = events.find(([ch]) => ch === 'quiz.finished');
+  assert.equal(fin[1].ok, true, fin[1].message);
+  assert.equal(fin[1].count, 2);
+  assert.equal(repo.aiUsageSummary().monthUsd, 0, 'Claude Code の分は費用に数えない');
+  await rm(bin);
+  assert.equal((await svc.keyInfo()).set, false, 'コマンドを消したら作れない');
 });

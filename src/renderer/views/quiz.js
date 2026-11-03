@@ -142,7 +142,7 @@ export function renderQuiz({data}, route) {
         ? `今日の復習はありません。${s.next ? `次は ${new Date(s.next.due).toLocaleDateString('ja-JP', {month: 'numeric', day: 'numeric'})} に ${s.next.count} 問です。` : ''}`
         : s.mode === 'retry'
           ? 'まちがえた問題はありません。'
-          : 'まだ問題がありません。授業やフォルダの画面にある「資料からクイズを作る」で作れます（先に 設定 → クイズ で Claude API キーを入れます）。';
+          : 'まだ問題がありません。授業やフォルダの画面にある「資料からクイズを作る」で作れます（先に 設定 → クイズ で、作る AI（Claude API キー・Claude Code・Codex）を選びます）。';
     // 次の一手：授業画面へ（授業が分からなければホームへ）
     const go = course
       ? `<button class="btn btn--primary" data-action="quiz-quit" data-route="/course/${esc(course.id)}">${esc(course.name)}の授業画面へ</button>`

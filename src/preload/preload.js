@@ -35,6 +35,8 @@ const INVOKE = [
   'round.update',
   'quiz.setKey',
   'quiz.removeKey',
+  'quiz.detectCli',
+  'quiz.setEngine',
   'quiz.settings',
   'quiz.generate',
   'quiz.fromMasks',
