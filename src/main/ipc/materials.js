@@ -95,9 +95,11 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
               place.course.kind === 'folder'
                 ? 'このフォルダ'
                 : where
-                  ? where.number === 0
-                    ? where.title_user || 'その他'
-                    : `第${where.number}回`
+                  ? where.user_made
+                    ? `付箋「${where.title_user || '名前のない付箋'}」`
+                    : where.number === 0
+                      ? where.title_user || 'その他'
+                      : `第${where.number}回`
                   : '「振り分け前」'
           });
         } else out.added++;

@@ -6,6 +6,7 @@ import {MIN_MASKS} from '../../shared/cloze.js';
 import {esc, jaWrap, progressText} from '../ui-kit.js';
 import {hash32} from '../../shared/hash.js';
 import {orderRounds} from '../../shared/rounds.js';
+import {applyOrder, hasOrder} from '../../shared/arrange.js';
 import {addDays} from '../../shared/holidays.js';
 import {canRename, state} from '../store.js';
 import {extOf, fileArt, kindOf, noteArt} from './file-art.js';
@@ -23,7 +24,9 @@ const EXTRACTABLE = /\.(pdf|docx|pptx|txt|md)$/i;
 // 「その他」は回の名前ではないので、名前を自分で変えられる（title_user。空ならその他）
 const otherName = (r) => r.title_user || 'その他';
 const OWN_LABEL = '振り分け前'; // 回を決めていないファイルの置き場（PDF の中の「メモ」や回の付箋と紛れない名前に）
-const placeName = (r) => (r ? (r.number === 0 ? otherName(r) : `第${r.number}回`) : OWN_LABEL);
+// 自分で足した付箋は回の番号を出さない（題だけ。空なら「名前のない付箋」）
+const placeName = (r) =>
+  r ? (r.user_made ? r.title_user || '名前のない付箋' : r.number === 0 ? otherName(r) : `第${r.number}回`) : OWN_LABEL;
 
 // 資料の紙：押すと開く。ドラッグで別の付箋へ移せる。右上の「⋯」（右クリックでも）で、開く・フォルダで表示・移す・ゴミ箱へ
 // （views/../app.js の material-menu。移せる先は placesOf）。copyOf は自分のフォルダの中の同じ中身の写し（開くと元の資料。注釈も同じ）
@@ -182,21 +185,22 @@ function notebookLine(round, list, course) {
   const file = `<button type="button" class="btn btn--small btn--quiet" data-action="upload" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="この付箋にファイルを入れます（コピーします。元のファイルは残ります）">＋ ファイル</button>`;
   // 自分で足した付箋だけ消せる（LMS の回は次の同期でまた出るため消さない）
   const del = round.user_made
-    ? `<button type="button" class="btn btn--small btn--quiet round-notebook__del" data-action="round-remove" data-round-id="${esc(round.id)}" data-name="${esc(round.title_user || `第${round.number}回`)}" data-files="${list.length}" title="この付箋を消します（中の資料は「振り分け前」へ移します）">付箋を消す</button>`
+    ? `<button type="button" class="btn btn--small btn--quiet round-notebook__del" data-action="round-remove" data-round-id="${esc(round.id)}" data-name="${esc(round.title_user || '名前のない付箋')}" data-files="${list.length}" title="この付箋を消します（中の資料は「振り分け前」へ移します）">付箋を消す</button>`
     : '';
   return `<div class="round-notebook">${note}${file}${del}</div>`;
 }
 
 function roundNote(round, list, course, today, quizzes = {}) {
-  const isToday = round.date === today;
+  const isToday = !round.user_made && round.date === today;
   const upcoming = !list.length && round.number > 0 && round.date && round.date > today;
   const other = round.number === 0;
-  const head = other ? otherName(round) : `第${round.number}回`;
+  const mine = !!round.user_made; // 自分で足した付箋：第何回・日付は出さず、題だけ（空なら薄く「タイトルを入力」）
+  const head = other ? otherName(round) : mine ? '' : `第${round.number}回`;
   const title = other ? '' : round.title_user || round.title || '';
   const cls = [
     'round-note',
     list.length ? '' : 'round-note--empty',
-    upcoming ? 'round-note--upcoming' : '',
+    upcoming && !mine ? 'round-note--upcoming' : '',
     isToday ? 'round-note--today' : ''
   ]
     .filter(Boolean)
@@ -204,8 +208,14 @@ function roundNote(round, list, course, today, quizzes = {}) {
   // 回の付箋の色：第 1 回から順に 5 色（着せ替えで変えていなければ --pop1〜5）。角にはシールを 1 枚
   const sk = skinOf(state.data, course);
   const i = roundColorIndex(round.number);
-  const noteColor = sk.sticky.round === 'default' ? `var(--pop${i + 1})` : sk.sticky.round[i];
-  return `<section class="${cls}" data-drop="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: ${noteColor}" aria-label="${esc(head)} ${esc(title)}${isToday ? '（今日）' : ''}">
+  // 右クリック →「色を変える」で選んだ色があれば、それを使う
+  const picked = state.data?.settings?.stickyColors?.[course.id]?.[round.id];
+  const noteColor = picked
+    ? `var(--pop${picked})`
+    : sk.sticky.round === 'default'
+      ? `var(--pop${i + 1})`
+      : sk.sticky.round[i];
+  return `<section class="${cls}" data-drop="${esc(round.id)}" data-sort-key="${esc(round.id)}" data-course-id="${esc(course.id)}" style="--tilt: ${tilt(round.id)}deg; --note-color: ${noteColor}" aria-label="${esc(mine ? title || '名前のない付箋' : `${head} ${title}`)}${isToday && !mine ? '（今日）' : ''}">
     ${fixedSticker(
       sk.stickers.find((st) => st.place === 'round'),
       state.data,
@@ -213,14 +223,21 @@ function roundNote(round, list, course, today, quizzes = {}) {
     )}
     <header class="round-note__head" data-rename-box>
       ${
-        other
-          ? `<span class="round-note__round" data-rename-target>${esc(head)}</span><span class="round-note__title"></span>`
-          : `<span class="round-note__round">${esc(head)}</span>
+        mine
+          ? title
+            ? `<span class="round-note__title round-note__title--mine" data-rename-target>${esc(title)}</span>
+      <button type="button" class="rename-btn" data-action="rename" data-what="round" data-id="${esc(round.id)}" data-value="${esc(title)}" title="付箋の名前を変える" aria-label="付箋の名前を変える">✎</button>`
+            : `<button type="button" class="round-note__placeholder" data-action="rename" data-what="round" data-id="${esc(round.id)}" data-value="" data-rename-target title="付箋の名前を入れる">タイトルを入力</button>`
+          : `${
+              other
+                ? `<span class="round-note__round" data-rename-target>${esc(head)}</span><span class="round-note__title"></span>`
+                : `<span class="round-note__round">${esc(head)}</span>
       <span class="round-note__title" data-rename-target>${esc(title)}</span>`
-      }
+            }
       <button type="button" class="rename-btn" data-action="rename" data-what="round" data-id="${esc(round.id)}" data-value="${esc(other ? round.title_user || '' : title)}" title="付箋の名前を変える" aria-label="${esc(head)}の名前を変える">✎</button>
       ${isToday ? '<span class="round-note__today">今日</span>' : ''}
-      <span class="round-note__date">${esc(fmtDate(round.date))}</span>
+      <span class="round-note__date">${esc(fmtDate(round.date))}</span>`
+      }
     </header>
     ${list.length ? `<div class="round-note__files">${list.map((m) => fileCard(m, course)).join('')}</div>` : upcoming ? '' : `<p class="round-note__none">資料なし</p>`}
     ${notebookLine(round, list, course)}
@@ -258,6 +275,8 @@ export function renderCourse({data, progress}, courseId) {
   // これからの回も、今週の回のあとに付箋で並べる（全部の回が付箋で見える。前は畳んだ一覧だった）
   const later = order.current.filter((r) => !now.includes(r));
   const past = order.past.slice().reverse();
+  // 右クリック →「並べ替え」で並べた並びがあれば、それに合わせる（日付で分けた「これまでの回」の見出しは出さない。新しい回は後ろ）
+  const saved = data.settings?.order?.[`course:${course.id}`];
   // 同期できるのは LMS の接続がある授業だけ（LMS を使わない授業・接続を削除した授業には同期のボタンを出さない）
   const conn = data.connections.find((c) => c.id === course.connection_id);
   const syncable = !!conn && conn.kind !== 'manual';
@@ -298,13 +317,19 @@ export function renderCourse({data, progress}, courseId) {
     ${status ? `<p class="muted course-status" id="sync-status" role="status">${esc(status)}</p>` : '<p class="sr-only" id="sync-status" role="status"></p>'}
     ${testPanel(course, quizzes, makeable, quizInfo.byRound, quizInfo.hasKey)}
     ${own.length ? '' : ownNote(course, own)}
-    <div class="round-notes">
+    <div class="round-notes" data-sort-scope="course:${esc(course.id)}">
       ${own.length ? ownNote(course, own) : ''}
-      ${now.map(note).join('')}
+      ${
+        hasOrder(saved)
+          ? applyOrder([...now, ...later, ...past, ...order.other, ...mine], (r) => r.id, saved)
+              .map(note)
+              .join('')
+          : `${now.map(note).join('')}
       ${later.map(note).join('')}
       ${past.length ? `<h3 class="round-notes__divider">これまでの回</h3>${past.map(note).join('')}` : ''}
       ${order.other.map(note).join('')}
-      ${mine.map(note).join('')}
+      ${mine.map(note).join('')}`
+      }
       <button type="button" class="round-note-add" data-action="round-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します。いちばん後ろに、足した順に並びます"><span aria-hidden="true">＋</span>付箋を足す</button>
     </div>
     ${shown.length ? '' : `<div class="empty"><p>${syncable ? 'まだ回がありません。右上の「⋯」の「この授業を同期」で、回ごとの付箋がここに並びます。' : 'ファイルは上の「振り分け前」へドラッグするか、「＋ 付箋を足す」で付箋を作って入れます。'}</p></div>`}`;

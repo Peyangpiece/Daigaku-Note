@@ -12,7 +12,7 @@ import {sendAll} from '../frames.js';
 
 /** ノートのファイル名（回ごと。同じ回フォルダの中でも、自分のフォルダの中でも名前が重ならないように回を入れる） */
 export function noteName(round) {
-  if (!round) return 'ノート.pdf';
+  if (!round || round.user_made) return 'ノート.pdf'; // 自分で足した付箋は回の番号を出さない（付箋ごとに別のフォルダ）
   return round.number > 0 ? `ノート 第${round.number}回.pdf` : 'ノート その他.pdf';
 }
 
@@ -80,7 +80,16 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
       const head = okHeader(header);
       // 自分のフォルダは回を分けないので「ノート.pdf」・題も回なし（「その他」は授業の回の呼び方）
       const folder = course.kind === 'folder';
-      const label = folder || !round ? '' : round.number > 0 ? ` 第${round.number}回` : ' その他';
+      const label =
+        folder || !round
+          ? ''
+          : round.user_made
+            ? round.title_user
+              ? ` ${round.title_user}`
+              : ''
+            : round.number > 0
+              ? ` 第${round.number}回`
+              : ' その他';
       const subName = subDir && subDir !== folderCourse.dir ? ` ${path.basename(subDir)}` : '';
       const bytes = await createNotePdf(d, {title: `${course.name}${label}${subName} ノート`, header: head});
       const r = await files.addOwn({

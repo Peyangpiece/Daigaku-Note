@@ -102,3 +102,98 @@
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
+
+/* ---- メニューの色見本（付箋の「色を変える」） ---- */
+.card-menu__swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border-radius: 3px;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--paper-ink) 25%, transparent);
+}
+
+/* ---- 並べ替え（右クリック →「並べ替え」）：全部が小刻みに揺れ、ドラッグで入れ替える。右上の ✓ で終わる ---- */
+/* 揺れは個別の回転（rotate）。付箋の傾き（transform）とドラッグの移動（translate）とは別に重なる */
+@keyframes jiggle {
+  0% {
+    rotate: calc(var(--jiggle-dir, 1) * -1.1deg);
+  }
+  50% {
+    rotate: calc(var(--jiggle-dir, 1) * 1.1deg);
+  }
+  100% {
+    rotate: calc(var(--jiggle-dir, 1) * -1.1deg);
+  }
+}
+.reordering {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.reorder {
+  touch-action: none;
+}
+.reorder > .reorder__item {
+  cursor: grab;
+  animation: jiggle calc(var(--motion) * 1.3) ease-in-out infinite;
+  animation-delay: var(--jiggle-delay, 0ms);
+}
+/* 中のボタン・ファイルは押せない（並べ替えだけ） */
+.reorder > .reorder__item * {
+  pointer-events: none;
+}
+.reorder > .reorder__item--drag {
+  z-index: 20;
+  cursor: grabbing;
+  animation: none;
+  scale: 1.05;
+  box-shadow: var(--card-shadow-hover);
+}
+/* 足すタイル・非表示のカード・見出しは並べ替えのあいだ薄く */
+.reorder > :not(.reorder__item) {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.reorder-done {
+  position: fixed;
+  z-index: 60;
+  top: 14px;
+  right: 18px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--paper-ink);
+  color: var(--card);
+  font: 700 24px/1 var(--font-ui, inherit);
+  box-shadow: var(--card-shadow-hover);
+  cursor: pointer;
+}
+.reorder-done:focus-visible {
+  outline: 3px solid var(--pop4);
+  outline-offset: 3px;
+}
+.reorder-tip {
+  position: fixed;
+  z-index: 60;
+  top: 24px;
+  right: 80px;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-s);
+  background: var(--card);
+  color: var(--paper-ink);
+  font-size: 13px;
+  box-shadow: var(--card-shadow);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reorder > .reorder__item {
+    animation: none;
+    outline: 2px dashed color-mix(in srgb, var(--paper-ink) 40%, transparent);
+    outline-offset: 2px;
+  }
+}

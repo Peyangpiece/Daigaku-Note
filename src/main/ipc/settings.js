@@ -4,6 +4,7 @@ import {CLASSIC_ID, isHex, lookByTemplate, templateIdOf} from '../../shared/skin
 import {checkDownloadDir} from '../../shared/paths.js';
 import {cleanUses, isRole} from '../../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
+import {ORDER_SCOPE, cleanColor, cleanKeys} from '../../shared/arrange.js';
 import {id, httpsUrl, loginItem, FOLDER_LOOK_PARTS, bad} from './common.js';
 
 export function register({handle, ctx, repo}) {
@@ -64,6 +65,32 @@ export function register({handle, ctx, repo}) {
       if (Object.keys(by).length) map[cid] = {byTemplate: by};
       else delete map[cid];
       repo.setSetting('skin.folderLooks', map);
+    }
+    // 並べ替え（右クリック →「並べ替え」で揺れる画面の ✓ を押したとき）：範囲ごとに鍵の並びを覚える。keys が空なら元の並びに戻す
+    if (patch.order && typeof patch.order === 'object') {
+      const {scope, keys} = patch.order;
+      if (typeof scope !== 'string' || !ORDER_SCOPE.test(scope)) bad('並べる場所が不正です');
+      const list = cleanKeys(keys) ?? bad('並びが不正です');
+      const map = {...repo.getSetting('ui.order', {})};
+      if (list.length) map[scope] = list;
+      else delete map[scope];
+      repo.setSetting('ui.order', map);
+    }
+    // 付箋の色（右クリック →「色を変える」）：1〜5 の --pop。null ならもとの色に戻す
+    if (patch.stickyColor && typeof patch.stickyColor === 'object') {
+      const {courseId: scid, key, color} = patch.stickyColor;
+      const cid = id(scid) ?? bad('この授業は見つかりませんでした');
+      repo.get('course', cid) ?? bad('この授業は見つかりませんでした');
+      if (typeof key !== 'string' || key.length > 400) bad('付箋が不正です');
+      const c = cleanColor(color);
+      if (c === undefined) bad('色が不正です');
+      const map = {...repo.getSetting('ui.stickyColors', {})};
+      const one = {...(map[cid] ?? {})};
+      if (c === null) delete one[key];
+      else one[key] = c;
+      if (Object.keys(one).length) map[cid] = one;
+      else delete map[cid];
+      repo.setSetting('ui.stickyColors', map);
     }
     if (patch.resetRoot === true) repo.setSetting('storage.root', null);
     if (patch.skipSetup === true) repo.setSetting('setup.skipped', true); // 初回のセットアップを終えた（次から起動時に出さない。LMS は任意で、設定からつなぐ）

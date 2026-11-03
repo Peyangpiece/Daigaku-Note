@@ -184,7 +184,9 @@ export async function generateQuiz(deps, opts) {
   const roundTitle =
     course.kind === 'folder'
       ? `フォルダ「${course.name}」` // 自分のフォルダは回で分けない
-      : `${round.number === 0 ? 'その他' : `第${round.number}回`} ${round.title_user || round.title || ''}`.trim();
+      : round.user_made
+        ? `付箋「${round.title_user || '名前のない付箋'}」` // 自分で足した付箋は回の番号を出さない
+        : `${round.number === 0 ? 'その他' : `第${round.number}回`} ${round.title_user || round.title || ''}`.trim();
   const hints = repo.roundNote(round.id)?.body?.trim() || '';
 
   const call = async (messages, schema, purpose, maxTokens = 32000) => {

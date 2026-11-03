@@ -10,6 +10,7 @@ import {folderLook, globalId, shapesOf, skinOf, stickerImg, stickerLayer} from '
 import {folderLookFor} from '../../shared/skin.js';
 import {classWeekday, termCalendar} from '../../shared/calendar.js';
 import {addDays, weekdayOf} from '../../shared/holidays.js';
+import {applyOrder} from '../../shared/arrange.js';
 
 const DAYS = '日月火水木金土';
 const slotOf = (c) => `${c.weekday}曜${c.period ? ` ${c.period}限` : ''}`;
@@ -97,7 +98,7 @@ export function folderCard(course, {today = false, data = null, skin = null, edi
   if (edit)
     return `<div class="${cls} folder--preview" style="${look.style}"${edit.still ? ' aria-hidden="true"' : ' data-drop-place="folder" data-edit="folder" title="押すとフォルダの色を変えられます。シールをここへドラッグすると貼れます"'}>${inner}</div>`;
   // 右上の「…」：右クリックと同じメニュー（名前を変える・着せ替え・ホームから外す）。右クリックに気づかなくても使えるように
-  return `<div class="folder-slot"><button class="${cls}" style="${look.style}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
+  return `<div class="folder-slot" data-sort-key="${esc(course.id)}"><button class="${cls}" style="${look.style}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
     ${inner}
   </button><button type="button" class="folder__more" data-action="card-menu" data-id="${esc(course.id)}" aria-label="${esc(course.name)} のメニュー" title="メニュー（右クリックでも出ます）" aria-haspopup="menu">⋯</button></div>`;
 }
@@ -143,7 +144,9 @@ export function renderHome({data, progress}) {
   const term = (data.terms ?? []).find((t) => t.id === data.currentTermId) ?? null;
   const cal = term ? termCalendar(term) : null;
   const {today, next} = classDays(all, new Date(), cal);
-  const courses = weekOrder(all); // 月曜の 1 限から週の順。今日の授業には「今日」を付ける
+  // 月曜の 1 限から週の順。今日の授業には「今日」を付ける。右クリック →「並べ替え」で並べた並びがあればそれに合わせる（新しい授業は後ろ）
+  const order = data.settings?.order ?? {};
+  const courses = applyOrder(weekOrder(all), (c) => c.id, order['home:classes']);
   const todayIds = new Set(today.map((c) => c.id));
   const dayLine = today.length
     ? `<p class="home-day" id="today-label"><strong>今日の授業</strong> ${today.map((c) => `${esc(c.name)}（${c.period ? `${c.period}限` : '時限なし'}）`).join('・')}</p>`
@@ -154,12 +157,16 @@ export function renderHome({data, progress}) {
   // 自分のフォルダ：マイフォルダと今学期のフォルダ。前の学期のフォルダは畳んで下に。
   // 足すのは並びの最後の「＋ フォルダを追加」のカードから（作る・パソコンのフォルダを登録を選ぶ）
   const mine = data.courses.filter((c) => c.kind === 'folder' && !c.hidden);
-  const shown = mine.filter((c) => folderShown(c, data.currentTermId));
+  const shown = applyOrder(
+    mine.filter((c) => folderShown(c, data.currentTermId)),
+    (c) => c.id,
+    order['home:folders']
+  );
   const past = mine.filter((c) => !folderShown(c, data.currentTermId));
   const addCard = `<button type="button" class="folder folder--add" data-action="folder-add" aria-haspopup="menu"><span class="folder__add-plus" aria-hidden="true">＋</span><span class="folder__name">フォルダを追加</span><span class="folder__sub">作る・パソコンのフォルダを登録</span></button>`;
   const myFolders = `<section class="my-folders" aria-labelledby="my-folders-title">
       <h2 class="home-sec" id="my-folders-title">自分のフォルダ</h2>
-      <div class="folders">${shown.map((c) => folderCard(c, {data})).join('')}${addCard}</div>
+      <div class="folders" data-sort-scope="home:folders">${shown.map((c) => folderCard(c, {data})).join('')}${addCard}</div>
       ${past.length ? `<details class="my-folders__past" id="my-folders-past"><summary>前の学期のフォルダ ${past.length}</summary><div class="folders">${past.map((c) => folderCard(c, {data})).join('')}</div></details>` : ''}
     </section>`;
   // 要確認：すぐ手当てが要るものだけ（ログイン・規約・ブラウザ）。急がないお勧め（学年暦）は 1 行の知らせにする
@@ -199,7 +206,7 @@ export function renderHome({data, progress}) {
       ? `<div class="home-top">${dayLine || '<span></span>'}${hasLms ? syncBox(data, progress, syncing) : ''}</div>`
       : '';
   const classes = courses.length
-    ? `<section aria-labelledby="classes-title"><h2 class="home-sec" id="classes-title">授業</h2><div class="folders">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</div></section>`
+    ? `<section aria-labelledby="classes-title"><h2 class="home-sec" id="classes-title">授業</h2><div class="folders" data-sort-scope="home:classes">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</div></section>`
     : hasLms
       ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
       : features(data.settings).lms

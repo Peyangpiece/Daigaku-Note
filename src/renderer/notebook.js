@@ -41,7 +41,9 @@ export function noteHeading(courseId, roundId) {
   const round = (state.data?.rounds?.[courseId] ?? []).find((r) => r.id === roundId);
   const parts = [course?.name ?? ''];
   // 自分のフォルダは回を分けない（回の「その他」は出さない）
-  if (round && course?.kind !== 'folder')
+  // 自分で足した付箋は題だけ（第何回・日付は出さない）
+  if (round?.user_made && course?.kind !== 'folder') parts.push(round.title_user || '');
+  else if (round && course?.kind !== 'folder')
     parts.push(
       round.number > 0 ? `第${round.number}回` : round.title_user || 'その他',
       round.number > 0 ? round.title_user || round.title || '' : '',

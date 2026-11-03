@@ -5,6 +5,7 @@ import {fileCard, quizLine} from './course.js';
 import {skinOf, stickerLayer} from '../skin.js';
 import {roundColorIndex} from '../../shared/skin.js';
 import {features} from '../../shared/profile.js';
+import {applyOrder} from '../../shared/arrange.js';
 
 const SCOPE_LABEL = {term: '今学期のフォルダ', always: 'マイフォルダ'};
 export const scopeLabel = (c) => SCOPE_LABEL[c.scope] ?? SCOPE_LABEL.always;
@@ -93,8 +94,13 @@ export function renderFolder({data}, course) {
   const gen = round ? data.quiz?.generating?.[round.id] : null;
   // 付箋：フォルダの直下と、下のフォルダごとに 1 枚ずつ、横に 5 枚まで並べる。色は着せ替えの回の付箋と同じく 1 枚目から順に
   const sk = skinOf(data, course);
-  const colorOf = (i) =>
-    sk.sticky.round === 'default' ? `var(--pop${roundColorIndex(i + 1) + 1})` : sk.sticky.round[roundColorIndex(i + 1)];
+  const picked = data.settings?.stickyColors?.[course.id] ?? {}; // 右クリック →「色を変える」で選んだ色
+  const colorOf = (i, sub) =>
+    picked[sub]
+      ? `var(--pop${picked[sub]})`
+      : sk.sticky.round === 'default'
+        ? `var(--pop${roundColorIndex(i + 1) + 1})`
+        : sk.sticky.round[roundColorIndex(i + 1)];
   // 付箋の並び：最初の付箋（フォルダの直下）→ もとからある下のフォルダ（名前順）→ 足した付箋（足した順）。
   // ファイルのない下のフォルダ（足したばかりの付箋など）も付箋で出す
   const bySub = new Map(groups(list));
@@ -104,11 +110,14 @@ export function renderFolder({data}, course) {
     .sort((x, y) => x.localeCompare(y, 'ja'));
   // 最初の付箋は、消したあと（直下のファイルがない間）は出さない
   const root = bySub.get('') ?? [];
-  const order = [...(course.rootHidden && !root.length ? [] : ['']), ...others, ...added];
+  const base = [...(course.rootHidden && !root.length ? [] : ['']), ...others, ...added];
+  // 右クリック →「並べ替え」で並べた並びがあれば、それに合わせる（新しい付箋は後ろ）。色はもとの並びの順で決めておき、並べ替えても変わらない
+  const order = applyOrder(base, (x) => x, data.settings?.order?.[`course:${course.id}`]);
   const hasNote = (ms) => ms.some((m) => m.source === 'note' && m.status === 'ok');
   const titleOf = (sub) => (sub ? sub.split('/').pop() : (round?.title_user ?? ''));
   const notes = order
-    .map((sub, i) => {
+    .map((sub) => {
+      const i = base.indexOf(sub);
       const ms = bySub.get(sub) ?? [];
       const title = titleOf(sub);
       // 最初の付箋の題は空のまま（薄く「タイトルを入力」）。押すと名前を入れられる（回 0 の title_user）
@@ -119,7 +128,7 @@ export function renderFolder({data}, course) {
         ? `<span class="round-note__round">${sub ? '📁 ' : ''}<span data-rename-target>${esc(title)}</span></span>
         <button type="button" class="rename-btn" ${rename} title="${sub ? '付箋の名前を変える（パソコンのフォルダの名前も変わります）' : '付箋の名前を変える'}" aria-label="名前を変える">✎</button>`
         : `<button type="button" class="round-note__placeholder" ${rename} data-rename-target title="付箋の名前を入れる">タイトルを入力</button>`;
-      return `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i)}" data-drop="own" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" aria-label="${esc(title || 'この付箋')} のファイル">
+      return `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i, sub)}" data-drop="own" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" data-sort-key="${esc(sub)}" aria-label="${esc(title || 'この付箋')} のファイル">
       <header class="round-note__head" data-rename-box>${head}</header>
       ${ms.length ? `<div class="round-note__files">${ms.map((m) => fileCard(m, course)).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグして入れます。</p>'}
       <div class="round-notebook">${
@@ -145,5 +154,5 @@ export function renderFolder({data}, course) {
     </nav>
     ${quizArea ? `<section class="test-panel test-panel--folder" aria-label="このフォルダのクイズ">${quizArea}</section>` : ''}
     <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です（開くたびに読み直します）。</p>
-    <div class="round-notes round-notes--folder">${notes}<button type="button" class="round-note-add" data-action="sub-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します。いちばん後ろに、足した順に並びます（パソコンのフォルダの中にフォルダを作ります）"><span aria-hidden="true">＋</span>付箋を足す</button></div>`;
+    <div class="round-notes round-notes--folder" data-sort-scope="course:${esc(course.id)}">${notes}<button type="button" class="round-note-add" data-action="sub-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します。いちばん後ろに、足した順に並びます（パソコンのフォルダの中にフォルダを作ります）"><span aria-hidden="true">＋</span>付箋を足す</button></div>`;
 }
