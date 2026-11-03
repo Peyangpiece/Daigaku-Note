@@ -122,6 +122,12 @@ function head() {
   chip.setAttribute('aria-label', `ポイント（${pt(balance)}）。押すと、もらい方と履歴を見られます`);
   chip.title = 'ポイント：復習のクイズに正解したり、毎日開いたりするとたまります。持ち物のショップで使えます';
 }
+// 上の固定ボタンの実際の幅を、上余白の右の空き（--topnav-w）にする。文字の大きさ・数の札で幅が変わっても重ならない
+const topnav = document.querySelector('.topnav');
+if (topnav)
+  new ResizeObserver(() =>
+    document.documentElement.style.setProperty('--topnav-w', `${Math.ceil(topnav.getBoundingClientRect().width)}px`)
+  ).observe(topnav);
 /** ポイントの印（筆箱のショップの札と同じ） */
 const COIN =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#f5c542" stroke="#b8860b" stroke-width="1.6"/><text x="12" y="16.2" text-anchor="middle" font-size="11" font-weight="700" fill="#7a5600" font-family="sans-serif">P</text></svg>';
