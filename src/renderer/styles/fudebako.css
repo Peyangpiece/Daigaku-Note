@@ -1146,3 +1146,14 @@ button.fb-card {
 .fb-back {
   justify-self: center;
 }
+/* 持ち物のポーチ：上に選んでいるポーチ（3D）と、いつも入っている道具 */
+.fb-pouch-top {
+  margin-bottom: var(--space-3);
+}
+.fb-pouch-top__bag {
+  max-width: 460px;
+  margin: 0 auto var(--space-2);
+}
+.fb-pouch-top h3 {
+  margin: 0 0 4px;
+}
