@@ -509,4 +509,8 @@ test('有料のペンの書き味：品の特徴に合わせる', async () => {
   // クラフトラボ 004：顔料ゲル。細字のカリカリ（手ごたえ・短い入り抜き）、濃い
   assert.ok(gel.gr > 0 && gel.ts < caran.ts && gel.w > 1);
   assert.equal(f('maker-craftlab-004', craft.refills[2]).name, '鉛筆らしい', 'シャープの芯は別');
+  // カヴェコ スペシャル：滑らかで安定（ガタつきなし＝ゆらぎなし、筆圧の効きは控えめ）
+  const kaweco = f('maker-kaweco-special');
+  assert.ok(kaweco.st > caran.st && kaweco.te > caran.te, '滑らか');
+  assert.ok(!kaweco.gr && !kaweco.sw && kaweco.th < f('pen-black-05').th, '安定');
 });
