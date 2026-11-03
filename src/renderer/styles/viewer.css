@@ -103,7 +103,7 @@
   width: 16px;
   height: 14px;
 }
-/* ペンの太さ（0.3・0.5・0.7）と書き味（ペンを持っているときだけ出る。v0.16.22） */
+/* ペンの太さ（0.3・0.5・0.7。ペンを持っているときだけ出る。v0.16.22） */
 .viewer-bar__sizes {
   gap: 4px;
 }
@@ -120,12 +120,6 @@
   height: var(--dot);
   border-radius: 50%;
   background: currentColor;
-}
-.viewer-bar__feel {
-  margin-left: 6px;
-  font-size: var(--fs-small);
-  color: var(--paper-ink-weak);
-  white-space: nowrap;
 }
 /* 多機能ペンの芯の切り替え（持っているときだけ出る） */
 .viewer-bar__refills {

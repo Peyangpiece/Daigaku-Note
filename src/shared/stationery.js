@@ -543,7 +543,7 @@ export const defaultSize = (item) => {
 };
 /**
  * 書き味（型番ごと。同じ型番の色ちがいは同じ書き味）。th・ts・te・st は shared/ink.js の feel、w は線の濃さ（太さの倍率）。
- * name・note は筆箱・ツールバーに出す一言
+ * name・note は型番の書き味のメモ（画面には出さない）
  */
 export const FEELS = {
   'pen-05': {name: 'ふつうの油性', note: '筆圧にほどよく応える', th: 0.35, ts: 1.2, te: 1.5, st: 0.2, w: 1},
@@ -611,9 +611,7 @@ export function heldPen(item, refillId, size = null) {
     ...base,
     size: s,
     width: sizeWidth(s, f),
-    feel: {th: f.th, ts: f.ts, te: f.te, st: f.st},
-    feelName: f.name,
-    feelNote: f.note
+    feel: {th: f.th, ts: f.ts, te: f.te, st: f.st}
   };
 }
 

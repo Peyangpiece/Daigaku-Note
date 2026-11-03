@@ -300,7 +300,7 @@ export const methods = {
     }
     this.$('delete').hidden = !a; // 選んでいるときだけ出す（ツールバーを 1 行に収める）
     this.$('rotate').hidden = !(a?.kind === 'stamp' && a.style?.type === 'photo'); // 写真を選んでいるとき
-    // ペンを持っているとき：太さ（0.3・0.5・0.7）と、そのペンの書き味
+    // ペンを持っているとき：太さ（0.3・0.5・0.7）
     const sg = this.root.querySelector('[data-group="pensize"]');
     const holding = this.tool === 'ink' && this.penItem?.type === 'pen' ? this.penItem : null;
     sg.hidden = !holding;
@@ -310,8 +310,7 @@ export const methods = {
         PEN_SIZES.map(
           (s) =>
             `<button type="button" class="viewer-bar__size" data-pen-size="${s}" aria-pressed="${s === holding.size}" title="${s} mm"><span style="--dot: ${sizeWidth(s, {w: 1}) * 2.4}px"></span>${s}</button>`
-        ).join('') +
-        `<span class="viewer-bar__feel" title="${esc(holding.feelNote ?? '')}">書き味：${esc(holding.feelName ?? '')}</span>`;
+        ).join('');
       if (sg.innerHTML !== html) sg.innerHTML = html;
     }
     // 持っている道具（ペン・マーカー・文字隠し・消しゴム）：筆箱を閉じていても分かるように、ツールバーに札で出す

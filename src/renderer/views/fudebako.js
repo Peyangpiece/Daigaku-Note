@@ -36,7 +36,6 @@ import {
   isGear,
   itemOf,
   listed,
-  penFeel,
   priceLabel,
   shopSeries,
   siblingsOf,
@@ -479,17 +478,9 @@ function detail(s, id) {
         '筆圧なし：ペンタブ・スタイラスの筆圧や書く速さで太さが変わらず、どこも同じ太さの線になります（書き始め・書き終わりも細くなりません）'
       ]);
   }
-  // 書くペン（v0.16.22）：太さは 0.3・0.5・0.7 から選べ、書き味は型番ごと（同じ型番の色ちがいは同じ）
+  // 書くペン（v0.16.22）：太さは 0.3・0.5・0.7 から選べる
   if (it.type === 'pen') {
     rows.push(['太さ', `${PEN_SIZES.join('・')} mm から選べます（PDF の編集画面でペンを持つと、上の帯に出ます）`]);
-    const feels = [...new Map((it.refills ?? [null]).map((r) => [penFeel(it, r), r])).entries()];
-    if (!it.even)
-      rows.push([
-        '書き味',
-        feels
-          .map(([f, r]) => `${r && feels.length > 1 ? `${esc(r.name)}：` : ''}${esc(f.name)}（${esc(f.note)}）`)
-          .join('　')
-      ]);
   }
   if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
   else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
