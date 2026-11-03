@@ -10,7 +10,7 @@ export const MODELS = {
 };
 export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 export const EFFORT = 'medium';
-const BETAS = ['server-side-fallback-2026-07-01'];
+export const BETAS = ['server-side-fallback-2026-07-01'];
 const err = (code, message) => Object.assign(new Error(message), {code});
 
 /** system（固定。キャッシュする。SPEC §18.3） */
@@ -23,7 +23,8 @@ export const SYSTEM = `あなたは大学生向け電子ノート「大学ノー
 - 誤答（o）は、ありがちな誤解・似た用語・逆の関係など、資料を読んでいれば消せるものにする。正解と同じもの・互いに同じものは入れない。
 - 誤答は正解と同じ種類の言葉にする（用語なら用語、数値なら数値）。種類の違いで答えが分かってしまう誤答にしない。
 - 正解だけが目立って長い・詳しい選択肢にしない（長さと書き方をそろえる）。
-- 全問に解説（n）を付け、根拠のページを書く。解説は正解の理由がわかる 1〜3 文にする（「正解は〜」だけで終わらせない）。
+- 全問に解説（n）を付け、根拠のページを書く。解説は、正解の理由と、覚えるときの要点がわかる 2〜4 文にする（「正解は〜」だけで終わらせない）。
+- 誤答（o）があるときは、それぞれがなぜ違うかを w に o と同じ順で 1 文ずつ書く（o が空なら w も空の配列）。
 - 各問に根拠（src）を付ける。file は資料の名前、page はページ番号、quote は資料本文からそのまま 20〜200 文字を写す（言い換えない）。
 - 答えに自信がない問題は入れない。
 
@@ -35,7 +36,7 @@ export const SYSTEM = `あなたは大学生向け電子ノート「大学ノー
 - card … 記述カード。q は「〜を説明せよ」の形、a は 1〜3 文の模範解答。o は空の配列。
 
 ## 書き方
-- q は 300 文字まで、a と o は 120 文字まで、n は 400 文字まで。
+- q は 300 文字まで、a と o は 120 文字まで、n は 400 文字まで、w の各文は 150 文字まで。
 - tags は 定義・比較・計算・事例・手順 から 0〜2 個。difficulty は 1（易）〜3（難）。
 - 学籍番号・個人名は書かない。`;
 
@@ -51,12 +52,13 @@ export const SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['type', 'q', 'a', 'o', 'unit', 'n', 'src', 'tags', 'difficulty'],
+        required: ['type', 'q', 'a', 'o', 'w', 'unit', 'n', 'src', 'tags', 'difficulty'],
         properties: {
           type: {type: 'string', enum: TYPES},
           q: {type: 'string'},
           a: {type: 'string'},
           o: {type: 'array', items: {type: 'string'}},
+          w: {type: 'array', items: {type: 'string'}}, // 誤答ごとの「なぜ違うか」（o と同じ順）
           unit: {type: 'string'},
           n: {type: 'string'},
           src: {
@@ -246,7 +248,7 @@ export async function generateQuiz(deps, opts) {
   let problems = checkQuiz(out.qs ?? [], {pageCount});
   if (problems.length) {
     // 形の不備：番号と理由を伝えて、全体を 1 回だけ出し直してもらう
-    onProgress('問題の形を直してもらっています…');
+    onProgress('問題を整えています…');
     const list = problems.map((p) => `- ${p.index + 1} 問目：${p.errors.join('／')}`).join('\n');
     messages = [
       ...messages,
@@ -335,6 +337,7 @@ export async function generateQuiz(deps, opts) {
         q: x.q,
         a: x.a,
         o_json: JSON.stringify(x.type === 'num' ? {unit: x.unit ?? ''} : (x.o ?? [])),
+        why_json: whyOf(x),
         n: x.n,
         src_sha256: text.docs.find((d) => d.file === x.src.file)?.sha256 ?? null,
         src_page: x.src.page,
@@ -346,6 +349,20 @@ export async function generateQuiz(deps, opts) {
     );
   });
   return {quizId, count: kept.length, dropped, flagged: mismatched.size, notes};
+}
+
+/** 誤答ごとの理由（o と同じ数にそろえ、長すぎる文は切る）。誤答がない種類・理由がないときは null */
+export function whyOf(x) {
+  const o = Array.isArray(x.o) ? x.o : [];
+  const w = Array.isArray(x.w) ? x.w : [];
+  if (!o.length || !w.some((t) => String(t ?? '').trim())) return null;
+  return JSON.stringify(
+    o.map((_, i) =>
+      String(w[i] ?? '')
+        .trim()
+        .slice(0, 150)
+    )
+  );
 }
 
 function halveMix(mix) {

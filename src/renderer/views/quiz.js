@@ -8,7 +8,7 @@ import {BLANK, TYPE_LABEL, choicesOf} from '../../shared/quiz.js';
 const api = window.daigaku;
 const MODE_LABEL = {
   quiz: 'クイズ',
-  exam: '試験前',
+  exam: 'まとめて解く',
   retry: 'まちがえた問題',
   card: 'カードで覚える',
   review: '今日の復習'
@@ -16,7 +16,7 @@ const MODE_LABEL = {
 const REPORTS = ['答えがまちがっている', '問題文がおかしい', '資料にない内容', '選択肢がおかしい'];
 const SAVE_KEY = 'dn.quiz.session';
 
-let session = null; // {key, mode, title, courseId, questions, i, results: {qid: {ok, answer}}, revealed, seed, startedAt, loading, error}
+let session = null; // {key, mode, title, courseId, questions, i, results: {qid: {ok, answer}}, asks: {qid: [{q, a}]}, revealed, seed, startedAt, loading, error}
 
 const shuffle = (list, seed) => {
   const out = [...list];
@@ -68,6 +68,7 @@ async function start(key, params) {
     questions: [],
     i: 0,
     results: {},
+    asks: {},
     seed: Date.now() % 100000,
     startedAt: Date.now()
   };
@@ -142,7 +143,7 @@ export function renderQuiz({data}, route) {
         ? `今日の復習はありません。${s.next ? `次は ${new Date(s.next.due).toLocaleDateString('ja-JP', {month: 'numeric', day: 'numeric'})} に ${s.next.count} 問です。` : ''}`
         : s.mode === 'retry'
           ? 'まちがえた問題はありません。'
-          : 'まだ問題がありません。授業やフォルダの画面にある「資料からクイズを作る」で作れます（先に 設定 → クイズ で、作る AI（Claude API キー・Claude Code・Codex）を選びます）。';
+          : '問題がまだありません。授業の画面の「問題を作る」で作れます。';
     // 次の一手：授業画面へ（授業が分からなければホームへ）
     const go = course
       ? `<button class="btn btn--primary" data-action="quiz-quit" data-route="/course/${esc(course.id)}">${esc(course.name)}の授業画面へ</button>`
@@ -154,15 +155,14 @@ export function renderQuiz({data}, route) {
   const res = s.results[q.id];
   const progress = `<div class="quiz-progress" aria-label="${s.i + 1} 問目／全 ${s.questions.length} 問"><span style="width:${(s.i / s.questions.length) * 100}%"></span></div>`;
   return `${head}
-    ${s.resumed && s.i > 0 && !res ? '<p class="muted">前回の続きから解いています。</p>' : ''}
     ${progress}
     <article class="qcard${res ? (res.ok ? ' qcard--ok' : ' qcard--ng') : ''}" aria-live="polite">
       <span class="qcard__hole" aria-hidden="true"></span>
-      <header class="qcard__head"><span>${s.i + 1} / ${s.questions.length}</span><span class="qcard__type">${esc(TYPE_LABEL[q.type] ?? q.type)}</span>${q.review === 'mismatch' ? '<span class="qcard__flag" title="AI がもう一度解いた答えと合わなかった問題です。答えを確かめてください">要確認</span>' : ''}</header>
+      <header class="qcard__head"><span>${s.i + 1} / ${s.questions.length}</span><span class="qcard__type">${esc(TYPE_LABEL[q.type] ?? q.type)}</span>${q.review === 'mismatch' ? '<span class="qcard__flag" title="AI の検算と答えが合いませんでした">要確認</span>' : ''}</header>
       <p class="qcard__q">${questionHtml(q)}</p>
       ${res ? feedbackHtml(q, res, data) : answerHtml(q, s)}
     </article>
-    ${res ? '' : `<p class="muted quiz-keys">${q.type === 'num' ? 'Enter で答える' : q.type === 'card' ? 'Space で答えを見る' : '数字キー 1〜4 で選べます'}</p>`}`;
+    ${res ? '' : `<p class="muted quiz-keys">${q.type === 'num' ? 'Enter で答える' : q.type === 'card' ? 'Space で答えを見る' : '1〜4 キーでも選べます'}</p>`}`;
 }
 
 const questionHtml = (q) => esc(q.q).replace(esc(BLANK), '<span class="qcard__blank">（　　）</span>');
@@ -174,8 +174,7 @@ function answerHtml(q, s) {
     if (!s.revealed)
       return `<div class="qcard__actions"><button class="btn btn--primary" data-action="quiz-reveal">答えを見る</button></div>`;
     return `<div class="qcard__answer"><strong>模範解答</strong><p>${esc(q.a)}</p></div>
-      <p class="muted">思い出せましたか？</p>
-      <div class="qcard__actions"><button class="btn" data-action="quiz-self" data-ok="0">まだ</button><button class="btn btn--primary" data-action="quiz-self" data-ok="1">できた</button></div>`;
+      <div class="qcard__actions"><button class="btn" data-action="quiz-self" data-ok="0">言えなかった</button><button class="btn btn--primary" data-action="quiz-self" data-ok="1">言えた</button></div>`;
   }
   const opts = choicesOf(q, (s.seed + s.i * 7919) >>> 0);
   return `<ol class="qcard__choices">${opts.map((o, k) => `<li><button class="choice" data-action="quiz-choose" data-value="${esc(o)}"><span class="choice__key">${k + 1}</span>${esc(o)}</button></li>`).join('')}</ol>`;
@@ -188,18 +187,54 @@ function feedbackHtml(q, res, data) {
         .find((m) => m.sha256 === q.src_sha256 && m.status === 'ok')
     : null;
   const answer = q.type === 'num' ? `${q.a}${q.unit ? ` ${q.unit}` : ''}` : q.a;
+  const mine = res.answer !== undefined && q.type !== 'card' ? String(res.answer) : null;
+  const verdict =
+    q.type === 'card'
+      ? res.ok
+        ? '言えた'
+        : '言えなかった（あとでまた出します）'
+      : res.ok
+        ? `正解${res.points ? `<span class="qcard__points">+${res.points} pt</span>` : ''}`
+        : '不正解';
+  // 誤答ごとの「なぜ違うか」（作ったときの AI の解説。前の版の問題にはない）
+  const why = (q.o ?? []).map((o, i) => [o, q.why?.[i]]).filter(([, w]) => w);
   return `<div class="qcard__feedback" role="status">
-      <p class="qcard__verdict">${q.type === 'card' ? (res.ok ? 'できた' : 'まだ（今度また）') : res.ok ? `正解！${res.points ? `<span class="qcard__points">+${res.points} pt</span>` : ''}` : `ざんねん。正解は「${esc(answer)}」`}</p>
-      ${!res.ok && q.type !== 'card' && res.answer !== undefined ? `<p class="muted">あなたの答え：${esc(String(res.answer))}</p>` : ''}
-      <p class="qcard__note">${esc(q.n)}</p>
-      ${q.src_quote ? `<blockquote class="qcard__src">「${esc(q.src_quote)}」<cite>${mat ? esc(mat.name) : '資料'}${q.src_page ? ` p.${q.src_page}` : ''}</cite></blockquote>` : ''}
+      <p class="qcard__verdict">${verdict}</p>
+      ${
+        q.type === 'card'
+          ? ''
+          : `<dl class="qcard__answers"><dt>正解</dt><dd>${esc(answer)}</dd>${!res.ok && mine !== null ? `<dt>あなた</dt><dd>${esc(mine)}</dd>` : ''}</dl>`
+      }
+      <section class="qcard__explain" aria-label="解説">
+        <h4>解説</h4>
+        <p>${esc(q.n)}</p>
+        ${why.length ? `<ul class="qcard__why">${why.map(([o, w]) => `<li${o === mine ? ' class="qcard__why--mine"' : ''}><strong>${esc(o)}</strong>${esc(w)}</li>`).join('')}</ul>` : ''}
+        ${q.src_quote ? `<blockquote class="qcard__src">「${esc(q.src_quote)}」<cite>${mat ? `<button type="button" class="link" data-action="open-material" data-id="${esc(mat.id)}">${esc(mat.name)}${q.src_page ? ` p.${q.src_page}` : ''}</button>` : `資料${q.src_page ? ` p.${q.src_page}` : ''}`}</cite></blockquote>` : ''}
+      </section>
+      ${askHtml(q, data)}
     </div>
     <div class="qcard__actions">
-      ${mat ? `<button class="btn btn--quiet" data-action="open-material" data-id="${esc(mat.id)}">資料を開く</button>` : ''}
-      <details class="qcard__report"><summary class="muted">おかしい問題を報告</summary>${REPORTS.map((r) => `<button class="btn btn--small" data-action="quiz-report" data-reason="${esc(r)}">${esc(r)}</button>`).join(' ')}<p class="muted">報告した問題は復習に出しません（外部には送りません）。</p></details>
+      <details class="qcard__report"><summary class="muted">問題を報告</summary>${REPORTS.map((r) => `<button class="btn btn--small" data-action="quiz-report" data-reason="${esc(r)}">${esc(r)}</button>`).join(' ')}</details>
       <span style="margin-left:auto"></span>
       <button class="btn btn--primary" data-action="quiz-next" id="quiz-next">${session.i + 1 >= session.questions.length ? '結果を見る' : '次へ'}</button>
     </div>`;
+}
+
+/** 答えの画面：この問題について AI に質問する。AI を選んでいなければ設定へ */
+function askHtml(q, data) {
+  if (!data.quiz?.key?.set)
+    return `<p class="qcard__ask-off"><button type="button" class="link" data-action="nav" data-route="/settings?focus=quiz">AI を設定</button>すると、この問題について質問できます</p>`;
+  const thread = session.asks[q.id] ?? [];
+  const busy = session.asking === q.id;
+  return `<section class="qcard__ask" aria-label="この問題について質問">
+      ${thread.map((t) => `<p class="qcard__ask-q">${esc(t.q)}</p><p class="qcard__ask-a">${esc(t.a)}</p>`).join('')}
+      ${busy ? `<p class="qcard__ask-q">${esc(session.askingText ?? '')}</p><p class="qcard__ask-a muted"><span class="spinner" aria-hidden="true"></span> 考えています…</p>` : ''}
+      <form class="qcard__ask-form" data-quiz-ask>
+        <label class="sr-only" for="quiz-ask">この問題について質問</label>
+        <input class="input" id="quiz-ask" maxlength="500" autocomplete="off" placeholder="${thread.length ? '続けて質問' : 'この問題について質問（例：なぜ ○○ ではないの？）'}"${busy ? ' disabled' : ''}>
+        <button class="btn" type="submit"${busy ? ' disabled' : ''}>質問</button>
+      </form>
+    </section>`;
 }
 
 function renderResult(s, course) {
@@ -223,18 +258,18 @@ function renderResult(s, course) {
   return `<section class="card quiz-result">
       <div class="ring" style="--pct:${pct}"><span>${scored.length ? `${pct}%` : '—'}</span></div>
       <div>
-        <h3>${scored.length ? `${scored.length} 問中 ${ok} 問 正解` : 'カードで覚えました'}</h3>
-        ${cards.length ? `<p class="muted">記述カード：できた ${cards.filter((q) => s.results[q.id]?.ok).length} ／ ${cards.length}（自己採点。点数には入れません）</p>` : ''}
-        ${s.mode === 'review' && s.rest ? `<p class="muted">今日の復習はあと ${s.rest} 問あります。</p>` : ''}
+        <h3>${scored.length ? `${scored.length} 問中 ${ok} 問 正解` : 'カードを見終わりました'}</h3>
+        ${cards.length ? `<p class="muted">記述：言えた ${cards.filter((q) => s.results[q.id]?.ok).length} ／ ${cards.length}</p>` : ''}
+        ${s.mode === 'review' && s.rest ? `<p class="muted">今日の復習はあと ${s.rest} 問</p>` : ''}
         <div class="actions">
-          ${wrong.length && s.mode !== 'review' ? `<button class="btn ${low ? '' : 'btn--primary'}" data-action="nav" data-route="${esc(retryRoute)}">まちがえた ${wrong.length} 問だけ解き直す</button>` : ''}
-          ${wrong.length && s.mode !== 'review' && s.courseId ? `<button class="btn ${low ? 'btn--primary' : ''}" data-action="nav" data-route="${esc(cardRoute)}">まちがえた ${wrong.length} 問をカードで覚える</button>` : ''}
-          ${s.mode === 'review' && s.rest ? `<button class="btn btn--primary" data-action="nav" data-route="/review?r=${Date.now()}">続けて復習する</button>` : ''}
-          <button class="btn" data-action="nav" data-route="${esc(course ? `/course/${course.id}` : '/')}">${course ? '授業へ戻る' : 'ホームへ'}</button>
+          ${wrong.length && s.mode !== 'review' ? `<button class="btn ${low ? '' : 'btn--primary'}" data-action="nav" data-route="${esc(retryRoute)}">まちがえた ${wrong.length} 問を解き直す</button>` : ''}
+          ${wrong.length && s.mode !== 'review' && s.courseId ? `<button class="btn ${low ? 'btn--primary' : ''}" data-action="nav" data-route="${esc(cardRoute)}">カードで覚える</button>` : ''}
+          ${s.mode === 'review' && s.rest ? `<button class="btn btn--primary" data-action="nav" data-route="/review?r=${Date.now()}">続ける</button>` : ''}
+          <button class="btn" data-action="nav" data-route="${esc(course ? `/course/${course.id}` : '/')}">${course ? '授業に戻る' : 'ホームへ'}</button>
         </div>
       </div>
     </section>
-    ${wrong.length ? `<section class="card"><h3>まちがえた問題</h3><ol class="wrong-list">${wrong.map((q) => `<li><p>${questionHtml(q)}</p><p class="muted">正解：${esc(q.a)}${q.unit ? ` ${esc(q.unit)}` : ''}${s.results[q.id].answer !== undefined && q.type !== 'card' ? `／あなた：${esc(String(s.results[q.id].answer))}` : ''}</p></li>`).join('')}</ol></section>` : ''}`;
+    ${wrong.length ? `<section class="card"><h3>まちがえた問題</h3><ol class="wrong-list">${wrong.map((q) => `<li><p>${questionHtml(q)}</p><p class="muted">正解：${esc(q.a)}${q.unit ? ` ${esc(q.unit)}` : ''}${s.results[q.id].answer !== undefined && q.type !== 'card' ? `　あなた：${esc(String(s.results[q.id].answer))}` : ''}</p></li>`).join('')}</ol></section>` : ''}`;
 }
 
 async function submit(value) {
@@ -248,7 +283,7 @@ async function submit(value) {
   if (r?.error) return toast(r.error, {error: true});
   s.results[q.id] = {
     ok: r.ok,
-    answer: value === true ? 'できた' : value === false ? 'まだ' : value,
+    answer: value === true ? '言えた' : value === false ? '言えなかった' : value,
     points: r.points ?? 0
   };
   if (r.points && state.data.points) state.data.points = {...state.data.points, balance: r.balance}; // 正解のポイント（shared/points.js）
@@ -277,11 +312,10 @@ export async function quizAction(action, el) {
     const q = session.questions[session.i];
     const r = await api['question.update']({questionId: q.id, patch: {report: el.dataset.reason}});
     if (r?.error) return (toast(r.error, {error: true}), true);
-    toast('報告しました。この問題は復習に出しません（授業画面の「編集」で直せます）');
+    toast('報告しました。この問題は復習に出しません');
   } else if (action === 'quiz-quit') {
     const left = session.questions.length - session.i;
-    if (!session.done && session.i > 0 && left > 0)
-      toast(`ここまでの答えは記録しました。あと ${left} 問は、同じクイズを開くと続きから解けます`);
+    if (!session.done && session.i > 0 && left > 0) toast(`続きの ${left} 問は、もう一度開くとそこから解けます`);
     session = null;
     navigate(el.dataset.route);
     reload().catch(() => {});
@@ -299,6 +333,31 @@ export function quizKey(e) {
   if (!res && /^[1-4]$/.test(e.key)) document.querySelectorAll('.qcard__choices .choice')[Number(e.key) - 1]?.click();
   if (!res && q.type === 'card' && e.key === ' ' && !session.revealed)
     return (e.preventDefault(), quizAction('quiz-reveal'));
+}
+
+/** この問題について質問する（答えの画面のフォーム）。答えが来たら、その問題のやりとりに足す */
+export async function quizSubmitAsk(form) {
+  const s = session;
+  const q = s?.questions[s.i];
+  const text = form.querySelector('input').value.trim();
+  if (!q || !text || s.asking) return;
+  form.querySelector('input').value = ''; // 描き直しで打った文が戻らないように、先に空にする
+  s.asking = q.id;
+  s.askingText = text;
+  refresh();
+  const thread = s.asks[q.id] ?? [];
+  const r = await api['quiz.ask']({questionId: q.id, text, mine: s.results[q.id]?.answer ?? null, history: thread});
+  s.asking = null;
+  if (r?.error) {
+    toast(r.error, {error: true});
+    refresh();
+    const input = document.getElementById('quiz-ask');
+    if (input) input.value = text; // 送れなかった質問は欄に戻す
+    return;
+  }
+  s.asks[q.id] = [...thread, {q: text, a: r.answer}];
+  refresh();
+  document.getElementById('quiz-ask')?.focus({preventScroll: true});
 }
 
 /** 数値の答え（フォームの送信） */

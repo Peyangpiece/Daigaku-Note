@@ -92,25 +92,22 @@ function ownNote(course, list) {
   </section>`;
 }
 
-// これからの回で資料がまだないものは、見出しだけの小さな付箋にする（資料のある回を埋もれさせない）
-// 授業のテスト（回をまたいだ試験前のテスト・まちがえた問題・まとめて作る）
-// クイズを作る回を選ぶ（1 つでも複数でも）。回ごとに 1 つのクイズを作り、テストは「回を選んでテスト」で回をまたいで解く
-function makePicker(makeable, byRound) {
+// 授業のクイズ（SPEC §8.2）：上の 1 段に、解く（全部の回・まちがえた問題・範囲を選ぶ）と、問題を作る（回を選ぶ）
+function makePicker(makeable, byRound, open) {
   if (!makeable.length) return '';
-  return `<details class="test-panel__range test-panel__make" id="qm-box" open><summary>回を選んでクイズを作る</summary>
+  return `<details class="test-panel__range test-panel__make" id="qm-box"${open ? ' open' : ''}><summary>問題を作る</summary>
     <div class="test-panel__rounds">${makeable
       .map((r) => {
         const z = byRound.get(r.id);
         const title = r.title_user || r.title || '';
-        return `<label><input type="checkbox" name="quiz-make" id="qm-${esc(r.id)}" value="${esc(r.id)}" data-has-quiz="${z ? '1' : ''}" data-label="${esc(placeName(r))}"> ${esc(placeName(r))}${title ? ` <span class="muted">${esc(title)}</span>` : ''}${z ? ' <span class="muted">（作成済み）</span>' : ''}</label>`;
+        return `<label><input type="checkbox" name="quiz-make" id="qm-${esc(r.id)}" value="${esc(r.id)}" data-has-quiz="${z ? '1' : ''}" data-label="${esc(placeName(r))}"> ${esc(placeName(r))}${title && !r.user_made ? ` <span class="muted">${esc(title)}</span>` : ''}${z ? ' <span class="muted">作成済み</span>' : ''}</label>`;
       })
       .join('')}</div>
     <div class="actions">
-      <button class="btn btn--small btn--primary" data-action="quiz-make-picked">選んだ回のクイズを作る</button>
-      <button class="btn btn--small btn--quiet" data-action="quiz-pick" data-pick="new">まだない回を選ぶ</button>
-      <button class="btn btn--small btn--quiet" data-action="quiz-pick" data-pick="none">選ぶのをやめる</button>
+      <button class="btn btn--small btn--primary" data-action="quiz-make-picked">作る</button>
+      <button class="btn btn--small btn--quiet" data-action="quiz-pick" data-pick="new">未作成をすべて選ぶ</button>
+      <button class="btn btn--small btn--quiet" data-action="quiz-pick" data-pick="none">選択を外す</button>
     </div>
-    <p class="muted">回ごとに作ります（1 回 1〜2 分・およそ十数円。資料の量で前後します）。作成済みの回は作り直しになります（前の版の記録は残ります）。</p>
   </details>`;
 }
 
@@ -120,57 +117,63 @@ function testPanel(course, quizzes, makeable, byRound, hasKey) {
   const tries = ready.reduce((a, z) => a + (z.tries ?? 0), 0);
   const correct = ready.reduce((a, z) => a + (z.correct ?? 0), 0);
   const all = ready.map((z) => z.id).join(',');
-  const roundName = (z) => (z.round_number === 0 ? 'その他' : `第${z.round_number}回`);
-  const make = hasKey ? makePicker(makeable, byRound) : '';
-  // API キーがなく、作った問題もなければ出さない（クイズを使わない人には毎回の雑音になる。入口は上の「⋯」の「クイズを使う…」）
-  if (!ready.length && !hasKey) return '';
-  // 回の付箋より上で場所を取りすぎないように、1 行にまとめる（回を選ぶ・作るは畳んでおく）
+  const roundName = (z) =>
+    z.round_number === 0
+      ? 'その他'
+      : z.round_title_user && z.round_user_made
+        ? z.round_title_user
+        : `第${z.round_number}回`;
+  // 問題も作る手段もなければ出さない（入口は右上の「⋯」の「テストを作る…」）
+  if (!ready.length && !(hasKey && makeable.length)) return '';
+  const make = hasKey ? makePicker(makeable, byRound, !ready.length) : '';
   if (!ready.length)
-    return `<section class="test-panel" aria-label="この授業のテスト"><div class="test-panel__row"><strong>テスト</strong>
-      <span class="muted">${makeable.length ? '回を選んでクイズを作ると、テストができます' : '資料（PDF・Word・PowerPoint・テキスト）のある回ができると、クイズを作れます'}</span></div>${make}</section>`;
-  return `<section class="test-panel" aria-label="この授業のテスト"><div class="test-panel__row">
-      <strong>テスト</strong><span class="muted">${ready.length} 回分・${total} 問${tries ? `・正答率 ${Math.round((correct / tries) * 100)}%` : ''}</span>
-      <button class="btn btn--small btn--primary" data-action="nav" data-route="/quiz?course=${esc(course.id)}&quizzes=${esc(all)}&mode=exam">全部の回からテスト</button>
-      <button class="btn btn--small" data-action="nav" data-route="/quiz?course=${esc(course.id)}&quizzes=${esc(all)}&mode=retry">まちがえた問題だけ</button>
+    return `<section class="test-panel" aria-label="この授業のクイズ"><div class="test-panel__row"><strong>クイズ</strong></div>${make}</section>`;
+  return `<section class="test-panel" aria-label="この授業のクイズ"><div class="test-panel__row">
+      <strong>クイズ</strong><span class="muted">${total} 問${tries ? `・正答率 ${Math.round((correct / tries) * 100)}%` : ''}</span>
+      <button class="btn btn--small btn--primary" data-action="nav" data-route="/quiz?course=${esc(course.id)}&quizzes=${esc(all)}&mode=exam">全部の回から解く</button>
+      <button class="btn btn--small" data-action="nav" data-route="/quiz?course=${esc(course.id)}&quizzes=${esc(all)}&mode=retry">まちがえた問題</button>
     </div>
-    <details class="test-panel__range" id="qr-box"><summary>回を選んでテスト</summary>
+    ${
+      ready.length > 1
+        ? `<details class="test-panel__range" id="qr-box"><summary>回を選んで解く</summary>
       <div class="test-panel__rounds">${ready.map((z) => `<label><input type="checkbox" name="quiz-range" id="qr-${esc(z.id)}" value="${esc(z.id)}" checked> ${esc(roundName(z))} <span class="muted">${z.count} 問</span></label>`).join('')}</div>
-      <button class="btn btn--small" data-action="quiz-range" data-course-id="${esc(course.id)}">選んだ回でテスト</button>
-    </details>
+      <button class="btn btn--small" data-action="quiz-range" data-course-id="${esc(course.id)}">解く</button>
+    </details>`
+        : ''
+    }
     ${make}
   </section>`;
 }
 
-// 回のクイズの行（SPEC §8.2「クイズ」）：作った問題の数・正答率・要確認と「解く」「作り直す」「編集」。資料があってクイズがなければ「作る」
-export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この回', {hintWhenNoKey = false} = {}) {
+// 付箋の中のクイズの行：問題の数・正答率と「解く」「編集」「作り直す」。作っている途中・失敗も出す
+export function quizLine(round, list, course, quiz, gen, hasKey, _where = 'この回', {hintWhenNoKey = false} = {}) {
   const extractable = list.some((m) => m.status === 'ok' && EXTRACTABLE.test(m.name));
-  // 文字隠しマーカーが MIN_MASKS 以上あれば、AI を使わない穴埋め（§11.3）。API キーがなくても作れる
+  // 文字隠しマーカーが MIN_MASKS 以上あれば、AI を使わない穴埋め（§11.3）
   const masks = list.reduce((n, m) => n + (m.masks ?? 0), 0);
   const cloze =
     masks >= MIN_MASKS
-      ? `<button class="btn btn--small btn--quiet" data-action="quiz-cloze" data-round="${esc(round.id)}" data-has-quiz="${quiz ? '1' : ''}" title="AI を使わず、文字隠しマーカーで隠した語（${masks} か所）を穴埋めの問題にします（API キーは要りません）">隠した箇所から穴埋めを作る</button>`
+      ? `<button class="btn btn--small btn--quiet" data-action="quiz-cloze" data-round="${esc(round.id)}" data-has-quiz="${quiz ? '1' : ''}" title="文字隠しマーカーで隠した ${masks} か所を穴埋めにします（AI は使いません）">隠した語で穴埋め</button>`
       : '';
   if (gen)
-    return `<div class="round-quiz round-quiz--busy" role="status">${gen.state === 'failed' ? `<span>${esc(/^クイズを作れませんでした/.test(gen.message) ? gen.message : `クイズを作れませんでした：${gen.message}`)}</span> <button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">もう一度</button>` : `<span class="spinner" aria-hidden="true"></span><span>${esc(gen.message)}</span>`}</div>`;
+    return `<div class="round-quiz round-quiz--busy" role="status">${gen.state === 'failed' ? `<span>${esc(/^クイズを作れませんでした/.test(gen.message) ? gen.message : `作れませんでした：${gen.message}`)}</span> <button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">もう一度</button>` : `<span class="spinner" aria-hidden="true"></span><span>${esc(gen.message)}</span>`}</div>`;
   if (quiz) {
-    const rate = quiz.tries ? `正答率 ${Math.round(((quiz.correct ?? 0) / quiz.tries) * 100)}%` : 'まだ解いていません';
+    const rate = quiz.tries ? `正答率 ${Math.round(((quiz.correct ?? 0) / quiz.tries) * 100)}%` : '未回答';
     return `<div class="round-quiz">
-      <span class="round-quiz__info">クイズ ${quiz.count} 問・${rate}${quiz.flagged ? `・<strong>要確認 ${quiz.flagged}</strong>` : ''}</span>
+      <span class="round-quiz__info">クイズ ${quiz.count} 問・${rate}${quiz.flagged ? `・<strong title="AI の検算と答えが合わなかった問題">要確認 ${quiz.flagged}</strong>` : ''}</span>
       <span class="round-quiz__btns">
         <button class="btn btn--small btn--primary" data-action="nav" data-route="/quiz?course=${esc(course.id)}&quizzes=${esc(quiz.id)}&mode=quiz">解く</button>
         <button class="btn btn--small btn--quiet" data-action="nav" data-route="/quiz-edit/${esc(quiz.id)}">編集</button>
-        ${hasKey && extractable ? `<button class="btn btn--small btn--quiet" data-action="quiz-generate" data-rounds="${esc(round.id)}" title="資料から作り直します（前の版の記録は残ります）">作り直す</button>` : ''}
+        ${hasKey && extractable ? `<button class="btn btn--small btn--quiet" data-action="quiz-generate" data-rounds="${esc(round.id)}">作り直す</button>` : ''}
         ${cloze}
       </span></div>`;
   }
   if (!extractable) return '';
-  // API キーがなければ回ごとには案内しない（授業画面の上に 1 つだけ）。自分のフォルダの画面にはその区画がないので、
-  // hintWhenNoKey で 1 行だけ案内する（入口がどこにもないと、クイズの機能に気づけない）
+  // AI を選んでいないとき：授業の画面では回ごとに案内しない（上の「⋯」から）。自分のフォルダの画面だけ 1 行出す
   if (!hasKey)
     return hintWhenNoKey
-      ? `<div class="round-quiz"><span class="muted">資料からクイズを作れます（Claude API キーか、このパソコンの Claude Code・Codex を使います）</span> <button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">設定 → クイズ</button>${cloze}</div>`
+      ? `<div class="round-quiz"><button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">AI を設定して問題を作る</button>${cloze}</div>`
       : cloze && `<div class="round-quiz">${cloze}</div>`;
-  return `<div class="round-quiz"><button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button>${cloze}</div>`;
+  return `<div class="round-quiz"><button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">問題を作る</button>${cloze}</div>`;
 }
 
 /**

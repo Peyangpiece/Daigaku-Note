@@ -126,6 +126,7 @@ export const COLUMNS = {
     'q',
     'a',
     'o_json',
+    'why_json',
     'n',
     'src_sha256',
     'src_page',
@@ -253,7 +254,7 @@ export class Repo {
   listQuizzesAll() {
     const rows = this.db
       .prepare(
-        `SELECT z.*, r.course_id AS course_id, r.number AS round_number, r.title AS round_title, r.title_user AS round_title_user,
+        `SELECT z.*, r.course_id AS course_id, r.number AS round_number, r.title AS round_title, r.title_user AS round_title_user, r.user_made AS round_user_made,
            (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0) AS count,
            (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0 AND q.review IS NOT NULL) AS flagged,
            (SELECT COUNT(*) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS tries,
@@ -267,7 +268,7 @@ export class Repo {
   listQuizzes(courseId) {
     return this.db
       .prepare(
-        `SELECT z.*, r.number AS round_number, r.title AS round_title, r.title_user AS round_title_user,
+        `SELECT z.*, r.number AS round_number, r.title AS round_title, r.title_user AS round_title_user, r.user_made AS round_user_made,
            (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0) AS count,
            (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0 AND q.review IS NOT NULL) AS flagged,
            (SELECT COUNT(*) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS tries,
