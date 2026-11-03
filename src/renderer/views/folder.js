@@ -65,7 +65,7 @@ export function renderFolderNew({data}, route) {
         <input class="input" id="fn-name" type="text" maxlength="80" autocomplete="off">`
       }
       ${scopeChoice(useTerms)}
-      ${noTerm && useTerms ? '<p class="muted">学期が未設定のため、今日の日付から仮の学期を作ります（設定 → 学期 で直せます）。</p>' : ''}
+      ${noTerm && useTerms ? '<p class="muted">学期が未設定のため、今日の日付から仮の学期を作ります（設定 → 授業と LMS → 学期 で直せます）。</p>' : ''}
       <div class="actions">
         <button class="btn btn--primary" data-action="folder-create" data-mode="${mode}">${mode === 'new' ? '作る' : 'フォルダを選んで登録…'}</button>
       </div>
@@ -130,7 +130,7 @@ export function renderFolder({data}, course) {
         : `<button type="button" class="round-note__placeholder" ${rename} data-rename-target title="付箋の名前を入れる">タイトルを入力</button>`;
       return `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i, sub)}" data-drop="own" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" data-sort-key="${esc(sub)}" aria-label="${esc(title || 'この付箋')} のファイル">
       <header class="round-note__head" data-rename-box>${head}</header>
-      ${ms.length ? `<div class="round-note__files">${ms.map((m) => fileCard(m, course)).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグして入れます。</p>'}
+      ${ms.length ? `<div class="round-note__files">${ms.map((m) => fileCard(m, course)).join('')}</div>` : '<p class="round-note__none">ここにファイルをドラッグ</p>'}
       <div class="round-notebook">${
         hasNote(ms) || !round
           ? ''
@@ -153,6 +153,5 @@ export function renderFolder({data}, course) {
       <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（フォルダを開く・読み直す・置き場所・ホームから外す・削除）" title="ほかの操作">⋯</button>
     </nav>
     ${quizArea ? `<section class="test-panel test-panel--folder" aria-label="このフォルダのクイズ">${quizArea}</section>` : ''}
-    <p class="muted course-help">パソコンの「${esc(course.dirName ?? '')}」フォルダの中身です（開くたびに読み直します）。</p>
     <div class="round-notes round-notes--folder" data-sort-scope="course:${esc(course.id)}">${notes}<button type="button" class="round-note-add" data-action="sub-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します。いちばん後ろに、足した順に並びます（パソコンのフォルダの中にフォルダを作ります）"><span aria-hidden="true">＋</span>付箋を足す</button></div>`;
 }

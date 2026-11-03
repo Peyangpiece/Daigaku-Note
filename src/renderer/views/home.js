@@ -109,7 +109,7 @@ function reviewEntry(data) {
   if (!due) return '';
   return `<button type="button" class="home-review" data-action="nav" data-route="/review">
       <span class="home-review__mark" aria-hidden="true">✓</span>
-      <span class="home-review__text"><strong>今日の復習 ${due} 問</strong><span class="muted">忘れかけたころに出る問題です。正解するとポイントがたまります</span></span>
+      <span class="home-review__text"><strong>今日の復習 ${due} 問</strong></span>
       <span class="home-review__go">始める →</span>
     </button>`;
 }
@@ -120,7 +120,7 @@ function syncBox(data, progress, syncing) {
   const preparing = data.browser?.state === 'pending';
   const time = last ? new Date(last.finished_at).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'}) : '';
   const status = preparing
-    ? 'LMS を読むためのブラウザを準備しています（初回だけ。数分かかります）'
+    ? 'LMS を読む準備をしています（初回だけ数分）'
     : progress
       ? progressText(progress)
       : last
@@ -174,7 +174,7 @@ export function renderHome({data, progress}) {
     .filter((c) => c.status === 'login-required')
     .map(
       (c) =>
-        `<li>${esc(c.label)} へのログインが必要です。<button class="btn btn--small" data-action="login" data-id="${esc(c.id)}">ログイン窓を開く</button></li>`
+        `<li>${esc(c.label)} へのログインが必要です。<button class="btn btn--small" data-action="login" data-id="${esc(c.id)}">ログイン</button></li>`
     );
   // LMS の登録は任意。つないでいなければ、同期のボタンとブラウザの準備の知らせは出さない
   const hasLms = data.connections.some((c) => c.kind !== 'manual' && c.status !== 'disabled');
@@ -195,7 +195,7 @@ export function renderHome({data, progress}) {
     !cal.holidays.length &&
     !cal.swaps.length &&
     !(data.settings.calendarDismissed ?? []).includes(term.id)
-      ? `<p class="home-tip"><span class="muted">大学の学年暦（休講日・振替授業日）を入れると、「今日の授業」と回の日付が大学の予定どおりになります。</span><span class="home-tip__acts"><button class="btn btn--small" data-action="nav" data-route="/settings/term?calendar=1">学年暦を入れる</button><button class="btn btn--small btn--quiet" data-action="calendar-dismiss" data-term-id="${esc(term.id)}">この学期は入れない</button></span></p>`
+      ? `<p class="home-tip"><span class="muted">学年暦を入れると、休講日と振替授業日が予定に反映されます。</span><span class="home-tip__acts"><button class="btn btn--small" data-action="nav" data-route="/settings/term?calendar=1">入れる</button><button class="btn btn--small btn--quiet" data-action="calendar-dismiss" data-term-id="${esc(term.id)}">今学期は入れない</button></span></p>`
       : '';
   // 使い方に合わせた並び：LMS を使わない人・社会人は自分のフォルダを先に
   const foldersFirst = features(data.settings).foldersFirst;
@@ -206,7 +206,7 @@ export function renderHome({data, progress}) {
       ? `<div class="home-top">${dayLine || '<span></span>'}${hasLms ? syncBox(data, progress, syncing) : ''}</div>`
       : '';
   const classes = courses.length
-    ? `<section aria-labelledby="classes-title"><h2 class="home-sec" id="classes-title">授業</h2><div class="folders" data-sort-scope="home:classes">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</div></section>`
+    ? `<section aria-labelledby="classes-title"><h2 class="home-sec" id="classes-title">授業</h2><div class="folders" data-sort-scope="home:classes">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings?tab=basic"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</div></section>`
     : hasLms
       ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
       : features(data.settings).lms

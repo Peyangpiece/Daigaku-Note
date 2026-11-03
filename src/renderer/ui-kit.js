@@ -90,6 +90,9 @@ export function textDialog(title, text) {
 // untilNavigate：画面を移ったら消す（更新の知らせなど、今の画面にいる間だけ見せたいもの）
 export function toast(message, {error = false, action = null, detail = '', untilNavigate = false} = {}) {
   const box = document.getElementById('toasts');
+  // 同じ知らせが重ならないように、前の同じ文の知らせは消してから出す（ログインの必要などが続けて来たとき 3 つ並んでいた）
+  for (const old of box.querySelectorAll('.toast'))
+    if (old.querySelector('.toast__text')?.textContent === message) old.remove();
   const el = document.createElement('div');
   el.className = `toast${error ? ' toast--error' : ''}`;
   if (untilNavigate) el.dataset.untilNavigate = '1';

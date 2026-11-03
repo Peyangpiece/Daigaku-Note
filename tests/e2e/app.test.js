@@ -107,11 +107,13 @@ test(
         {timeout: 30000}
       );
       // 設定：情報の節と版
-      await win.evaluate(() => (location.hash = '#/settings'));
+      await win.evaluate(() => (location.hash = '#/settings?tab=about')); // 設定の「情報」タブ
       await win.waitForSelector('#st-about', {timeout: 30000});
       const about = await win.evaluate(() => document.querySelector('#st-about').textContent);
       assert.match(about, /α 版/);
-      assert.ok(await win.evaluate(() => !!document.querySelector('[data-backup="export"]')), 'データの節がある');
+      // 設定の「データ」タブ：バックアップ
+      await win.evaluate(() => (location.hash = '#/settings?tab=data'));
+      await win.waitForSelector('[data-backup="export"]', {timeout: 30000});
       // 裏で状態が変わって描き直しても、打っている欄のカーソルは動かず、日本語の変換中は欄を作り直さない
       await win.evaluate(() => (location.hash = '#/folder-new'));
       await win.waitForSelector('#fn-name');
