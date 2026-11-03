@@ -34,18 +34,54 @@ function autoLogin(c) {
 
 /** クイズ（SPEC §11.8・§11.9）：API キー・同意・モデル・問題数と種類・上限・今月の使用量 */
 const TYPE_NAMES = {choice: '選択', tf: '正誤', cloze: '穴埋め', num: '数値', card: '記述カード'};
+// クイズを作る AI（SPEC §11.8）：Claude API キー・このパソコンの Claude Code・Codex
+const ENGINE_NOTE = {
+  api: '使った分だけ費用がかかります（1 回の作成はおよそ十数円）。月の上限は下で決められます',
+  'claude-code': 'このパソコンの Claude Code（Anthropic）を使います。Claude の契約（Pro・Max など）の範囲で作れます',
+  codex: 'このパソコンの Codex（OpenAI）を使います。ChatGPT の契約の範囲で作れます'
+};
+const VENDOR = {api: 'Claude API（Anthropic）', 'claude-code': 'Claude Code（Anthropic）', codex: 'Codex（OpenAI）'};
+function engineChoice(q) {
+  const engine = q.key?.engine ?? 'api';
+  const row = (id) => {
+    const found = id === 'api' ? null : q.cli?.[id];
+    const state =
+      id === 'api'
+        ? q.key?.apiKey
+          ? `キー ••••${esc(q.key.last4 ?? '')}`
+          : 'キー未登録'
+        : q.cli == null
+          ? '探しています…'
+          : found
+            ? `見つかりました（${esc(found.version)}）`
+            : 'このパソコンに見つかりません';
+    const off = id !== 'api' && !found;
+    return `<label class="qz-engine${off ? ' qz-engine--off' : ''}"><input type="radio" name="qz-engine" value="${id}"${id === engine ? ' checked' : ''}${off ? ' disabled' : ''}>
+      <span><strong>${esc(q.engines?.[id] ?? id)}</strong> <span class="muted">${state}${id === engine ? '・いま使っています' : ''}</span><br><span class="muted">${esc(ENGINE_NOTE[id])}</span></span></label>`;
+  };
+  return `<fieldset class="qz-engines"><legend>クイズを作る AI</legend>
+      ${['api', 'claude-code', 'codex'].map(row).join('')}
+      <div class="actions" style="margin-top: var(--space-1)"><button type="button" class="btn btn--small" data-quiz-detect>このパソコンの Claude Code・Codex を探す</button></div>
+    </fieldset>`;
+}
+let cliDetected = false; // このアプリを開いてから探したか
 function quizSection(q, focus = false) {
   if (!q) return '';
-  const key = q.key?.set
-    ? `<p>API キー：<code>••••${esc(q.key.last4)}</code> <button class="btn btn--small" data-quiz-removekey>削除（同意も取り消す）</button></p>
-       <p class="muted">${consentLine(q.consent)}</p>`
-    : `<p class="muted">クイズを作るには、自分の Claude API キーが要ります（<button type="button" class="link" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">Anthropic Console</button> で作れます）。費用は使った分だけで、1 回の作成はおよそ十数円（資料の量で前後します）。月の上限は下で決められます。</p>
-       <details class="consent"><summary>AI に送るもの・送らないもの（${esc(AI_CONSENT_VERSION)} 版）</summary>
+  const engine = q.key?.engine ?? 'api';
+  const consentOk = q.consent?.version === AI_CONSENT_VERSION && (q.consent.engine ?? 'api') === engine;
+  const apiKey = q.key?.apiKey
+    ? `<p>API キー：<code>••••${esc(q.key.last4)}</code> <button class="btn btn--small" data-quiz-removekey>削除</button></p>`
+    : `<div class="qz-apikey" style="display:flex; gap: var(--space-1); align-items:end"><label style="flex:1">API キー（<button type="button" class="link" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">Anthropic Console</button> で作れます）<input class="input" id="qz-key" type="password" placeholder="キーを貼り付け（sk-ant- で始まります）" autocomplete="off" data-keep="off"></label><button class="btn btn--primary" data-quiz-setkey>確かめて保存</button></div>`;
+  const key = `${engineChoice(q)}
+       <details class="consent"${consentOk ? '' : ' open'}><summary>AI に送るもの・送らないもの（${esc(AI_CONSENT_VERSION)} 版）</summary>
          <p><strong>送る</strong>：${AI_SENDS.map(esc).join('。')}。</p>
          <p><strong>送らない</strong>：${AI_NOT_SENDS.map(esc).join('。')}。</p>
+         <p><strong>送り先</strong>：選んだ AI（Claude API キー・Claude Code は Anthropic、Codex は OpenAI）。</p>
        </details>
-       <label style="display:block; margin: var(--space-1) 0"><input type="checkbox" id="qz-consent"> 上の内容で、資料の本文を Claude API に送ることに同意します</label>
-       <div style="display:flex; gap: var(--space-1); align-items:end"><label style="flex:1">API キー<input class="input" id="qz-key" type="password" placeholder="キーを貼り付け（sk-ant- で始まります）" autocomplete="off" data-keep="off"></label><button class="btn btn--primary" data-quiz-setkey>確かめて保存</button></div>`;
+       <p class="muted">${consentOk ? consentLine(q.consent) : `いま選んでいる AI（${esc(VENDOR[engine])}）への同意の記録がありません。`}</p>
+       <label style="display:block; margin: var(--space-1) 0"><input type="checkbox" id="qz-consent"> 上の内容で、資料の本文を選んだ AI に送ることに同意します</label>
+       <div data-qz-api${engine === 'api' ? '' : ' hidden'}>${apiKey}</div>
+       <div class="actions" data-qz-use${engine === 'api' && !q.key?.apiKey ? ' hidden' : ''}><button class="btn btn--primary" data-quiz-engine>選んだ AI を使う</button></div>`;
   const mix = Object.entries(TYPE_NAMES)
     .map(
       ([t, label]) =>
@@ -54,10 +90,10 @@ function quizSection(q, focus = false) {
     .join('');
   return `<section class="card" id="st-quiz"${focus ? ' data-scroll-into-view' : ''}><h3>クイズ</h3>
     ${key}
-    <p class="muted" style="margin: var(--space-1) 0 0">今月の費用：$${(q.monthUsd ?? 0).toFixed(2)} ／ 上限 $${q.perMonthUsd}・今日の作成 ${q.today} ／ ${q.perDay} 回</p>
+    <p class="muted" style="margin: var(--space-1) 0 0">${engine === 'api' ? '' : 'Claude Code・Codex で作った分は、それぞれの契約の範囲です（下の費用には入りません）。'}今月の費用（API キー）：$${(q.monthUsd ?? 0).toFixed(2)} ／ 上限 $${q.perMonthUsd}・今日の作成 ${q.today} ／ ${q.perDay} 回</p>
     <details class="settings__more"><summary>問題の数と種類・AI のモデル・費用の上限</summary>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2)">
-      <label>AI のモデル<select class="input" id="qz-model">${Object.entries(q.models ?? {})
+      <label>AI のモデル（API キー・Claude Code）<select class="input" id="qz-model">${Object.entries(q.models ?? {})
         .map(([id, label]) => `<option value="${esc(id)}" ${id === q.model ? 'selected' : ''}>${esc(label)}</option>`)
         .join('')}</select></label>
     </div>
@@ -210,7 +246,7 @@ function consentLine(c) {
   const at = new Date(c.at).toLocaleString('ja-JP', {dateStyle: 'medium', timeStyle: 'short'});
   return c.version === AI_CONSENT_VERSION
     ? `AI に送る内容に同意：${esc(at)}（${esc(c.version)} 版）`
-    : `送る内容の説明が ${esc(c.version)} 版から変わりました。キーを削除して、同意し直してください。`;
+    : `送る内容の説明が ${esc(c.version)} 版から変わりました。上で同意し直してください。`;
 }
 
 /**
@@ -344,6 +380,50 @@ function bind() {
       toast('API キーを保存しました。授業画面からクイズを作れます');
       reload();
     };
+  // クイズを作る AI：選ぶと、API キーの欄（API キーを選んだときだけ）と「使う」を出し分ける
+  const engines = [...document.querySelectorAll('input[name="qz-engine"]')];
+  const syncEngine = () => {
+    const pick = engines.find((x) => x.checked)?.value;
+    const box = document.querySelector('[data-qz-api]');
+    if (box) box.hidden = pick !== 'api';
+    const use = document.querySelector('[data-qz-use]');
+    // API キーをまだ入れていないときは、キーの「確かめて保存」で使い始める
+    if (use) use.hidden = pick === 'api' && !document.querySelector('[data-quiz-removekey]');
+  };
+  engines.forEach((x) => x.addEventListener('change', syncEngine));
+  const qeng = document.querySelector('[data-quiz-engine]');
+  if (qeng)
+    qeng.onclick = async () => {
+      const engine = engines.find((x) => x.checked)?.value;
+      if (!engine) return;
+      if (!$('qz-consent').checked) return toast('送る内容への同意にチェックを入れてください', {error: true});
+      const r = await api['quiz.setEngine']({engine, consent: true});
+      if (r?.error) return toast(r.error, {error: true});
+      toast('クイズを作る AI を切り替えました。授業画面からクイズを作れます');
+      reload();
+    };
+  const qdet = document.querySelector('[data-quiz-detect]');
+  const detectCli = async () => {
+    cliDetected = true;
+    if (qdet) {
+      qdet.disabled = true;
+      qdet.textContent = '探しています…';
+    }
+    const r = await api['quiz.detectCli']();
+    if (r?.error) toast(r.error, {error: true});
+    reload();
+    return r;
+  };
+  if (qdet)
+    qdet.onclick = async () => {
+      const r = await detectCli();
+      if (r && !r.error) {
+        const names = [r['claude-code'] && 'Claude Code', r.codex && 'Codex'].filter(Boolean);
+        toast(names.length ? `${names.join('・')} が見つかりました` : 'Claude Code・Codex は見つかりませんでした');
+      }
+    };
+  // 設定を開いて最初に、このパソコンの Claude Code・Codex を探す（アプリを開いているあいだ 1 回）
+  if (qdet && !cliDetected) detectCli();
   const qrm = document.querySelector('[data-quiz-removekey]');
   if (qrm)
     qrm.onclick = async () => {

@@ -168,7 +168,7 @@ export function quizLine(round, list, course, quiz, gen, hasKey, where = 'この
   // hintWhenNoKey で 1 行だけ案内する（入口がどこにもないと、クイズの機能に気づけない）
   if (!hasKey)
     return hintWhenNoKey
-      ? `<div class="round-quiz"><span class="muted">資料からクイズを作れます（自分の Claude API キーが要ります。1 回およそ十数円）</span> <button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">設定 → クイズ</button>${cloze}</div>`
+      ? `<div class="round-quiz"><span class="muted">資料からクイズを作れます（Claude API キーか、このパソコンの Claude Code・Codex を使います）</span> <button class="btn btn--small" data-action="nav" data-route="/settings?focus=quiz">設定 → クイズ</button>${cloze}</div>`
       : cloze && `<div class="round-quiz">${cloze}</div>`;
   return `<div class="round-quiz"><button class="btn btn--small" data-action="quiz-generate" data-rounds="${esc(round.id)}">${esc(where)}の資料からクイズを作る</button>${cloze}</div>`;
 }

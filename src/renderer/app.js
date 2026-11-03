@@ -1182,7 +1182,7 @@ function openCourseMenu(id, x, y) {
     if (course.lms_url) items.push(['lms', `${conn?.label || 'LMS'} で開く`]);
     const quizzes = state.data.quizzes?.[id] ?? [];
     if (!state.data.quiz?.key?.set && !quizzes.length && features(state.data.settings).quiz)
-      items.push(['quiz', 'クイズを使う…（Claude API キーを入れる）']);
+      items.push(['quiz', 'クイズを使う…（作る AI を選ぶ）']);
     items.push(['hide', 'ホームから外す']);
   }
   openMenu(course.name, items, x, y, (what) => {
