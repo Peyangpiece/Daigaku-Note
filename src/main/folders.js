@@ -285,6 +285,20 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
     return repo.updateCourse(c.id, patch);
   }
   /** フォルダの中の小さなフォルダ（sub：フォルダからの相対パス）の名前を変える。同じ親フォルダの中のまま。戻りは scan の結果 */
+  /** 並べ替えた並びと付箋の色（shared/arrange.js）の鍵も新しい名前に（下のフォルダの中のフォルダも） */
+  function renameKey(courseId, from, to) {
+    const move = (k) => (k === from ? to : k.startsWith(`${from}/`) ? to + k.slice(from.length) : k);
+    const order = repo.getSetting('ui.order', {}) ?? {};
+    const scope = `course:${courseId}`;
+    if (order[scope]) repo.setSetting('ui.order', {...order, [scope]: order[scope].map(move)});
+    const colors = repo.getSetting('ui.stickyColors', {}) ?? {};
+    if (colors[courseId])
+      repo.setSetting('ui.stickyColors', {
+        ...colors,
+        [courseId]: Object.fromEntries(Object.entries(colors[courseId]).map(([k, v]) => [move(k), v]))
+      });
+  }
+
   async function renameSub(courseId, sub, name) {
     const c = folderCourse(courseId);
     const to = String(name ?? '').trim();
@@ -300,6 +314,7 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
     const rel = path.relative(c.dir, dest).split(path.sep).join('/');
     if (added[c.id]?.includes(String(sub)))
       repo.setSetting('folder.added', {...added, [c.id]: added[c.id].map((x) => (x === String(sub) ? rel : x))});
+    renameKey(c.id, String(sub), rel);
     return scan(c.id);
   }
 

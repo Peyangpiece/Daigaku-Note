@@ -32,6 +32,7 @@ let viewerMod = null;
 const loadViewer = () =>
   viewerMod ? Promise.resolve(viewerMod) : import('./views/viewer.js').then((m) => (viewerMod = m));
 import {watchModels} from './model3d.js';
+import {isReordering, startReorder} from './reorder.js';
 import './swipe.js'; // トラックパッドの 2 本指の横スワイプで戻る・進む
 import {
   NOTE_PAPERS,
@@ -267,7 +268,8 @@ function render() {
   viewer?.unmount();
   viewer = null;
   const same = route === lastRoute;
-  if (same && composing) {
+  // 並べ替えの最中も、同じ画面の描き直しは終わるまで待たせる（並べている途中の並びが消えないように）
+  if (same && (composing || isReordering())) {
     deferred = true;
     return;
   }
@@ -632,11 +634,13 @@ document.addEventListener('click', async (e) => {
       if (r?.ok) await api['sync.run']({connectionId: el.dataset.id});
       reload();
     } else if (action === 'round-add') {
-      // 付箋（回）を足して、すぐ名前を入れられるようにする（空のままなら「第N回」だけ）
+      // 付箋を足して、すぐ名前を入れられるようにする（空のままなら題のない付箋。薄く「タイトルを入力」）
       const r = await api['round.add']({courseId: el.dataset.courseId});
       if (r?.error) return toast(r.error, {error: true});
       await reload();
-      const btn = document.querySelector(`[data-drop="${CSS.escape(r.round.id)}"] .rename-btn`);
+      const btn = document.querySelector(
+        `[data-drop="${CSS.escape(r.round.id)}"] :is(.rename-btn, .round-note__placeholder)`
+      );
       if (btn) {
         btn.closest('.round-note')?.scrollIntoView({block: 'center'});
         renameFrom(btn);
@@ -937,8 +941,12 @@ function openMenu(label, items, x, y, onPick) {
   cardMenu.className = 'card-menu';
   cardMenu.setAttribute('role', 'menu');
   cardMenu.setAttribute('aria-label', label);
+  // 3 つ目があれば色見本（付箋の「色を変える」）
   cardMenu.innerHTML = items
-    .map(([k, l]) => `<button type="button" role="menuitem" data-card-menu="${k}">${esc(l)}</button>`)
+    .map(
+      ([k, l, swatch]) =>
+        `<button type="button" role="menuitem" data-card-menu="${k}">${swatch ? `<span class="card-menu__swatch" style="--swatch: ${esc(swatch)}" aria-hidden="true"></span>` : ''}${esc(l)}</button>`
+    )
     .join('');
   document.body.append(cardMenu);
   const {width, height} = cardMenu.getBoundingClientRect();
@@ -971,6 +979,77 @@ async function deleteFolder(course) {
   return true;
 }
 
+/**
+ * 並べ替えを始める（右クリック →「並べ替え」）：container の中の [data-sort-key] が揺れ、ドラッグで入れ替える。
+ * 右上の ✓ で並びを覚える（範囲は container の data-sort-scope）。Esc でやめると元の並びに戻す
+ */
+function beginSort(container) {
+  const scope = container?.dataset.sortScope;
+  if (!scope) return;
+  closeCardMenu();
+  const ok = startReorder(container, {
+    itemSelector: '[data-sort-key]',
+    onDone: async (keys, changed) => {
+      if (changed) {
+        const r = await api['settings.update']({patch: {order: {scope, keys}}});
+        if (r?.error) toast(r.error, {error: true});
+        else toast('並びを覚えました');
+      }
+      await reload();
+    },
+    onCancel: () => render()
+  });
+  if (!ok) toast('並べ替えるものが 2 つ以上ありません');
+}
+const sortable = (el) => {
+  const box = el?.closest('[data-sort-scope]');
+  return box && box.querySelectorAll(':scope > [data-sort-key]').length > 1 ? box : null;
+};
+
+// 付箋の色（--pop1〜5）。右クリック →「色を変える」で選ぶ
+const STICKY_COLORS = [
+  [1, '黄色'],
+  [2, 'ピンク'],
+  [3, '緑'],
+  [4, '水色'],
+  [5, 'オレンジ']
+];
+/** 付箋のメニュー（右クリック）：色を変える・並べ替え・消す（消せる付箋だけ） */
+function openStickyMenu(note, x, y) {
+  const courseId = note.dataset.courseId;
+  const key = note.dataset.sortKey;
+  const course = state.data?.courses.find((c) => c.id === courseId);
+  if (!course || key == null) return;
+  const del = note.querySelector('[data-action="round-remove"], [data-action="sub-remove"]');
+  const box = sortable(note);
+  const items = [
+    ['color', '色を変える…'],
+    ...(box ? [['sort', '並べ替え']] : []),
+    ...(del ? [['delete', '付箋を消す…']] : [])
+  ];
+  const label = note.getAttribute('aria-label') ?? '付箋';
+  openMenu(label, items, x, y, (what) => {
+    if (what === 'sort') return beginSort(box);
+    if (what === 'delete') return del.click();
+    const now = state.data.settings.stickyColors?.[courseId]?.[key] ?? null;
+    openMenu(
+      '付箋の色',
+      [
+        ...STICKY_COLORS.map(([n, name]) => [String(n), `${now === n ? '✓ ' : ''}${name}`, `var(--pop${n})`]),
+        ['0', `${now ? '' : '✓ '}もとの色`]
+      ],
+      x,
+      y,
+      async (pick) => {
+        const color = pick === '0' ? null : Number(pick);
+        const r = await api['settings.update']({patch: {stickyColor: {courseId, key, color}}});
+        if (r?.error) return toast(r.error, {error: true});
+        await reload();
+      }
+    );
+  });
+}
+
 /** フォルダのメニュー（右クリック・カードの「⋯」）：開く・名前を変える・着せ替え・ホームから外す・（自分のフォルダは）削除 */
 function openCardMenu(card, x, y) {
   const course = state.data?.courses.find((c) => c.id === card.dataset.id);
@@ -979,11 +1058,13 @@ function openCardMenu(card, x, y) {
     ['open', '開く'],
     ...(canRename(course) ? [['rename', '名前を変える…']] : []),
     ['skin', '着せ替え…'],
+    ...(sortable(card) ? [['sort', '並べ替え']] : []),
     ['remove', 'ホームから外す'],
     ...(course.kind === 'folder' ? [['delete', 'フォルダを削除…']] : [])
   ];
   openMenu(course.name, items, x, y, (what) => {
     if (what === 'open') navigate(`/course/${course.id}`);
+    else if (what === 'sort') beginSort(sortable(card));
     else if (what === 'rename') renameCourse(course, card.querySelector('.folder__name') ?? card);
     else if (what === 'skin') {
       const r = card.getBoundingClientRect();
@@ -1132,6 +1213,14 @@ document.addEventListener('contextmenu', (e) => {
     const r = file.getBoundingClientRect();
     const at = e.clientX || e.clientY;
     return openMaterialMenu(file.dataset.material, at ? e.clientX : r.left + 16, at ? e.clientY : r.top + 16);
+  }
+  // 付箋の右クリック：付箋のメニュー（色を変える・並べ替え・消す）
+  const note = e.target.closest?.('.round-note[data-sort-key]');
+  if (note) {
+    e.preventDefault();
+    const r = note.getBoundingClientRect();
+    const at = e.clientX || e.clientY;
+    return openStickyMenu(note, at ? e.clientX : r.left + 16, at ? e.clientY : r.top + 16);
   }
   const card = e.target.closest?.('.folder[data-action="open-course"]');
   closeCardMenu();

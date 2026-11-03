@@ -388,12 +388,17 @@ test('足した付箋は足した順を覚える・名前を変えても場所�
   await folders.addSub(c.id, 'ゼット');
   await folders.addSub(c.id, 'アルファ');
   assert.deepEqual(repo.getSetting('folder.added', {})[c.id], ['ゼット', 'アルファ'], '名前順ではなく足した順');
+  // 並べ替えた並びと付箋の色（右クリック）も、名前を変えたら新しい名前で覚え直す
+  repo.setSetting('ui.order', {[`course:${c.id}`]: ['アルファ', 'ゼット', '']});
+  repo.setSetting('ui.stickyColors', {[c.id]: {ゼット: 2, '': 4}});
   await folders.renameSub(c.id, 'ゼット', 'ベータ');
   assert.deepEqual(
     repo.getSetting('folder.added', {})[c.id],
     ['ベータ', 'アルファ'],
     '名前を変えても並びの場所はそのまま'
   );
+  assert.deepEqual(repo.getSetting('ui.order', {})[`course:${c.id}`], ['アルファ', 'ベータ', '']);
+  assert.deepEqual(repo.getSetting('ui.stickyColors', {})[c.id], {ベータ: 2, '': 4});
   const trashed = [];
   await folders.removeRoot(c.id, async (f) => {
     trashed.push(path.basename(f));
