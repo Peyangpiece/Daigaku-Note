@@ -1,6 +1,6 @@
 // セットアップ（SPEC §6.3）。1 ページ 1 手順、付箋が順に貼られる表現。手順は多くても 6（SPEC §6.3）。
 // 初回（#/setup）は あなたと使い方・授業の資料・（利用規約）・学期と保存先、大学の LMS とつなぐ人はそのまま LMS とつなぐ（URL とログイン）・授業の確認と同期（1 本の連番）。
-// あとから LMS とつなぐ手順（#/settings/lms）は 設定 → 大学の LMS から入る
+// あとから LMS とつなぐ手順（#/settings/lms）は 設定 → 授業と LMS から入る
 // （利用規約に同意していなければ最初に同意。Moodle の ID・パスワードと画面操作型のブラウザ窓。学期がまだなければ学期の設定も挟む）
 import {esc, toast} from '../ui-kit.js';
 import {navigate, reload} from '../store.js';
@@ -114,7 +114,7 @@ function stepLms(data, n) {
   const back =
     n > 1
       ? '<button class="btn" data-setup-back>戻る</button>'
-      : '<button class="btn" data-action="nav" data-route="/settings">やめる</button>';
+      : '<button class="btn" data-action="nav" data-route="/settings?tab=lms">やめる</button>';
   if (!draft.connectionId)
     return `<h2>${n}. 大学の LMS とつなぐ</h2>
     <p class="muted">大学の LMS（manaba・Moodle などの学習支援サービス）のトップページの URL を入れて「種類を判定」を押します。いま使えるのは Moodle と manabo（試験中）です。つなぐと、授業の資料を自動で集めます。</p>
@@ -175,7 +175,7 @@ function stepProfile(data, n) {
     ${
       role
         ? `<h3 class="su-sub">何に使いますか</h3>
-    <p class="muted">いくつでも選べます（あとから 設定 → 使い方 で変えられます）。</p>
+    <p class="muted">いくつでも選べます（あとから 設定 → 基本 → 使い方 で変えられます）。</p>
     <div class="use-pick" role="group" aria-label="使い方">${USES[role]
       .map(
         ([k, l, d]) =>
@@ -226,11 +226,11 @@ function stepLmsTerms(data, n) {
       <p class="muted">${esc(LMS_TERMS_VERSION.replace(/-/g, '/'))} 版</p>
     </div>
     <label class="lms-terms__agree"><input type="checkbox" id="su-agree" ${ok ? 'checked' : ''}> 注意書きを読み、上の利用規約に同意します</label>
-    <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : '<button class="btn" data-action="nav" data-route="/settings">やめる</button>'}<button class="btn btn--primary" id="su-terms" ${ok ? '' : 'disabled'}>同意して次へ</button></div>`;
+    <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : '<button class="btn" data-action="nav" data-route="/settings?tab=lms">やめる</button>'}<button class="btn btn--primary" id="su-terms" ${ok ? '' : 'disabled'}>同意して次へ</button></div>`;
 }
 function stepTerm(data, n) {
   return `<h2>${n}. 学期の設定</h2>
-    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 学期 で直せます）。</p>
+    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 授業と LMS → 学期 で直せます）。</p>
     ${termForm(data, null, {compact: true})}
     <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : ''}<button class="btn btn--primary" id="su-next4">保存して次へ</button></div>`;
 }
@@ -248,7 +248,7 @@ function stepTermRoot(data, n) {
     ${
       terms
         ? `<h3 class="su-sub">学期</h3>
-    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 学期 で直せます）。</p>
+    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 授業と LMS → 学期 で直せます）。</p>
     ${termForm(data, kept, {compact: true})}
     <h3 class="su-sub">保存先</h3>`
         : ''

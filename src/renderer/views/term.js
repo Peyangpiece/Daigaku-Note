@@ -1,4 +1,4 @@
-// 学期の設定（SPEC §6.14・§12.2）。セットアップの手順 4 と、設定 → 学期 の編集画面で同じ入力欄を使う。
+// 学期の設定（SPEC §6.14・§12.2）。セットアップの手順 4 と、設定 → 授業と LMS → 学期 の編集画面で同じ入力欄を使う。
 // 学期名は候補から選ぶか、自由に入力する（大学によって「1学期」「Fall」などがあるため）
 import {confirmDialog, esc, toast} from '../ui-kit.js';
 import {navigate, refresh, reload} from '../store.js';
@@ -113,7 +113,7 @@ export function renderTerm({data}, route = '/settings/term') {
   queueMicrotask(() => bind(term));
   return `
     <nav class="page-nav">
-      <button class="btn" data-action="nav" data-route="/settings">← 設定</button><h2>学期</h2>
+      <button class="btn" data-action="nav" data-route="/settings?tab=lms">← 設定</button><h2>学期</h2>
     </nav>
     <section class="card" style="max-width: 760px">
       <label style="display:block; margin-bottom: var(--space-2)">編集する学期<select class="input" id="tm-pick" data-keep="off">${terms.map((t) => `<option value="${esc(t.id)}" ${t.id === editingId ? 'selected' : ''}>${t.year} ${esc(t.label)}</option>`).join('')}<option value="" ${editingId === null ? 'selected' : ''}>＋ 新しい学期を追加</option></select></label>
@@ -254,7 +254,7 @@ function bind(term) {
       // 画面の学期の一覧・上の学期名を読み直してから戻る（読み直さないと、前の名前のまま見える）
       await reload();
       toast(r.redated ? `学期を保存しました。回の日付を ${r.redated} 件計算し直しました` : '学期を保存しました');
-      navigate('/settings');
+      navigate('/settings?tab=lms');
     };
   if ($('tm-remove'))
     $('tm-remove').onclick = async () => {

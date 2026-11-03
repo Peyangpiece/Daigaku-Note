@@ -5,7 +5,6 @@ import {reload} from '../store.js';
 import {ROLES, USES, features} from '../../shared/profile.js';
 
 const api = window.daigaku;
-const KIND_LABEL = {api: 'API で読む', recipe: '画面を読む', generic: '汎用の読み取り', manual: '手動で取り込む'};
 const fmtDate = (iso) =>
   iso
     ? new Date(iso).toLocaleString('ja-JP', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})
@@ -58,19 +57,19 @@ function engineChoice(q) {
     return `<label class="qz-engine${off ? ' qz-engine--off' : ''}"><input type="radio" name="qz-engine" value="${id}"${id === engine ? ' checked' : ''}${off ? ' disabled' : ''}>
       <span><strong>${esc(q.engines?.[id] ?? id)}</strong> <span class="muted">${state}${id === engine && q.key?.set ? '・使用中' : ''}</span><br><span class="muted">${esc(ENGINE_NOTE[id])}</span></span></label>`;
   };
-  return `<fieldset class="qz-engines"><legend>問題を作る AI</legend>
+  return `<fieldset class="qz-engines"><legend class="sr-only">問題を作る AI</legend>
       ${['api', 'claude-code', 'codex'].map(row).join('')}
       <div><button type="button" class="btn btn--small btn--quiet" data-quiz-detect>Claude Code・Codex を探し直す</button></div>
     </fieldset>`;
 }
 let cliDetected = false; // このアプリを開いてから探したか
-function quizSection(q, focus = false) {
+function quizSection(q) {
   if (!q) return '';
   const engine = q.key?.engine ?? 'api';
   const consentOk = q.consent?.version === AI_CONSENT_VERSION && (q.consent.engine ?? 'api') === engine;
   const apiKey = q.key?.apiKey
     ? `<p>API キー <code>••••${esc(q.key.last4)}</code> <button class="btn btn--small btn--quiet" data-quiz-removekey>削除</button></p>`
-    : `<div class="qz-apikey" style="display:flex; gap: var(--space-1); align-items:end"><label style="flex:1">API キー（<button type="button" class="link" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">取得</button>）<input class="input" id="qz-key" type="password" placeholder="sk-ant-…" autocomplete="off" data-keep="off"></label><button class="btn btn--primary" data-quiz-setkey>保存</button></div>`;
+    : `<div class="qz-apikey" style="display:flex; gap: var(--space-1); align-items:end"><label style="flex:1">API キー（<button type="button" class="link" data-action="open-external" data-url="https://console.anthropic.com/settings/keys">取得</button>）<input class="input" id="qz-key" type="password" placeholder="sk-ant-…" autocomplete="off" data-keep="off"></label><button class="btn btn--primary" data-quiz-setkey>保存して使う</button></div>`;
   // 同意：済んでいれば 1 行。まだなら送る内容（畳む）とチェック
   const consent = `${consentOk ? `<p class="muted" data-qz-agreed>${consentLine(q.consent)}</p>` : ''}
     <div data-qz-consent${consentOk ? ' hidden' : ''}><details class="consent"><summary>AI に送る内容</summary>
@@ -82,8 +81,8 @@ function quizSection(q, focus = false) {
   // 出し分けに使う今の状態（bind の syncEngine が読む）
   const key = `<div data-qz-state data-engine="${esc(engine)}" data-agreed="${consentOk ? '1' : ''}" data-ready="${q.key?.set ? '1' : ''}" hidden></div>
        ${engineChoice(q)}
-       ${consent}
        <div data-qz-api${engine === 'api' ? '' : ' hidden'}>${apiKey}</div>
+       ${consent}
        <div class="actions" data-qz-use${(engine === 'api' && !q.key?.apiKey) || (consentOk && q.key?.set) ? ' hidden' : ''}><button class="btn btn--primary" data-quiz-engine>この AI を使う</button></div>`;
   const mix = Object.entries(TYPE_NAMES)
     .map(
@@ -91,11 +90,12 @@ function quizSection(q, focus = false) {
         `<label>${label}<input class="input" type="number" min="0" max="30" id="qz-mix-${t}" value="${q.mix?.[t] ?? 0}"></label>`
     )
     .join('');
-  return `<section class="card" id="st-quiz"${focus ? ' data-scroll-into-view' : ''}><h3>クイズ</h3>
+  return `<section class="card" id="st-quiz"><h3>問題を作る AI</h3>
     ${key}
     <p class="muted" style="margin: var(--space-1) 0 0">今日の作成 ${q.today} ／ ${q.perDay} 回${engine === 'api' ? `・今月 $${(q.monthUsd ?? 0).toFixed(2)} ／ $${q.perMonthUsd}` : ''}</p>
-    <details class="settings__more"><summary>問題の数と種類・モデル・上限</summary>
-    <p style="margin: var(--space-2) 0 4px">1 回分の問題数（合計 1〜30 問）</p>
+  </section>
+  <section class="card"><h3>1 回に作る問題</h3>
+    <p class="muted" style="margin: 0 0 4px">種類ごとの数（合計 1〜30 問）</p>
     <div class="qz-mix">${mix}</div>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2)">
       <label>モデル（API キー・Claude Code）<select class="input" id="qz-model">${Object.entries(q.models ?? {})
@@ -105,16 +105,30 @@ function quizSection(q, focus = false) {
       <label>月の費用の上限（ドル・API キー）<input class="input" type="number" min="0.5" max="500" step="0.5" id="qz-permonth" value="${q.perMonthUsd}"></label>
     </div>
     <div class="actions"><button class="btn" data-quiz-save>保存</button></div>
-    </details>
   </section>`;
 }
 
 /** ブラウザの準備の状態。技術的な文言は「くわしく」の中へ */
 export function browserState(b) {
   if (b?.state === 'ready') return '用意できています';
-  if (b?.state === 'pending') return '準備中…（初回だけ。数分かかります）';
+  if (b?.state === 'pending') return '準備中…（初回だけ数分）';
   return `準備に失敗しました。ネットにつながっているか確かめて、「準備し直す」を押してください。${b?.message ? `<details class="muted"><summary>くわしく</summary>${esc(b.message)}</details>` : ''}`;
 }
+
+// 設定のタブ。#/settings?tab=<鍵>（focus=quiz はクイズのタブ）。前は 1 枚に全部並べていて、探しにくかった
+const TABS = [
+  ['basic', '基本'],
+  ['lms', '授業と LMS'],
+  ['quiz', 'クイズ'],
+  ['mobile', 'スマホ'],
+  ['data', 'データ'],
+  ['about', '情報']
+];
+export const settingsTab = (route) => {
+  const q = new URLSearchParams(route.split('?')[1] ?? '');
+  const tab = q.get('tab') ?? (q.get('focus') === 'quiz' ? 'quiz' : 'basic');
+  return TABS.some(([k]) => k === tab) ? tab : 'basic';
+};
 
 export function renderSettings({data}, route = '/settings') {
   const s = data.settings;
@@ -122,25 +136,15 @@ export function renderSettings({data}, route = '/settings') {
   // 「手動」の接続はアプリの中の仕組み（自分のファイルの置き場）なので出さない。同期の設定は LMS をつないだときだけ出す
   const lmsConns = data.connections.filter((c) => c.kind !== 'manual');
   const hasLms = lmsConns.length > 0;
-  const focus = new URLSearchParams(route.split('?')[1] ?? '').get('focus');
-  // 使い方に合わせて項目を出す。使っていない機能でも、もう設定してあるもの（LMS の接続・API キー）は出す
+  const tab = settingsTab(route);
   const f = features({role: s.role, uses: s.uses});
-  const showLms = f.lms || hasLms;
-  // テスト作成（クイズ）の設定は、使い方にかかわらずいつも出す（使い方で「復習」を選んでいないと見つけられなかった）
   queueMicrotask(bind);
-  return `
-    <nav class="page-nav">
-      <button class="btn" data-action="nav" data-route="/">← ホーム</button><h2>設定</h2>
-    </nav>
-    <div class="settings">
-      <nav class="settings__jump" aria-label="設定の項目">
-        <button type="button" class="btn btn--small" data-jump="st-general">ふだんの設定</button>
-        ${data.quiz ? '<button type="button" class="btn btn--small" data-jump="st-quiz">クイズ</button>' : ''}
-        ${showLms ? '<button type="button" class="btn btn--small" data-jump="st-lms">大学の LMS</button>' : ''}
-        <button type="button" class="btn btn--small" data-jump="st-about">情報</button>
-      </nav>
-      <h3 class="settings__group" id="st-general">ふだんの設定</h3>
-      <div class="settings__grid">
+  const tabs = `<nav class="settings__tabs" role="tablist" aria-label="設定">${TABS.map(
+    ([k, l]) =>
+      `<button type="button" role="tab" class="settings__tab" aria-selected="${k === tab}" data-action="nav" data-route="/settings?tab=${k}">${l}</button>`
+  ).join('')}</nav>`;
+  const panels = {
+    basic: `
       <section class="card" id="st-profile"><h3>使い方</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
           <label>使う人<select class="input" id="st-role">${s.role ? '' : '<option value="">（未設定）</option>'}${Object.entries(
@@ -150,100 +154,97 @@ export function renderSettings({data}, route = '/settings') {
             .join('')}</select></label>
           ${s.role === 'student' ? `<label>大学名<input class="input" id="st-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(s.university ?? '')}"></label>` : ''}
         </div>
-        ${s.role ? `<div style="margin-top: var(--space-2)">${USES[s.role].map(([k, l]) => `<label style="display:block"><input type="checkbox" data-st-use="${k}" ${s.uses.includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div>` : ''}
+        ${s.role ? `<p class="muted" style="margin: var(--space-2) 0 4px">使う機能（ホームに出すもの）</p>${USES[s.role].map(([k, l]) => `<label style="display:block"><input type="checkbox" data-st-use="${k}" ${s.uses.includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}` : ''}
       </section>
+      <section class="card"><h3>見た目</h3>
+        <label>テーマ<select class="input" id="st-theme">${[
+          ['system', 'パソコンに合わせる'],
+          ['light', '明るい'],
+          ['dark', '暗い']
+        ]
+          .map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`)
+          .join('')}</select></label>
+        <div class="about__row" style="margin-top: var(--space-2)"><button class="btn btn--small" data-action="nav" data-route="/kisekae">ノートの着せ替え</button><button class="btn btn--small" data-action="nav" data-route="/fudebako">ペン（筆箱）</button></div>
+      </section>
+      <section class="card"><h3>通知と起動</h3>
+        <label style="display:block"><input type="checkbox" id="st-notify" ${s.notifications === false ? '' : 'checked'}> 新しい資料・クイズの完成・同期の失敗を通知する</label>
+        ${s.openAtLogin?.available ? `<label style="display:block; margin-top: var(--space-1)"><input type="checkbox" id="st-login" ${s.openAtLogin?.on ? 'checked' : ''}> パソコンの起動時に大学ノートを開く</label>` : ''}
+      </section>
+      ${
+        hidden.length
+          ? `<section class="card"><h3>非表示の授業・フォルダ</h3>
+              <ul style="padding-left: 1.2em">${hidden.map((c) => `<li style="margin-bottom: 6px">${esc(c.name)} <button class="btn btn--small" data-show-course="${esc(c.id)}">${c.kind === 'folder' ? 'ホームに戻す' : 'ホームに戻す（同期も再開）'}</button></li>`).join('')}</ul>
+            </section>`
+          : ''
+      }`,
+    lms: `
       ${
         f.terms
           ? `<section class="card"><h3>学期</h3>
-        ${data.terms.length ? `<ul style="padding-left: 1.2em">${data.terms.map((t) => `<li>${t.year} ${esc(t.label)} <span class="muted">${esc(t.start_date)}〜${esc(t.end_date)}・${t.rounds} 回${t.periods_json ? '・時限あり' : '・時限未設定'}</span></li>`).join('')}</ul>` : '<p class="muted">学期の設定がありません。</p>'}
-        <button class="btn" data-action="nav" data-route="/settings/term">${data.terms.length ? '学期を編集・追加' : '学期を設定'}</button>
+        ${data.terms.length ? `<ul style="padding-left: 1.2em">${data.terms.map((t) => `<li>${t.year} ${esc(t.label)} <span class="muted">${esc(t.start_date)}〜${esc(t.end_date)}・${t.rounds} 回${t.periods_json ? '' : '・時限の時刻なし'}</span></li>`).join('')}</ul>` : '<p class="muted">学期がありません。</p>'}
+        <button class="btn" data-action="nav" data-route="/settings/term">${data.terms.length ? '学期を編集' : '学期を設定'}</button>
       </section>`
           : ''
       }
-      <section class="card" id="st-mobile"><h3>スマホとつなぐ</h3><div data-v="mobile">読み込み中…</div></section>
-      <section class="card" id="st-data"><h3>データ</h3>
-        <p class="muted">授業・回・資料の記録、書き込み、クイズ、設定をまとめた 1 つのファイル（.sqlite）です。大学のアカウントの情報と資料のファイルは含みません。毎日の写しは 7 日分、自動で取っています。</p>
-        <div class="about__row"><button type="button" class="btn btn--small" data-backup="export">バックアップを書き出す</button><button type="button" class="btn btn--small" data-backup="import">バックアップを読み込む…</button><button type="button" class="btn btn--small btn--quiet" data-backup="dir">自動バックアップのフォルダを開く</button></div>
-        <p class="muted">読み込むと、いまのデータはそのファイルの中身に置き換わります（いまのものは before-restore という名前で残します）。別のパソコンへ移すときは、資料のフォルダをコピーし、同じ保存先にしてから読み込み、LMS にログインし直してください。</p>
-      </section>
-      <section class="card"><h3>保存先</h3>
-        <p><code>${esc(s.root)}</code>${s.root === s.defaultRoot ? ' <span class="muted">（既定）</span>' : ''}</p>
-        <div style="display:flex; gap: var(--space-1)"><button class="btn" data-action="pick-dir">フォルダを選択…</button>${s.root !== s.defaultRoot ? '<button class="btn" data-action="reset-dir">既定に戻す</button>' : ''}<button class="btn" data-action="open-root">開く</button></div>
-      </section>
-      <section class="card"><h3>見た目</h3>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
-          <label>テーマ<select class="input" id="st-theme">${[
-            ['system', 'OS に合わせる'],
-            ['light', '明るい'],
-            ['dark', '暗い']
-          ]
-            .map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`)
-            .join('')}</select></label>
-          <p class="muted" style="align-self:end">ノートの種類・色・線の濃さは<button class="btn btn--small" data-action="nav" data-route="/kisekae">着せ替え</button>で、PDF に書くペンは<button class="btn btn--small" data-action="nav" data-route="/fudebako">筆箱</button>で変えられます</p>
-        </div>
-      </section>
-        ${
-          hidden.length
-            ? `<section class="card"><h3>非表示の授業・フォルダ</h3>
-                <p class="muted">ホームに出さない授業とフォルダ（授業は同期もしません）：</p>
-                <ul style="padding-left: 1.2em">${hidden.map((c) => `<li style="margin-bottom: 6px">${esc(c.name)} <button class="btn btn--small" data-show-course="${esc(c.id)}">${c.kind === 'folder' ? 'ホームに戻す' : '表示して同期する'}</button></li>`).join('')}</ul>
-              </section>`
-            : ''
-        }
-      </div>
-      ${
-        data.quiz
-          ? `<h3 class="settings__group">クイズ</h3>
-      <div class="settings__grid">
-      ${quizSection({...data.quiz, consent: data.settings.aiConsent}, focus === 'quiz')}
-      </div>`
-          : ''
-      }
-      <div${showLms ? '' : ' hidden'}>
-      <h3 class="settings__group">大学の LMS</h3>
-      <div class="settings__grid">
-      <section class="card" id="st-lms"><h3>大学の LMS とつなぐ</h3>
-        <p class="muted">大学の LMS（学習支援サービス）とつなぐと、授業の資料を自動で集めます（いま使えるのは Moodle と manabo（試験中））。</p>
+      <section class="card" id="st-lms"><h3>大学の LMS</h3>
+        <p class="muted">つなぐと、授業の資料を自動で集めます（Moodle・manabo）。</p>
         ${
           lmsConns.length
             ? `<ul style="padding-left: 1.2em">${lmsConns
                 .map(
                   (
                     c
-                  ) => `<li style="margin-bottom: 6px"><span data-rename-box><span data-rename-target>${esc(c.label)}</span> <button type="button" class="rename-btn" data-action="rename" data-what="conn" data-id="${esc(c.id)}" data-value="${esc(c.label)}" title="名前を変える" aria-label="${esc(c.label)}の名前を変える">✎</button></span> <span class="muted">${esc(KIND_LABEL[c.kind] ?? c.kind)}${c.base_url ? ` ・ ${esc(c.base_url)}` : ''} ・ 前回の同期 ${esc(fmtDate(c.last_sync_at))}${c.status !== 'ok' ? ` ・ <strong>${c.status === 'login-required' ? 'ログインが必要です' : esc(c.status)}</strong>` : ''}</span>
+                  ) => `<li style="margin-bottom: 6px"><span data-rename-box><span data-rename-target>${esc(c.label)}</span> <button type="button" class="rename-btn" data-action="rename" data-what="conn" data-id="${esc(c.id)}" data-value="${esc(c.label)}" title="名前を変える" aria-label="${esc(c.label)}の名前を変える">✎</button></span> <span class="muted">前回の同期 ${esc(fmtDate(c.last_sync_at))}${c.status !== 'ok' ? ` ・ <strong>${c.status === 'login-required' ? 'ログインが必要' : esc(c.status)}</strong>` : ''}</span>
                     <span style="display:inline-flex; gap: 6px; margin-left: 8px">
-                      ${c.kind !== 'manual' ? `<button class="btn" data-login="${esc(c.id)}">ログインし直す</button>` : ''}
-                      <button class="btn" data-remove-conn="${esc(c.id)}">削除</button>
+                      ${c.kind !== 'manual' ? `<button class="btn btn--small${c.status === 'login-required' ? ' btn--primary' : ''}" data-login="${esc(c.id)}">ログイン</button>` : ''}
+                      <button class="btn btn--small btn--quiet" data-remove-conn="${esc(c.id)}">削除</button>
                     </span>${c.kind === 'recipe' ? autoLogin(c) : ''}</li>`
                 )
                 .join('')}</ul>`
-            : '<p class="muted">大学の LMS（manaba・Moodle など）とはつないでいません。</p>'
+            : ''
         }
-        <button class="btn${lmsConns.length ? '' : ' btn--primary'}" data-action="nav" data-route="/settings/lms">${lmsConns.length ? '別の LMS を追加' : 'LMS とつなぐ'}</button>
-        <div class="muted" style="margin-top: var(--space-2)">LMS を読むためのブラウザ：${browserState(data.browser)}
-          <button class="btn btn--small" data-action="install-browser" ${data.browser?.state === 'pending' ? 'disabled' : ''}>準備し直す</button></div>
+        <button class="btn${lmsConns.length ? ' btn--small' : ' btn--primary'}" data-action="nav" data-route="/settings/lms">${lmsConns.length ? '別の LMS を追加' : 'LMS とつなぐ'}</button>
+        ${data.browser?.state === 'failed' || data.browser?.state === 'pending' ? `<div class="muted" style="margin-top: var(--space-2)">LMS を読むブラウザ：${browserState(data.browser)} <button class="btn btn--small" data-action="install-browser" ${data.browser?.state === 'pending' ? 'disabled' : ''}>準備し直す</button></div>` : ''}
       </section>
-      <section class="card"${hasLms ? '' : ' hidden'}><h3>LMS の同期</h3>
+      ${
+        hasLms
+          ? `<section class="card"><h3>同期</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
-          <label>毎日の同期の時刻<input class="input" id="st-time" type="time" value="${esc(s.syncTime)}"></label>
-          <label>定期の確認<select class="input" id="st-every">${[0, 1, 3, 6].map((h) => `<option value="${h}" ${s.everyHours === h ? 'selected' : ''}>${h ? `${h} 時間ごと` : 'オフ'}</option>`).join('')}</select></label>
+          <label>毎日の時刻<input class="input" id="st-time" type="time" value="${esc(s.syncTime)}"></label>
+          <label>途中の確認<select class="input" id="st-every">${[0, 1, 3, 6].map((h) => `<option value="${h}" ${s.everyHours === h ? 'selected' : ''}>${h ? `${h} 時間ごと` : 'しない'}</option>`).join('')}</select></label>
         </div>
-        <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-class" ${s.classStart ? 'checked' : ''}> 授業の開始時刻に、その授業を同期する（学期の設定に時限の時刻が要ります）</label>
-        <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-notify" ${s.notifications === false ? '' : 'checked'}> 新しい資料・ログインの必要・クイズの完成・同期の失敗を、パソコンの通知で知らせる</label>
-        <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-login" ${s.openAtLogin?.on ? 'checked' : ''} ${s.openAtLogin?.available ? '' : 'disabled'}> パソコンにログインしたら大学ノートを起動する（同期はアプリが起動している間だけ動きます）</label>
-        ${s.openAtLogin?.available ? '' : '<p class="muted" style="margin-top: 4px">インストールしたアプリから起動しているときに設定できます（開発中の起動では使えません）。</p>'}
+        <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-class" ${s.classStart ? 'checked' : ''}> 授業の始まる時刻にも同期する</label>
+        <p class="muted" style="margin: 4px 0 0">同期は大学ノートを開いている間に動きます。</p>
+      </section>`
+          : ''
+      }`,
+    quiz: data.quiz ? quizSection({...data.quiz, consent: data.settings.aiConsent}) : '',
+    mobile: `<section class="card" id="st-mobile"><h3>スマホ</h3><div data-v="mobile">読み込み中…</div></section>`,
+    data: `
+      <section class="card"><h3>保存先</h3>
+        <p><code>${esc(s.root)}</code>${s.root === s.defaultRoot ? ' <span class="muted">（既定）</span>' : ''}</p>
+        <div class="about__row"><button class="btn btn--small" data-action="open-root">開く</button><button class="btn btn--small" data-action="pick-dir">変える…</button>${s.root !== s.defaultRoot ? '<button class="btn btn--small btn--quiet" data-action="reset-dir">既定に戻す</button>' : ''}</div>
       </section>
-      </div>
-      </div>
-      ${showLms ? '' : '<p class="muted">使わない機能の設定は出していません。出すには、上の「使い方」で選んでください。</p>'}
+      <section class="card" id="st-data"><h3>バックアップ</h3>
+        <p class="muted">記録・書き込み・クイズ・設定をまとめたファイルです（資料のファイルは含みません）。毎日自動で 7 日分取っています。</p>
+        <div class="about__row"><button type="button" class="btn btn--small" data-backup="export">書き出す</button><button type="button" class="btn btn--small" data-backup="import">読み込む…</button><button type="button" class="btn btn--small btn--quiet" data-backup="dir">自動バックアップを開く</button></div>
+      </section>`,
+    about: `
       <section class="card" id="st-about"><h3>情報</h3>
         <p>大学ノート ${esc(data.version)}<span class="about__alpha">α 版</span></p>
-        <p class="muted">試験中の版です。動かないことやデータが消えることがあります。大切な資料は元の場所にも残してください。</p>
-        <div class="about__row"><button type="button" class="btn btn--small" data-action="policy">利用規約とプライバシーポリシー</button><button type="button" class="btn btn--small" data-action="notices">第三者のソフトウェアのライセンス</button></div>
-        <p class="muted">データの場所：<code>${esc(data.dataDir ?? '')}</code></p>
-        <div class="about__row"><button type="button" class="btn btn--small" data-action="open-data-dir">データの場所を開く</button><button type="button" class="btn btn--small" data-action="open-logs">ログを開く</button></div>
-        <p class="muted">不具合は GitHub の Peyangpiece/Daigaku-Note の Issues へ。ログは 7 日分残り、パスワードや Cookie は含みません。</p>
-      </section>
+        <p class="muted">試験中の版です。大切な資料は元の場所にも残してください。</p>
+        <div class="about__row"><button type="button" class="btn btn--small" data-action="policy">利用規約とプライバシーポリシー</button><button type="button" class="btn btn--small" data-action="notices">ライセンス</button></div>
+        <div class="about__row"><button type="button" class="btn btn--small btn--quiet" data-action="open-data-dir">データの場所を開く</button><button type="button" class="btn btn--small btn--quiet" data-action="open-logs">ログを開く</button></div>
+        <p class="muted">不具合の報告：GitHub の Peyangpiece/Daigaku-Note（Issues）</p>
+      </section>`
+  };
+  return `
+    <nav class="page-nav">
+      <button class="btn" data-action="nav" data-route="/">← ホーム</button><h2>設定</h2>
+    </nav>
+    <div class="settings">
+      ${tabs}
+      <div class="settings__grid" role="tabpanel">${panels[tab]}</div>
     </div>`;
 }
 
@@ -275,8 +276,8 @@ async function renderMobile(box, st = null, pair = null) {
         .join('')}</ul>`
     : '<p class="muted">つないだスマホはまだありません。</p>';
   box.innerHTML = `
-    <p class="muted">同じ Wi-Fi のスマホのブラウザで、今日の復習・資料と書き込みを見る・メモやマーカーを書く・写真を回のフォルダへ送る、ができます。資料はこのパソコンの中にだけあり、インターネットには送りません。</p>
-    <label style="display:block"><input type="checkbox" data-mobile-on ${s.enabled ? 'checked' : ''}> スマホとつなぐ（大学ノートを開いている間だけ）</label>
+    <p class="muted">同じ Wi-Fi のスマホで、資料・復習・書き込みを使えます。インターネットには送りません。</p>
+    <label style="display:block"><input type="checkbox" data-mobile-on ${s.enabled ? 'checked' : ''}> スマホとつなぐ</label>
     ${
       s.enabled
         ? `${addr ? `<p class="muted">アドレス：${addr}</p>` : '<p class="muted">Wi-Fi などのネットワークにつながっていません。</p>'}
@@ -287,7 +288,7 @@ async function renderMobile(box, st = null, pair = null) {
           : ''
       }
       ${devices}
-      <p class="muted">つながらないとき：パソコンとスマホが同じ Wi-Fi にあるか確かめてください。大学の Wi-Fi は端末どうしがつながらない設定のことが多く、家の Wi-Fi で使うのがおすすめです。</p>`
+      <p class="muted">つながらないときは、家の Wi-Fi で試してください（大学の Wi-Fi は端末どうしがつながらないことが多い）。</p>`
         : devices
     }`;
   box.querySelector('[data-mobile-on]').onchange = async (e) => {
@@ -343,14 +344,6 @@ async function renderMobile(box, st = null, pair = null) {
 }
 
 function bind() {
-  // 上の項目のボタン：その項目まで送る（画面の道すじ #/settings は変えない）
-  document
-    .querySelectorAll('[data-jump]')
-    .forEach((b) =>
-      b.addEventListener('click', () =>
-        document.getElementById(b.dataset.jump)?.scrollIntoView({behavior: 'smooth', block: 'start'})
-      )
-    );
   const $ = (id) => document.getElementById(id);
   renderMobile(document.querySelector('[data-v="mobile"]'));
   for (const b of document.querySelectorAll('[data-backup]'))

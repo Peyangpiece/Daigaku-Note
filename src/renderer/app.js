@@ -362,10 +362,10 @@ api.on('sync.finished', (r) => {
   state.progress = null;
   if (EMBED) return; // アプリ全体の知らせは親の画面だけで出す（並べた左右の画面で 3 つ重ならないように）
   if (r.status === 'login-required')
-    toast(r.message || 'LMS へのログインが必要です（設定 → 大学の LMS → ログインし直す）', {error: true});
+    return; // login.required の知らせで出す
   else if (r.status === 'failed' || r.status === 'browser-not-ready')
     toast(r.message || '同期に失敗しました', {error: true, detail: r.detail});
-  else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 学期）', {error: true});
+  else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 授業と LMS → 学期）', {error: true});
   else if (r.status === 'terms-required') toast(r.message, {error: true});
   else
     toast(
@@ -389,10 +389,16 @@ document.addEventListener('submit', (e) => {
     quizSubmitAsk(e.target);
   }
 });
-api.on(
-  'login.required',
-  ({label, message}) => !EMBED && toast(message ?? `${label} へのログインが必要です`, {error: true})
-);
+// LMS へのログインが要るとき：短い 1 行と「ログイン」（設定の 授業と LMS へ）。くわしい理由は「くわしく」に
+api.on('login.required', ({label, message}) => {
+  if (EMBED) return;
+  const text = `${label ?? 'LMS'} へのログインが必要です`;
+  toast(text, {
+    error: true,
+    action: {label: 'ログイン', run: () => navigate('/settings?tab=lms')},
+    detail: message && message !== text ? message : ''
+  });
+});
 api.on('route', (r) => navigate(r));
 // メニューの拡大・縮小（⌘＋・⌘−・⌘0）。編集画面では PDF だけ、ほかの画面ではアプリ全体
 api.on('zoom', (dir) => (split ? zoomSplit(dir) : viewer ? viewer.zoomStep(dir) : api.appZoom(dir)));
@@ -691,7 +697,7 @@ document.addEventListener('click', async (e) => {
       if (r?.error) toast(r.error, {error: true});
       else if (!r.canceled) uploaded(r);
     } else if (action === 'finish-setup') {
-      // 初回のセットアップを終える（次から起動時に出さない。LMS はあとからでも 設定 → 大学の LMS からつなげる）
+      // 初回のセットアップを終える（次から起動時に出さない。LMS はあとからでも 設定 → 授業と LMS からつなげる）
       await api['settings.update']({patch: {skipSetup: true}});
       await reload();
       navigate(el.dataset.next || '/');

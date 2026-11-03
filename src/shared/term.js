@@ -120,7 +120,7 @@ export function termEndingSoon(term, today, days = 30) {
 
 /**
  * 学期がまだないとき（LMS をつながずに使い始めたとき）の仮の学期。4〜9 月は春学期、10〜3 月は秋学期（1〜3 月は前の年度）。
- * 期間は defaultTermDates のまま。あとで 設定 → 学期 で直せる
+ * 期間は defaultTermDates のまま。あとで 設定 → 授業と LMS → 学期 で直せる
  */
 export function autoTerm(today) {
   const [y, m] = String(today).split('-').map(Number);
