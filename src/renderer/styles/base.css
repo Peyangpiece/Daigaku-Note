@@ -141,7 +141,9 @@ html.paper-canvas body,
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 0 calc(var(--space-6) + 440px) 0 var(--space-6); /* 右は上の固定ボタン（ホーム・復習・筆箱・着せ替え・設定）の分 */
+  /* 右は上の固定ボタン（ホーム・クイズ・持ち物・着せ替え・設定）の分。幅は app.js が実際の幅を測って --topnav-w に入れる
+     （決め打ちの 440px では、今日の復習の数の札が付くと足りず、ポイントの札がボタンの下に重なっていた） */
+  padding: 0 calc(var(--space-6) + var(--topnav-w, 520px) + 16px) 0 var(--space-6);
   white-space: nowrap;
 }
 /* 窓が狭いときは、日付、学期の順に外す（アプリ名・ポイント・上のボタンを 1 行に収める） */
