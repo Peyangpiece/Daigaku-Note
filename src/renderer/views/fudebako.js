@@ -28,7 +28,10 @@ import {
   cartPoints,
   cartTotal,
   CASE_INFO,
+  GEAR,
+  POUCH_INFO,
   caseArt,
+  isGear,
   itemOf,
   listed,
   priceLabel,
@@ -82,6 +85,8 @@ function spec(item) {
     return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格`;
   if (item.experimental) return `${esc(item.maker)}・${item.line ? esc(item.line) : `${item.mm} mm`}`;
   if (item.type === 'case') return CASE_INFO[item.style]?.short ?? '';
+  if (item.type === 'pouch') return POUCH_INFO[item.style]?.short ?? '';
+  if (item.type === 'calc' || item.type === 'timer') return esc(item.note ?? '');
   if (item.pencil) return `芯 ${item.mm} mm・${item.lead}`;
   if (item.type === 'pen') return item.even ? `${item.mm} mm・筆圧なし（太さが一定）` : `${item.mm} mm`;
   if (item.type === 'marker') return item.thick ? '太め' : 'ふつう';
@@ -91,7 +96,7 @@ function spec(item) {
 
 /** 札の絵。3D モデルの品は、ドラッグで回せる 3D 表示（renderer/model3d.js が中を作る）。big は詳細ページ（拡大もできる）。foot: false で下の説明を省く */
 const art = (item, {big = false, foot = true} = {}) =>
-  item.type === 'case' && !big
+  isGear(item) && !big
     ? caseArt(item)
     : item.art === 'model'
       ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}" data-item="${esc(item.id)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
@@ -104,7 +109,7 @@ const art = (item, {big = false, foot = true} = {}) =>
               }</div>`
             : ''
         }`
-      : item.type === 'case'
+      : isGear(item)
         ? caseArt(item)
         : toolArt(item);
 const detailRoute = (item) => `/fudebako/item/${encodeURIComponent(item.id)}`;
@@ -150,13 +155,39 @@ const POUCH_TOOLS = [
   ['ruler', '定規', 'ふちに沿ってまっすぐな線が引ける'],
   ['timer', 'タイマー', '時間になると音で知らせる']
 ];
-/** ポーチ：中の道具と、何に使うか */
-function pouchPage() {
-  return `<div class="fb-grid fb-pouch">${POUCH_TOOLS.map(
-    ([k, name, what]) => `<div class="fb-card"><div class="fb-card__art">${POUCH_ART[k]}</div>
-      <div class="fb-card__name">${name}</div><div class="muted fb-card__spec">${what}</div></div>`
-  ).join('')}</div>
-    <p class="muted fb-pouch__hint">PDF を開いた画面・ホーム・クイズの右下の「ポーチ」から使えます。</p>`;
+/** ポーチ：選んでいるポーチと中の道具。ポーチ・電卓・タイマーは持っている中から選ぶ（ショップで別の形を買える） */
+function pouchPage(s) {
+  const owned = s.owned.map(itemOf).filter(Boolean);
+  // 種類ごとの札：持っている品を並べ、押すとそれを使う
+  const choose = (type) => {
+    const items = owned.filter((it) => it.type === type);
+    return `<section class="fb-group"><h3>${TYPE_LABEL[type]}</h3><div class="fb-grid fb-grid--cases">${items
+      .map(
+        (
+          it
+        ) => `<button type="button" class="fb-card fb-card--case${s[GEAR[type]] === it.id ? ' is-in' : ''}" data-fb="gear" data-id="${esc(it.id)}" aria-pressed="${s[GEAR[type]] === it.id}">
+          <div class="fb-card__art">${caseArt(it)}</div><div class="fb-card__name">${esc(it.name)}</div>
+          <span class="muted fb-card__state">${s[GEAR[type]] === it.id ? '使っています' : '押して使う'}</span></button>`
+      )
+      .join('')}</div></section>`;
+  };
+  const bag = itemOf(s.pouchId);
+  // いつも入っている道具（形は 1 つ）
+  const fixed = POUCH_TOOLS.filter(([k]) => k !== 'calc' && k !== 'timer');
+  return `
+    <div class="fb-pouch-top">
+      <div class="fb-pouch-top__bag">${bag ? art(bag, {foot: false}) : ''}</div>
+      <div><h3>${esc(bag?.name ?? 'ポーチ')}</h3>
+        <p class="muted">PDF を開いた画面・ホーム・クイズの右下の「ポーチ」から使えます。</p>
+        <div class="fb-grid fb-pouch">${fixed
+          .map(
+            ([k, name, what]) =>
+              `<div class="fb-card"><div class="fb-card__art">${POUCH_ART[k]}</div><div class="fb-card__name">${name}</div><div class="muted fb-card__spec">${what}</div></div>`
+          )
+          .join('')}</div>
+      </div>
+    </div>
+    ${choose('pouch')}${choose('calc')}${choose('timer')}`;
 }
 
 /** わたしの筆箱：ペンケースの中に 6 本。押した場所に、下の一覧から入れる */
@@ -227,7 +258,9 @@ function priceTag(item, owned) {
 }
 /** 色の丸：外が軸の色、中がインクの色（ペンケースは外が本体、中が飾り） */
 const dotStyle = (it) =>
-  it.type === 'case' ? `--body:${it.base};--ink:${it.trim}` : `--body:${it.body ?? it.color};--ink:${it.color}`;
+  it.base
+    ? `--body:${it.base};--ink:${it.trim}`
+    : `--body:${it.body ?? it.color ?? '#c9ced6'};--ink:${it.color ?? '#8a929e'}`;
 /** 札の右下の丸：シリーズの色ちがい（押すと札の品が変わる）。多機能ペンは芯の色（押せない） */
 function dots(series, picked) {
   if (series.items.length === 1 && picked.refills)
@@ -274,13 +307,15 @@ function seriesCard(series, s) {
   if (series.items.length > 1) sub.push(it.name);
   else if (it.refills) sub.push(`2&1・替え芯 ${it.refill} 規格`);
   else if (it.type === 'case') sub.push(CASE_INFO[it.style]?.short ?? '');
+  else if (it.type === 'pouch') sub.push(POUCH_INFO[it.style]?.short ?? '');
+  else if (it.note) sub.push(it.note);
   else if (it.pencil) sub.push(`芯 ${it.mm} mm・${it.lead}`);
   else if (it.type === 'pen') sub.push(it.even ? `${it.mm} mm・筆圧なし` : `${it.mm} mm`);
   else if (it.type === 'marker') sub.push(it.thick ? '太め' : 'ふつう');
   else if (it.type === 'hider') sub.push('赤シートで隠れる');
   return `<article class="shop-card shop-card--${tier.id}${owned ? ' is-owned' : ''}" data-series="${esc(series.id)}">
     ${ribbons(it)}
-    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'case' ? caseArt(it) : toolArt(it, {shot: true})}</button>
+    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it, {shot: true})}</button>
     <button type="button" class="shop-card__name" data-action="nav" data-route="${detailRoute(it)}">${esc(series.name)}</button>
     <div class="muted shop-card__spec">${sub.map(esc).join('・')}</div>
     <div class="shop-card__foot">${priceTag(it, owned)}${dots(series, it)}</div>
@@ -357,7 +392,7 @@ function hero(s) {
       <p>${esc(it.maker)}。${it.refills ? '黒・赤のボールペンと 0.5 のシャープが 1 本に。' : ''}${it.art === 'model' ? '3D モデルで、実物の形と材質を回して確かめられます。' : ''}</p>
       <div class="shop-hero__act">${priceTag(it, owned)}${owned ? '' : cartAction(it, s)}<button type="button" class="btn btn--small" data-action="nav" data-route="${detailRoute(it)}">くわしく見る</button></div>
     </div>
-    <div class="shop-hero__art">${art(it, {foot: false})}${it.art === 'model' && it.type !== 'case' ? '<p class="muted shop-hero__hint">ドラッグで回せます</p>' : ''}</div>
+    <div class="shop-hero__art">${art(it, {foot: false})}${it.art === 'model' && !isGear(it) ? '<p class="muted shop-hero__hint">ドラッグで回せます</p>' : ''}</div>
   </section>`;
 }
 /** ショップ：帯・検索・絞り込み・シリーズの札 */
@@ -391,10 +426,7 @@ function buyButtons(s, it) {
     return cart.has(it.id)
       ? `<span class="muted">カートに入っています</span><button type="button" class="btn btn--primary" data-action="nav" data-route="/fudebako/cart">カートを見る</button>`
       : `<button type="button" class="btn btn--primary" data-shop="cart" data-id="${esc(it.id)}">${ICON.cart} カートへ入れる</button>`;
-  if (it.type === 'case')
-    return it.id === s.caseId
-      ? '<span class="muted">このペンケースを使っています</span>'
-      : `<button type="button" class="btn" data-fb="case" data-id="${it.id}">このペンケースを使う</button>`;
+  if (isGear(it)) return useButton(s, it);
   const where = s.slots.indexOf(it.id);
   if (where >= 0) return `<span class="muted">筆箱の ${where + 1} 本目に入っています</span>`;
   const at = s.slots.indexOf(null);
@@ -402,6 +434,13 @@ function buyButtons(s, it) {
     ? `<button type="button" class="btn btn--primary" data-fb="put" data-id="${it.id}" data-at="${at}">筆箱の ${at + 1} 本目に入れる</button>
       <button type="button" class="btn" data-action="nav" data-route="/fudebako">筆箱で選ぶ</button>`
     : swapButtons(s, it);
+}
+/** 1 つだけ選ぶ持ち物（ペンケース・ポーチ・電卓・タイマー）：使っている／「この○○を使う」 */
+function useButton(s, it, small = false) {
+  const label = TYPE_LABEL[it.type];
+  return s[GEAR[it.type]] === it.id
+    ? `<span class="muted">${small ? '使っています' : `この${label}を使っています`}</span>`
+    : `<button type="button" class="btn${small ? ' btn--small' : ''}" data-fb="gear" data-id="${esc(it.id)}">この${label}を使う</button>`;
 }
 /** 筆箱がいっぱいのとき：何本目と入れ替えるかのボタン（丸は今そこにある品のインクの色。出した品は持ち物に残る） */
 function swapButtons(s, it) {
@@ -438,10 +477,10 @@ function detail(s, id) {
       ]);
   } else if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
   else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
-  else if (it.type === 'case' && CASE_INFO[it.style]) {
-    const c = CASE_INFO[it.style];
+  else if ((it.type === 'case' && CASE_INFO[it.style]) || (it.type === 'pouch' && POUCH_INFO[it.style])) {
+    const c = (it.type === 'case' ? CASE_INFO : POUCH_INFO)[it.style];
     rows.push(['素材', c.material], ['つくり', c.build], ['大きさ', `${c.size}（長さ × 幅 × 高さ）`]);
-  }
+  } else if (it.note) rows.push(['見た目', it.note]);
   if (it.art === 'model') rows.push(['見た目', '3D モデル（実物の形と材質）']);
   const samples = it.refills
     ? `<ul class="fb-refills">${it.refills
@@ -498,7 +537,7 @@ const rowSpec = (it) =>
   [it.experimental ? '' : (it.maker ?? '大学ノート'), spec(it) || typeLabel(it)].filter(Boolean).join('・');
 const orderRow = (it, {remove = false} = {}) =>
   `<li class="shop-row">
-    <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'case' ? caseArt(it) : toolArt(it)}</button>
+    <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it)}</button>
     <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${rowSpec(it)}</div></div>
     <div class="shop-row__price">${priceLabel(it)}</div>
     ${remove ? `<button type="button" class="btn btn--small btn--quiet" data-shop="remove" data-id="${esc(it.id)}" aria-label="${esc(it.name)}をカートから外す">外す</button>` : ''}
@@ -588,11 +627,7 @@ function orderPage(s, id) {
       if (!it)
         return `<li class="shop-row"><div class="shop-row__text">${esc(x.name)}</div><div class="shop-row__price">${cost(x)}</div></li>`;
       let act = '';
-      if (it.type === 'case')
-        act =
-          it.id === s.caseId
-            ? '<span class="muted">使っています</span>'
-            : `<button type="button" class="btn btn--small" data-fb="case" data-id="${it.id}">このペンケースを使う</button>`;
+      if (isGear(it)) act = useButton(s, it, true);
       else {
         const where = s.slots.indexOf(it.id);
         act =
@@ -603,7 +638,7 @@ function orderPage(s, id) {
               : swapButtons(s, it);
       }
       return `<li class="shop-row">
-        <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'case' ? caseArt(it) : toolArt(it)}</button>
+        <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it)}</button>
         <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${esc(it.maker ?? '大学ノート')}</div></div>
         <div class="shop-row__price">${cost(x)}</div>
         <div class="shop-row__act">${act}</div>
@@ -681,7 +716,7 @@ export function renderFudebako(_state, route) {
             : isShop
               ? shop(s)
               : isPouch
-                ? pouchPage()
+                ? pouchPage(s)
                 : mine(s);
   // 持ち物（筆箱・ポーチ）は右上にショップへのボタン。ショップの中は「← 持ち物」とカート
   const head = inShop
@@ -813,4 +848,8 @@ document.addEventListener('click', (e) => {
     );
     if (next >= 0) ui.slot = next; // 空きがあれば、次はそこへ
   } else if (what === 'case') save('stationery.arrange', {caseId: id});
+  else if (what === 'gear') {
+    const it = itemOf(id);
+    if (it && GEAR[it.type]) save('stationery.arrange', {[GEAR[it.type]]: id}, `${it.name} を使います`);
+  }
 });

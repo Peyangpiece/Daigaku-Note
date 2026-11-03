@@ -16,6 +16,7 @@ import {
 } from '../shared/figures.js';
 import {growFigure, renderFigure} from './figure-view.js';
 import {dressRuler} from './model3d.js';
+import {caseArt, itemOf, stationeryState} from '../shared/stationery.js';
 import {evaluate, formatNumber} from '../shared/calc.js';
 import {
   TIMER_PRESETS,
@@ -128,16 +129,28 @@ export const POUCH_ART = Object.fromEntries(
 /**
  * 四隅のうち、ポーチ・シール帳・素材の HTML（筆箱は使う側が作る）
  */
-export const cornersHtml = () => `
+/** 選んでいるポーチと、ポーチの電卓・タイマー（持ち物の「ポーチ」で選ぶ）。電卓・タイマーは選んだ形の 3D モデルで描く */
+function pouchGear() {
+  const st = stationeryState(state.data?.stationery);
+  const art = (k, id) => {
+    const model = itemOf(id)?.model;
+    return model && model !== `tool-${k}` ? pouchArt(model, POUCH_FLAT[k]) : POUCH_ART[k];
+  };
+  return {bag: itemOf(st.pouchId), calc: art('calc', st.calcId), timer: art('timer', st.timerId)};
+}
+
+export const cornersHtml = () => {
+  const gear = pouchGear();
+  return `
   <aside class="corner corner--pouch is-tucked" data-corner="pouch" aria-label="ポーチ">
     <button type="button" class="corner__tab" data-corner-tab="pouch" aria-expanded="false" title="ポーチを出す（マウスを画面の右下の端へ・右端から左へなでる）" aria-label="ポーチを出す"><span>ポーチ</span></button>
-    <div class="corner__head"><strong>ポーチ</strong></div>
+    <div class="corner__head"><strong>ポーチ</strong>${gear.bag ? `<span class="pouch__bag" title="${esc(gear.bag.name)}">${caseArt(gear.bag)}</span>` : ''}</div>
     <div class="pouch__items">
       <button type="button" class="pouch__item" data-v="sheet" aria-pressed="false" title="赤シートを出す・しまう（${key(MOD, 'R')}）。赤い字が消え、マーカーのところが黒く隠れます">${POUCH_ART.sheet}<span>赤シート</span></button>
-      <button type="button" class="pouch__item" data-v="calc" aria-pressed="false" title="電卓を出す・しまう（${key(MOD, 'D')}）">${POUCH_ART.calc}<span>電卓</span></button>
+      <button type="button" class="pouch__item" data-v="calc" aria-pressed="false" title="電卓を出す・しまう（${key(MOD, 'D')}）">${gear.calc}<span>電卓</span></button>
       <button type="button" class="pouch__item" data-v="memo" aria-pressed="false" title="メモ帳を出す・しまう。書いてちぎると、ページに貼れます">${POUCH_ART.memo}<span>メモ帳</span></button>
       <button type="button" class="pouch__item" data-v="ruler" aria-pressed="false" title="定規を出す・しまう。ふちのすぐ外からボールペンで書くと、まっすぐな線になります">${POUCH_ART.ruler}<span>定規</span></button>
-      <button type="button" class="pouch__item" data-v="timer" aria-pressed="false" title="タイマーを出す・しまう">${POUCH_ART.timer}<span>タイマー</span><small class="pouch__badge" data-v="timer-badge" hidden></small></button>
+      <button type="button" class="pouch__item" data-v="timer" aria-pressed="false" title="タイマーを出す・しまう">${gear.timer}<span>タイマー</span><small class="pouch__badge" data-v="timer-badge" hidden></small></button>
     </div>
   </aside>
   <aside class="corner corner--seal is-tucked" data-corner="seal" aria-label="シール帳">
@@ -154,6 +167,7 @@ export const cornersHtml = () => `
     <div class="corner__grid corner__grid--sozai" data-v="sozai-grid"></div>
     <p class="corner__hint">押すと見ているページの真ん中に、ドラッグするとページの好きな所に貼れます。ペンで上に書き込めます</p>
   </aside>`;
+};
 
 /**
  * 四隅の道具の土台。使う側（PDF の編集画面・クイズとホームの机）はこれを継いで、次を決める：

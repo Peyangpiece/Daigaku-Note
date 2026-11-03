@@ -8,7 +8,7 @@
 //     文房具の詳細ページの大きな表示：ホイールやピンチで近づけて細部を見られる）
 //   - [data-model-reset]：同じ [data-model-box] の中の 3D 表示の向きと距離を戻す
 // 描けないとき（WebGL が使えない・読み込めない）は、ふつうのペン（ペンケース）の絵に置き換える
-import {CATALOG, caseArt, tierOf, toolArt} from '../shared/stationery.js';
+import {CATALOG, caseArt, isGear, tierOf, toolArt} from '../shared/stationery.js';
 
 const handles = new WeakMap(); // .model-view → mount() の戻り（reset）
 
@@ -18,9 +18,8 @@ const snaps = new Map(); // 「model id|品の id」→ Promise<data URL>
 // 同じ形（model）を品ごとの色で描く（公式の品は形の種類ごとに 1 つの GLB）。品の id がなければ GLB の色のまま
 const itemOf = (el) => CATALOG.find((it) => it.id === el.dataset.item) ?? null;
 
-/** 描けないときの絵（ペンケースはペンケースの絵） */
-const plainArt = (item, opts) =>
-  item.type === 'case' ? caseArt({...item, art: null}) : toolArt({...item, art: null}, opts);
+/** 描けないときの絵（ペンケース・ポーチ・電卓・タイマーは箱の絵） */
+const plainArt = (item, opts) => (isGear(item) ? caseArt({...item, art: null}) : toolArt({...item, art: null}, opts));
 
 /**
  * 平らな 2D の絵で描くか：PDF の編集画面（[data-flat-art] の中）では、光のない平らな絵にする（3D と同じ形・色）。

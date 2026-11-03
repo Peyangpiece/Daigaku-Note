@@ -13,7 +13,7 @@ import {esc} from './html.js';
 export const SLOTS = 6;
 // 種類（kind）：ショップの絞り込み・一覧の見出しの分け方。シャープペンシルは書く道具としてはペン（type: 'pen'）で、
 // 線が黒鉛の灰色になるだけなので、種類だけを分ける（pencil: true の品。kindOf）
-export const TYPES = ['pen', 'pencil', 'marker', 'hider', 'case'];
+export const TYPES = ['pen', 'pencil', 'marker', 'hider', 'case', 'pouch', 'calc', 'timer'];
 export const TOOL_TYPES = ['pen', 'marker', 'hider'];
 export const TOOL_KINDS = ['pen', 'pencil', 'marker', 'hider'];
 export const TYPE_LABEL = {
@@ -21,12 +21,64 @@ export const TYPE_LABEL = {
   pencil: 'シャープペンシル',
   marker: 'マーカー',
   hider: '文字隠しペン',
-  case: 'ペンケース'
+  case: 'ペンケース',
+  pouch: 'ポーチ',
+  calc: '電卓',
+  timer: 'タイマー'
 };
+/**
+ * 1 つだけ選んで使う持ち物（ペンケース・ポーチ・ポーチの電卓とタイマー）。種類 → 選んだ品を覚える設定の名前。
+ * 筆箱の 6 本（道具）とちがい、持っている中から 1 つを選ぶ
+ */
+export const GEAR = {case: 'caseId', pouch: 'pouchId', calc: 'calcId', timer: 'timerId'};
+export const isGear = (item) => !!GEAR[item?.type];
 /** 品の種類（シャープペンシルは 'pencil'、ほかは type） */
 export const kindOf = (item) => (item?.pencil ? 'pencil' : item?.type);
 /** 品ぞろえ（CATALOG）の外の 3D モデル：消しゴム（筆箱の横にいつもある道具）とポーチの道具の絵 */
 export const EXTRA_MODELS = ['eraser', 'tool-sheet', 'tool-calc', 'tool-memo', 'tool-ruler', 'tool-timer'];
+// ポーチ（ポーチの道具を入れる袋）も 3D モデル（形の種類ごとの GLB：pouch-flat・pouch-box・pouch-gama・pouch-drum）。
+// ペンケースと同じく CaseBase・CaseTrim を base・trim で塗る
+const bag = (id, name, style, base, trim, series = undefined) => ({
+  id,
+  type: 'pouch',
+  name,
+  style,
+  base,
+  trim,
+  price: 0,
+  art: 'model',
+  model: `pouch-${style}`,
+  ...(series ? {series} : {})
+});
+/** ポーチの説明（形の種類ごと。寸法は scripts/pens3d/build.py。長さ × 幅 × 高さ）。short はショップの札の一言 */
+export const POUCH_INFO = {
+  flat: {
+    short: '帆布・平たい',
+    material: '帆布（太い綿糸の平織り）',
+    build: '平たい長方形の袋。上にコイルのファスナー、端に輪のタブ、正面の織りネーム',
+    size: '約 190 × 26 × 125 mm'
+  },
+  box: {
+    short: 'マチ付き・自立する',
+    material: 'ナイロン',
+    build: '底の広い箱形（立てて置ける）。上のファスナー、両端の持ち手のループ',
+    size: '約 175 × 85 × 95 mm'
+  },
+  gama: {
+    short: 'がま口・金の口金',
+    material: '帆布（太い綿糸の平織り）',
+    build: 'ふっくらした袋に、金色の口金と玉の留め具',
+    size: '約 150 × 62 × 105 mm'
+  },
+  drum: {
+    short: '筒形・手首のひも',
+    material: 'ナイロン',
+    build: '横に寝かせた円筒。上のファスナー、両端の縁取り、手首のひも',
+    size: '約 170 × 72 × 72 mm'
+  }
+};
+// ポーチの電卓・タイマー（形ごとに 1 つの GLB。色は GLB のまま）。note はショップの札の一言
+const gadget = (id, type, name, model, note) => ({id, type, name, model, note, price: 0, art: 'model'});
 /** 品の種類の名前 */
 export const typeLabel = (item) => TYPE_LABEL[kindOf(item)];
 /** 道具の種類 → 編集画面の注釈の種類（shared/annotation.js） */
@@ -242,6 +294,16 @@ export const CATALOG = [
   pencase('case-pastel-pink', '帆布の筆箱（桃）', 'pouch', '#f6c9d6', '#ffffff', 'case-pouch'),
   pencase('case-sage', '帆布の筆箱（くすみグリーン）', 'pouch', '#a9bfa8', '#f3efe4', 'case-pouch'),
   pencase('case-clear', 'クリアケース', 'clear', '#e9f3f8', '#9fb7c4'),
+  // ポーチ（4 つの形）と、ポーチの電卓・タイマー（2 つずつ）
+  bag('pouch-flat-navy', 'フラットポーチ（紺）', 'flat', '#2e4a7a', '#e9e2d0', 'pouch-flat'),
+  bag('pouch-flat-mustard', 'フラットポーチ（からし）', 'flat', '#c9a23a', '#f4ecd8', 'pouch-flat'),
+  bag('pouch-box-pink', 'マチ付きポーチ（桃）', 'box', '#e7a7b8', '#fff3f6'),
+  bag('pouch-gama-red', 'がま口ポーチ（赤）', 'gama', '#b33a3a', '#f2e4c9'),
+  bag('pouch-drum-gray', '筒形ポーチ（グレー）', 'drum', '#6b7480', '#f2c14e'),
+  gadget('calc-standard', 'calc', '電卓', 'tool-calc', '濃い灰色・ふつうのキー'),
+  gadget('calc-card', 'calc', 'カード電卓', 'tool-calc-card', '薄いパステル・丸いキー'),
+  gadget('timer-stopwatch', 'timer', 'ストップウォッチ', 'tool-timer', '金属のケース・針'),
+  gadget('timer-digital', 'timer', 'デジタルタイマー', 'tool-timer-digital', 'ミントの本体・液晶'),
   // 既製品の見た目のペン（試作。メーカーの許しを得ていないので、正式な公開の前に見直す。
   // α 版のあいだはショップに出す：MAKER_ITEMS_LISTED）
   // 値段は各メーカーの参考価格・希望小売価格（税込。2026 年 10 月に確かめた）
@@ -406,7 +468,13 @@ const POINTS = {
   'case-leather-brown': 600,
   'case-pastel-pink': 400,
   'case-sage': 400,
-  'case-clear': 500
+  'case-clear': 500,
+  'pouch-flat-mustard': 300,
+  'pouch-box-pink': 400,
+  'pouch-gama-red': 500,
+  'pouch-drum-gray': 400,
+  'calc-card': 250,
+  'timer-digital': 250
 };
 for (const it of CATALOG) it.points = POINTS[it.id] ?? 0;
 const ITEMS = new Map(CATALOG.map((it) => [it.id, it]));
@@ -442,7 +510,14 @@ export const STARTER_SLOTS = [
   'hider-cyan'
 ];
 export const STARTER_CASE = 'case-canvas-navy';
-export const STARTER = [...STARTER_SLOTS, STARTER_CASE];
+/** はじめから持っているポーチと、ポーチの電卓・タイマー（GEAR の種類ごと） */
+export const STARTER_GEAR = {
+  case: STARTER_CASE,
+  pouch: 'pouch-flat-navy',
+  calc: 'calc-standard',
+  timer: 'timer-stopwatch'
+};
+export const STARTER = [...STARTER_SLOTS, ...Object.values(STARTER_GEAR)];
 export const DEFAULT_HIDER = 'hider-cyan';
 
 /** 文字隠しペンに使える色か：赤の成分が 0（赤シートで黒くなる）で、下の字が読める明るさ（緑と青の合計が 300 以上） */
@@ -488,14 +563,20 @@ export function stationeryState(raw) {
     used.add(id);
     return id;
   });
-  const caseId = has.has(r.caseId) && itemOf(r.caseId).type === 'case' ? r.caseId : STARTER_CASE;
+  // 1 つだけ選んで使う持ち物（ペンケース・ポーチ・電卓・タイマー）：持っていてその種類の品なら、選んだもの。なければはじめの品
+  const gear = Object.fromEntries(
+    Object.entries(GEAR).map(([type, key]) => [
+      key,
+      has.has(r[key]) && itemOf(r[key]).type === type ? r[key] : STARTER_GEAR[type]
+    ])
+  );
   const refills = {};
   if (r.refills && typeof r.refills === 'object')
     for (const [id, rid] of Object.entries(r.refills)) {
       const it = itemOf(id);
       if (has.has(id) && it?.refills?.some((x) => x.id === rid)) refills[id] = rid;
     }
-  return {owned, slots, caseId, refills};
+  return {owned, slots, ...gear, refills};
 }
 
 /** 円もポイントも要らない品を入手する（カートを通らない近道。いまははじめから持っている品だけが当たる）。入手できなければ Error */
@@ -555,7 +636,7 @@ export function purchase(raw, ids, payment = null, {now = new Date(), orderId = 
 }
 
 /** 筆箱の中身・ペンケース・多機能ペンの芯を変える。持っていない品は入れられない（Error） */
-export function arrange(raw, {slots, caseId, refills} = {}) {
+export function arrange(raw, {slots, refills, ...picked} = {}) {
   const st = stationeryState(raw);
   const has = new Set(st.owned);
   if (slots !== undefined) {
@@ -565,8 +646,14 @@ export function arrange(raw, {slots, caseId, refills} = {}) {
     if (new Set(slots.filter(Boolean)).size !== slots.filter(Boolean).length)
       throw new Error('同じ文房具は 1 本だけ入れられます');
   }
-  if (caseId !== undefined && (!has.has(caseId) || itemOf(caseId)?.type !== 'case'))
-    throw new Error('持っていないペンケースです');
+  // ペンケース・ポーチ・電卓・タイマー（caseId・pouchId・calcId・timerId）
+  const gear = {};
+  for (const [type, key] of Object.entries(GEAR)) {
+    const id = picked[key];
+    if (id === undefined) continue;
+    if (!has.has(id) || itemOf(id)?.type !== type) throw new Error(`持っていない${TYPE_LABEL[type]}です`);
+    gear[key] = id;
+  }
   if (refills !== undefined) {
     if (!refills || typeof refills !== 'object') throw new Error('芯の指定が不正です');
     for (const [id, rid] of Object.entries(refills))
@@ -575,7 +662,7 @@ export function arrange(raw, {slots, caseId, refills} = {}) {
   return stationeryState({
     ...st,
     ...(slots !== undefined ? {slots} : {}),
-    ...(caseId !== undefined ? {caseId} : {}),
+    ...gear,
     ...(refills !== undefined ? {refills: {...st.refills, ...refills}} : {})
   });
 }
@@ -627,7 +714,8 @@ const SERIES_INFO = {
   'pencil-05': {name: 'シャープペンシル 0.5'},
   'pencil-03': {name: 'シャープペンシル 0.3'},
   'pencil-07': {name: 'シャープペンシル 0.7'},
-  'case-pouch': {name: '帆布の筆箱'}
+  'case-pouch': {name: '帆布の筆箱'},
+  'pouch-flat': {name: 'フラットポーチ'}
 };
 /** 品のシリーズの id（series がなければ品の id） */
 export const seriesIdOf = (item) => item.series ?? item.id;

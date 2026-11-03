@@ -244,7 +244,8 @@ async function loadNow(id, item) {
   // ペンケースは机に置いた向きで、縦の軸のまわりに回す（ペンは軸のまわりに転がす）
   // 机に置く物（ペンケース・消しゴム）は 'case'：置いた向きで回し、小さな絵は斜め上から。
   // ポーチの道具（tool-*：赤シート・電卓・メモ帳・定規・タイマー）は 'tool'：平らな物が多いので、もっと上から少し斜めに
-  const kind = /^tool-/.test(id) ? 'tool' : /^(case-|eraser$)/.test(id) ? 'case' : 'pen';
+  // ポーチ（pouch-*）もペンケースと同じく机に置く物
+  const kind = /^tool-/.test(id) ? 'tool' : /^(case-|pouch-|eraser$)/.test(id) ? 'case' : 'pen';
   const scene = new THREE.Scene();
   scene.add(group);
   scene.environment = envMap;

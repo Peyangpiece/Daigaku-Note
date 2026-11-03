@@ -1433,6 +1433,179 @@ def tool_timer():
 
 
 
+# ---- ポーチ（ポーチの道具を入れる袋。持ち物の「ポーチ」で選ぶ）----
+# ペンケースと同じく CaseBase（本体）・CaseTrim（ファスナーのテープ・縁取り・タブ）を品の base・trim で塗る。
+def pouch_flat():
+    """フラットポーチ：平たい長方形の帆布の袋。上にコイルのファスナー、右の端に輪のタブ、正面の左下に織りネーム。
+    L 190 × D 26 × H 125 mm"""
+    cv = canvas_maps()
+    M = case_materials(maps_kw(cv, 0.9), maps_kw(cv, 0.9))
+    L, D, H = 190.0, 26.0, 125.0
+    P = pouch_surface(L, D, H, nu=121, nv=128, end='round', end_frac=0.05, n_top=4.0, n_bot=6.0, top_narrow=0.3,
+                      wrinkle=0.7, seed=21)
+    body = grid_object('Body', P, M['base'], cv[3], poles=True)
+    zipper(P, 0.04, 0.96, M['trim'], M['coil'], M['metal'], M['metal'], tooth=(1.2, 4.6, 1.2), pitch=1.6,
+           slider_s=0.84)
+    zt = H * 0.86
+    tab = [(L / 2 + 0.2, -1.2, zt), (L / 2 + 8, -1.2, zt), (L / 2 + 11, -0.6, zt), (L / 2 + 11.6, 0, zt),
+           (L / 2 + 11, 0.6, zt), (L / 2 + 8, 1.2, zt), (L / 2 + 0.2, 1.2, zt)]
+    sweep('LoopTab', tab, 10.0, 1.2, M['trim'],
+          lambda p: (1, 0, 0) if p[0] > L / 2 + 10.5 else (0, -1 if p[1] < 0 else 1, 0), round_r=0.5)
+    lab = rounded_plate('Label', 34, 12, 1.2, M['trim'])
+    place_on(lab, body, lambda x, y: (-58 + x, -200, H * 0.22 + y), (0, 1, 0), 0.5)
+    txt = flat_text('LabelText', '大学ノート', FONT_JA, 5.6, M['label_text'])
+    place_on(txt, body, lambda x, y: (-58 + x, -200, H * 0.22 + y), (0, 1, 0), 0.75)
+    to_pen_axes()
+
+
+def pouch_box():
+    """マチ付きポーチ：底の広い箱形のナイロンの袋（自立する）。ファスナーは上で両端まで回り、両側に持ち手のループ。
+    L 175 × D 85 × H 95 mm"""
+    M = case_materials({'roughness': 0.55, 'coat': 0.15}, {'roughness': 0.75})
+    L, D, H = 175.0, 85.0, 95.0
+    P = pouch_surface(L, D, H, nu=141, nv=128, end='round', end_frac=0.16, n_top=5.0, n_bot=7.0, top_narrow=0.06,
+                      wrinkle=0.35, seed=23)
+    body = grid_object('Body', P, M['base'], 20.0, poles=True)
+    zipper(P, 0.03, 0.97, M['trim'], M['coil'], M['metal'], M['trim'], tape_w=12.0, tooth=(1.4, 5.0, 1.3),
+           pitch=1.7, slider_s=0.86, pull_len=24.0, pull_w=8.0, pull_thick=1.6)
+    # 両端の持ち手のループ（テープを折って縫い込んだもの）
+    for sgn in (-1, 1):
+        x0 = sgn * (L / 2 - 1.0)
+        pts = [(x0 + sgn * 18 * math.sin(math.pi * k / 30), 0, H * 0.55 + 22 * (1 - math.cos(math.pi * k / 30)) / 2)
+               for k in range(31)]
+        sweep(f'Handle_{"L" if sgn < 0 else "R"}', pts, 14.0, 1.6, M['trim'],
+              lambda p, sgn=sgn: (sgn, 0, 0), round_r=0.6)
+    lab = rounded_plate('Label', 40, 13, 1.4, M['trim'])
+    place_on(lab, body, lambda x, y: (x, -200, H * 0.42 + y), (0, 1, 0), 0.5)
+    txt = flat_text('LabelText', '大学ノート', FONT_JA, 6.2, M['label_text'])
+    place_on(txt, body, lambda x, y: (x, -200, H * 0.42 + y), (0, 1, 0), 0.75)
+    to_pen_axes()
+
+
+def pouch_gama():
+    """がま口ポーチ：ふっくらした帆布の袋に、金色の口金（2 本の弧）と、真ん中で交わる玉の留め具。
+    L 150 × D 62 × H 105 mm"""
+    cv = canvas_maps()
+    M = case_materials(maps_kw(cv, 0.9), maps_kw(cv, 0.9))
+    gold = material('ClaspGold', srgb('#c9a35a'), metallic=1.0, roughness=0.22)
+    L, D, H = 150.0, 62.0, 105.0
+    P = pouch_surface(L, D, H, nu=161, nv=128, end='pinch', n_top=2.2, n_bot=3.4, top_narrow=0.72, wrinkle=0.6,
+                      seed=27)
+    grid_object('Body', P, M['base'], cv[3])
+    # 口金：上のふちに沿った 2 本の弧（奥と手前）
+    for side, tt in (('F', math.pi / 2 + 0.16), ('B', math.pi / 2 - 0.16)):
+        pts = [surf_at(P, 0.10 + 0.80 * k / 80, tt) + surf_normal(P, 0.10 + 0.80 * k / 80, tt) * 1.6 for k in range(81)]
+        sweep(f'Clasp_{side}', [tuple(p) for p in pts], 5.0, 3.0, gold,
+              lambda p, tt=tt: (0, math.cos(tt), math.sin(tt)), round_r=1.2)
+    # 玉の留め具（真ん中で交わる 2 つの玉と軸）
+    top = surf_at(P, 0.5, math.pi / 2)
+    for k, dx in enumerate((-3.4, 3.4)):
+        bm = bmesh.new()
+        bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=4.4)
+        ob = obj_from_bm(f'ClaspBall_{k}', bm, gold)
+        ob.data.transform(Matrix.Translation(top + Vector((dx, 0, 9.5))))
+        stem = [tuple(top + Vector((dx * 0.6, 0, 1.0))), tuple(top + Vector((dx * 0.9, 0, 6.0)))]
+        sweep(f'ClaspStem_{k}', stem, 2.2, 2.2, gold, lambda p: (0, 1, 0), round_r=0.9)
+    to_pen_axes()
+
+
+def pouch_drum():
+    """筒形ポーチ：横に寝かせた円筒の袋。上にファスナー、両端の丸いふたのふちに縁取り、片方に手首のひも。
+    L 170 × 直径 72 mm"""
+    M = case_materials({'roughness': 0.6, 'coat': 0.1}, {'roughness': 0.8})
+    L, D, H = 170.0, 72.0, 72.0
+    P = pouch_surface(L, D, H, nu=141, nv=128, end='round', end_frac=0.035, n_top=2.0, n_bot=2.0, top_narrow=0.0,
+                      wrinkle=0.25, seed=31)
+    grid_object('Body', P, M['base'], 20.0, poles=True)
+    zipper(P, 0.06, 0.94, M['trim'], M['coil'], M['metal'], M['metal'], tape_w=10.0, tooth=(1.2, 4.6, 1.2),
+           pitch=1.6, slider_s=0.82)
+    # 両端のふちの縁取り（丸い輪）
+    for sgn in (-1, 1):
+        x = sgn * (L / 2 - 3.2)
+        ring = [(x, (D / 2 + 0.6) * math.cos(2 * math.pi * k / 96), H / 2 + (H / 2 + 0.6) * math.sin(2 * math.pi * k / 96))
+                for k in range(97)]
+        sweep(f'Piping_{"L" if sgn < 0 else "R"}', ring, 3.6, 2.4, M['trim'],
+              lambda p, x=x: (0, p[1], p[2] - H / 2), round_r=1.0)
+    # 右の端の手首のひも（輪）
+    strap = [(L / 2 + 2 + 26 * math.sin(math.pi * k / 40), -6 * math.sin(2 * math.pi * k / 40),
+              H / 2 + 14 * math.cos(math.pi * k / 40)) for k in range(41)]
+    sweep('WristStrap', strap, 9.0, 1.6, M['trim'], lambda p: (0, 1, 0), round_r=0.6)
+    to_pen_axes()
+
+
+def tool_calc_card():
+    """カード電卓：薄いパステルの本体（白に近い）・横長の液晶（0）・丸いキー 4 列 5 行（色つきの = と AC）。
+    机に平らに置き、液晶を奥にする。L 66 × W 104 × H 6 mm"""
+    body = material('Calc2Body', srgb('#f4f1ea'), roughness=0.45, coat=0.4)
+    lcd = material('Calc2Lcd', srgb('#c7d6cf'), roughness=0.3)
+    seg = material('Calc2Digits', srgb('#25302c'), roughness=0.6)
+    key = material('Calc2Key', srgb('#ffffff'), roughness=0.4)
+    key_op = material('Calc2KeyOp', srgb('#9ec9e8'), roughness=0.4)
+    key_eq = material('Calc2KeyEq', srgb('#f29bb3'), roughness=0.4)
+    key_c = material('Calc2KeyC', srgb('#f5c76a'), roughness=0.4)
+    label = material('Calc2Label', srgb('#4a4f57'), roughness=0.6)
+    W, D, H = 66.0, 104.0, 6.0
+    rbox('Body', D, W, H, 0.0, 8.0, 2.4, body, seg_v=10, seg_e=4)
+    top = H
+    rbox('Lcd', 20.0, 54.0, 0.5, top - 0.15, 3.0, 0.2, lcd, seg_v=5, seg_e=1).data.transform(
+        Matrix.Translation((D / 2 - 17.0, 0, 0)))
+    digits = flat_text('LcdDigits', '0', None, 12.0, seg, align='RIGHT')
+    for v in digits.data.vertices:
+        x, y = v.co.x, v.co.y
+        v.co.x, v.co.y = y, -x
+    place_on(digits, bpy.data.objects['Lcd'], lambda x, y: (D / 2 - 17.0 + x, -22.0 + y, 100), (0, 0, -1), 0.03)
+    rows = [('AC', '%', '÷', '×'), ('7', '8', '9', '−'), ('4', '5', '6', '+'), ('1', '2', '3', '='),
+            ('0', '00', '.', '√')]
+    pitch = 13.6
+    for r, row in enumerate(rows):
+        for c, lab in enumerate(row):
+            xk = D / 2 - 38.0 - r * pitch
+            yk = (c - 1.5) * pitch
+            mat = key_c if lab == 'AC' else key_eq if lab == '=' else key_op if c == 3 or r == 0 else key
+            k = lathe(f'Key_{r}_{c}', fillet([(0, top - 0.3), (5.2, top - 0.3), (5.2, top + 1.2), (0, top + 1.6)], 0.5),
+                      mat, seg=40)
+            k.data.transform(Matrix.Translation((xk, yk, 0)))
+            t = flat_text(f'KeyLabel_{r}_{c}', lab, None, 4.0, label)
+            for v in t.data.vertices:
+                x, y = v.co.x, v.co.y
+                v.co.x, v.co.y = y, -x
+            place_on(t, k, lambda x, y, xk=xk, yk=yk: (xk + x, yk + y, 100), (0, 0, -1), 0.03)
+    for ob in bpy.context.scene.objects:
+        if ob.type == 'MESH':
+            ob.data.transform(Matrix.Rotation(math.pi / 2, 4, 'Z'))
+    to_pen_axes()
+
+
+def tool_timer_digital():
+    """デジタルタイマー：角の丸い四角の本体（ミントグリーン）・液晶（25:00）・下に 3 つのボタン（分・秒・スタート）。
+    机に平らに置く。66 × 66 × 16 mm"""
+    body = material('Timer2Body', srgb('#9fd8c6'), roughness=0.45, coat=0.3)
+    face = material('Timer2Face', srgb('#f7f7f2'), roughness=0.5)
+    lcd = material('Timer2Lcd', srgb('#c9d3c1'), roughness=0.3)
+    seg = material('Timer2Digits', srgb('#1f2622'), roughness=0.6)
+    btn = material('Timer2Btn', srgb('#ffffff'), roughness=0.4)
+    btn_go = material('Timer2BtnGo', srgb('#f08c6a'), roughness=0.4)
+    ink = material('Timer2Ink', srgb('#3a4048'), roughness=0.6)
+    S, H = 66.0, 16.0
+    rbox('Body', S, S, H, 0.0, 14.0, 3.0, body, seg_v=12, seg_e=4)
+    rbox('Face', S - 8, S - 8, 0.6, H - 0.2, 11.0, 0.3, face, seg_v=10, seg_e=2)
+    rbox('Lcd', S - 18, 20.0, 0.5, H + 0.2, 3.0, 0.2, lcd, seg_v=5, seg_e=1).data.transform(
+        Matrix.Translation((0, 9.0, 0)))
+    digits = flat_text('LcdDigits', '25:00', None, 11.0, seg)
+    place_on(digits, bpy.data.objects['Lcd'], lambda x, y: (x, 9.0 + y, 100), (0, 0, -1), 0.03)
+    for k, (lab, mat) in enumerate((('分', btn), ('秒', btn), ('▶', btn_go))):
+        xb = (k - 1) * 16.0
+        b = lathe(f'Btn_{k}', fillet([(0, H + 0.2), (5.4, H + 0.2), (5.4, H + 2.0), (0, H + 2.5)], 0.6), mat, seg=40)
+        b.data.transform(Matrix.Translation((xb, -14.0, 0)))
+        t = flat_text(f'BtnLabel_{k}', lab, FONT_JA, 4.2, ink)
+        place_on(t, b, lambda x, y, xb=xb: (xb + x, -14.0 + y, 100), (0, 0, -1), 0.03)
+    # 上のふちのつり下げ穴（輪）
+    path = [(4.0 * math.cos(2 * math.pi * k / 48), S / 2 + 4.0 + 4.0 * math.sin(2 * math.pi * k / 48), H / 2)
+            for k in range(49)]
+    sweep('HangRing', path, 2.6, 2.6, body, lambda p: (0, 0, 1), round_r=1.0)
+    to_pen_axes()
+
+
 CHECK = None  # 寸法の照合（__main__ で makers を読んだら入る）
 
 FAMILIES = {
@@ -1452,6 +1625,12 @@ FAMILIES = {
     'case-leather': case_leather,
     'case-clear': case_clear,
     'case-tin': case_tin,
+    'pouch-flat': pouch_flat,
+    'pouch-box': pouch_box,
+    'pouch-gama': pouch_gama,
+    'pouch-drum': pouch_drum,
+    'tool-calc-card': tool_calc_card,
+    'tool-timer-digital': tool_timer_digital,
 }
 
 

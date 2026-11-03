@@ -363,3 +363,40 @@ test('筆圧なしのペン：ショップに 1 枚の札（黒・赤・青）�
   assert.equal(s.name, '筆圧なしペン 0.5');
   assert.equal(s.items.length, 3);
 });
+
+test('ポーチと、ポーチの電卓・タイマー：はじめは 1 つずつ持っていて、ショップで別の形を買い、1 つを選んで使う', async () => {
+  const {GEAR, POUCH_INFO, STARTER_GEAR, isGear, stationeryState: state} = await import('../src/shared/stationery.js');
+  const {existsSync} = await import('node:fs');
+  const bags = CATALOG.filter((it) => it.type === 'pouch');
+  assert.equal(new Set(bags.map((it) => it.model)).size, 4, 'ポーチは 4 つの形');
+  for (const it of bags) {
+    assert.ok(POUCH_INFO[it.style], `${it.id} の説明`);
+    assert.match(it.base, /^#[0-9a-f]{6}$/);
+  }
+  for (const type of ['calc', 'timer'])
+    assert.equal(
+      new Set(CATALOG.filter((it) => it.type === type).map((it) => it.model)).size,
+      2,
+      `${type} は 2 つの形`
+    );
+  for (const it of CATALOG.filter(isGear))
+    assert.ok(
+      existsSync(new URL(`../src/renderer/assets/stationery/${it.model}.glb`, import.meta.url)),
+      `${it.model}.glb`
+    );
+  // はじめの状態：はじめの品を選んでいる。前の版の保存（ポーチの項目がない）でも同じ
+  const st = state({owned: ['pen-black-05'], caseId: 'case-canvas-navy'});
+  for (const [type, key] of Object.entries(GEAR)) assert.equal(st[key], STARTER_GEAR[type]);
+  assert.ok(st.owned.includes('pouch-flat-navy') && st.owned.includes('calc-standard'));
+  // 買っていない品は選べない。買えば選べ、種類のちがう品は選べない
+  assert.throws(() => arrange(st, {pouchId: 'pouch-gama-red'}), /持っていないポーチ/);
+  const mine = state({...st, owned: [...st.owned, 'pouch-gama-red', 'calc-card']});
+  const next = arrange(mine, {pouchId: 'pouch-gama-red', calcId: 'calc-card'});
+  assert.equal(next.pouchId, 'pouch-gama-red');
+  assert.equal(next.calcId, 'calc-card');
+  assert.equal(next.timerId, 'timer-stopwatch');
+  assert.throws(() => arrange(mine, {calcId: 'pouch-gama-red'}), /持っていない電卓/);
+  // ポーチの道具は筆箱の 6 本には入らない・ポイントで買える
+  assert.throws(() => arrange(mine, {slots: ['calc-card', null, null, null, null, null]}), /持っていない文房具/);
+  assert.ok(CATALOG.filter((it) => isGear(it) && !STARTER.includes(it.id)).every((it) => it.points > 0));
+});
