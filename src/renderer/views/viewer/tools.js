@@ -4,12 +4,14 @@ import {navigate, state} from '../../store.js';
 import {
   DEFAULT_HIDER,
   KIND_OF,
+  PEN_SIZES,
   TYPE_LABEL,
   TOOL_KINDS,
   heldPen,
   itemOf,
   kindOf,
   nextRefill,
+  sizeWidth,
   toolArt,
   typeLabel
 } from '../../../shared/stationery.js';
@@ -77,7 +79,8 @@ export const methods = {
   /** 筆箱の i 本目（null なら筆箱の外の品）のペンを持つ */
   usePen(item, i = null) {
     if (!item) return;
-    this.penItem = heldPen(item, this.st.refills?.[item.id]); // 多機能ペンは選んだ芯の色・太さ
+    // 多機能ペンは選んだ芯の色。太さは選んだ太さ（0.3・0.5・0.7）、書き味は型番のもの
+    this.penItem = heldPen(item, this.st.refills?.[item.id], this.st.sizes?.[item.id]);
 
     this.slot = i;
     this.setTool(KIND_OF[item.type]);
@@ -95,6 +98,19 @@ export const methods = {
       this.pickRefill(next);
       toast(`${item.name}：${heldPen(item, next).refill.name}に回しました`);
     } else this.usePen(item, i);
+  },
+
+  /** 持っているペンの太さを選ぶ（0.3・0.5・0.7。ペンごとに設定に残す） */
+  async pickSize(size) {
+    const item = itemOf(this.penItem?.id);
+    if (item?.type !== 'pen' || !PEN_SIZES.includes(size)) return;
+    this.st = {...this.st, sizes: {...this.st.sizes, [item.id]: size}};
+    if (state.data) state.data.stationery = this.st;
+    this.usePen(item, this.slot);
+    const r = await api['stationery.arrange']({sizes: {[item.id]: size}});
+    if (r?.error) return toast(r.error, {error: true});
+    this.st = r.stationery;
+    if (state.data) state.data.stationery = r.stationery;
   },
 
   /** 持っている多機能ペンの芯を選ぶ（設定に残す） */
@@ -284,6 +300,19 @@ export const methods = {
     }
     this.$('delete').hidden = !a; // 選んでいるときだけ出す（ツールバーを 1 行に収める）
     this.$('rotate').hidden = !(a?.kind === 'stamp' && a.style?.type === 'photo'); // 写真を選んでいるとき
+    // ペンを持っているとき：太さ（0.3・0.5・0.7）
+    const sg = this.root.querySelector('[data-group="pensize"]');
+    const holding = this.tool === 'ink' && this.penItem?.type === 'pen' ? this.penItem : null;
+    sg.hidden = !holding;
+    if (holding) {
+      const html =
+        '<span class="muted">太さ</span>' +
+        PEN_SIZES.map(
+          (s) =>
+            `<button type="button" class="viewer-bar__size" data-pen-size="${s}" aria-pressed="${s === holding.size}" title="${s} mm"><span style="--dot: ${sizeWidth(s, {w: 1}) * 2.4}px"></span>${s}</button>`
+        ).join('');
+      if (sg.innerHTML !== html) sg.innerHTML = html;
+    }
     // 持っている道具（ペン・マーカー・文字隠し・消しゴム）：筆箱を閉じていても分かるように、ツールバーに札で出す
     const held = this.$('held');
     const pen = ['ink', 'line', 'mask'].includes(this.tool) ? this.penItem : null;
@@ -342,6 +371,7 @@ export const methods = {
       if (this.pouchAction(t.dataset.v)) return;
       if (t.dataset.tool) this.setTool(t.dataset.tool);
       else if (t.dataset.refill) this.pickRefill(t.dataset.refill);
+      else if (t.dataset.penSize) this.pickSize(t.dataset.penSize);
       else if (t.dataset.slot !== undefined) this.useSlot(Number(t.dataset.slot));
       else if (t.dataset.v === 'case') this.openCase(this.$('case-panel').hidden);
       else if (t.dataset.textColor) this.setTextStyle({color: t.dataset.textColor});

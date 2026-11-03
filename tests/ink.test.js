@@ -117,3 +117,30 @@ test('書き味の受け渡し：保存した style → 描き方、ペン → �
   assert.deepEqual(modeStyle(false), {pressure: false});
   assert.deepEqual(modeStyle('even'), {pressure: 'even'});
 });
+
+test('書き味（feel）：前の版の線は同じ形。書き味を変えると線の形が変わり、保存できる値に収める', async () => {
+  const {FEEL_DEFAULT, cleanFeel, feelOf, feelStyle, strokePath, streamlineOf} = await import('../src/shared/ink.js');
+  const pts = Array.from({length: 30}, (_, i) => [i * 2, Math.sin(i / 3) * 5, 0.3 + (i % 5) / 10]);
+  assert.equal(strokePath(pts, 1.1), strokePath(pts, 1.1, {feel: FEEL_DEFAULT}), 'feel なしは前の版と同じ');
+  assert.equal(
+    strokePath(pts, 1.1, {pressure: false}),
+    strokePath(pts, 1.1, {pressure: false, feel: FEEL_DEFAULT}),
+    '指・マウスも前の版と同じ'
+  );
+  assert.notEqual(strokePath(pts, 1.1), strokePath(pts, 1.1, {feel: {th: 0.6, ts: 0.5, te: 2}}), '書き味で形が変わる');
+  assert.equal(
+    strokePath(pts, 1.1, {pressure: 'even'}),
+    strokePath(pts, 1.1, {pressure: 'even', feel: {th: 0.6, ts: 0.5, te: 2}}),
+    '筆圧なしは書き味によらず同じ太さ'
+  );
+  assert.deepEqual(
+    cleanFeel({th: 2, ts: -1, te: '1.234', st: 0.5}),
+    {th: 0.9, ts: 0, te: 1.23},
+    '範囲に収め、st は保存しない'
+  );
+  assert.equal(cleanFeel({th: 'x', ts: 1, te: 1}), null);
+  assert.deepEqual(feelOf({feel: {th: 0.3, ts: 1, te: 1}}), {th: 0.3, ts: 1, te: 1});
+  assert.deepEqual(feelOf({f: {th: 0.3, ts: 1, te: 1}}), {th: 0.3, ts: 1, te: 1}, 'メモの線は f');
+  assert.deepEqual(feelStyle({th: 0.3, ts: 1, te: 1}, 'even'), {}, '筆圧なしの線には入れない');
+  assert.ok(streamlineOf({st: 0.3}, 'mouse') > streamlineOf({st: 0.3}, 'pen'), '指・マウスは手ぶれ補正が強め');
+});

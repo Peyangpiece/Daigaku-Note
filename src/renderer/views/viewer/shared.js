@@ -219,6 +219,7 @@ export const BAR = `
       <input type="color" data-v="note-custom" title="ほかの色" aria-label="コメントのほかの色" />
     </div>
     <div class="viewer-bar__group viewer-sub__group viewer-bar__refills" data-group="refill" role="group" aria-label="多機能ペンの芯" hidden></div>
+    <div class="viewer-bar__group viewer-sub__group viewer-bar__sizes" data-group="pensize" role="group" aria-label="ペンの太さ" hidden></div>
     <div class="viewer-bar__group viewer-sub__group viewer-find" data-group="find" role="search" hidden>
       <input type="search" class="input viewer-find__q" data-v="find-q" placeholder="PDF の中を検索" aria-label="PDF の中を検索" />
       <span class="muted viewer-find__count" data-v="find-count" aria-live="polite"></span>

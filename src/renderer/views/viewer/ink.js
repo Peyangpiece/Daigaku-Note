@@ -4,6 +4,8 @@ import {
   boundsOf,
   createCapture,
   drawMode,
+  feelStyle,
+  streamlineOf,
   encodePoints,
   modeStyle,
   speedPressure,
@@ -53,7 +55,8 @@ export const methods = {
     el.classList.add('ink-draft');
     p.ink.append(el);
     // 間引き：画面で 0.3px より近い点は捨てる。なめらかさ：ペンは控えめ（遅れを小さく）、指・マウスは強め（手ぶれを抑える）
-    const cap = createCapture({minGap: 0.3 / vp.scale, streamline: e.pointerType === 'pen' ? 0.2 : 0.4});
+    // 手ぶれ補正はペンの書き味（型番ごと）。指・マウスは少し強め
+    const cap = createCapture({minGap: 0.3 / vp.scale, streamline: streamlineOf(this.penItem.feel, e.pointerType)});
     const d = (this.drawing = {
       kind: 'ink',
       p,
@@ -113,7 +116,10 @@ export const methods = {
       this.inkFrame = 0;
       const d = this.drawing;
       if (d?.kind !== 'ink') return;
-      d.el.setAttribute('d', strokePath([...d.cap.points, ...d.extra], d.item.width, {pressure: d.pressure}));
+      d.el.setAttribute(
+        'd',
+        strokePath([...d.cap.points, ...d.extra], d.item.width, {pressure: d.pressure, feel: d.item.feel})
+      );
     });
   },
 
@@ -126,7 +132,12 @@ export const methods = {
     const [x, y, pr] = this.inkPoint(d, e);
     const points = d.cap.finish(x, y, pr);
     if (!points.length) return;
-    const style = {color: d.item.color, width: d.item.width, ...modeStyle(d.pressure)};
+    const style = {
+      color: d.item.color,
+      width: d.item.width,
+      ...modeStyle(d.pressure),
+      ...feelStyle(d.item.feel, d.pressure)
+    };
     const a = this.addAnno({
       key: `k${this.seq++}`,
       id: null,

@@ -29,8 +29,10 @@ import {
   cartTotal,
   CASE_INFO,
   GEAR,
+  PEN_SIZES,
   POUCH_INFO,
   caseArt,
+  defaultSize,
   isGear,
   itemOf,
   listed,
@@ -469,13 +471,18 @@ function detail(s, id) {
     rows.push(['芯', `${it.mm} mm・${it.lead}（線は黒鉛の灰色）`]);
     rows.push(['しくみ', 'ノック式の製図用。細い金属のパイプ・アヤ目のローレットのグリップ・硬度の窓']);
   } else if (it.type === 'pen') {
-    rows.push(['字幅', `${it.mm} mm`]);
+    rows.push(['字幅', `${it.mm} mm（はじめの太さは ${defaultSize(it)} mm）`]);
     if (it.even)
       rows.push([
         '書き味',
         '筆圧なし：ペンタブ・スタイラスの筆圧や書く速さで太さが変わらず、どこも同じ太さの線になります（書き始め・書き終わりも細くなりません）'
       ]);
-  } else if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
+  }
+  // 書くペン（v0.16.22）：太さは 0.3・0.5・0.7 から選べる
+  if (it.type === 'pen') {
+    rows.push(['太さ', `${PEN_SIZES.join('・')} mm から選べます（PDF の編集画面でペンを持つと、上の帯に出ます）`]);
+  }
+  if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
   else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
   else if ((it.type === 'case' && CASE_INFO[it.style]) || (it.type === 'pouch' && POUCH_INFO[it.style])) {
     const c = (it.type === 'case' ? CASE_INFO : POUCH_INFO)[it.style];

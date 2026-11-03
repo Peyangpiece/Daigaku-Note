@@ -29,8 +29,16 @@ export function register({handle, repo}) {
   });
 
   // 筆箱の 6 本・芯と、1 つだけ選ぶ持ち物（ペンケース・ポーチ・電卓・タイマー）
-  handle('stationery.arrange', ({slots, caseId, pouchId, calcId, timerId, refills}) => {
-    const st = arrange(repo.getSetting('stationery', null), {slots, caseId, pouchId, calcId, timerId, refills});
+  handle('stationery.arrange', ({slots, caseId, pouchId, calcId, timerId, refills, sizes}) => {
+    const st = arrange(repo.getSetting('stationery', null), {
+      slots,
+      caseId,
+      pouchId,
+      calcId,
+      timerId,
+      refills,
+      sizes
+    });
     repo.setSetting('stationery', st);
     return {stationery: st};
   });

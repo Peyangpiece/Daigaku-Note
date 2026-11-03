@@ -103,6 +103,24 @@
   width: 16px;
   height: 14px;
 }
+/* ペンの太さ（0.3・0.5・0.7。ペンを持っているときだけ出る。v0.16.22） */
+.viewer-bar__sizes {
+  gap: 4px;
+}
+:is(.viewer-bar, .viewer-sub) button.viewer-bar__size {
+  --dot: 4px; /* 太さの丸（ボタンの style で太さごとに上書き） */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.viewer-bar__size > span {
+  display: inline-block;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: currentColor;
+}
 /* 多機能ペンの芯の切り替え（持っているときだけ出る） */
 .viewer-bar__refills {
   gap: 4px;
