@@ -343,3 +343,8 @@ textarea.input {
   opacity: 0.55;
   cursor: default;
 }
+/* 出し分けの hidden を、.actions などの display より優先する */
+[data-qz-api][hidden],
+[data-qz-use][hidden] {
+  display: none;
+}

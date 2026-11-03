@@ -207,3 +207,13 @@
 .mobile-devices li {
   margin-bottom: 4px;
 }
+/* 設定の上の項目のボタン（押すとその項目まで送る） */
+.settings__jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.settings__group,
+.settings .card {
+  scroll-margin-top: 80px;
+}
