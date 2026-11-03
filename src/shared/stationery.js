@@ -254,24 +254,26 @@ const multi = (id, name, makerName, {model, body, accent, refills, refill, price
 });
 
 export const CATALOG = [
-  pen('pen-black-05', '黒のボールペン 0.5', '#222222', '0.5', '#2c2d30', '#55575c'),
-  pen('pen-red-05', '赤のボールペン 0.5', '#d93025', '0.5', '#c9262c', '#7d1a1e'),
-  pen('pen-blue-05', '青のボールペン 0.5', '#1a5fd0', '0.5', '#1f4fb3', '#183a7f'),
-  pen('pen-black-038', '黒のボールペン 0.38', '#222222', '0.38', '#3b3b3b', '#222222'),
-  pen('pen-black-07', '黒のボールペン 0.7', '#222222', '0.7', '#e6e2d8', '#222222'),
-  pen('pen-green-05', '緑のボールペン 0.5', '#188038', '0.5', '#f2f2f0'),
-  pen('pen-blueblack-05', 'ブルーブラック 0.5', '#1f3a5f', '0.5', '#dfe6ee'),
-  pen('pen-sepia-05', 'セピアのボールペン 0.5', '#6b4423', '0.5', '#efe3d3'),
-  pen('pen-pink-05', 'ピンクのボールペン 0.5', '#d6457a', '0.5', '#fbe3ec'),
-  pen('pen-orange-05', 'オレンジのボールペン 0.5', '#e37400', '0.5', '#fdebd3'),
-  pen('pen-purple-05', '紫のボールペン 0.5', '#7b3fbf', '0.5', '#ece2f7'),
-  pen('pen-sakura-05', 'さくら軸 黒 0.5', '#222222', '0.5', '#f7c5d5', '#e98aa8', 'pen-art'),
-  pen('pen-mint-05', 'ミント軸 青 0.5', '#1a5fd0', '0.5', '#bfe8dc', '#5fbfa3', 'pen-art'),
-  pen('pen-wood-07', '木軸 黒 0.7', '#222222', '0.7', '#c89b6d', '#8a6440', 'pen-art', {model: 'pen-ballpoint-wood'}),
-  pen('pen-navy-038', 'ネイビー軸 赤 0.38', '#d93025', '0.38', '#24365c', '#c9a227', 'pen-art', {trim: 'gold'}),
-  evenPen('pen-even-black-05', '筆圧なし 黒 0.5', '#222222', '#f1f1ee', '#222222'),
-  evenPen('pen-even-red-05', '筆圧なし 赤 0.5', '#d93025', '#f1f1ee', '#d93025'),
-  evenPen('pen-even-blue-05', '筆圧なし 青 0.5', '#1a5fd0', '#f1f1ee', '#1a5fd0'),
+  // 公式のボールペンは 3 つの型番（v0.16.23）：DN-1 硬い（筆圧なし。pen-even）・DN-2 普通（インクの色ちがい。pen-05）・
+  // DN-3 滑らか（軸の色・柄で選ぶ。pen-art）。名前に字幅は入れない（太さは 0.3・0.5・0.7 から選ぶ）。id は前の版のまま
+  pen('pen-black-05', '黒のボールペン', '#222222', '0.5', '#2c2d30', '#55575c'),
+  pen('pen-red-05', '赤のボールペン', '#d93025', '0.5', '#c9262c', '#7d1a1e'),
+  pen('pen-blue-05', '青のボールペン', '#1a5fd0', '0.5', '#1f4fb3', '#183a7f'),
+  pen('pen-green-05', '緑のボールペン', '#188038', '0.5', '#f2f2f0'),
+  pen('pen-blueblack-05', 'ブルーブラックのボールペン', '#1f3a5f', '0.5', '#dfe6ee'),
+  pen('pen-sepia-05', 'セピアのボールペン', '#6b4423', '0.5', '#efe3d3'),
+  pen('pen-pink-05', 'ピンクのボールペン', '#d6457a', '0.5', '#fbe3ec'),
+  pen('pen-orange-05', 'オレンジのボールペン', '#e37400', '0.5', '#fdebd3'),
+  pen('pen-purple-05', '紫のボールペン', '#7b3fbf', '0.5', '#ece2f7'),
+  pen('pen-sakura-05', 'さくら軸 黒', '#222222', '0.5', '#f7c5d5', '#e98aa8', 'pen-art'),
+  pen('pen-mint-05', 'ミント軸 青', '#1a5fd0', '0.5', '#bfe8dc', '#5fbfa3', 'pen-art'),
+  pen('pen-wood-07', '木軸 黒', '#222222', '0.7', '#c89b6d', '#8a6440', 'pen-art', {model: 'pen-ballpoint-wood'}),
+  pen('pen-navy-038', 'ネイビー軸 赤', '#d93025', '0.38', '#24365c', '#c9a227', 'pen-art', {trim: 'gold'}),
+  pen('pen-black-038', 'グレー軸 黒', '#222222', '0.38', '#3b3b3b', '#222222', 'pen-art'),
+  pen('pen-black-07', 'クリーム軸 黒', '#222222', '0.7', '#e6e2d8', '#222222', 'pen-art'),
+  evenPen('pen-even-black-05', '筆圧なし 黒', '#222222', '#f1f1ee', '#222222'),
+  evenPen('pen-even-red-05', '筆圧なし 赤', '#d93025', '#f1f1ee', '#d93025'),
+  evenPen('pen-even-blue-05', '筆圧なし 青', '#1a5fd0', '#f1f1ee', '#1a5fd0'),
   marker('marker-yellow', '黄色のマーカー', '#ffe14d'),
   marker('marker-pink', 'ピンクのマーカー', '#ff9ec7'),
   marker('marker-orange', 'オレンジのマーカー', '#ffbf6b'),
@@ -283,11 +285,12 @@ export const CATALOG = [
   hider('hider-cyan', '文字隠しペン（水色）', '#00d2ff'),
   hider('hider-green', '文字隠しペン（緑）', '#00c98d'),
   hider('hider-blue', '文字隠しペン（青）', '#0094ff'),
-  pencil('pencil-black-05', 'シャープペンシル 0.5（黒）', '0.5', '#2c2d30', '#55575c'),
-  pencil('pencil-silver-05', 'シャープペンシル 0.5（銀）', '0.5', '#c9ced6', '#55575c'),
-  pencil('pencil-navy-05', 'シャープペンシル 0.5（紺）', '0.5', '#24365c', '#55575c'),
-  pencil('pencil-black-03', 'シャープペンシル 0.3', '0.3', '#2c2d30', '#7d1a1e'),
-  pencil('pencil-black-07', 'シャープペンシル 0.7', '0.7', '#2c2d30', '#183a7f'),
+  // シャープペンシル：名前に芯の太さは入れない（太さは 0.3・0.5・0.7 から選ぶ）。前の 0.3・0.7 は色ちがいとして 1 つのシリーズに
+  pencil('pencil-black-05', 'シャープペンシル（黒）', '0.5', '#2c2d30', '#55575c'),
+  pencil('pencil-silver-05', 'シャープペンシル（銀）', '0.5', '#c9ced6', '#55575c'),
+  pencil('pencil-navy-05', 'シャープペンシル（紺）', '0.5', '#24365c', '#55575c'),
+  pencil('pencil-black-03', 'シャープペンシル（黒・赤ライン）', '0.3', '#2c2d30', '#7d1a1e', 'pencil-05'),
+  pencil('pencil-black-07', 'シャープペンシル（黒・青ライン）', '0.7', '#2c2d30', '#183a7f', 'pencil-05'),
   pencase('case-canvas-navy', '帆布の筆箱（紺）', 'pouch', '#2e3f66', '#d9d2c3', 'case-pouch'),
   pencase('case-tin-silver', '缶ペンケース（銀）', 'tin', '#c9ced6', '#8a929e', 'case-tin'),
   pencase('case-leather-brown', '革のペンケース（茶）', 'leather', '#8a5a3b', '#e8c9a0', 'case-leather'),
@@ -331,7 +334,7 @@ export const CATALOG = [
   // 値段は各メーカーの参考価格・希望小売価格（税込。2026 年 10 月に確かめた）
   maker(
     'maker-jetstream-black',
-    'ジェットストリーム 黒 0.5',
+    'ジェットストリーム 黒',
     '三菱鉛筆',
     'jetstream',
     '#1f1f22',
@@ -342,7 +345,7 @@ export const CATALOG = [
   ),
   maker(
     'maker-jetstream-red',
-    'ジェットストリーム 赤 0.5',
+    'ジェットストリーム 赤',
     '三菱鉛筆',
     'jetstream',
     '#d0202e',
@@ -351,28 +354,8 @@ export const CATALOG = [
     165,
     'jetstream'
   ),
-  maker(
-    'maker-sarasa-black',
-    'サラサクリップ 黒 0.5',
-    'ゼブラ',
-    'sarasa',
-    '#141414',
-    '#e8eef2',
-    '#1b1b1b',
-    110,
-    'sarasa'
-  ),
-  maker(
-    'maker-sarasa-red',
-    'サラサクリップ 赤 0.5',
-    'ゼブラ',
-    'sarasa',
-    '#e4002b',
-    '#e8eef2',
-    '#e4002b',
-    110,
-    'sarasa'
-  ),
+  maker('maker-sarasa-black', 'サラサクリップ 黒', 'ゼブラ', 'sarasa', '#141414', '#e8eef2', '#1b1b1b', 110, 'sarasa'),
+  maker('maker-sarasa-red', 'サラサクリップ 赤', 'ゼブラ', 'sarasa', '#e4002b', '#e8eef2', '#e4002b', 110, 'sarasa'),
   // 輸入の筆記具（定価は各社・正規販売店の希望小売価格。2026 年 11 月に確かめた）。書く線は黒・中字（M）相当の 1.0 にそろえる
   // （出荷時の替え芯は時期・店で違うことがあるため、アプリでは決めた 1 つにする）
   // ピンクゴールドは 849 プレミアム（ブリュットロゼ）の形（ヘアラインのアルマイトの軸・つやのある金属のクリップとノックの頭）。
@@ -543,14 +526,13 @@ export const defaultSize = (item) => {
 };
 /**
  * 書き味（型番ごと。同じ型番の色ちがいは同じ書き味）。th・ts・te・st は shared/ink.js の feel、w は線の濃さ（太さの倍率）。
- * name・note は型番の書き味のメモ（画面には出さない）
+ * name は書き味の名前（公式のボールペンはショップに「書き味：硬い」のように出す）、note は一言のメモ
  */
 export const FEELS = {
-  'pen-05': {name: 'ふつうの油性', note: '筆圧にほどよく応える', th: 0.35, ts: 1.2, te: 1.5, st: 0.2, w: 1},
-  'pen-038': {name: 'かための細字', note: '太さがあまり変わらず、くっきり', th: 0.2, ts: 0.8, te: 1, st: 0.15, w: 1},
-  'pen-07': {name: 'やわらかい太字', note: '押すと太く、抜きが長い', th: 0.5, ts: 1.6, te: 2.2, st: 0.25, w: 1},
-  'pen-art': {name: 'しっとり', note: '入りと抜きがやわらかい', th: 0.4, ts: 1.6, te: 2, st: 0.3, w: 1},
-  'pen-even': {name: '筆圧なし', note: 'どこも同じ太さ', th: 0, ts: 0, te: 0, st: 0.3, w: 1},
+  // 公式のボールペン：書き味は 3 段階（硬い＝筆圧なし・普通・滑らか）。普通は前の版の線と同じ
+  'pen-even': {name: '硬い', note: '筆圧で太さが変わらない', th: 0, ts: 0, te: 0, st: 0.3, w: 1},
+  'pen-05': {name: '普通', note: '筆圧にほどよく応える', th: 0.35, ts: 1.2, te: 1.5, st: 0.2, w: 1},
+  'pen-art': {name: '滑らか', note: '筆圧で大きく太り、入りと抜きが長い', th: 0.6, ts: 2, te: 2.6, st: 0.4, w: 1},
   'pencil-05': {
     name: '鉛筆らしい',
     note: '筆圧で濃さと太さが大きく変わる',
@@ -560,8 +542,6 @@ export const FEELS = {
     st: 0.15,
     w: 1.18
   },
-  'pencil-03': {name: '細い芯', note: '筆圧に敏感で、とがった線', th: 0.45, ts: 0.5, te: 0.7, st: 0.12, w: 1.15},
-  'pencil-07': {name: '太い芯', note: '筆圧で大きく太る', th: 0.65, ts: 0.8, te: 1.1, st: 0.18, w: 1.2},
   jetstream: {name: '低粘度の油性', note: '軽く、抜きが長くのびる', th: 0.28, ts: 0.9, te: 2, st: 0.3, w: 1},
   sarasa: {name: 'ゲルインク', note: '濃く、入りから太い', th: 0.3, ts: 0.5, te: 0.8, st: 0.25, w: 1.14},
   'caran-849': {name: 'なめらかな中字', note: '重めで安定した線', th: 0.32, ts: 1, te: 1.3, st: 0.4, w: 1.05},
@@ -593,6 +573,9 @@ export function penFeel(item, refill = null) {
     w: 1
   };
 }
+/** 公式のボールペンの書き味（3 段階）の名前：硬い・普通・滑らか。ほかの品は null（ショップに出すのは公式のボールペンだけ） */
+const OFFICIAL_FEEL = ['pen-even', 'pen-05', 'pen-art'];
+export const feelLabel = (item) => (OFFICIAL_FEEL.includes(item?.series) ? FEELS[item.series].name : null);
 /** 線の太さ（pt）：選んだ太さ × 書き味の濃さ */
 export const sizeWidth = (size, feel) =>
   Math.round((SIZE_WIDTH[size] ?? SIZE_WIDTH['0.5']) * (feel?.w ?? 1) * 100) / 100;
@@ -831,13 +814,11 @@ export const tierOf = (price) => [...TIERS].reverse().find((t) => price >= t.min
 // ---- ショップの札：シリーズ（同じ品の色ちがい）----
 // items の series が同じ品を 1 枚の札にまとめ、色は札の右下の丸で選ぶ。series のない品は 1 品で 1 枚
 const SERIES_INFO = {
-  'pen-05': {name: 'ボールペン 0.5'},
-  'pen-038': {name: 'ボールペン 0.38'},
-  'pen-07': {name: 'ボールペン 0.7'},
-  'pen-art': {name: 'デザイン軸のボールペン'}, // 軸の色・柄で選ぶペン（インクの色ちがいの札と分ける）
-  'pen-even': {name: '筆圧なしペン 0.5'}, // 筆圧で太さが変わらないペン
-  jetstream: {name: 'ジェットストリーム 0.5'},
-  sarasa: {name: 'サラサクリップ 0.5'},
+  'pen-even': {name: 'ボールペン DN-1'}, // 書き味：硬い（筆圧なし。太さが変わらない）
+  'pen-05': {name: 'ボールペン DN-2'}, // 書き味：普通（インクの色ちがい）
+  'pen-art': {name: 'ボールペン DN-3'}, // 書き味：滑らか（軸の色・柄で選ぶ）
+  jetstream: {name: 'ジェットストリーム'},
+  sarasa: {name: 'サラサクリップ'},
   'caran-849': {name: 'カランダッシュ 849 ボールペン'},
   'parker-jotter': {name: 'パーカー ジョッター'},
   'lamy-2000': {name: 'LAMY 2000 ボールペン'},
@@ -845,9 +826,7 @@ const SERIES_INFO = {
   marker: {name: 'マーカー'},
   'marker-wide': {name: 'マーカー（太）'},
   hider: {name: '文字隠しペン'},
-  'pencil-05': {name: 'シャープペンシル 0.5'},
-  'pencil-03': {name: 'シャープペンシル 0.3'},
-  'pencil-07': {name: 'シャープペンシル 0.7'},
+  'pencil-05': {name: 'シャープペンシル'},
   'case-pouch': {name: '帆布の筆箱'},
   'case-tin': {name: '缶ペンケース'},
   'case-leather': {name: '革のペンケース'},

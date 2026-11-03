@@ -70,16 +70,23 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
   const series = shopSeries();
   assert.equal(new Set(series.map((s) => s.id)).size, series.length);
   const pen05 = series.find((s) => s.id === 'pen-05');
-  assert.equal(pen05.name, 'ボールペン 0.5');
+  assert.equal(pen05.name, 'ボールペン DN-2');
   assert.equal(pen05.maker, '大学ノート');
-  assert.ok(pen05.items.length >= 9, '0.5 の公式のボールペンは 9 色以上');
+  assert.ok(pen05.items.length >= 9, '書き味「普通」の公式のボールペンは 9 色以上');
   assert.ok(pen05.items.every((it) => it.mm === '0.5' && !it.maker));
-  // 軸の色・柄で選ぶペンは、インクの色ちがいの札と分けて 1 枚に
+  // 公式のボールペンは 3 つの型番（DN-1 硬い・DN-2 普通・DN-3 滑らか）。軸の色・柄で選ぶ DN-3 は 1 枚に
   const art = series.find((s) => s.id === 'pen-art');
+  assert.equal(art.name, 'ボールペン DN-3');
   assert.deepEqual(
     art.items.map((it) => it.id),
-    ['pen-sakura-05', 'pen-mint-05', 'pen-wood-07', 'pen-navy-038']
+    ['pen-sakura-05', 'pen-mint-05', 'pen-wood-07', 'pen-navy-038', 'pen-black-038', 'pen-black-07']
   );
+  assert.equal(series.filter((s) => s.type === 'pen' && s.maker === '大学ノート').length, 3, '公式のボールペンは 3 つ');
+  // 名前に字幅・芯の太さは入れない（太さは 0.3・0.5・0.7 から選ぶ）
+  for (const it of CATALOG.filter((x) => x.type === 'pen'))
+    assert.doesNotMatch(it.name, /\d\.\d/, `${it.id} の名前に太さ`);
+  for (const s of series.filter((x) => x.type === 'pen' || x.type === 'pencil'))
+    assert.doesNotMatch(s.name, /\d\.\d/, `${s.id} の名前に太さ`);
   // 既製品の見た目の品も、α 版のあいだはショップに出す
   const js = series.find((s) => s.id === 'jetstream');
   assert.deepEqual(
@@ -196,7 +203,7 @@ test('筆箱：持っている道具だけを 6 本まで入れる。ペンケ�
 });
 
 test('絵：道具とペンケースの SVG に名前が入る（名前は文字として逃がす）', () => {
-  assert.match(toolArt(itemOf('pen-black-05')), /<svg[^>]*>[\s\S]*黒のボールペン 0\.5/);
+  assert.match(toolArt(itemOf('pen-black-05')), /<svg[^>]*>[\s\S]*黒のボールペン/);
   assert.match(toolArt(itemOf('hider-cyan')), /隠/);
   assert.doesNotMatch(toolArt(itemOf('pen-black-05'), {label: false}), /<title>/);
   for (const id of ['case-canvas-navy', 'case-tin-silver', 'case-leather-brown', 'case-clear'])
@@ -217,7 +224,8 @@ test('シャープペンシル：書く道具としてはペン（type pen）で
   assert.ok(w('0.3') < w('0.5') && w('0.5') < w('0.7'));
   const se = shopSeries().find((x) => x.id === 'pencil-05');
   assert.equal(se.type, 'pencil');
-  assert.equal(se.items.length, 3);
+  assert.equal(se.items.length, 5, '前の 0.3・0.7 も色ちがいとして 1 つのシリーズに');
+  assert.equal(se.name, 'シャープペンシル');
 });
 
 test('消しゴム・ポーチの道具の絵：3D モデルの画像を入れる所と、入るまでの平らな絵がある。GLB がある', async () => {
@@ -388,7 +396,7 @@ test('筆圧なしのペン：ショップに 1 枚の札（黒・赤・青）�
     assert.ok(it.points > 0, 'はじめから持っている品ではない');
   }
   const s = shopSeries().find((x) => x.id === 'pen-even');
-  assert.equal(s.name, '筆圧なしペン 0.5');
+  assert.equal(s.name, 'ボールペン DN-1');
   assert.equal(s.items.length, 3);
 });
 
@@ -466,4 +474,17 @@ test('書き味：型番ごとに決まり、同じ型番の色ちがいは同�
   assert.deepEqual(heldPen(itemOf('pen-black-05')).feel, heldPen(itemOf('pen-red-05')).feel);
   assert.equal(heldPen(itemOf('pencil-black-05')).width, 1.3, 'シャープペンシル 0.5 の線は前の版と同じ');
   assert.equal(heldPen(itemOf('maker-sarasa-black')).width, 1.25, 'ゲルインクは少し太い（前の版と同じ）');
+});
+
+test('公式のボールペンの書き味は 3 段階（硬い＝筆圧なし・普通・滑らか）。型番ごとに同じ', async () => {
+  const {feelLabel, penFeel} = await import('../src/shared/stationery.js');
+  assert.equal(feelLabel(itemOf('pen-even-red-05')), '硬い');
+  assert.equal(feelLabel(itemOf('pen-purple-05')), '普通');
+  assert.equal(feelLabel(itemOf('pen-wood-07')), '滑らか');
+  assert.equal(feelLabel(itemOf('pen-black-038')), '滑らか', '前の 0.38 は DN-3 の軸の 1 つ');
+  assert.equal(feelLabel(itemOf('maker-sarasa-black')), null, '既製品には出さない');
+  const th = (id) => penFeel(itemOf(id)).th;
+  assert.equal(th('pen-even-black-05'), 0, '硬い：筆圧で太さが変わらない');
+  assert.ok(th('pen-black-05') < th('pen-sakura-05'), '普通より滑らかのほうが筆圧で大きく変わる');
+  assert.ok(itemOf('pen-even-black-05').even, '硬いは筆圧なしの線（even）');
 });
