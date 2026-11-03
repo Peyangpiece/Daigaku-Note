@@ -484,3 +484,24 @@ test('答えの画面で質問：問題・解説・根拠のページの本文�
     '問題（num）：Q\n正解：800 円\n解説：N'
   );
 });
+
+test('クイズの一覧の成績：解いた問題の数・苦手（最後にまちがえた問題）・最後に解いた日', async (t) => {
+  const {repo, course} = await setup(t);
+  const client = fakeClient([{json: {title: '原価企画', qs: [Q.choice, Q.tf, Q.num]}}]);
+  const {quizId} = await generateQuiz({repo, client}, {roundId: 'r3'});
+  const svc = createQuizService({repo, secrets: {get: async () => null}});
+  const qs = repo.listQuestions({quizIds: [quizId]});
+  const [a, b] = qs;
+  svc.answer({questionId: a.id, answer: 'ちがう答え'}); // まちがえる
+  svc.answer({questionId: b.id, answer: b.a}); // 正解
+  let z = repo.listQuizzesAll()[course.id].find((x) => x.id === quizId);
+  assert.equal(z.answered, 2);
+  assert.equal(z.wrong, 1, '最後にまちがえた問題');
+  assert.equal(z.tries, 2);
+  assert.equal(z.correct, 1);
+  assert.ok(z.last_at);
+  svc.answer({questionId: a.id, answer: a.a}); // 解き直して正解すると苦手から外れる
+  z = repo.listQuizzesAll()[course.id].find((x) => x.id === quizId);
+  assert.equal(z.wrong, 0);
+  assert.equal(repo.listQuizzes(course.id)[0].answered, 2, '授業ごとの一覧にも同じ成績');
+});

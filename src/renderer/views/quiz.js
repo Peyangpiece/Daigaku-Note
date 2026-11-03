@@ -1,5 +1,6 @@
 // クイズの画面（SPEC §11.7・§11.10）。単語カードのような 1 問 1 枚。答えるとすぐ正誤・解説・根拠を出し、終わったら結果。
-// 経路：#/quiz?course=<授業>&quizzes=<id,id>&mode=quiz|exam|retry|card|review ／ #/review（今日の復習）／ #/quiz-edit/<quizId>
+// 経路：#/quizzes（クイズの一覧。上の「クイズ」）／ #/quiz?course=<授業>&quizzes=<id,id>&mode=quiz|exam|retry|card|review ／
+//   #/review（今日の復習）／ #/quiz-edit/<quizId>。一覧から開いたクイズは back=quizzes で、戻ると一覧へ
 // カテキョにならう：選択肢の並びは解くたびに変わる seed で決める、正解でも解説を出す、半分未満ならカードで覚えるを主に、途中でやめても続きから
 import {confirmDialog, esc, toast} from '../ui-kit.js';
 import {navigate, refresh, reload, state} from '../store.js';
@@ -131,9 +132,14 @@ export function renderQuiz({data}, route) {
   }
   const s = session;
   const course = data.courses.find((c) => c.id === s.courseId);
-  const back = course
-    ? `<button class="btn" data-action="quiz-quit" data-route="/course/${esc(course.id)}">← ${esc(course.name)}</button>`
-    : `<button class="btn" data-action="quiz-quit" data-route="/">← ホーム</button>`;
+  // 戻る先：クイズの一覧から開いたら一覧、授業から開いたら授業、今日の復習は一覧
+  s.backTo =
+    params.back === 'quizzes' || params.mode === 'review'
+      ? {route: '/quizzes', label: 'クイズ'}
+      : course
+        ? {route: `/course/${course.id}`, label: course.name}
+        : {route: '/', label: 'ホーム'};
+  const back = `<button class="btn" data-action="quiz-quit" data-route="${esc(s.backTo.route)}">← ${esc(s.backTo.label)}</button>`;
   const head = `<nav class="page-nav">${back}<h2>${esc(MODE_LABEL[s.mode] ?? 'クイズ')}</h2></nav>`;
   if (s.loading) return head + `<p class="muted">問題を読み込んでいます…</p>`;
   if (s.error) return head + `<div class="card"><p>${esc(s.error)}</p></div>`;
@@ -253,8 +259,10 @@ function renderResult(s, course) {
   const low = scored.length && pct < 50;
   const ids = [...new Set(s.questions.map((q) => q.quiz_id))].join(',');
   const retryRoute =
-    s.mode === 'review' ? '/review' : `/quiz?course=${s.courseId}&quizzes=${ids}&mode=retry&r=${Date.now()}`;
-  const cardRoute = `/quiz?course=${s.courseId}&quizzes=${ids}&mode=card&only=wrong&r=${Date.now()}`;
+    s.mode === 'review'
+      ? '/review'
+      : `/quiz?course=${s.courseId}&quizzes=${ids}&mode=retry${s.backTo?.route === '/quizzes' ? '&back=quizzes' : ''}&r=${Date.now()}`;
+  const cardRoute = `/quiz?course=${s.courseId}&quizzes=${ids}&mode=card&only=wrong${s.backTo?.route === '/quizzes' ? '&back=quizzes' : ''}&r=${Date.now()}`;
   return `<section class="card quiz-result">
       <div class="ring" style="--pct:${pct}"><span>${scored.length ? `${pct}%` : '—'}</span></div>
       <div>
@@ -265,7 +273,7 @@ function renderResult(s, course) {
           ${wrong.length && s.mode !== 'review' ? `<button class="btn ${low ? '' : 'btn--primary'}" data-action="nav" data-route="${esc(retryRoute)}">まちがえた ${wrong.length} 問を解き直す</button>` : ''}
           ${wrong.length && s.mode !== 'review' && s.courseId ? `<button class="btn ${low ? 'btn--primary' : ''}" data-action="nav" data-route="${esc(cardRoute)}">カードで覚える</button>` : ''}
           ${s.mode === 'review' && s.rest ? `<button class="btn btn--primary" data-action="nav" data-route="/review?r=${Date.now()}">続ける</button>` : ''}
-          <button class="btn" data-action="nav" data-route="${esc(course ? `/course/${course.id}` : '/')}">${course ? '授業に戻る' : 'ホームへ'}</button>
+          <button class="btn" data-action="nav" data-route="${esc(s.backTo?.route ?? (course ? `/course/${course.id}` : '/'))}">${esc(s.backTo ? `${s.backTo.label}に戻る` : course ? '授業に戻る' : 'ホームへ')}</button>
         </div>
       </div>
     </section>
@@ -369,6 +377,105 @@ export function quizSubmitNum(form) {
 
 /** 経路が変わったら（クイズ画面を離れたら）片付ける */
 export const leaveQuiz = () => (session = null);
+
+// ---- クイズの一覧（#/quizzes。上の「クイズ」）：今日の復習と、授業ごとに作ったテストと成績 ----
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : null);
+/** 最後に解いた日（今日・昨日・n 日前・日付） */
+function lastDay(iso) {
+  if (!iso) return '未回答';
+  const d = new Date(iso);
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (days < 1 && new Date().toDateString() === d.toDateString()) return '今日';
+  if (days < 2) return '昨日';
+  if (days < 7) return `${days} 日前`;
+  return d.toLocaleDateString('ja-JP', {month: 'numeric', day: 'numeric'});
+}
+/** 正答率の帯（色は 80% 以上・50% 以上・それ未満で変える） */
+function rateBar(rate) {
+  if (rate === null) return '<span class="qz-rate qz-rate--none">—</span>';
+  const tone = rate >= 80 ? 'good' : rate >= 50 ? 'mid' : 'low';
+  return `<span class="qz-rate qz-rate--${tone}"><span class="qz-rate__bar"><span style="width:${rate}%"></span></span><b>${rate}%</b></span>`;
+}
+const quizName = (z) =>
+  z.round_number === 0
+    ? z.round_title_user || 'その他'
+    : z.round_user_made
+      ? z.round_title_user || '名前のない付箋'
+      : `第${z.round_number}回${z.round_title_user || z.round_title ? `　${z.round_title_user || z.round_title}` : ''}`;
+
+/** 画面：クイズの一覧 */
+export function renderQuizzes({data}) {
+  const due = data.quiz?.reviewDue ?? 0;
+  const next = data.quiz?.reviewNext;
+  const review = due
+    ? `<button type="button" class="home-review" data-action="nav" data-route="/review"><span class="home-review__mark" aria-hidden="true">✓</span><span class="home-review__text"><strong>今日の復習 ${due} 問</strong></span><span class="home-review__go">始める →</span></button>`
+    : `<p class="muted qz-hub__none">今日の復習はありません。${next ? `次は ${new Date(next.due).toLocaleDateString('ja-JP', {month: 'numeric', day: 'numeric'})} に ${next.count} 問。` : ''}</p>`;
+  const courses = data.courses
+    .filter((c) => !c.hidden)
+    .map((c) => ({c, list: (data.quizzes?.[c.id] ?? []).filter((z) => z.count > 0)}))
+    .filter((x) => x.list.length);
+  if (!courses.length)
+    return `<nav class="page-nav"><h2>クイズ</h2></nav>${review}
+      <div class="empty"><p>まだテストがありません。授業の画面の「問題を作る」で作れます。</p></div>`;
+  // 全体のまとめ
+  const all = courses.flatMap((x) => x.list);
+  const sum = (k) => all.reduce((n, z) => n + (z[k] ?? 0), 0);
+  const total = {count: sum('count'), tries: sum('tries'), correct: sum('correct'), wrong: sum('wrong')};
+  const summary = `<div class="qz-hub__sum">
+      <div><b>${courses.length}</b><span>授業</span></div>
+      <div><b>${all.length}</b><span>テスト</span></div>
+      <div><b>${total.count}</b><span>問題</span></div>
+      <div><b>${pct(total.correct, total.tries) ?? '—'}${total.tries ? '%' : ''}</b><span>正答率</span></div>
+      <div><b>${total.wrong}</b><span>苦手</span></div>
+    </div>`;
+  const sections = courses
+    .map(({c, list}) => {
+      const t = {
+        count: list.reduce((n, z) => n + z.count, 0),
+        tries: list.reduce((n, z) => n + (z.tries ?? 0), 0),
+        correct: list.reduce((n, z) => n + (z.correct ?? 0), 0),
+        wrong: list.reduce((n, z) => n + (z.wrong ?? 0), 0),
+        last: list
+          .map((z) => z.last_at)
+          .filter(Boolean)
+          .sort()
+          .at(-1)
+      };
+      const ids = list.map((z) => z.id).join(',');
+      const q = (mode) => `/quiz?course=${esc(c.id)}&quizzes=${esc(ids)}&mode=${mode}&back=quizzes`;
+      const rows = list
+        .map((z) => {
+          const rate = pct(z.correct ?? 0, z.tries ?? 0);
+          return `<tr>
+            <th scope="row">${esc(quizName(z))}</th>
+            <td>${z.count} 問</td>
+            <td>${rateBar(rate)}</td>
+            <td>${z.answered ?? 0} / ${z.count}</td>
+            <td>${z.wrong ? `<b class="qz-hub__wrong">${z.wrong}</b>` : '0'}</td>
+            <td>${lastDay(z.last_at)}</td>
+            <td class="qz-hub__acts"><button class="btn btn--small btn--primary" data-action="nav" data-route="/quiz?course=${esc(c.id)}&quizzes=${esc(z.id)}&mode=quiz&back=quizzes">解く</button>${z.wrong ? `<button class="btn btn--small" data-action="nav" data-route="/quiz?course=${esc(c.id)}&quizzes=${esc(z.id)}&mode=retry&back=quizzes">まちがえた問題</button>` : ''}<button class="btn btn--small btn--quiet" data-action="nav" data-route="/quiz-edit/${esc(z.id)}">編集</button>${z.flagged ? `<span class="qcard__flag" title="AI の検算と答えが合わなかった問題">要確認 ${z.flagged}</span>` : ''}</td>
+          </tr>`;
+        })
+        .join('');
+      return `<section class="card qz-hub__course">
+        <header class="qz-hub__head">
+          <h3><button type="button" class="link" data-action="nav" data-route="/course/${esc(c.id)}">${esc(c.name)}</button></h3>
+          <span class="muted">${list.length} テスト・${t.count} 問・正答率 ${pct(t.correct, t.tries) ?? '—'}${t.tries ? '%' : ''}${t.wrong ? `・苦手 ${t.wrong} 問` : ''}・最後に解いた日 ${lastDay(t.last)}</span>
+          <span class="qz-hub__acts">${list.length > 1 ? `<button class="btn btn--small btn--primary" data-action="nav" data-route="${q('exam')}">全部の回から解く</button>` : ''}${t.wrong ? `<button class="btn btn--small" data-action="nav" data-route="${q('retry')}">苦手な ${t.wrong} 問</button>` : ''}</span>
+        </header>
+        <div class="qz-hub__scroll"><table class="qz-hub__table">
+          <thead><tr><th scope="col">テスト</th><th scope="col">問題</th><th scope="col">正答率</th><th scope="col">解いた問題</th><th scope="col">苦手</th><th scope="col">最後に解いた日</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </section>`;
+    })
+    .join('');
+  return `<nav class="page-nav"><h2>クイズ</h2></nav>
+    ${review}
+    ${summary}
+    <p class="muted qz-hub__note">正答率はこれまでに解いた答えのうち正解の割合、苦手は最後に解いたときまちがえた問題の数です。</p>
+    ${sections}`;
+}
 
 // ---- 問題の編集（SPEC §11.10） ----
 let editing = null; // {quizId, questions, loading}

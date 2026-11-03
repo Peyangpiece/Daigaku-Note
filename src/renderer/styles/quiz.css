@@ -423,3 +423,106 @@ textarea.input {
   font-size: var(--fs-small);
   color: var(--paper-ink-weak);
 }
+
+/* クイズの一覧（#/quizzes）：今日の復習・全体のまとめ・授業ごとのテストの表 */
+.qz-hub__none {
+  margin: 0 0 var(--space-2);
+}
+.qz-hub__sum {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
+}
+.qz-hub__sum > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.qz-hub__sum b {
+  font-size: var(--fs-h3);
+}
+.qz-hub__sum span {
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+}
+.qz-hub__note {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-small);
+}
+.qz-hub__course {
+  margin-bottom: var(--space-3);
+}
+.qz-hub__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin-bottom: var(--space-1);
+}
+.qz-hub__head h3 {
+  margin: 0;
+}
+.qz-hub__acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.qz-hub__head .qz-hub__acts {
+  margin-left: auto;
+}
+.qz-hub__scroll {
+  overflow-x: auto;
+}
+.qz-hub__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+}
+.qz-hub__table th,
+.qz-hub__table td {
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+  border-top: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
+}
+.qz-hub__table thead th {
+  border-top: 0;
+  color: var(--paper-ink-weak);
+  font-weight: 400;
+}
+.qz-hub__table tbody th {
+  white-space: normal;
+  min-width: 180px;
+}
+.qz-hub__wrong {
+  color: var(--danger-ink);
+}
+.qz-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.qz-rate__bar {
+  display: inline-block;
+  width: 70px;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
+  overflow: hidden;
+}
+.qz-rate__bar > span {
+  display: block;
+  height: 100%;
+  background: var(--pop3);
+}
+.qz-rate--mid .qz-rate__bar > span {
+  background: var(--pop1);
+}
+.qz-rate--low .qz-rate__bar > span {
+  background: var(--pop2);
+}

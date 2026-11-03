@@ -26,7 +26,8 @@ import {
   quizSubmitAsk,
   quizSubmitNum,
   renderQuiz,
-  renderQuizEdit
+  renderQuizEdit,
+  renderQuizzes
 } from './views/quiz.js';
 // PDF の編集画面（pdf.js 本体 0.5 MB を含む）は、開くときに読む（起動を軽くする）。最初の描画のあとに裏で読み始める
 let viewerMod = null;
@@ -116,7 +117,7 @@ function head() {
   const route = location.hash.replace(/^#/, '') || '/';
   const chip = document.getElementById('head-points');
   const balance = state.data?.points?.balance ?? 0;
-  chip.hidden = !(route === '/' || route.startsWith('/review'));
+  chip.hidden = !(route === '/' || route.startsWith('/review') || route.startsWith('/quizzes'));
   chip.innerHTML = `${COIN}<b>${balance.toLocaleString('ja-JP')}</b> pt`;
   chip.setAttribute('aria-label', `ポイント（${pt(balance)}）。押すと、もらい方と履歴を見られます`);
   chip.title = 'ポイント：復習のクイズに正解したり、毎日開いたりするとたまります。持ち物のショップで使えます';
@@ -203,14 +204,22 @@ function render() {
   for (const b of document.querySelectorAll('.topnav [data-nav]'))
     b.setAttribute(
       'aria-current',
-      (b.dataset.nav === 'home' ? route === '/' : route.startsWith(`/${b.dataset.nav}`)) ? 'page' : 'false'
+      (
+        b.dataset.nav === 'home'
+          ? route === '/'
+          : b.dataset.nav === 'quiz'
+            ? /^\/(quiz|review)/.test(route) // クイズの一覧・解く画面・今日の復習
+            : route.startsWith(`/${b.dataset.nav}`)
+      )
+        ? 'page'
+        : 'false'
     );
   const due = state.data.quiz?.reviewDue ?? 0;
   const count = document.getElementById('nav-review-count');
   if (count) {
     count.textContent = due ? String(due) : '';
     count.hidden = !due;
-    count.parentElement.setAttribute('aria-label', due ? `復習（今日 ${due} 問）` : '復習');
+    count.parentElement.setAttribute('aria-label', due ? `クイズ（今日の復習 ${due} 問）` : 'クイズ');
   }
   deskRoute(route); // クイズ・ホームでは四隅の道具を出す（編集画面は自分で持つ）
   const inViewer = route.startsWith('/viewer/') || route.startsWith('/split/');
@@ -292,6 +301,7 @@ function render() {
   } else if (route.startsWith('/folder-new')) view.innerHTML = renderFolderNew(state, route);
   else if (/^\/settings\/term(\?|$)/.test(route)) view.innerHTML = renderTerm(state, route);
   else if (route.startsWith('/quiz-edit/')) view.innerHTML = renderQuizEdit(state, route.slice('/quiz-edit/'.length));
+  else if (route === '/quizzes' || route.startsWith('/quizzes?')) view.innerHTML = renderQuizzes(state);
   else if (route.startsWith('/quiz') || route.startsWith('/review')) view.innerHTML = renderQuiz(state, route);
   else if (route === '/settings' || route.startsWith('/settings?')) view.innerHTML = renderSettings(state, route);
   else if (/^\/kisekae(\/edit)?(\?|$)/.test(route)) view.innerHTML = renderKisekae(state, route);
