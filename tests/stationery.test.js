@@ -102,7 +102,7 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
   );
   assert.deepEqual(
     siblingsOf(itemOf('case-clear')).map((it) => it.id),
-    ['case-clear']
+    ['case-clear', 'case-clear-blue', 'case-clear-pink']
   );
   // 品ぞろえの順に並ぶ（公式の品 → 既製品の見た目の品）
   assert.equal(series[0].id, 'pen-05');
@@ -237,8 +237,30 @@ test('ペンケース：帆布の筆箱の色ちがいは 1 枚の札（シリ�
   assert.equal(se.name, '帆布の筆箱');
   assert.deepEqual(
     se.items.map((it) => it.id),
-    ['case-canvas-navy', 'case-pastel-pink', 'case-sage']
+    [
+      'case-canvas-navy',
+      'case-pastel-pink',
+      'case-sage',
+      'case-canvas-mustard',
+      'case-canvas-gray',
+      'case-canvas-black'
+    ]
   );
+  // どの形のペンケース・ポーチも色ちがいが 3 色以上（1 枚の札にまとめる）。同じシリーズは同じ形・同じ値段
+  for (const type of ['case', 'pouch']) {
+    const groups = shopSeries().filter((x) => x.type === type);
+    assert.equal(groups.length, 4, `${type} は 4 つの形`);
+    for (const g of groups) {
+      assert.ok(g.items.length >= 3, `${g.id} の色ちがい`);
+      assert.equal(new Set(g.items.map((it) => it.model)).size, 1, `${g.id} は同じ形`);
+      assert.equal(
+        new Set(g.items.filter((it) => it.points > 0).map((it) => it.points)).size,
+        1,
+        `${g.id} は同じ値段（はじめの品をのぞく）`
+      );
+      assert.equal(new Set(g.items.map((it) => it.base)).size, g.items.length, `${g.id} の色が重ならない`);
+    }
+  }
   for (const it of CATALOG.filter((x) => x.type === 'case')) {
     const c = CASE_INFO[it.style];
     assert.ok(c?.short && c.material && c.build && /mm/.test(c.size), it.id);

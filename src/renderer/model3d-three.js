@@ -271,7 +271,9 @@ async function loadNow(id, item) {
   ground.position.y = kind !== 'pen' ? new THREE.Box3().setFromObject(group).min.y - 0.001 : -0.08;
   ground.receiveShadow = true;
   scene.add(ground);
-  return {scene, group, ground, kind};
+  // 回しても全体が入る大きさ：外接箱の対角線の半分（中心は原点。ペンの長さを 1 にした大きさで）
+  const radius = new THREE.Box3().setFromObject(group).getSize(new THREE.Vector3()).length() / 2;
+  return {scene, group, ground, kind, radius};
 }
 
 function load(id, item = null) {
@@ -425,11 +427,29 @@ export function mount(el, id, {zoom = false, item = null} = {}) {
   const home = new THREE.Vector3(0.06, 0.34, 1.55);
   let moved = false; // 利用者が回した・近づけた
   cam.position.copy(home);
-  /** ペン（長さ 1）が幅の 9 割に収まる距離（視野 26°・縦横比から） */
+  /**
+   * 見る距離。ペン（長さ 1）は幅の 9 割に収まる距離（視野 26°・縦横比から）。
+   * 机に置く物（ペンケース・ポーチ・電卓・タイマーなど）は幅も奥行きも高さもあるので、縦の軸のまわりに回しても
+   * 全体が縦にも横にも収まる距離（外接箱を包む球が、視野の狭いほうの向きに入る）にする（前はペンと同じで見切れていた）
+   */
   const fit = () => {
-    const halfW = Math.tan((cam.fov / 2) * (Math.PI / 180)) * cam.aspect;
+    const halfV = (cam.fov / 2) * (Math.PI / 180);
+    const halfW = Math.tan(halfV) * cam.aspect;
+    if (model && model.kind !== 'pen') {
+      const half = Math.min(halfV, Math.atan(halfW));
+      const d = (model.radius * 1.06) / Math.sin(half);
+      // 少し上から（上の面も見える）。平たい道具（電卓・タイマー）はもっと上から
+      home
+        .set(0.06, model.kind === 'tool' ? 0.75 : 0.42, 1)
+        .normalize()
+        .multiplyScalar(d);
+      controls.minDistance = d * 0.3;
+      controls.maxDistance = d * 1.35;
+      if (!moved) cam.position.copy(home);
+      return;
+    }
     const d = Math.max(0.8, 0.5 / 0.9 / halfW);
-    home.set(0.06 * d, (model?.kind === 'case' ? 0.42 : 0.22) * d, d); // ペンケースは少し上から（上の面も見える）
+    home.set(0.06 * d, 0.22 * d, d);
     controls.minDistance = d * 0.3;
     controls.maxDistance = d * 1.35; // 離しても小さくなりすぎない
     if (!moved) cam.position.copy(home);
@@ -484,8 +504,9 @@ export function mount(el, id, {zoom = false, item = null} = {}) {
     if (!visible || !model) return;
     // ペンは軸のまわりにゆっくり転がし、ペンケースは机の上で回す（ドラッグ中・動きを減らす設定では止める）
     if (!dragging && !reduceMotion)
-      model.group.rotation[model.kind === 'case' ? 'y' : 'x'] +=
-        Math.min(0.05, (t - last) / 1000) * (model.kind === 'case' ? 0.35 : 0.6);
+      // 机に置く物（ペンケース・ポーチ・電卓など）は縦の軸のまわりに回す（電卓が裏返らないように）
+      model.group.rotation[model.kind === 'pen' ? 'x' : 'y'] +=
+        Math.min(0.05, (t - last) / 1000) * (model.kind === 'pen' ? 0.6 : 0.35);
     last = t;
     if (!moved) cam.position.copy(home); // 動かすまでは、いつも収まる位置
     controls.update();
