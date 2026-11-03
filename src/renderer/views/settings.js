@@ -88,7 +88,8 @@ function quizSection(q, focus = false) {
         `<label>${label}<input class="input" type="number" min="0" max="30" id="qz-mix-${t}" value="${q.mix?.[t] ?? 0}"></label>`
     )
     .join('');
-  return `<section class="card" id="st-quiz"${focus ? ' data-scroll-into-view' : ''}><h3>クイズ</h3>
+  return `<section class="card" id="st-quiz"${focus ? ' data-scroll-into-view' : ''}><h3>テスト作成</h3>
+    <p class="muted">授業の資料から、AI でテスト（クイズ）を作ります。作る AI と、問題の数・種類を決めます。</p>
     ${key}
     <p class="muted" style="margin: var(--space-1) 0 0">${engine === 'api' ? '' : 'Claude Code・Codex で作った分は、それぞれの契約の範囲です（下の費用には入りません）。'}今月の費用（API キー）：$${(q.monthUsd ?? 0).toFixed(2)} ／ 上限 $${q.perMonthUsd}・今日の作成 ${q.today} ／ ${q.perDay} 回</p>
     <details class="settings__more"><summary>問題の数と種類・AI のモデル・費用の上限</summary>
@@ -125,14 +126,20 @@ export function renderSettings({data}, route = '/settings') {
   // 使い方に合わせて項目を出す。使っていない機能でも、もう設定してあるもの（LMS の接続・API キー）は出す
   const f = features({role: s.role, uses: s.uses});
   const showLms = f.lms || hasLms;
-  const showQuiz = f.quiz || !!data.quiz?.key?.set || focus === 'quiz';
+  // テスト作成（クイズ）の設定は、使い方にかかわらずいつも出す（使い方で「復習」を選んでいないと見つけられなかった）
   queueMicrotask(bind);
   return `
     <nav class="page-nav">
       <button class="btn" data-action="nav" data-route="/">← ホーム</button><h2>設定</h2>
     </nav>
     <div class="settings">
-      <h3 class="settings__group">ふだんの設定</h3>
+      <nav class="settings__jump" aria-label="設定の項目">
+        <button type="button" class="btn btn--small" data-jump="st-general">ふだんの設定</button>
+        ${data.quiz ? '<button type="button" class="btn btn--small" data-jump="st-quiz">テスト作成（クイズ）</button>' : ''}
+        ${showLms ? '<button type="button" class="btn btn--small" data-jump="st-lms">大学の LMS</button>' : ''}
+        <button type="button" class="btn btn--small" data-jump="st-about">情報</button>
+      </nav>
+      <h3 class="settings__group" id="st-general">ふだんの設定</h3>
       <div class="settings__grid">
       <section class="card" id="st-profile"><h3>使い方</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
@@ -185,10 +192,10 @@ export function renderSettings({data}, route = '/settings') {
         }
       </div>
       ${
-        showQuiz
-          ? `<h3 class="settings__group">復習</h3>
+        data.quiz
+          ? `<h3 class="settings__group">テスト作成（クイズ）</h3>
       <div class="settings__grid">
-      ${quizSection(data.quiz && {...data.quiz, consent: data.settings.aiConsent}, focus === 'quiz')}
+      ${quizSection({...data.quiz, consent: data.settings.aiConsent}, focus === 'quiz')}
       </div>`
           : ''
       }
@@ -228,7 +235,7 @@ export function renderSettings({data}, route = '/settings') {
       </section>
       </div>
       </div>
-      ${showQuiz && showLms ? '' : '<p class="muted">使わない機能の設定は出していません。出すには、上の「使い方」で選んでください。</p>'}
+      ${showLms ? '' : '<p class="muted">使わない機能の設定は出していません。出すには、上の「使い方」で選んでください。</p>'}
       <section class="card" id="st-about"><h3>情報</h3>
         <p>大学ノート ${esc(data.version)}<span class="about__alpha">α 版</span></p>
         <p class="muted">試験中の版です。動かないことやデータが消えることがあります。大切な資料は元の場所にも残してください。</p>
@@ -336,6 +343,14 @@ async function renderMobile(box, st = null, pair = null) {
 }
 
 function bind() {
+  // 上の項目のボタン：その項目まで送る（画面の道すじ #/settings は変えない）
+  document
+    .querySelectorAll('[data-jump]')
+    .forEach((b) =>
+      b.addEventListener('click', () =>
+        document.getElementById(b.dataset.jump)?.scrollIntoView({behavior: 'smooth', block: 'start'})
+      )
+    );
   const $ = (id) => document.getElementById(id);
   renderMobile(document.querySelector('[data-v="mobile"]'));
   for (const b of document.querySelectorAll('[data-backup]'))
