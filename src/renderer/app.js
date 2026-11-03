@@ -23,6 +23,7 @@ import {
   quizAction,
   quizEditAction,
   quizKey,
+  quizSubmitAsk,
   quizSubmitNum,
   renderQuiz,
   renderQuizEdit
@@ -375,10 +376,7 @@ api.on('sync.finished', (r) => {
 api.on('quiz.progress', () => reload().catch(console.error));
 api.on('quiz.finished', (r) => {
   if (EMBED) return;
-  if (r.ok)
-    toast(
-      `クイズができました：${r.count} 問${r.flagged ? `（要確認 ${r.flagged} 問）` : ''}${r.notes?.length ? `。${r.notes.join('。')}` : ''}`
-    );
+  if (r.ok) toast(`クイズができました（${r.count} 問${r.flagged ? `・要確認 ${r.flagged}` : ''}）`);
   else toast(r.message, {error: true, detail: r.detail});
 });
 document.addEventListener('keydown', (e) => !isTyping(e) && quizKey(e));
@@ -386,6 +384,9 @@ document.addEventListener('submit', (e) => {
   if (e.target.matches('[data-quiz-num]')) {
     e.preventDefault();
     quizSubmitNum(e.target);
+  } else if (e.target.matches('[data-quiz-ask]')) {
+    e.preventDefault();
+    quizSubmitAsk(e.target);
   }
 });
 api.on(
@@ -778,11 +779,11 @@ document.addEventListener('click', async (e) => {
         x.checked = el.dataset.pick === 'new' ? !x.dataset.hasQuiz : false;
     } else if (action === 'quiz-make-picked') {
       const picked = [...document.querySelectorAll('input[name=quiz-make]:checked')];
-      if (!picked.length) return toast('クイズを作る回を 1 つ以上選んでください', {error: true});
+      if (!picked.length) return toast('回を選んでください', {error: true});
       const redo = picked.filter((x) => x.dataset.hasQuiz).map((x) => x.dataset.label);
       if (
         redo.length &&
-        !(await confirmDialog(`${redo.join('・')}はクイズがあります。作り直しますか？（前の版の記録は残ります）`, {
+        !(await confirmDialog(`${redo.join('・')}のクイズを作り直しますか？（これまでの記録は残ります）`, {
           ok: '作り直す'
         }))
       )
@@ -791,11 +792,7 @@ document.addEventListener('click', async (e) => {
       const r = await api['quiz.generate']({roundIds});
       if (r?.error) return toast(r.error, {error: true});
       for (const x of picked) x.checked = false;
-      toast(
-        roundIds.length > 1
-          ? `${r.queued} 回分のクイズを順に作ります（1 回 1〜2 分）`
-          : 'クイズを作っています（1〜2 分）'
-      );
+      toast(roundIds.length > 1 ? `${r.queued} 回分を順に作ります（1 回 1〜2 分）` : '作っています（1〜2 分）');
       reload();
     } else if (action === 'calendar-dismiss') {
       // ホームの「学年暦を入れる」案内を、この学期では出さない
@@ -809,29 +806,21 @@ document.addEventListener('click', async (e) => {
       const roundIds = el.dataset.rounds.split(',').filter(Boolean);
       const r = await api['quiz.generate']({roundIds});
       if (r?.error) toast(r.error, {error: true});
-      else
-        toast(
-          roundIds.length > 1
-            ? `${r.queued} 回分のクイズを順に作ります（1 回 1〜2 分）`
-            : 'クイズを作っています（1〜2 分）'
-        );
+      else toast(roundIds.length > 1 ? `${r.queued} 回分を順に作ります（1 回 1〜2 分）` : '作っています（1〜2 分）');
       reload();
     } else if (action === 'quiz-cloze') {
       // 文字隠しマーカーからの穴埋め（§11.3）。AI を使わないのですぐできる。同じ回のクイズがあれば置き換える（前の版の記録は残る）
       if (
         el.dataset.hasQuiz &&
-        !(await confirmDialog(
-          'この回にはクイズがあります。隠した箇所からの穴埋めに作り直しますか？（前の版の記録は残ります）',
-          {
-            ok: '作り直す'
-          }
-        ))
+        !(await confirmDialog('この回のクイズを、隠した語の穴埋めで作り直しますか？（これまでの記録は残ります）', {
+          ok: '作り直す'
+        }))
       )
         return;
       el.disabled = true;
       const r = await api['quiz.fromMasks']({roundId: el.dataset.round}).finally(() => (el.disabled = false));
       if (r?.error) return toast(r.error, {error: true});
-      toast(`隠した箇所から穴埋めを ${r.count} 問作りました`);
+      toast(`穴埋めを ${r.count} 問作りました`);
       reload();
     } else if (action === 'open-external') await api['shell.openExternal']({url: el.dataset.url});
     else if (action === 'open-data-dir') await api['app.openDataDir']();
@@ -1181,7 +1170,7 @@ function openCourseMenu(id, x, y) {
     }
     if (course.lms_url) items.push(['lms', `${conn?.label || 'LMS'} で開く`]);
     const quizzes = state.data.quizzes?.[id] ?? [];
-    if (!state.data.quiz?.key?.set && !quizzes.length) items.push(['quiz', 'テストを作る…（作る AI を選ぶ）']);
+    if (!state.data.quiz?.key?.set && !quizzes.length) items.push(['quiz', 'クイズを作る…（AI を設定）']);
     items.push(['hide', 'ホームから外す']);
   }
   openMenu(course.name, items, x, y, (what) => {

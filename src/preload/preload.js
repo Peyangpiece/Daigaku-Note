@@ -37,6 +37,7 @@ const INVOKE = [
   'quiz.removeKey',
   'quiz.detectCli',
   'quiz.setEngine',
+  'quiz.ask',
   'quiz.settings',
   'quiz.generate',
   'quiz.fromMasks',

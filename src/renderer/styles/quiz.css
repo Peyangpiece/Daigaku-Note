@@ -348,3 +348,78 @@ textarea.input {
 [data-qz-use][hidden] {
   display: none;
 }
+
+/* 答えの画面：正解とあなたの答え・解説・誤答ごとの理由・質問 */
+.qcard__answers {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: var(--space-1) 0 0;
+}
+.qcard__answers dt {
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+}
+.qcard__answers dd {
+  margin: 0;
+  font-weight: 700;
+}
+.qcard__explain {
+  margin-top: var(--space-2);
+  padding-top: var(--space-1);
+  border-top: 1px dashed color-mix(in srgb, var(--paper-ink) 20%, transparent);
+}
+.qcard__explain h4 {
+  margin: 0 0 4px;
+  font-size: var(--fs-small);
+  color: var(--paper-ink-weak);
+}
+.qcard__explain > p {
+  margin: 0;
+}
+.qcard__why {
+  margin: var(--space-1) 0 0;
+  padding-left: 1.2em;
+  font-size: var(--fs-small);
+}
+.qcard__why li {
+  margin-bottom: 4px;
+}
+.qcard__why strong {
+  margin-right: 0.5em;
+}
+.qcard__why--mine strong {
+  text-decoration: underline wavy color-mix(in srgb, var(--danger-ink) 70%, transparent);
+}
+.qcard__ask {
+  margin-top: var(--space-2);
+  display: grid;
+  gap: 6px;
+}
+.qcard__ask-q,
+.qcard__ask-a {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-s);
+  white-space: pre-wrap;
+}
+.qcard__ask-q {
+  justify-self: end;
+  max-width: 85%;
+  background: color-mix(in srgb, var(--pop4) 30%, transparent);
+}
+.qcard__ask-a {
+  background: color-mix(in srgb, var(--paper-ink) 6%, transparent);
+}
+.qcard__ask-form {
+  display: flex;
+  gap: var(--space-1);
+}
+.qcard__ask-form .input {
+  flex: 1;
+}
+.qcard__ask-off {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-small);
+  color: var(--paper-ink-weak);
+}

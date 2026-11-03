@@ -7,7 +7,8 @@ import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
 import {checkQuestion, checkQuiz, choicesOf, findQuote, grade, parseNumber} from '../src/shared/quiz.js';
 import {scrub, pptxPages, unzip} from '../src/main/quiz/extract.js';
-import {SCHEMA, costOf, generateQuiz} from '../src/main/quiz/generate.js';
+import {SCHEMA, costOf, generateQuiz, whyOf} from '../src/main/quiz/generate.js';
+import {ASK_SCHEMA, askAboutQuestion, questionContext} from '../src/main/quiz/ask.js';
 import {createQuizService} from '../src/main/quiz/service.js';
 import {createCliClient} from '../src/main/quiz/cli.js';
 
@@ -428,4 +429,58 @@ test('このパソコンの Claude Code で作る：探した場所を覚え、�
   assert.equal(repo.aiUsageSummary().monthUsd, 0, 'Claude Code の分は費用に数えない');
   await rm(bin);
   assert.equal((await svc.keyInfo()).set, false, 'コマンドを消したら作れない');
+});
+
+test('解説：誤答ごとの「なぜ違うか」を o と同じ順で保存する（ないときは null）', async (t) => {
+  const {repo} = await setup(t);
+  const why = ['量産段階は原価維持・原価改善の段階', '販売後は原価企画の対象外', '決算は会計の手続き'];
+  const client = fakeClient([{json: {title: '原価企画', qs: [{...Q.choice, w: why}, Q.tf]}}]);
+  const r = await generateQuiz({repo, client}, {roundId: 'r3'});
+  const qs = repo.listQuestions({quizIds: [r.quizId]});
+  assert.deepEqual(JSON.parse(qs.find((q) => q.type === 'choice').why_json), why);
+  assert.equal(qs.find((q) => q.type === 'tf').why_json, null);
+  assert.ok(SCHEMA.properties.qs.items.required.includes('w'), '構造化出力でも必ず返させる');
+  assert.equal(whyOf({o: ['a', 'b'], w: ['x']}), JSON.stringify(['x', '']), 'o の数にそろえる');
+  assert.equal(whyOf({o: [], w: []}), null);
+});
+
+test('答えの画面で質問：問題・解説・根拠のページの本文と質問を送り、答えを返す。使った分は ask で記録', async (t) => {
+  const {repo} = await setup(t);
+  const gen = fakeClient([{json: {title: '原価企画', qs: [Q.choice, Q.tf]}}]);
+  const {quizId} = await generateQuiz({repo, client: gen}, {roundId: 'r3'});
+  const q = repo.listQuestions({quizIds: [quizId]}).find((x) => x.type === 'choice');
+  const client = fakeClient([{json: {answer: '量産段階は原価を守る・下げる段階だからです（p.1）。'}}]);
+  const r = await askAboutQuestion(
+    {repo, client},
+    {
+      questionId: q.id,
+      text: 'なぜ量産段階ではないの？',
+      mine: '量産段階',
+      history: [{q: '前の質問', a: '前の答え'}],
+      model: 'claude-sonnet-5-5'
+    }
+  );
+  assert.equal(r.answer, '量産段階は原価を守る・下げる段階だからです（p.1）。');
+  const sent = client.calls[0];
+  const body = sent.messages[0].content;
+  assert.match(body, /問題（choice）：目標原価を設定する段階/);
+  assert.match(body, /本人の答え：量産段階/);
+  assert.match(body, /\[p\.1\] 原価企画とは/, '根拠のページの本文');
+  assert.match(body, /質問：前の質問\n答え：前の答え/);
+  assert.match(body, /## 質問\nなぜ量産段階ではないの？/);
+  assert.deepEqual(sent.output_config.format.schema, ASK_SCHEMA);
+  const used = repo.db.prepare("SELECT COUNT(*) c FROM ai_usage WHERE purpose = 'ask'").get().c;
+  assert.equal(used, 1);
+  assert.equal(repo.aiUsageSummary().today, 1, '質問は作成の回数に数えない');
+  await assert.rejects(
+    askAboutQuestion(
+      {repo, client},
+      {questionId: q.id, text: 'x', model: 'claude-sonnet-5-5', limits: {perMonthUsd: 0}}
+    ),
+    /上限/
+  );
+  assert.equal(
+    questionContext({type: 'num', q: 'Q', a: '800', o_json: '{"unit":"円"}', n: 'N'}, null),
+    '問題（num）：Q\n正解：800 円\n解説：N'
+  );
 });

@@ -6,10 +6,12 @@ import {clozeQuizFromMasks} from '../quiz/cloze-local.js';
 import {str, id, bad, ids} from './common.js';
 
 export function register({handle, repo, log, quiz}) {
-  const parseQ = ({o_json, tags_json, ...q}) => {
+  const parseQ = ({o_json, tags_json, why_json, ...q}) => {
     const o = JSON.parse(o_json ?? '[]');
+    const why = JSON.parse(why_json ?? '[]');
     return {
       ...q,
+      why: Array.isArray(why) ? why : [], // 誤答ごとの「なぜ違うか」（o と同じ順。前の版の問題は空）
       o: Array.isArray(o) ? o : [],
       unit: Array.isArray(o) ? '' : (o.unit ?? ''),
       tags: JSON.parse(tags_json ?? '[]')
@@ -61,14 +63,29 @@ export function register({handle, repo, log, quiz}) {
     return {ok: true};
   });
 
-  handle('quiz.generate', ({roundIds}) => {
+  // AI に送る前に、選んでいる AI への今の版の同意があるか（前の版の記録には engine がない＝API キー）
+  const needConsent = () => {
     const consent = repo.getSetting('quiz.consent', null);
-    if (consent?.version !== AI_CONSENT_VERSION)
-      bad('AI に送る内容の説明が変わりました。設定 → クイズ で内容を確かめて同意し直してください');
-    // 同意は送り先ごと（前の版の記録には engine がない＝API キー）
-    if ((consent.engine ?? 'api') !== quiz.settings().engine)
-      bad('選んだ AI に送ることへの同意がありません。設定 → クイズ で同意してください');
+    if (consent?.version !== AI_CONSENT_VERSION || (consent.engine ?? 'api') !== quiz.settings().engine)
+      bad('AI に送る内容への同意が必要です（設定 → クイズ）');
+  };
+
+  handle('quiz.generate', ({roundIds}) => {
+    needConsent();
     return {queued: quiz.generate(ids(roundIds))};
+  });
+
+  // 答えの画面で、その問題について質問する。history はそれまでのやりとり（新しい 6 つまで）
+  handle('quiz.ask', ({questionId, text, mine, history}) => {
+    needConsent();
+    const qid = id(questionId) ?? bad('問題が不正です');
+    const t =
+      (str(String(text ?? '').trim(), 500) ?? bad('質問が長すぎます（500 文字まで）')) || bad('質問を入れてください');
+    const h = (Array.isArray(history) ? history.slice(-6) : []).map((x) => ({
+      q: String(x?.q ?? '').slice(0, 500),
+      a: String(x?.a ?? '').slice(0, 2000)
+    }));
+    return quiz.ask({questionId: qid, text: t, mine: mine == null ? null : String(mine).slice(0, 200), history: h});
   });
 
   // 文字隠しマーカーからの穴埋め（§11.3）：AI も API キーも使わない。同じ回のクイズがあれば版を上げる

@@ -4,6 +4,7 @@ import {schedule, reviewQueue, nextDue} from '../../shared/srs.js';
 import fs from 'node:fs';
 import {DEFAULT_MODEL, MODELS, friendlyAiError, generateQuiz} from './generate.js';
 import {CLI_ENGINES, ENGINES, createCliClient, detectClis} from './cli.js';
+import {askAboutQuestion} from './ask.js';
 
 const KEY = 'ai:anthropic';
 const err = (message) => Object.assign(new Error(message), {code: 'quiz-service'});
@@ -97,6 +98,27 @@ export function createQuizService({
       setState(roundId, {state: 'failed', message});
       notify('quiz.finished', {roundId, ok: false, message, detail: String(e?.message ?? e).slice(0, 300)});
       notify('state.changed', {kind: 'quiz'});
+    }
+  }
+
+  /** 答えの画面で、その問題について質問する（列には積まず、すぐ聞く）。戻りは {answer} */
+  async function ask({questionId, text, mine, history}) {
+    const s = settings();
+    try {
+      return await askAboutQuestion(
+        {repo, client: await client(), log},
+        {
+          questionId,
+          text,
+          mine,
+          history,
+          model: s.engine === 'codex' ? 'codex' : s.model,
+          limits: {perMonthUsd: s.perMonthUsd}
+        }
+      );
+    } catch (e) {
+      log(`[quiz] 質問に答えられませんでした：${e.code ?? ''} ${e.message}`);
+      throw err(friendlyAiError(e, await loadSdk().catch(() => null)));
     }
   }
 
@@ -202,6 +224,7 @@ export function createQuizService({
 
   return {
     generate,
+    ask,
     setKey,
     keyInfo,
     removeKey: () => secrets.remove(KEY),
