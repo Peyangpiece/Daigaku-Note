@@ -258,7 +258,12 @@ export class Repo {
            (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0) AS count,
            (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0 AND q.review IS NOT NULL) AS flagged,
            (SELECT COUNT(*) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS tries,
-           (SELECT SUM(a.ok) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS correct
+           (SELECT SUM(a.ok) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS correct,
+           (SELECT MAX(a.at) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS last_at,
+           (SELECT COUNT(DISTINCT a.question_id) FROM attempt a JOIN question q ON q.id = a.question_id
+              WHERE q.quiz_id = z.id AND q.deleted = 0) AS answered,
+           (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0
+              AND (SELECT a.ok FROM attempt a WHERE a.question_id = q.id ORDER BY a.at DESC LIMIT 1) = 0) AS wrong
          FROM quiz z JOIN round r ON r.id = z.round_id
          WHERE z.status != 'replaced' ORDER BY r.course_id, r.number`
       )
@@ -272,7 +277,12 @@ export class Repo {
            (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0) AS count,
            (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0 AND q.review IS NOT NULL) AS flagged,
            (SELECT COUNT(*) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS tries,
-           (SELECT SUM(a.ok) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS correct
+           (SELECT SUM(a.ok) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS correct,
+           (SELECT MAX(a.at) FROM attempt a JOIN question q ON q.id = a.question_id WHERE q.quiz_id = z.id) AS last_at,
+           (SELECT COUNT(DISTINCT a.question_id) FROM attempt a JOIN question q ON q.id = a.question_id
+              WHERE q.quiz_id = z.id AND q.deleted = 0) AS answered,
+           (SELECT COUNT(*) FROM question q WHERE q.quiz_id = z.id AND q.deleted = 0
+              AND (SELECT a.ok FROM attempt a WHERE a.question_id = q.id ORDER BY a.at DESC LIMIT 1) = 0) AS wrong
          FROM quiz z JOIN round r ON r.id = z.round_id
          WHERE r.course_id = ? AND z.status != 'replaced' ORDER BY r.number`
       )
