@@ -29,6 +29,9 @@ export function register({handle, ctx, repo}) {
     if (['normal', 'light', 'none'].includes(patch.rules)) repo.setSetting('ui.rules', patch.rules);
     if (typeof patch.experiments === 'boolean') repo.setSetting('experiments.makerPens', patch.experiments);
     if (typeof patch.notifications === 'boolean') repo.setSetting('ui.notifications', patch.notifications);
+    // PDF の編集画面で次に貼る付箋の色（v0.16.20。着せ替えの「PDF の付箋」の代わり）
+    if (typeof patch.fusenColor === 'string' && isHex(patch.fusenColor))
+      repo.setSetting('pdf.fusenColor', patch.fusenColor.toLowerCase());
     if (typeof patch.calendarDismiss === 'string' && /^[\w-]{1,40}$/.test(patch.calendarDismiss))
       repo.setSetting('calendar.dismissed', [
         ...new Set([...repo.getSetting('calendar.dismissed', []), patch.calendarDismiss])

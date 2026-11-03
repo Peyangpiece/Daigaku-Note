@@ -1,6 +1,7 @@
 // PDF の編集画面：付箋（ページの右の端から出る色の目印。一覧から押すとその場所へ）。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 // 付箋は貼りもの（stamp・type index）の注釈。v0.12.2 で「しおり」をここにまとめた（しおりは開いたときに付箋へ移す）
 import {esc, toast} from '../../ui-kit.js';
+import {state} from '../../store.js';
 import {api, INDEX_W, INDEX_H, INDEX_COLORS} from './shared.js';
 
 const LABEL_MAX = 12; // 付箋に書ける文字数（shared/annotation.js の INDEX_LABEL_MAX）
@@ -21,10 +22,31 @@ export const methods = {
       .sort((a, b) => a.page - b.page || parseFloat(a.el.style.top) - parseFloat(b.el.style.top));
   },
 
-  /** 新しい付箋の色：最後に選んだ色。まだなら着せ替えの付箋の色（標準なら赤） */
+  /** 新しい付箋の色：この画面で最後に選んだ色（設定に覚える。v0.16.20）。まだなら着せ替えの付箋の色（標準なら赤） */
   fusenColor() {
+    const saved = state.data?.settings?.fusenColor;
     const sk = this.skin?.bookmark?.color;
-    return (this.indexColor ??= sk && sk !== 'default' ? sk : INDEX_COLORS[0]);
+    return (this.indexColor ??= saved || (sk && sk !== 'default' ? sk : INDEX_COLORS[0]));
+  },
+
+  /** 次に貼る付箋の色を決めて覚える（次に PDF を開いたときもこの色） */
+  setFusenColor(color) {
+    this.indexColor = color;
+    if (state.data?.settings) state.data.settings.fusenColor = color;
+    api['settings.update']({patch: {fusenColor: color}}).catch(() => {});
+    this.renderBookmarks();
+  },
+
+  /** 貼ってある付箋の色を変える（取り消せる） */
+  recolorFusen(a, color) {
+    if (a.removed || a.style.color === color) return this.renderBookmarks();
+    const before = this.snap(a);
+    a.style = {...a.style, color};
+    this.applyStyle(a);
+    this.record(a.key, before, this.snap(a));
+    this.scheduleSave(a, 0);
+    this.recoloring = null;
+    this.renderBookmarks();
   },
 
   fusenSpec(color = this.fusenColor(), body = '') {
@@ -97,11 +119,19 @@ export const methods = {
       ? list
           .map(
             (a) => `<li class="bookmark-panel__item" data-bm="${esc(a.key)}">
-          <span class="index-pad__chip" style="--index: ${esc(a.style.color)}" aria-hidden="true"></span>
+          <button type="button" class="bookmark-panel__color" data-bm-action="color" aria-expanded="${this.recoloring === a.key}" title="色を変える" aria-label="この付箋の色を変える"><span class="index-pad__chip" style="--index: ${esc(a.style.color)}"></span></button>
           <button type="button" class="bookmark-panel__name" data-bm-action="jump" title="この付箋の場所へ（ダブルクリックで言葉を変える）">${esc(a.body || '（言葉なし）')}</button>
           <span class="muted bookmark-panel__page">p.${a.page}</span>
           <button type="button" class="bookmark-panel__tool" data-bm-action="rename" title="言葉を変える" aria-label="付箋の言葉を変える">✎</button>
           <button type="button" class="bookmark-panel__tool" data-bm-action="remove" title="はがす" aria-label="付箋をはがす">×</button>
+          ${
+            this.recoloring === a.key
+              ? `<span class="bookmark-panel__recolor" role="group" aria-label="この付箋の色">${INDEX_COLORS.map(
+                  (c) =>
+                    `<button type="button" class="index-pad__color" data-bm-recolor="${c}" style="--index: ${c}" aria-pressed="${c === a.style.color}" aria-label="${c} にする"></button>`
+                ).join('')}</span>`
+              : ''
+          }
         </li>`
           )
           .join('')
@@ -175,10 +205,15 @@ export const methods = {
     this.on(panel, 'click', (e) => {
       const c = e.target.closest('[data-fusen-color]');
       if (c && e.detail === 0) return this.addFusen(c.dataset.fusenColor); // キーボード：その色で貼る
+      const re = e.target.closest('[data-bm-recolor]');
+      if (re && which(e)) return this.recolorFusen(which(e), re.dataset.bmRecolor);
       const btn = e.target.closest('[data-bm-action]');
       const a = btn && which(e);
       if (!a) return;
-      if (btn.dataset.bmAction === 'jump') this.jumpToFusen(a);
+      if (btn.dataset.bmAction === 'color') {
+        this.recoloring = this.recoloring === a.key ? null : a.key;
+        this.renderBookmarks();
+      } else if (btn.dataset.bmAction === 'jump') this.jumpToFusen(a);
       else if (btn.dataset.bmAction === 'rename') this.startRename(a);
       else if (btn.dataset.bmAction === 'remove') {
         this.removeAnno(a);
@@ -191,10 +226,7 @@ export const methods = {
       if (!c) return;
       this.startCarry(e, this.fusenSpec(c.dataset.fusenColor), {
         ghost: () => this.indexGhost(c.dataset.fusenColor),
-        onTap: () => {
-          this.indexColor = c.dataset.fusenColor;
-          this.renderBookmarks();
-        }
+        onTap: () => this.setFusenColor(c.dataset.fusenColor)
       });
     });
     this.on(panel, 'dblclick', (e) => {

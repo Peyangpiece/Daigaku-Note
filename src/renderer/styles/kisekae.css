@@ -666,7 +666,6 @@
   justify-content: space-between;
   gap: 8px;
 }
-.ks-scenes,
 .ks-stagebar__undo,
 .ks-inspector__parts {
   display: flex;
@@ -730,22 +729,6 @@
   display: grid;
   gap: 18px;
   padding: 20px 20px 28px 88px;
-}
-.ks-stage--viewer {
-  aspect-ratio: 3 / 2;
-}
-.ks-pdf--stage {
-  overflow: visible;
-  pointer-events: auto;
-}
-.ks-pdfnotes {
-  position: absolute;
-  left: 8%;
-  bottom: 8%;
-  display: flex;
-  gap: 6px;
-  padding: 6px;
-  border-radius: var(--radius-m);
 }
 /* 押せる部分：乗せると点線で囲み、選んでいる部分は実線で囲む */
 .ks-stage [data-edit] {
@@ -1071,4 +1054,12 @@
   background: var(--card);
   color: var(--paper-ink);
   box-shadow: var(--card-shadow-hover);
+}
+
+/* 見本の場面の名前（選んだ部分に合わせて変わる。v0.16.20） */
+.ks-stagebar__scene {
+  font-size: var(--fs-small);
+}
+.ks-allkinds {
+  margin: 4px 0 12px;
 }
