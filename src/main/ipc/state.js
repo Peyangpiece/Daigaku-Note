@@ -119,6 +119,7 @@ export function register({handle, ctx, repo}) {
         experiments: repo.getSetting('experiments.makerPens', false), // 実験：既製品の見た目のペンをショップに出す（個人の試作）
         order: repo.getSetting('ui.order', {}) ?? {}, // 並べ替えた並び {範囲: [鍵]}（shared/arrange.js）
         stickyColors: repo.getSetting('ui.stickyColors', {}) ?? {}, // 付箋の色 {授業の id: {鍵: 1〜5}}
+        fusenColor: repo.getSetting('pdf.fusenColor', null), // PDF の編集画面で次に貼る付箋の色（最後に選んだ色）
         notifications: repo.getSetting('ui.notifications', true) !== false, // OS の通知（新しい資料・ログインの必要・クイズの完成・同期の失敗）
         calendarDismissed: repo.getSetting('calendar.dismissed', []), // ホームの「学年暦を入れる」案内を「この学期は入れない」にした学期の id
         openAtLogin: loginItem()

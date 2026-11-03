@@ -84,8 +84,6 @@ const INVOKE = [
   'sticker.update',
   'sticker.remove',
   'sticker.data',
-  'skin.export',
-  'skin.import',
   'stationery.purchase',
   'stationery.arrange',
   'stationery.model',
