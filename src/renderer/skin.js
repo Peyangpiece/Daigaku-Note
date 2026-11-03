@@ -1,6 +1,15 @@
 // 着せ替えをレンダラに当てる（SPEC-KISEKAE.md）。どのテンプレートが当たるかと色の計算は shared/skin.js。
 // ノートは html の data-note・data-margin と CSS 変数で、フォルダとテープは各カードの style で変える。シールの画像は main から data: URL でもらう
-import {BUILTIN_TEMPLATES, CLASSIC_ID, NOTE_GAPS, INK_LIGHT, darken, inkOn, resolveSkin} from '../shared/skin.js';
+import {
+  BUILTIN_TEMPLATES,
+  CLASSIC_ID,
+  NOTE_GAPS,
+  INK_LIGHT,
+  darken,
+  inkOn,
+  resolveSkin,
+  setColorFor
+} from '../shared/skin.js';
 import {builtinStickerUrl, isBuiltinSticker} from '../shared/stickers.js';
 
 /** 今が暗い表示か（設定のテーマ、または OS に合わせる） */
@@ -89,7 +98,7 @@ export function watchTheme(getData, onChange) {
 /** フォルダのカードの style（カード・タブ・文字の色、テープの色）と、テープの柄 */
 export function folderLook(course, skin, dark = isDark()) {
   const card = tone(skin.folder.card, 'card', dark);
-  const tab = tone(skin.folder.tab, 'tab', dark);
+  const tab = tone(setColorFor(skin.folder.tab, course), 'tab', dark);
   const vars = [];
   if (card) {
     const ink = inkOn(card);
@@ -100,7 +109,7 @@ export function folderLook(course, skin, dark = isDark()) {
     );
   }
   if (tab) vars.push(`--folder-tab: ${tab}`);
-  const tapeColor = skin.tape.color === 'course' ? `var(--c${course.color ?? 1})` : skin.tape.color;
+  const tapeColor = setColorFor(skin.tape.color, course);
   const pattern = skin.tape.pattern === 'course' ? course.tape_pattern || 'plain' : skin.tape.pattern;
   // 柄が画像のテープ：シールの素をくり返して貼る（画像がまだ届いていなければ色だけ）
   const image = pattern === 'image' && skin.tape.image ? stickerUrl(skin.tape.image) : '';

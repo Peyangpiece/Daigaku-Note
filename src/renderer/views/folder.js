@@ -100,7 +100,7 @@ export function renderFolder({data}, course) {
       ? `var(--pop${picked[sub]})`
       : sk.sticky.round === 'default'
         ? `var(--pop${roundColorIndex(i + 1) + 1})`
-        : sk.sticky.round[roundColorIndex(i + 1)];
+        : sk.sticky.round[roundColorIndex(i + 1, sk.sticky.round.length)];
   // 付箋の並び：最初の付箋（フォルダの直下）→ もとからある下のフォルダ（名前順）→ 足した付箋（足した順）。
   // ファイルのない下のフォルダ（足したばかりの付箋など）も付箋で出す
   const bySub = new Map(groups(list));

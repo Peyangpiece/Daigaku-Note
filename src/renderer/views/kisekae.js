@@ -19,6 +19,12 @@ import {
   isBuiltin,
   normalizeTemplate,
   FILE_KINDS,
+  SET_MAX,
+  SET_MODES,
+  SET_MODE_LABEL,
+  SET_WEEKDAYS,
+  TAB_WEEKDAY,
+  TAPE_WEEKDAY,
   FILE_KIND_LABEL,
   FIXED_PLACES,
   FILE_ART_ITEMS,
@@ -173,7 +179,7 @@ function galleryCard(data, t, course, current) {
 }
 
 // ---- 細かく直す：部品ごとの操作 ----
-function colorField(key, label, value, {allowDefault = true, allowCourse = false, recent = [], light = false} = {}) {
+function colorField(key, label, value, {allowDefault = true, recent = [], light = false} = {}) {
   const sw = (v, text, cls = '') =>
     `<button type="button" class="ks-sw ${cls}" data-ks="color" data-key="${key}" data-value="${v}" aria-pressed="${value === v}" title="${esc(text)}"${v.startsWith('#') ? ` style="--sw: ${v}"` : ''}>${v.startsWith('#') ? '' : esc(text)}</button>`;
   // 最近使った色（4 つまで）・今の色（候補になくても見せる）・候補
@@ -182,7 +188,6 @@ function colorField(key, label, value, {allowDefault = true, allowCourse = false
   ];
   return `<fieldset class="ks-field"><legend>${label}</legend><div class="ks-swatches">
     ${allowDefault ? sw('default', '標準', 'ks-sw--text') : ''}
-    ${allowCourse ? sw('course', '授業ごとの色', 'ks-sw--text') : ''}
     ${colors.map((c) => sw(c, c)).join('')}
     <label class="ks-sw ks-sw--pick" title="好きな色">＋<input type="color" data-ks-color="${key}" value="${value?.startsWith('#') ? value : '#ffffff'}" aria-label="${label}：好きな色" /></label>
   </div></fieldset>`;
@@ -214,11 +219,43 @@ function noteControls(data) {
 function folderControls(data) {
   const f = ui.draft.parts.folder;
   const recent = data.skin?.recent ?? [];
-  return `${colorField('folder.card', 'カードの色', f.card, {recent, light: true})}${colorField('folder.tab', 'タブの色', f.tab, {recent})}`;
+  return `${colorField('folder.card', 'カードの色', f.card, {recent, light: true})}${setControls('folder.tab', 'タブの色', f.tab, {allowDefault: true})}`;
+}
+// 色の組の既定（曜日ごとの 5 色。カスタムに切り替えたときもこの 5 色から）
+const SET_DEFAULTS = {'folder.tab': TAB_WEEKDAY, 'tape.color': TAPE_WEEKDAY};
+/** 色の組（タブ・テープ）：標準（タブだけ）・カスタム・曜日ごとを選び、色を 1 つずつ変える。カスタムは色を消して数を減らせる */
+function setControls(key, label, value, {allowDefault = false} = {}) {
+  const mode = value === 'default' ? 'default' : value.mode;
+  const modes = [...(allowDefault ? ['default'] : []), ...SET_MODES];
+  const head = `<fieldset class="ks-field"><legend>${label}</legend>
+    <div class="ks-choices">${modes
+      .map(
+        (m) =>
+          `<button type="button" class="ks-choice" data-ks="set-mode" data-key="${key}" data-mode="${m}" aria-pressed="${mode === m}"><span>${SET_MODE_LABEL[m]}</span></button>`
+      )
+      .join('')}</div>`;
+  if (mode === 'default') return `${head}<p class="muted ks-hint2">テーマの色のまま</p></fieldset>`;
+  const weekday = mode === 'weekday';
+  const n = value.colors.length;
+  const sw = (c, i) =>
+    `<span class="ks-sw-named"><label class="ks-sw ks-sw--pick" style="--sw: ${c}" title="${weekday ? `${SET_WEEKDAYS[i]}曜` : `${i + 1} つ目`}"><input type="color" data-ks-set="${key}" data-i="${i}" value="${c}" aria-label="${label}：${weekday ? `${SET_WEEKDAYS[i]}曜` : `${i + 1} つ目`}" /></label>${
+      weekday
+        ? `<span>${SET_WEEKDAYS[i]}</span>`
+        : n > 1
+          ? `<button type="button" class="ks-sw-del" data-ks="set-del" data-key="${key}" data-i="${i}" title="この色を消す" aria-label="${i + 1} つ目の色を消す">×</button>`
+          : '<span></span>'
+    }</span>`;
+  return `${head}<p class="muted ks-hint2">${
+    weekday ? '授業の曜日の色。土・日と曜日のない授業は、この 5 色を順に使う' : 'フォルダごとに、この色を順に使う'
+  }</p><div class="ks-swatches">${value.colors.map(sw).join('')}${
+    !weekday && n < SET_MAX
+      ? `<button type="button" class="ks-sw ks-sw--text" data-ks="set-add" data-key="${key}" title="色を足す（${SET_MAX} 色まで）">＋</button>`
+      : ''
+  }</div></fieldset>`;
 }
 function tapeControls(data) {
   const t = ui.draft.parts.tape;
-  return `${colorField('tape.color', 'テープの色', t.color, {allowDefault: false, allowCourse: true, recent: data.skin?.recent ?? []})}
+  return `${setControls('tape.color', 'テープの色', t.color)}
     <fieldset class="ks-field"><legend>柄</legend>${choice('tape.pattern', t.pattern, TAPE_PATTERNS, TAPE_PATTERN_LABEL)}</fieldset>
     ${
       t.pattern === 'image'
@@ -318,19 +355,35 @@ function fileControls(data) {
     </fieldset>`;
 }
 /** 色の並び（付箋の色）。1 つずつ色の選び器で変える */
-function colorRow(key, list, defaults, label, names = null, hint = '') {
+function colorRow(key, list, defaults, label, names = null, hint = '', {remove = false} = {}) {
   const colors = list === 'default' ? defaults : list;
   const name = (i) => names?.[i] ?? `${i + 1} つ目`;
-  const sw = (c, i) =>
+  const pick = (c, i) =>
     `<label class="ks-sw ks-sw--pick" style="--sw: ${c}" title="${esc(name(i))}"><input type="color" data-ks-list="${key}" data-i="${i}" value="${c}" aria-label="${label}：${esc(name(i))}" /></label>`;
+  // 色を消せる並び：色の下に ×（1 色は残す）
+  const sw = (c, i) =>
+    remove
+      ? `<span class="ks-sw-named">${pick(c, i)}${colors.length > 1 ? `<button type="button" class="ks-sw-del" data-ks="list-del" data-key="${key}" data-i="${i}" title="この色を消す" aria-label="${i + 1} つ目の色を消す">×</button>` : '<span></span>'}</span>`
+      : pick(c, i);
   return `<fieldset class="ks-field"><legend>${label}</legend>${hint ? `<p class="muted ks-hint2">${hint}</p>` : ''}<div class="ks-swatches">
     ${colors.map((c, i) => (names ? `<span class="ks-sw-named">${sw(c, i)}<span>${esc(names[i])}</span></span>` : sw(c, i))).join('')}
+    ${remove && colors.length < defaults.length ? `<button type="button" class="ks-sw ks-sw--text" data-ks="list-add" data-key="${key}" title="色を足す（${defaults.length} 色まで）">＋</button>` : ''}
     <button type="button" class="ks-sw ks-sw--text" data-ks="set" data-key="${key}" data-value="default" aria-pressed="${list === 'default'}">元の色に戻す</button>
   </div></fieldset>`;
 }
 function stickyControls() {
   const st = ui.draft.parts.sticky;
-  return colorRow('sticky.round', st.round, POP, '付箋とコメントの色');
+  return colorRow(
+    'sticky.round',
+    st.round,
+    POP,
+    '付箋とコメントの色',
+    null,
+    '第 1 回から順に使う。色を消すと、残りの色をくり返す',
+    {
+      remove: true
+    }
+  );
 }
 
 // ---- 見本（ステージ）：場面ごとの見本の上で、部分を押して直し、シールをドラッグで貼って動かす ----
@@ -410,7 +463,8 @@ const KIND_FILE = {
 const SCENE_FILES = Object.values(KIND_FILE);
 function courseScene(data, {first, note, skin1}) {
   const sk = skin1;
-  const colors = sk.sticky.round === 'default' ? POP : sk.sticky.round;
+  const list = sk.sticky.round === 'default' ? POP : sk.sticky.round;
+  const colors = POP.map((_, i) => list[i % list.length]);
   const find = (place, k) => sk.stickers.find((st) => st.place === place && (!k || st.kind === k));
   const file = (name) => {
     const kind = kindOf(name);
@@ -605,6 +659,10 @@ const setPath = (obj, key, value) => {
   const [a, b] = key.split('.');
   obj[a][b] = value;
 };
+const getPath = (obj, key) => {
+  const [a, b] = key.split('.');
+  return obj[a][b];
+};
 async function applyTemplate(data, templateId) {
   const prev = globalId(data);
   const r = await api['skin.apply']({templateId: templateId || null});
@@ -762,7 +820,38 @@ document.addEventListener('click', async (e) => {
       return navigate(galleryRoute());
     }
     if (ks === 'part') selectPart(el.dataset.part);
-    else if (ks === 'file-all') {
+    else if (ks === 'set-mode') {
+      // 色の組の切り替え：曜日ごと・カスタムは、今の色を引き継ぐ（曜日ごとは 5 色そろっているときだけ）
+      const key = el.dataset.key;
+      const cur = getPath(ui.draft.parts, key);
+      const defaults = SET_DEFAULTS[key];
+      const colors = cur && typeof cur === 'object' ? cur.colors : defaults;
+      remember();
+      const m = el.dataset.mode;
+      setPath(
+        ui.draft.parts,
+        key,
+        m === 'default'
+          ? 'default'
+          : m === 'weekday'
+            ? {mode: 'weekday', colors: colors.length === SET_MAX ? [...colors] : [...defaults]}
+            : {mode: 'custom', colors: [...colors]}
+      );
+    } else if (ks === 'set-del' || ks === 'set-add') {
+      const set = getPath(ui.draft.parts, el.dataset.key);
+      remember();
+      if (ks === 'set-del' && set.colors.length > 1) set.colors.splice(Number(el.dataset.i), 1);
+      else if (ks === 'set-add' && set.colors.length < SET_MAX)
+        set.colors.push(SET_DEFAULTS[el.dataset.key].find((c) => !set.colors.includes(c)) ?? set.colors.at(-1));
+    } else if (ks === 'list-del' || ks === 'list-add') {
+      const [a, b] = el.dataset.key.split('.');
+      const list = ui.draft.parts[a][b] === 'default' ? [...POP] : [...ui.draft.parts[a][b]];
+      remember();
+      if (ks === 'list-del' && list.length > 1) list.splice(Number(el.dataset.i), 1);
+      else if (ks === 'list-add' && list.length < POP.length)
+        list.push(POP.find((c) => !list.includes(c)) ?? list.at(-1));
+      ui.draft.parts[a][b] = list;
+    } else if (ks === 'file-all') {
       // 今の種類の色と紙の色を、すべての種類に当てる
       const {file, fileBody} = ui.draft.parts;
       remember();
@@ -855,8 +944,9 @@ document.addEventListener('change', async (e) => {
   if (!inKisekae(el)) return;
   if (!ui.draft) return;
   if (el.id === 'ks-name') ui.draft.name = el.value;
-  else if (el.dataset.ksList) {
+  else if (el.dataset.ksList || el.dataset.ksSet) {
     setListColor(el);
+    pickStart = null;
     refresh();
   } else if (el.dataset.ksColor) {
     setPath(ui.draft.parts, el.dataset.ksColor, el.value.toLowerCase());
@@ -884,7 +974,7 @@ document.addEventListener('change', async (e) => {
 document.addEventListener('input', (e) => {
   const el = e.target;
   if (!inKisekae(el) || !ui.draft) return;
-  if (el.dataset.ksList) {
+  if (el.dataset.ksList || el.dataset.ksSet) {
     if (!pickStart) ((pickStart = true), remember());
     setListColor(el);
     repaintPreview();
@@ -906,6 +996,10 @@ let pickStart = null; // 色の選び器・つまみを動かし始めたら 1 �
 let rangeStart = null;
 /** 色の並びの 1 つを変える（はじめの色のままなら、はじめの色を写してから） */
 function setListColor(el) {
+  if (el.dataset.ksSet) {
+    getPath(ui.draft.parts, el.dataset.ksSet).colors[Number(el.dataset.i)] = el.value.toLowerCase();
+    return;
+  }
   const [a, b] = el.dataset.ksList.split('.');
   const defaults = POP;
   const list = ui.draft.parts[a][b] === 'default' ? [...defaults] : [...ui.draft.parts[a][b]];

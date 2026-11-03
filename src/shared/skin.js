@@ -64,8 +64,42 @@ export const BOOKMARK_SHAPE_LABEL = {tag: 'タグ', ribbon: 'リボン', round: 
 export const ROUND_COLORS = 5; // 付箋の色（授業ページの回の付箋は第 1 回から順に、6 回目からはまた 1 色目。PDF のメモはこの 5 色から選ぶ）
 // 回の付箋のはじめの色（tokens.css の --pop1〜5 と同じ）
 export const ROUND_DEFAULTS = ['#ffe14d', '#ff9ec4', '#6fe3b8', '#7cccff', '#ffad5c'];
-/** 回の付箋の色の番号（0〜4）：第 1 回から順に。「その他」（第 0 回）は 1 色目 */
-export const roundColorIndex = (number) => (number > 0 ? (number - 1) % ROUND_COLORS : 0);
+/** 回の付箋の色の番号：第 1 回から順に、色の数（n。1〜5）でくり返す。「その他」（第 0 回）は 1 色目 */
+export const roundColorIndex = (number, n = ROUND_COLORS) => (number > 0 ? (number - 1) % Math.max(1, n) : 0);
+
+// ---- 色の組（マスキングテープの色・フォルダのタブの色。v0.16.21）----
+// {mode: 'weekday', colors: [月, 火, 水, 木,金]}：授業の曜日の色（5 色ちょうど）。土・日・曜日のない授業は、授業の色の番号の順で 5 色から
+// {mode: 'custom', colors: [1〜5 色]}：授業の色の番号の順に、選んだ色をくり返す。色を消して数を減らせる
+// タブは 'default'（テーマの色のまま）も。前の版の値：#rrggbb は 1 色のカスタム、course（授業ごとの色）は曜日ごと
+export const SET_MAX = 5;
+export const SET_WEEKDAYS = ['月', '火', '水', '木', '金'];
+export const SET_MODES = ['custom', 'weekday'];
+export const SET_MODE_LABEL = {default: '標準', custom: 'カスタム', weekday: '曜日ごと'};
+export const TAPE_WEEKDAY = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9'];
+export const TAB_WEEKDAY = ['#ffe7a3', '#ffd3cf', '#c6eedb', '#cfe2ff', '#e4d8ff'];
+const hexList = (v, min, max) =>
+  Array.isArray(v) && v.length >= min && v.length <= max && v.every(isHex) ? v.map((c) => c.toLowerCase()) : null;
+function colorSet(v, weekday, fallback, {allowDefault = false, course = false} = {}) {
+  if (allowDefault && v === 'default') return 'default';
+  if (isHex(v)) return {mode: 'custom', colors: [v.toLowerCase()]};
+  if (course && v === 'course') return {mode: 'weekday', colors: [...weekday]};
+  if (v && typeof v === 'object') {
+    if (v.mode === 'weekday') return {mode: 'weekday', colors: hexList(v.colors, SET_MAX, SET_MAX) ?? [...weekday]};
+    const c = v.mode === 'custom' && hexList(v.colors, 1, SET_MAX);
+    if (c) return {mode: 'custom', colors: c};
+  }
+  return typeof fallback === 'object' ? structuredClone(fallback) : fallback;
+}
+/** 色の組から、その授業の色（#rrggbb）。文字の値（#rrggbb・default・フォルダごとの色）はそのまま */
+export function setColorFor(set, course) {
+  if (!set || typeof set !== 'object') return set;
+  if (set.mode === 'weekday') {
+    const w = SET_WEEKDAYS.indexOf(course?.weekday);
+    if (w >= 0) return set.colors[w];
+  }
+  const k = Number.isInteger(course?.color) && course.color > 0 ? course.color - 1 : 0;
+  return set.colors[k % set.colors.length];
+}
 export const SHAPES = ['cut', 'square', 'round', 'circle', 'framed'];
 export const SHAPE_LABEL = {cut: '形どおり', square: 'そのまま', round: '角丸', circle: '丸', framed: '白いふち付き'};
 export const CLASSIC_ID = 'builtin-classic';
@@ -92,7 +126,7 @@ const text = (v, max, fallback = '') =>
 export const DEFAULT_PARTS = {
   note: {type: 'ruled', paper: 'default', line: 'default', gap: 'normal', margin: true},
   folder: {card: 'default', tab: 'default'},
-  tape: {color: 'course', pattern: 'course', image: null},
+  tape: {color: {mode: 'weekday', colors: TAPE_WEEKDAY}, pattern: 'course', image: null},
   file: Object.fromEntries(FILE_KINDS.map((k) => [k, 'default'])),
   // 資料のイラストの紙の色（default は白。テーマ・置く場所によらず同じ）
   fileBody: Object.fromEntries(FILE_KINDS.map((k) => [k, 'default'])),
@@ -103,9 +137,8 @@ export const DEFAULT_PARTS = {
   bookmark: {color: 'default', shape: 'tag'}
 };
 
-// 色の並び：default（はじめの色）か、#rrggbb を n 個（足りなければ default）
-const colorList = (v, n) =>
-  Array.isArray(v) && v.length === n && v.every(isHex) ? v.map((c) => c.toLowerCase()) : 'default';
+// 色の並び：default（はじめの色）か、#rrggbb を 1〜n 個（v0.16.21 から色を消して数を減らせる）
+const colorList = (v, n) => hexList(v, 1, n) ?? 'default';
 
 // 資料のイラストの中身（種類の印・拡張子のラベル）：元の位置からのずれ（イラストの座標。幅 54・高さ 66）と、出すかどうか
 export const FILE_ART_ITEMS = ['mark', 'label'];
@@ -126,7 +159,7 @@ function tape(t) {
   let pattern = oneOf(t.pattern, [...TAPE_PATTERNS, 'course'], d.pattern);
   const image = pattern === 'image' && isAssetId(t.image) ? t.image : null;
   if (pattern === 'image' && !image) pattern = 'plain';
-  return {color: color(t.color, d.color, {course: true}), pattern, image};
+  return {color: colorSet(t.color, TAPE_WEEKDAY, d.color, {course: true}), pattern, image};
 }
 
 /** 部品の値を決まった範囲に収める（知らない項目は捨て、範囲外は既定値） */
@@ -143,7 +176,7 @@ export function normalizeParts(raw = {}) {
       gap: oneOf(n.gap, Object.keys(NOTE_GAPS), d.note.gap),
       margin: typeof n.margin === 'boolean' ? n.margin : d.note.margin
     },
-    folder: {card: color(f.card, d.folder.card), tab: color(f.tab, d.folder.tab)},
+    folder: {card: color(f.card, d.folder.card), tab: colorSet(f.tab, TAB_WEEKDAY, d.folder.tab, {allowDefault: true})},
     tape: tape(t),
     file: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.file?.[k], 'default')])),
     fileBody: Object.fromEntries(FILE_KINDS.map((k) => [k, color(raw.fileBody?.[k], 'default')])),

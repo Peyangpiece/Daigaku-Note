@@ -45,7 +45,15 @@ test('テンプレートの形：知らない項目は捨て、範囲外は既�
   assert.equal('evil' in t, false);
   assert.deepEqual(t.parts.note, {type: 'ruled', paper: 'default', line: '#abcdef', gap: 'wide', margin: true});
   assert.deepEqual(t.parts.folder, {card: '#ffffff', tab: 'default'}, 'タブに course は使えない');
-  assert.deepEqual(t.parts.tape, {color: 'course', pattern: 'check', image: null});
+  assert.deepEqual(
+    t.parts.tape,
+    {
+      color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+      pattern: 'check',
+      image: null
+    },
+    '前の版の「授業ごとの色」は曜日ごとに'
+  );
   assert.deepEqual(
     t.stickers,
     [{place: 'folder', asset: SHA, x: 1, y: 0, scale: 2, rotate: 180, z: 3}],
@@ -96,10 +104,14 @@ test('どのテンプレートが当たるか：アプリ全体で 1 つ。授�
   assert.equal(resolveSkin(all, 'gone').template.id, CLASSIC_ID, '消えたテンプレートはクラシックに');
 });
 
-test('クラシックは今の見た目のまま（テーマの色・授業ごとのテープ）', () => {
+test('クラシック：テーマの色・曜日ごとのテープ', () => {
   const c = BUILTIN_TEMPLATES.find((t) => t.id === CLASSIC_ID);
   assert.deepEqual(c.parts.folder, {card: 'default', tab: 'default'});
-  assert.deepEqual(c.parts.tape, {color: 'course', pattern: 'course', image: null});
+  assert.deepEqual(c.parts.tape, {
+    color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+    pattern: 'course',
+    image: null
+  });
   assert.equal(c.parts.note.paper, 'default');
 });
 
@@ -154,12 +166,12 @@ test('シールの場所：フォルダ・ホームの余白・授業ページ�
 
 test('テープの柄に画像：画像がなければ無地に戻す', () => {
   assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: SHA}}}).parts.tape, {
-    color: 'course',
+    color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
     pattern: 'image',
     image: SHA
   });
   assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: 'x'}}}).parts.tape, {
-    color: 'course',
+    color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
     pattern: 'plain',
     image: null
   });
@@ -319,4 +331,52 @@ test('0011：授業ごとのテンプレートを外し、アプリ全体の 1 �
     ['a', 'b', 'c'].map((id) => ({id, skin_template_id: null, skin_auto: 0, sticker_mode: 'global'}))
   );
   assert.equal(db.prepare('SELECT COUNT(*) n FROM skin_template').get().n, 1, '自作のテンプレートは残す');
+});
+
+test('色の組（テープ・タブ）：曜日ごと・カスタム。前の版の値を引き継ぎ、授業ごとの色を返す', async () => {
+  const {setColorFor, TAB_WEEKDAY, TAPE_WEEKDAY} = await import('../src/shared/skin.js');
+  const p = (folder, tape) => normalizeTemplate({parts: {folder, tape}}).parts;
+  assert.deepEqual(
+    p({tab: '#ABCDEF'}).folder.tab,
+    {mode: 'custom', colors: ['#abcdef']},
+    '前の版の 1 色はカスタム 1 色'
+  );
+  assert.equal(p({tab: 'default'}).folder.tab, 'default');
+  assert.equal(p({tab: 'course'}).folder.tab, 'default', 'タブに授業ごとの色はない');
+  assert.deepEqual(
+    p({tab: {mode: 'weekday', colors: ['#111111']}}).folder.tab,
+    {mode: 'weekday', colors: TAB_WEEKDAY},
+    '曜日ごとは 5 色ちょうど'
+  );
+  assert.deepEqual(p({}, {color: {mode: 'custom', colors: ['#111111', '#222222']}}).tape.color.colors, [
+    '#111111',
+    '#222222'
+  ]);
+  assert.deepEqual(
+    p({}, {color: {mode: 'custom', colors: []}}).tape.color,
+    {mode: 'weekday', colors: TAPE_WEEKDAY},
+    '空のカスタムは既定に'
+  );
+  assert.equal(
+    p({}, {color: {mode: 'custom', colors: Array(6).fill('#111111')}}).tape.color.mode,
+    'weekday',
+    '6 色以上は受け付けない'
+  );
+  const wk = {mode: 'weekday', colors: ['#000001', '#000002', '#000003', '#000004', '#000005']};
+  assert.equal(setColorFor(wk, {weekday: '水', color: 1}), '#000003', '曜日の色');
+  assert.equal(setColorFor(wk, {weekday: '土', color: 7}), '#000002', '土曜は授業の色の番号の順');
+  assert.equal(setColorFor(wk, {color: null}), '#000001');
+  const cu = {mode: 'custom', colors: ['#00000a', '#00000b']};
+  assert.equal(setColorFor(cu, {weekday: '月', color: 3}), '#00000a', 'カスタムは授業の色の番号で順に');
+  assert.equal(setColorFor(cu, {color: 2}), '#00000b');
+  assert.equal(setColorFor('#123456', {color: 2}), '#123456', '文字の値（フォルダごとの色）はそのまま');
+});
+
+test('付箋の色：色を消して 1〜5 色にできる。残りの色をくり返す', () => {
+  const r = normalizeTemplate({parts: {sticky: {round: ['#111111', '#222222', '#333333']}}}).parts.sticky.round;
+  assert.deepEqual(r, ['#111111', '#222222', '#333333']);
+  assert.equal(roundColorIndex(4, 3), 0);
+  assert.equal(roundColorIndex(5, 3), 1);
+  assert.equal(roundColorIndex(3, 1), 0);
+  assert.equal(normalizeTemplate({parts: {sticky: {round: []}}}).parts.sticky.round, 'default');
 });

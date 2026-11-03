@@ -210,7 +210,7 @@ function roundNote(round, list, course, today, quizzes = {}) {
     .join(' ');
   // 回の付箋の色：第 1 回から順に 5 色（着せ替えで変えていなければ --pop1〜5）。角にはシールを 1 枚
   const sk = skinOf(state.data, course);
-  const i = roundColorIndex(round.number);
+  const i = roundColorIndex(round.number, sk.sticky.round === 'default' ? undefined : sk.sticky.round.length);
   // 右クリック →「色を変える」で選んだ色があれば、それを使う
   const picked = state.data?.settings?.stickyColors?.[course.id]?.[round.id];
   const noteColor = picked

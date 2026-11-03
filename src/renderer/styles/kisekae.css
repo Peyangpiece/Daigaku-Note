@@ -1063,3 +1063,20 @@
 .ks-allkinds {
   margin: 4px 0 12px;
 }
+
+/* 色の組・付箋の色：色の下の ×（その色を消して数を減らす。v0.16.21） */
+.ks-sw-del {
+  min-width: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  cursor: pointer;
+}
+.ks-sw-del:hover {
+  background: color-mix(in srgb, var(--paper-ink) 10%, transparent);
+  color: var(--paper-ink);
+}
