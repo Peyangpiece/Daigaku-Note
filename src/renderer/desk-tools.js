@@ -121,7 +121,9 @@ const POUCH_FLAT = {
   timer:
     '<svg viewBox="0 0 56 40" aria-hidden="true"><circle cx="28" cy="22" r="14" fill="#fff" stroke="#3b4252" stroke-width="2.5"/><rect x="25" y="3" width="6" height="4" rx="1" fill="#3b4252"/><path d="M28 22V13" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/><path d="M28 22L34 26" stroke="#3b4252" stroke-width="2" stroke-linecap="round"/></svg>'
 };
-const POUCH_ART = Object.fromEntries(Object.entries(POUCH_FLAT).map(([k, svg]) => [k, pouchArt(`tool-${k}`, svg)]));
+export const POUCH_ART = Object.fromEntries(
+  Object.entries(POUCH_FLAT).map(([k, svg]) => [k, pouchArt(`tool-${k}`, svg)])
+);
 
 /**
  * 四隅のうち、ポーチ・シール帳・素材の HTML（筆箱は使う側が作る）

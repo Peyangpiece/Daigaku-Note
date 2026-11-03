@@ -164,7 +164,7 @@ export function renderSettings({data}, route = '/settings') {
         ]
           .map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`)
           .join('')}</select></label>
-        <div class="about__row" style="margin-top: var(--space-2)"><button class="btn btn--small" data-action="nav" data-route="/kisekae">ノートの着せ替え</button><button class="btn btn--small" data-action="nav" data-route="/fudebako">ペン（筆箱）</button></div>
+        <div class="about__row" style="margin-top: var(--space-2)"><button class="btn btn--small" data-action="nav" data-route="/kisekae">ノートの着せ替え</button><button class="btn btn--small" data-action="nav" data-route="/fudebako">ペン（持ち物）</button></div>
       </section>
       <section class="card"><h3>通知と起動</h3>
         <label style="display:block"><input type="checkbox" id="st-notify" ${s.notifications === false ? '' : 'checked'}> 新しい資料・クイズの完成・同期の失敗を通知する</label>

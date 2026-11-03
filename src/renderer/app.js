@@ -119,7 +119,7 @@ function head() {
   chip.hidden = !(route === '/' || route.startsWith('/review'));
   chip.innerHTML = `${COIN}<b>${balance.toLocaleString('ja-JP')}</b> pt`;
   chip.setAttribute('aria-label', `ポイント（${pt(balance)}）。押すと、もらい方と履歴を見られます`);
-  chip.title = 'ポイント：復習のクイズに正解したり、毎日開いたりするとたまります。筆箱のショップで使えます';
+  chip.title = 'ポイント：復習のクイズに正解したり、毎日開いたりするとたまります。持ち物のショップで使えます';
 }
 /** ポイントの印（筆箱のショップの札と同じ） */
 const COIN =
