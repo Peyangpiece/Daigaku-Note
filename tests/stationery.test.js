@@ -488,3 +488,25 @@ test('公式のボールペンの書き味は 3 段階（硬い＝筆圧なし�
   assert.ok(th('pen-black-05') < th('pen-sakura-05'), '普通より滑らかのほうが筆圧で大きく変わる');
   assert.ok(itemOf('pen-even-black-05').even, '硬いは筆圧なしの線（even）');
 });
+
+test('有料のペンの書き味：品の特徴に合わせる', async () => {
+  const {heldPen, penFeel} = await import('../src/shared/stationery.js');
+  const f = (id, r = null) => penFeel(itemOf(id), r);
+  const caran = f('maker-caran-849-black'),
+    parker = f('maker-parker-jotter'),
+    lamy = f('maker-lamy-2000'),
+    jet = f('maker-jetstream-black');
+  const craft = itemOf('maker-craftlab-004');
+  const gel = f('maker-craftlab-004', craft.refills[0]);
+  // カランダッシュ：低粘度ほど滑らず（手ぶれ補正・抜きが短い）、太さは均一（th 小）、線は濃い
+  assert.ok(caran.st < jet.st && caran.te < jet.te, 'カランダッシュは低粘度より筆記抵抗がある');
+  assert.ok(caran.th < f('pen-black-05').th && caran.w > 1, 'インクが均一でしっかりした線');
+  assert.ok(!caran.gr && !caran.sw, 'カスレ・クセなし');
+  // パーカー：低粘度で非常に滑らか（カランダッシュより滑る）
+  assert.ok(parker.st > caran.st && parker.te > caran.te);
+  // LAMY 2000：スイートスポット
+  assert.ok(lamy.sw > 0 && heldPen(itemOf('maker-lamy-2000')).feel.sw === lamy.sw, '線に残す');
+  // クラフトラボ 004：顔料ゲル。細字のカリカリ（手ごたえ・短い入り抜き）、濃い
+  assert.ok(gel.gr > 0 && gel.ts < caran.ts && gel.w > 1);
+  assert.equal(f('maker-craftlab-004', craft.refills[2]).name, '鉛筆らしい', 'シャープの芯は別');
+});

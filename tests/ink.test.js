@@ -144,3 +144,36 @@ test('書き味（feel）：前の版の線は同じ形。書き味を変える�
   assert.deepEqual(feelStyle({th: 0.3, ts: 1, te: 1}, 'even'), {}, '筆圧なしの線には入れない');
   assert.ok(streamlineOf({st: 0.3}, 'mouse') > streamlineOf({st: 0.3}, 'pen'), '指・マウスは手ぶれ補正が強め');
 });
+
+test('書き味のクセ：スイートスポット（向きで細くなる）と紙をとらえる手ごたえ（ゆらぎ）。上下を返しても同じ太さ', async () => {
+  const {cleanFeel, strokeOutline, strokeOptions} = await import('../src/shared/ink.js');
+  const line = (dx, dy) => Array.from({length: 20}, (_, i) => [i * dx, i * dy, 0.5]);
+  const widthAt = (pts, opts) => {
+    const o = strokeOutline(pts, opts);
+    const n = (o.length - 16) / 2; // 左・終わりの半円（7 点）・右・始まりの半円（7 点）
+    const i = Math.floor(n / 2);
+    const l = o[i],
+      r = o[o.length - 8 - i];
+    return Math.hypot(l[0] - r[0], l[1] - r[1]);
+  };
+  const base = {size: 2, thinning: 0, taperStart: 0, taperEnd: 0};
+  const v = widthAt(line(0, 3), {...base, sweet: 0.3});
+  const h = widthAt(line(3, 0), {...base, sweet: 0.3});
+  assert.ok(Math.abs(v - 2) < 0.05, '縦の線は太さのまま');
+  assert.ok(Math.abs(h - 2 * 0.7) < 0.05, '横の線は sweet の割合だけ細い');
+  assert.ok(Math.abs(widthAt(line(0, -3), {...base, sweet: 0.3}) - v) < 1e-9, '上下を返しても同じ');
+  const g = strokeOutline(line(3, 0), {...base, grain: 0.1});
+  const plain = strokeOutline(line(3, 0), base);
+  assert.notDeepEqual(g, plain, 'ゆらぎで太さが少し変わる');
+  assert.deepEqual(strokeOutline(line(3, 0), {...base, grain: 0.1}), g, 'ゆらぎは毎回同じ');
+  assert.deepEqual(
+    cleanFeel({th: 0.3, ts: 1, te: 1, sw: 0.9, gr: 0}),
+    {th: 0.3, ts: 1, te: 1, sw: 0.5},
+    'sw は 0.5 まで、0 は持たない'
+  );
+  assert.equal(
+    strokeOptions(1, {pressure: 'even', feel: {th: 0.3, ts: 1, te: 1, sw: 0.3}}).sweet,
+    undefined,
+    '筆圧なしはクセもなし'
+  );
+});
