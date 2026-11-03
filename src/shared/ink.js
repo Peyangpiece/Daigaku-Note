@@ -46,7 +46,10 @@ export function boundsOf(points, width = 0) {
  * size は線の太さ（筆圧 0.5 のとき）、thinning は筆圧で太さが変わる強さ（0〜1）。
  * 戻り値は輪郭の点 [[x, y], …]（左側を行き、終わりを丸く回って、右側を戻る）
  */
-export function strokeOutline(points, {size = 1, thinning = 0.35, taperStart = 0, taperEnd = 0} = {}) {
+export function strokeOutline(
+  points,
+  {size = 1, thinning = 0.35, taperStart = 0, taperEnd = 0, sweet = 0, grain = 0} = {}
+) {
   if (!points.length) return [];
   const radius = (p) => Math.max(size * 0.08, (size / 2) * (1 + thinning * (p - 0.5) * 2));
   // 長さ（書き始め・書き終わりを細くするのに使う）
@@ -56,11 +59,23 @@ export function strokeOutline(points, {size = 1, thinning = 0.35, taperStart = 0
   // 押しただけ（点）：丸
   if (points.length === 1 || total < size * 0.3) return circle(points[0], radius(points[0][2]));
   const ease = (t) => 1 - (1 - t) * (1 - t);
+  // スイートスポット（sweet。v0.16.24）：ペン先の当たりのよい向き（縦の線）から外れるほど細くなる。
+  // 縦の成分で決めるので、上下を返した座標（メモの手書き・書き出し）でも同じ形。前後の点の向きをならして、急に変わらない
+  const upright = points.map((_, i) => {
+    const a = points[Math.max(0, i - 2)],
+      b = points[Math.min(points.length - 1, i + 2)];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    return len ? Math.abs(b[1] - a[1]) / len : 1;
+  });
+  // 紙をとらえる細かな手ごたえ（grain。v0.16.24）：線の長さに沿って決まった小さな太さのゆらぎ（毎回同じ形）
+  const texture = (t) => (Math.sin(t * 1.7) + Math.sin(t * 4.3 + 1.3) * 0.6) / 1.6;
   const rs = points.map((pt, i) => {
     let r = radius(pt[2]);
     if (taperStart > 0) r *= 0.35 + 0.65 * ease(Math.min(1, along[i] / taperStart));
     if (taperEnd > 0) r *= 0.35 + 0.65 * ease(Math.min(1, (total - along[i]) / taperEnd));
-    return r;
+    if (sweet > 0) r *= 1 - sweet * (1 - upright[i]);
+    if (grain > 0) r *= 1 + grain * texture(along[i] / Math.max(0.2, size));
+    return sweet > 0 || grain > 0 ? Math.max(size * 0.08, r) : r; // 前の版の線の形は変えない
   });
   const left = [],
     right = [];
@@ -132,15 +147,21 @@ export function outlinePath(outline, {flipY = false} = {}) {
  * FEEL_DEFAULT は前の版の線と同じ（feel のない線はこれで描く）
  */
 export const FEEL_DEFAULT = {th: 0.35, ts: 1.2, te: 1.5, st: 0.2};
-const FEEL_RANGE = {th: [0, 0.9], ts: [0, 5], te: [0, 5], st: [0, 0.8]};
-/** 書き味を決まった範囲に収める（形が違えば null）。保存する 3 つ（th・ts・te）だけを返す */
+// sw：スイートスポット（当たりのよい向きから外れたときに細くなる割合）、gr：紙をとらえる手ごたえ（太さのゆらぎ）。どちらも 0 なら持たない
+const FEEL_RANGE = {th: [0, 0.9], ts: [0, 5], te: [0, 5], st: [0, 0.8], sw: [0, 0.5], gr: [0, 0.3]};
+const clampFeel = (k, v) => round2(Math.min(FEEL_RANGE[k][1], Math.max(FEEL_RANGE[k][0], v)));
+/** 書き味を決まった範囲に収める（形が違えば null）。保存するもの（th・ts・te と、あれば sw・gr）だけを返す */
 export function cleanFeel(f) {
   if (!f || typeof f !== 'object') return null;
   const out = {};
   for (const k of ['th', 'ts', 'te']) {
     const v = Number(f[k]);
     if (!Number.isFinite(v)) return null;
-    out[k] = round2(Math.min(FEEL_RANGE[k][1], Math.max(FEEL_RANGE[k][0], v)));
+    out[k] = clampFeel(k, v);
+  }
+  for (const k of ['sw', 'gr']) {
+    const v = Number(f[k]);
+    if (Number.isFinite(v) && clampFeel(k, v) > 0) out[k] = clampFeel(k, v);
   }
   return out;
 }
@@ -159,9 +180,16 @@ export function strokeOptions(width, {pressure = true, feel = null} = {}) {
   if (pressure === 'even') return {size: width, thinning: 0, taperStart: 0, taperEnd: 0};
   const f = cleanFeel(feel) ?? FEEL_DEFAULT;
   // 指・マウス：筆圧の代わりに速さで変えるので、筆圧の効きは弱め、入り・抜きは長め（前の版の 0.25・2 倍・3 倍と同じ割合）
+  const extra = {sweet: f.sw ?? 0, grain: f.gr ?? 0};
   return pressure
-    ? {size: width, thinning: f.th, taperStart: width * f.ts, taperEnd: width * f.te}
-    : {size: width, thinning: f.th * (0.25 / 0.35), taperStart: width * f.ts * (2 / 1.2), taperEnd: width * f.te * 2};
+    ? {size: width, thinning: f.th, taperStart: width * f.ts, taperEnd: width * f.te, ...extra}
+    : {
+        size: width,
+        thinning: f.th * (0.25 / 0.35),
+        taperStart: width * f.ts * (2 / 1.2),
+        taperEnd: width * f.te * 2,
+        ...extra
+      };
 }
 
 /** 保存した線の書き味（style.pressure）→ strokePath の pressure。'even'（筆圧なし）・false（筆圧の取れない道具）・true */
