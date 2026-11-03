@@ -293,7 +293,7 @@ export const methods = {
         multi.refills
           .map(
             (r) =>
-              `<button type="button" class="viewer-bar__refill" data-refill="${r.id}" aria-pressed="${r.id === cur}" style="--swatch: ${r.color}" title="${esc(r.name)} ${r.mm} mm">${esc(r.name)}</button>`
+              `<button type="button" class="viewer-bar__refill" data-refill="${r.id}" aria-pressed="${r.id === cur}" style="--swatch: ${r.color}" title="${esc(r.name)}">${esc(r.name)}</button>`
           )
           .join('');
       if (rg.innerHTML !== html) rg.innerHTML = html;

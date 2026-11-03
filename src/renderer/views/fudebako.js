@@ -32,9 +32,9 @@ import {
   PEN_SIZES,
   POUCH_INFO,
   caseArt,
-  defaultSize,
   isGear,
   itemOf,
+  feelLabel,
   listed,
   priceLabel,
   shopSeries,
@@ -84,13 +84,13 @@ function sample(item) {
 /** 品の説明（色・太さ） */
 function spec(item) {
   if (item.refills)
-    return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => `${esc(r.name)} ${r.mm}`).join('・')}）・替え芯は ${esc(item.refill)} 規格`;
-  if (item.experimental) return `${esc(item.maker)}・${item.line ? esc(item.line) : `${item.mm} mm`}`;
+    return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => esc(r.name)).join('・')}）・替え芯は ${esc(item.refill)} 規格`;
+  if (item.experimental) return esc(item.maker);
   if (item.type === 'case') return CASE_INFO[item.style]?.short ?? '';
   if (item.type === 'pouch') return POUCH_INFO[item.style]?.short ?? '';
   if (item.type === 'calc' || item.type === 'timer') return esc(item.note ?? '');
-  if (item.pencil) return `芯 ${item.mm} mm・${item.lead}`;
-  if (item.type === 'pen') return item.even ? `${item.mm} mm・筆圧なし（太さが一定）` : `${item.mm} mm`;
+  if (item.pencil) return `芯 ${item.lead}`;
+  if (item.type === 'pen') return feelLabel(item) ? `書き味：${feelLabel(item)}` : '';
   if (item.type === 'marker') return item.thick ? '太め' : 'ふつう';
   if (item.type === 'hider') return '赤シートで隠れる色';
   return '';
@@ -307,12 +307,14 @@ function seriesCard(series, s) {
   const tier = tierOf(it.price);
   const sub = [it.maker ?? '大学ノート'];
   if (series.items.length > 1) sub.push(it.name);
+  if (series.items.length > 1 && feelLabel(it))
+    sub.push(`書き味：${feelLabel(it)}`); // 公式のボールペン（3 段階）
   else if (it.refills) sub.push(`2&1・替え芯 ${it.refill} 規格`);
   else if (it.type === 'case') sub.push(CASE_INFO[it.style]?.short ?? '');
   else if (it.type === 'pouch') sub.push(POUCH_INFO[it.style]?.short ?? '');
   else if (it.note) sub.push(it.note);
-  else if (it.pencil) sub.push(`芯 ${it.mm} mm・${it.lead}`);
-  else if (it.type === 'pen') sub.push(it.even ? `${it.mm} mm・筆圧なし` : `${it.mm} mm`);
+  else if (it.pencil) sub.push(`芯 ${it.lead}`);
+  else if (feelLabel(it)) sub.push(`書き味：${feelLabel(it)}`);
   else if (it.type === 'marker') sub.push(it.thick ? '太め' : 'ふつう');
   else if (it.type === 'hider') sub.push('赤シートで隠れる');
   return `<article class="shop-card shop-card--${tier.id}${owned ? ' is-owned' : ''}" data-series="${esc(series.id)}">
@@ -333,12 +335,7 @@ function matches(series, q) {
     series.name,
     series.maker,
     TYPE_LABEL[series.type],
-    ...series.items.flatMap((it) => [
-      it.name,
-      it.mm ? `${it.mm} mm ${it.mm}mm` : '',
-      it.art === 'model' ? '3d' : '',
-      it.refill ?? ''
-    ])
+    ...series.items.flatMap((it) => [it.name, feelLabel(it) ?? '', it.art === 'model' ? '3d' : '', it.refill ?? ''])
   ]
     .join(' ')
     .toLowerCase();
@@ -404,7 +401,7 @@ function shop(s) {
     ${hero(s)}
     <div class="shop-toolbar" role="search">
       <div class="shop-toolbar__row">
-        <label class="shop-search">${ICON.search}<input id="shop-q" type="search" value="${esc(f.q)}" placeholder="ペンやメーカーの名前でさがす（例：0.38、サラサ、ジェット）" aria-label="文房具をさがす" autocomplete="off" /></label>
+        <label class="shop-search">${ICON.search}<input id="shop-q" type="search" value="${esc(f.q)}" placeholder="ペンやメーカーの名前でさがす（例：DN-2、滑らか、サラサ、ジェット）" aria-label="文房具をさがす" autocomplete="off" /></label>
         <label class="shop-sort"><span class="sr-only">並び替え</span><select id="shop-sort" data-shop="sort">${Object.entries(
           SORTS
         )
@@ -468,19 +465,24 @@ function detail(s, id) {
     ]);
     rows.push(['替え芯', `${esc(it.refill)} 規格`]);
   } else if (it.pencil) {
-    rows.push(['芯', `${it.mm} mm・${it.lead}（線は黒鉛の灰色）`]);
+    rows.push(['芯', `${it.lead}（線は黒鉛の灰色）`]);
     rows.push(['しくみ', 'ノック式の製図用。細い金属のパイプ・アヤ目のローレットのグリップ・硬度の窓']);
   } else if (it.type === 'pen') {
-    rows.push(['字幅', `${it.mm} mm（はじめの太さは ${defaultSize(it)} mm）`]);
-    if (it.even)
+    // 公式のボールペン（v0.16.23）：書き味は 3 段階（硬い＝筆圧なし・普通・滑らか）
+    if (feelLabel(it))
       rows.push([
         '書き味',
-        '筆圧なし：ペンタブ・スタイラスの筆圧や書く速さで太さが変わらず、どこも同じ太さの線になります（書き始め・書き終わりも細くなりません）'
+        it.even
+          ? '硬い（筆圧なし）：ペンタブ・スタイラスの筆圧や書く速さで太さが変わらず、どこも同じ太さの線になります（書き始め・書き終わりも細くなりません）'
+          : `${feelLabel(it)}（3 段階：硬い・普通・滑らか）`
       ]);
   }
   // 書くペン（v0.16.22）：太さは 0.3・0.5・0.7 から選べる
   if (it.type === 'pen') {
-    rows.push(['太さ', `${PEN_SIZES.join('・')} mm から選べます（PDF の編集画面でペンを持つと、上の帯に出ます）`]);
+    rows.push([
+      '太さ',
+      `${PEN_SIZES.join('・')} mm から選べます（試し書きと、PDF の編集画面でペンを持ったときの上の帯で）`
+    ]);
   }
   if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
   else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
@@ -493,7 +495,7 @@ function detail(s, id) {
     ? `<ul class="fb-refills">${it.refills
         .map(
           (r) =>
-            `<li><span>${esc(r.name)} ${r.mm} mm</span><svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><path fill="${r.color}" d="${strokePath(wave(6, 40), r.width * 1.6)}"/></svg></li>`
+            `<li><span>${esc(r.name)}</span><svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><path fill="${r.color}" d="${strokePath(wave(6, 40), r.width * 1.6)}"/></svg></li>`
         )
         .join('')}</ul>`
     : sample(it);

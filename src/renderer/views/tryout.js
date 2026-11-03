@@ -1,6 +1,6 @@
 // ショップの詳細ページの「試し書き」（SPEC §15）。お店に置いてある試し書きの紙のように、罫線のある白い正方形の付箋に書ける。
 // 付箋は木のメモトレー（縁を残して彫ったくぼみ）に載せてある。
-// ボールペン：白紙の付箋に、ペンの色・太さ・書き味（筆圧で太さが変わる。shared/ink.js）で書く。
+// ボールペン：白紙の付箋に、ペンの色・太さ・書き味（筆圧で太さが変わる。shared/ink.js）で書く。太さは 0.3・0.5・0.7 から選べる。
 // マーカー・文字隠しペン：付箋の真ん中に「大学ノート」と印字してあり、その上に引ける。
 // 赤シート：文字隠しペンと、赤シートで消える色（赤・橙・桃）のボールペンでは、付箋の横に置く（shared/stationery.js の needsRedSheet）。
 //   ドラッグで動かして付箋に重ねると、重なったところだけ「赤シートを通した見え方」の写し（.ts-seen）に切り替わる。
@@ -11,7 +11,7 @@
 // 付箋の右下はめくれていて、押すか左上へ引くと、はがれて下の新しい紙になる。書いた線はこの画面を開いている間だけ覚える（保存しない）
 import {esc} from '../ui-kit.js';
 import {createCapture, drawMode, streamlineOf, strokePath} from '../../shared/ink.js';
-import {TOOL_TYPES, fadesUnderRedSheet, heldPen, itemOf, needsRedSheet} from '../../shared/stationery.js';
+import {PEN_SIZES, TOOL_TYPES, fadesUnderRedSheet, heldPen, itemOf, needsRedSheet} from '../../shared/stationery.js';
 
 const SIZE = 300; // 付箋の座標（75mm 角の付箋を 1 = 0.25mm で）
 const RULE = {top: 38, gap: 28}; // 罫線の位置（7mm おき）
@@ -24,7 +24,7 @@ const PEEL_MS = 450;
 // 品ごとの書いた線と選んだ芯（この画面を開いている間だけ。描き直しても消えない）
 const notes = new Map();
 const noteOf = (id) => {
-  if (!notes.has(id)) notes.set(id, {ink: [], refill: null});
+  if (!notes.has(id)) notes.set(id, {ink: [], refill: null, size: null});
   return notes.get(id);
 };
 let sheetAt = {x: 0, y: 0}; // 赤シートを動かした量（px）
@@ -32,8 +32,8 @@ let sheetAt = {x: 0, y: 0}; // 赤シートを動かした量（px）
 /** 書く線の色・太さ・書き方。多機能ペンは選んだ芯（シャープも） */
 function inkOf(item) {
   if (item.type === 'pen') {
-    // 太さは品のはじめの太さ、書き味は型番のもの（PDF の編集画面と同じ。shared/stationery.js の heldPen）
-    const h = heldPen(item, noteOf(item.id).refill);
+    // 太さは試し書きで選んだ太さ（はじめは品のはじめの太さ）、書き味は型番のもの（PDF の編集画面と同じ。shared/stationery.js の heldPen）
+    const h = heldPen(item, noteOf(item.id).refill, noteOf(item.id).size);
     return {kind: 'pen', color: h.color, width: h.width * PEN_SCALE, feel: h.feel};
   }
   if (item.type === 'marker') return {kind: 'line', color: item.color, width: item.width * MARKER_SCALE};
@@ -91,6 +91,14 @@ export function tryout(item) {
         })
         .join('')}</div>`
     : '';
+  // 太さ（ペンだけ）：0.3・0.5・0.7 を切り替えて書ける
+  const size = item.type === 'pen' ? heldPen(item, note.refill, note.size).size : null;
+  const sizes = size
+    ? `<div class="ts-refills ts-sizes" role="group" aria-label="太さ">${PEN_SIZES.map(
+        (s) =>
+          `<button type="button" class="shop-chip${s === size ? ' is-on' : ''}" data-try="size" data-id="${s}" aria-pressed="${s === size}">${s} mm</button>`
+      ).join('')}</div>`
+    : '';
   const fading = item.refills?.filter((r) => !r.sharp && fadesUnderRedSheet(r.color)).map((r) => esc(r.name));
   const what =
     item.type === 'hider'
@@ -101,7 +109,7 @@ export function tryout(item) {
   requestAnimationFrame(syncAll); // 描き直したあと、赤シートが付箋に重なっていれば写しを出す
   return `<section class="fb-try" data-try-box="${esc(item.id)}" aria-label="試し書き">
     <h3 class="fb-detail__sub">試し書き</h3>
-    ${refills}
+    ${refills}${sizes}
     <div class="ts-desk${sheet ? ' ts-desk--sheet' : ''}">
       <div class="ts-tray" aria-hidden="true"><div class="ts-tray__well"></div></div>
       <div class="ts-pad">
@@ -311,9 +319,9 @@ document.addEventListener('click', (e) => {
   const box = b.closest('[data-try-box]');
   if (b.dataset.try === 'peel') {
     if (e.detail === 0) peel(box); // キーボード（Enter・スペース）。ポインタは pointerup で済ませている
-  } else if (b.dataset.try === 'refill') {
-    noteOf(box.dataset.tryBox).refill = b.dataset.id;
-    for (const c of box.querySelectorAll('[data-try="refill"]')) {
+  } else if (b.dataset.try === 'refill' || b.dataset.try === 'size') {
+    noteOf(box.dataset.tryBox)[b.dataset.try] = b.dataset.id; // 書く芯・太さ（次に書く線から）
+    for (const c of box.querySelectorAll(`[data-try="${b.dataset.try}"]`)) {
       const on = c === b;
       c.classList.toggle('is-on', on);
       c.setAttribute('aria-pressed', String(on));
