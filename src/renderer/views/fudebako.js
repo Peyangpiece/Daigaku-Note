@@ -201,7 +201,7 @@ function mine(s) {
       const on = ui.slot === i;
       return `<div class="fb-slot${on ? ' is-on' : ''}${it ? '' : ' is-empty'}">
         <button type="button" class="fb-slot__pick" data-fb="slot" data-i="${i}" aria-pressed="${on}" title="${i + 1} 本目${it ? `：${esc(it.name)}` : '（空き）'}">
-          <span class="fb-slot__num">${i + 1}</span>${it ? toolArt(it, {label: false}) : '<span class="muted">空き</span>'}
+          <span class="fb-slot__num">${i + 1}</span>${it ? toolArt(it, {label: false, flat: true}) : '<span class="muted">空き</span>'}
         </button>
         ${it ? `<button type="button" class="fb-slot__out" data-fb="out" data-i="${i}" title="筆箱から出す" aria-label="${i + 1} 本目を筆箱から出す">×</button>` : ''}
       </div>`;
@@ -216,7 +216,11 @@ function mine(s) {
         .map((it) => {
           const where = s.slots.indexOf(it.id);
           return `<div class="fb-card${where >= 0 ? ' is-in' : ''}">
-            <div class="fb-card__art">${art(it)}</div>
+            <div class="fb-card__art">${
+              isGear(it)
+                ? art(it)
+                : `<button type="button" class="fb-card__pick" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${toolArt(it, {label: false, flat: true})}</button>`
+            }</div>
             <div class="fb-card__name">${esc(it.name)}</div>
             <div class="muted fb-card__spec">${spec(it)}</div>
             ${sample(it)}
@@ -319,7 +323,7 @@ function seriesCard(series, s) {
   else if (it.type === 'hider') sub.push('赤シートで隠れる');
   return `<article class="shop-card shop-card--${tier.id}${owned ? ' is-owned' : ''}" data-series="${esc(series.id)}">
     ${ribbons(it)}
-    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it, {shot: true})}</button>
+    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it, {flat: true})}</button>
     <button type="button" class="shop-card__name" data-action="nav" data-route="${detailRoute(it)}">${esc(series.name)}</button>
     <div class="muted shop-card__spec">${sub.map(esc).join('・')}</div>
     <div class="shop-card__foot">${priceTag(it, owned)}${dots(series, it)}</div>
@@ -546,7 +550,7 @@ const rowSpec = (it) =>
   [it.experimental ? '' : (it.maker ?? '大学ノート'), spec(it) || typeLabel(it)].filter(Boolean).join('・');
 const orderRow = (it, {remove = false} = {}) =>
   `<li class="shop-row">
-    <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it)}</button>
+    <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it, {flat: true})}</button>
     <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${rowSpec(it)}</div></div>
     <div class="shop-row__price">${priceLabel(it)}</div>
     ${remove ? `<button type="button" class="btn btn--small btn--quiet" data-shop="remove" data-id="${esc(it.id)}" aria-label="${esc(it.name)}をカートから外す">外す</button>` : ''}
@@ -647,7 +651,7 @@ function orderPage(s, id) {
               : swapButtons(s, it);
       }
       return `<li class="shop-row">
-        <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it)}</button>
+        <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it, {flat: true})}</button>
         <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${esc(it.maker ?? '大学ノート')}</div></div>
         <div class="shop-row__price">${cost(x)}</div>
         <div class="shop-row__act">${act}</div>

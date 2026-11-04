@@ -514,3 +514,12 @@ test('有料のペンの書き味：品の特徴に合わせる', async () => {
   assert.ok(kaweco.st > caran.st && kaweco.te > caran.te, '滑らか');
   assert.ok(!kaweco.gr && !kaweco.sw && kaweco.th < f('pen-black-05').th, '安定');
 });
+
+test('一覧のペンの絵（flat）：3D モデルを光なしで描く 2D の絵。影の楕円を描かない（v0.16.25）', () => {
+  const svg = toolArt(itemOf('maker-lamy-2000'), {flat: true});
+  assert.match(svg, /data-flat-art="all"/, '高級の品も平らな絵');
+  assert.match(svg, /data-model="lamy-2000"/);
+  assert.doesNotMatch(svg, /<ellipse/, '影なし');
+  assert.doesNotMatch(svg, /data-model-shot/, '斜めから照らした切り抜きではない');
+  assert.match(toolArt(itemOf('pen-black-05')), /<ellipse/, 'ほかの所（PDF の編集画面の筆箱など）は前のまま');
+});

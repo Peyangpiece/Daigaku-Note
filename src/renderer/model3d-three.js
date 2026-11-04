@@ -92,10 +92,14 @@ function glassify(obj) {
  * 光を使わない平らな塗り（2D の絵）で fn を描く：材質を、色と模様（map）だけで塗る材質に一時的に替える。
  * 形・部品・色・印字は 3D と同じで、陰影・映り込み・つや・影がない。トーンマッピングも外し、色をそのまま出す
  */
-function withFlat(root, fn) {
+function withFlat(root, fn, {outline = 0} = {}) {
   const swaps = [];
+  const hulls = [];
+  const meshes = [];
   root.traverse((o) => {
-    if (!o.isMesh || !o.material) return;
+    if (o.isMesh && o.material) meshes.push(o);
+  });
+  for (const o of meshes) {
     const m = o.material;
     const flat = new THREE.MeshBasicMaterial({
       color: m.color ? m.color.clone() : new THREE.Color(1, 1, 1),
@@ -107,7 +111,29 @@ function withFlat(root, fn) {
     });
     swaps.push([o, m, flat]);
     o.material = flat;
-  });
+    // 輪郭（outline。持ち物・ショップの一覧の 2D の絵。v0.16.25）：部品ごとに、法線の向きに少しふくらませた裏面を、
+    // その部品の色を暗くした色で塗る（線の太さはモデルの大きさに対して決まるので、縮めて見ても消えない）。
+    // 光・陰影ではなく、イラストの線。同じ色の部品が重なっても（軸の上のクリップなど）形が分かる
+    if (outline > 0 && o.geometry?.attributes?.normal && !m.transparent) {
+      const ink = (m.color ? m.color.clone() : new THREE.Color(1, 1, 1)).lerp(new THREE.Color(0, 0, 0), 0.55);
+      const hm = new THREE.MeshBasicMaterial({color: ink, side: THREE.BackSide});
+      // 世界の座標での太さにする（部品の拡大率で割る）
+      const s = new THREE.Vector3();
+      o.getWorldScale(s);
+      const w = outline / Math.max(1e-6, (Math.abs(s.x) + Math.abs(s.y) + Math.abs(s.z)) / 3);
+      hm.onBeforeCompile = (sh) => {
+        sh.vertexShader = sh.vertexShader.replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>\ntransformed += normalize(normal) * ${w.toFixed(6)};`
+        );
+      };
+      hm.customProgramCacheKey = () => `hull-${w.toFixed(6)}`;
+      const hull = new THREE.Mesh(o.geometry, hm);
+      hull.renderOrder = -1;
+      o.add(hull);
+      hulls.push([o, hull, hm]);
+    }
+  }
   const g = gl();
   const tone = g.toneMapping;
   const shadows = g.shadowMap.enabled;
@@ -121,6 +147,10 @@ function withFlat(root, fn) {
     for (const [o, m, f] of swaps) {
       o.material = m;
       f.dispose();
+    }
+    for (const [o, hull, hm] of hulls) {
+      o.remove(hull);
+      hm.dispose();
     }
   }
 }
@@ -290,7 +320,7 @@ function load(id, item = null) {
  * 横から描いた画像（data URL の PNG）。ペンは stationery.js の絵の viewBox（200×28）と同じ比率で真横から。
  * ペンケースは 200×80 で、斜め上から（ふたや上のファスナーも見える）。外接箱が画像に収まる範囲を写す
  */
-export async function snapshot(id, {w = 1600, h = 224, item = null, flat = false} = {}) {
+export async function snapshot(id, {w = 1600, h = 224, item = null, flat = false, outline = false} = {}) {
   const m = await load(id, item);
   const g = gl();
   g.setSize(w, h, false);
@@ -325,7 +355,8 @@ export async function snapshot(id, {w = 1600, h = 224, item = null, flat = false
     cam.lookAt(0, 0, 0);
   }
   m.ground.visible = false;
-  if (flat) withFlat(m.scene, () => g.render(m.scene, cam));
+  // 輪郭の太さ：写す幅（ペンは約 1.04）の 0.3% ほど
+  if (flat) withFlat(m.scene, () => g.render(m.scene, cam), {outline: outline ? 0.0032 : 0});
   else g.render(m.scene, cam);
   m.ground.visible = true;
   return g.domElement.toDataURL('image/png');

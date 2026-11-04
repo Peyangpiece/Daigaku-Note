@@ -950,10 +950,16 @@ const METAL = (id) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
  * ボールペンはノック式：金属のペン先・透けた先の部品・すべり止めのグリップ・軸・金属のクリップ・ノック。
  * 軸の色・グリップ（accent）・インクの色（ペン先とグリップの下の輪）が品ごとに変わる
  */
-export function toolArt(item, {label = true, shot = false} = {}) {
+/**
+ * 道具の絵。flat（v0.16.25。持ち物・ショップの一覧）：3D モデルを真横から、光・陰影・影なしの平らな塗りで描いた 2D の絵
+ * （形・部品・色・印字はモデルのまま。renderer/model3d.js の flatFor）。下の影（楕円）も描かない
+ */
+export function toolArt(item, {label = true, shot = false, flat = false} = {}) {
   const title = label ? `<title>${esc(item.name)}</title>` : '';
   const g = `st-${item.id}`; // グラデーションの id（品ごと）
   const open = `<svg class="st-art st-art--${item.type === 'pen' ? 'pen' : 'marker'}" viewBox="0 0 200 28" aria-hidden="${label ? 'false' : 'true'}" role="img">${title}`;
+  if (item.art === 'model' && flat)
+    return `${open.replace('<svg ', `<svg data-model="${esc(item.model)}" data-item="${esc(item.id)}" data-flat-art="all" `)}${SHOT_IMG}</svg>`;
   if (item.art === 'model')
     return `${open.replace('<svg ', `<svg data-model="${esc(item.model)}" data-item="${esc(item.id)}"${shot ? ' data-model-shot="1"' : ''} `)}${shot ? SHOT_IMG : modelArt()}</svg>`;
   if (item.type === 'pen') {
