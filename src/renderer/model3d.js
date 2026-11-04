@@ -23,14 +23,19 @@ const plainArt = (item, opts) => (isGear(item) ? caseArt({...item, art: null}) :
 
 /**
  * 平らな 2D の絵で描くか：PDF の編集画面（[data-flat-art] の中）では、光のない平らな絵にする（3D と同じ形・色）。
- * プレミアムの品（値段帯が「高級」の品）だけは 3D のまま
+ * プレミアムの品（値段帯が「高級」の品）だけは 3D のまま。data-flat-art="all"（持ち物・ショップの一覧。v0.16.25）は高級の品も平らな絵
  */
-const flatFor = (el, item) =>
-  !!el?.closest?.('[data-flat-art]') && !(item?.price && tierOf(item.price).id === 'premium');
+const flatFor = (el, item) => {
+  const at = el?.closest?.('[data-flat-art]');
+  if (!at) return false;
+  return at.dataset.flatArt === 'all' || !(item?.price && tierOf(item.price).id === 'premium');
+};
 
 const snapshot = (id, item, svg) => {
   const flat = flatFor(svg, item);
-  const key = `${id}|${item?.id ?? ''}|${flat ? 'flat' : '3d'}`;
+  // 持ち物・ショップの一覧（data-flat-art="all"）の平らな絵には、部品の輪郭を描く（同じ色の部品が重なっても形が分かる）
+  const outline = flat && svg?.closest?.('[data-flat-art]')?.dataset.flatArt === 'all';
+  const key = `${id}|${item?.id ?? ''}|${flat ? (outline ? 'line' : 'flat') : '3d'}`;
   if (!snaps.has(key)) {
     // 絵の縦横比に合わせる：ペンケースは 200×80、消しゴムは 64×28（どちらも斜め上から）、ペンは 200×28（真横から）
     const vb = svg?.viewBox?.baseVal;
@@ -38,7 +43,7 @@ const snapshot = (id, item, svg) => {
       vb && vb.width && Math.abs(vb.width / vb.height - 200 / 28) > 0.01
         ? {w: 1200, h: Math.round((1200 * vb.height) / vb.width)}
         : {};
-    const p = loadThree().then((m) => m.snapshot(id, {item, flat, ...size}));
+    const p = loadThree().then((m) => m.snapshot(id, {item, flat, outline, ...size}));
     p.catch(() => snaps.delete(key));
     snaps.set(key, p);
   }

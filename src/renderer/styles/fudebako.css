@@ -711,24 +711,28 @@ button.fb-card {
   box-shadow: var(--card-shadow);
   color: var(--paper-ink);
   --stage-bg: radial-gradient(ellipse at 50% 60%, #ffffff, #f4f1ea);
+  --stage-flat: #f6f3ed;
 }
 .shop-card--daily {
   border-color: #ead3a0;
   background: linear-gradient(135deg, #fffaf0, #fdebd3);
   color: #2b2b2b;
   --stage-bg: radial-gradient(ellipse at 50% 60%, #fffdf8, #f7eedc);
+  --stage-flat: #fbf3e4;
 }
 .shop-card--fine {
   border-color: #d9b45a;
   background: linear-gradient(135deg, #fdf7e4, #f2dfa9);
   color: #2b2b2b;
   --stage-bg: radial-gradient(ellipse at 50% 60%, #fffcf3, #f6ead0);
+  --stage-flat: #faf1dc;
 }
 .shop-card--premium {
   border-color: #c9a24d;
   background: linear-gradient(135deg, #2b2f3a, #4a4f5e);
   color: var(--cream);
   --stage-bg: radial-gradient(ellipse at 50% 60%, #6a7080, #3b404b);
+  --stage-flat: #535866;
 }
 .shop-card--daily .muted,
 .shop-card--fine .muted {
@@ -1156,4 +1160,33 @@ button.fb-card {
 }
 .fb-pouch-top h3 {
   margin: 0 0 4px;
+}
+
+/* 持ち物の札のペン（v0.16.25）：3D モデルを真横から光なしで描いた平らな絵。押すと詳細ページ */
+.fb-card__pick {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 72px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  cursor: pointer;
+}
+.fb-card__pick:hover {
+  background: color-mix(in srgb, var(--paper-ink) 5%, transparent);
+}
+.fb-card__art .fb-card__pick .st-art {
+  height: auto;
+  max-height: 56px;
+}
+
+/* ペンの札（v0.16.25）：3D モデルを光なしで描いた平らな 2D の絵。台も照らさない（ムラのない一色）。絵は札の幅いっぱい */
+.shop-card__stage:has(svg[data-flat-art]) {
+  background: var(--stage-flat, #f6f3ed);
+}
+.shop-card__stage .st-art[data-flat-art] {
+  height: auto;
+  max-height: 72px;
 }
