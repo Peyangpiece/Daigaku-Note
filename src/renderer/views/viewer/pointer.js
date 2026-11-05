@@ -1,5 +1,6 @@
 // PDF の編集画面：ポインタの振り分け（押す・動かす・離す）。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 import {DRAW_TOOLS} from './shared.js';
+import {syntheticMove} from '../../../shared/ink.js';
 import {figureSize, growsWithSize} from '../../../shared/figures.js';
 import {growFigure, renderFigure} from '../../figure-view.js';
 
@@ -11,10 +12,14 @@ const inBox = (el, e) => {
 
 export const methods = {
   onPointerDown(e) {
+    if (e.pointerType === 'pen') this.penAt = performance.now();
     if (e.pointerType === 'touch') {
       this.touchIds.add(e.pointerId);
       // 2 本目の指は書き込みに使わない（ピンチ）。1 本目で始めたことも取りやめる（ペンで書いている間の手のひらは無視）
       if (this.drawing?.byPen) return;
+      // ペンが画面の近くにある・少し前まで使っていた間の指は手のひら：何もしない（Surface などで、ペンを下ろす前に
+      // 手を置くと、手のひらでピンチ・スクロールになり、書いている線が動いて途切れていた。v0.16.29）
+      if (this.palmLikely()) return;
       if (this.touchIds.size > 1) return this.cancelPointer();
     }
     if (e.pointerType === 'pen' && !this.penSeen) {
@@ -136,7 +141,14 @@ export const methods = {
     }
   },
 
+  /** 手のひららしいか：ペンを画面の近く（浮かせた状態も含む）で 1 秒以内に使った */
+  palmLikely() {
+    return this.penSeen && performance.now() - (this.penAt ?? -Infinity) < 1000;
+  },
+
   onPointerMove(e) {
+    if (e.pointerType === 'pen') this.penAt = performance.now(); // 浮かせたペンの動きも数える（Surface のペンは近づけると動きが来る）
+    if (e.pointerType === 'touch' && this.palmLikely() && !this.pinch) return;
     if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);
     const pan = this.pan;
     if (pan?.pointer === e.pointerId) {
@@ -148,7 +160,7 @@ export const methods = {
     }
     const dr = this.drawing;
     // 書いている・消している・引いている間の、押していない合成の動き（buttons が 0）は使わない（書いていない線が出るため。v0.16.28）
-    if (dr?.pointer === e.pointerId && e.buttons === 0) return;
+    if (dr?.pointer === e.pointerId && syntheticMove(e)) return;
     if (dr?.pointer === e.pointerId && dr.kind === 'ink') {
       this.addInkPoint(dr, e);
       return this.drawInk();

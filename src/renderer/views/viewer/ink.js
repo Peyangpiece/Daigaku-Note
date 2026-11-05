@@ -10,6 +10,7 @@ import {
   encodePoints,
   modeStyle,
   speedPressure,
+  syntheticMove,
   touchesStroke
 } from '../../../shared/ink.js';
 import {lineOf, ERASER_PX, SVG_NS} from './shared.js';
@@ -102,9 +103,14 @@ export const methods = {
   addInkPoint(d, e) {
     // 押していない動き（buttons が 0）は線に入れない：ページの並びが変わった・スクロールしたあとに、ブラウザが押していない
     // 合成の動きを送ることがあり（位置がずれていることもある）、書いていない線が出る（v0.16.28）
-    if (e.buttons === 0) return;
-    // ページの画面の位置は動くたびに取り直す（書いている間にスクロール・ページが足されても、線が離れた所へ飛ばない。v0.16.27）
-    d.box = d.p.el.getBoundingClientRect();
+    if (syntheticMove(e)) return;
+    // ページの画面の位置は、書いている間にスクロールしたときだけ取り直す（線が離れた所へ飛ばない。毎回測ると描き直しのたびに
+    // 配置の計算をやり直させて重いので、スクロールの位置が変わったときだけ。v0.16.29）
+    if (d.sx !== window.scrollX || d.sy !== window.scrollY) {
+      d.sx = window.scrollX;
+      d.sy = window.scrollY;
+      d.box = d.p.el.getBoundingClientRect();
+    }
     // 間の点（画面の描き直しより細かく来る点）もすべて使う。線がかくかくしない
     const evs = e.getCoalescedEvents?.() ?? [];
     for (const ev of evs.length ? evs : [e]) {
@@ -138,8 +144,8 @@ export const methods = {
     this.inkFrame = 0;
     d.el.remove();
     d.box = d.p.el.getBoundingClientRect();
-    const [x, y, pr] = this.inkPoint(d, e);
-    const points = d.cap.finish(x, y, pr);
+    // 途中で取り消された（pointercancel：OS・ブラウザが操作を引き取った）ときは、そこまで書いた線を残す（最後の点は足さない）
+    const points = e?.type === 'pointercancel' ? d.cap.points : d.cap.finish(...this.inkPoint(d, e));
     if (!points.length) return;
     const style = {
       color: d.item.color,

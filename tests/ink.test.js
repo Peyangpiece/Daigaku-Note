@@ -233,3 +233,39 @@ test('下書き（createDraft）は書いた線の外に線を描かない：急
     assert.ok(worst <= width * 0.9 + 0.05, `輪郭が線から離れすぎ（${worst.toFixed(2)}）`);
   }
 });
+
+test('書き味は書き味のない線より細く・短くしない。書いている先は細くしない。押していない合成の動きだけを見分ける（v0.16.29）', async () => {
+  const {FEEL_DEFAULT, createDraft, strokeOptions, strokeOutline, syntheticMove} = await import('../src/shared/ink.js');
+  const strong = strokeOptions(1, {feel: {th: 0.9, ts: 5, te: 5}});
+  const base = strokeOptions(1, {feel: FEEL_DEFAULT});
+  assert.ok(strong.thinning <= 0.45, '筆圧の効きは 0.45 まで');
+  assert.ok(strong.taperStart <= base.taperStart && strong.taperEnd <= base.taperEnd, '入り・抜きは書き味のない線まで');
+  const mouse = strokeOptions(1, {pressure: false, feel: {th: 0.9, ts: 5, te: 5}});
+  const mouseBase = strokeOptions(1, {pressure: false});
+  assert.ok(mouse.taperStart <= mouseBase.taperStart && mouse.taperEnd <= mouseBase.taperEnd, '指・マウスも');
+  // 軽く書いても（筆圧 0）太さの半分の 45% より細くならない
+  const pts = Array.from({length: 40}, (_, i) => [i, 0, 0]);
+  const out = strokeOutline(pts, {size: 2, thinning: 0.9});
+  const mid = out[20];
+  assert.ok(Math.abs(mid[1]) >= (2 / 2) * 0.45 - 1e-9, `細りすぎない（${Math.abs(mid[1])}）`);
+  // 書いている先（尾）は細くしない：先の点の太さが、途中の点と同じ
+  const draft = createDraft(2, {feel: FEEL_DEFAULT});
+  const line = Array.from({length: 30}, (_, i) => [i * 2, 0, 0.5]);
+  const {live} = draft.update(line);
+  const ys = [...live.matchAll(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  const nearTip = ys.filter(([x]) => x > 54 && x < 58).map(([, y]) => Math.abs(y));
+  assert.ok(Math.max(...nearTip) > 0.95, `先も太さのまま（${Math.max(...nearTip)}）`);
+  // 合成の動き：マウス・押していない・移動量 0 だけ
+  assert.equal(syntheticMove({pointerType: 'mouse', buttons: 0, movementX: 0, movementY: 0}), true);
+  assert.equal(syntheticMove({pointerType: 'mouse', buttons: 1, movementX: 0, movementY: 0}), false);
+  assert.equal(
+    syntheticMove({pointerType: 'pen', buttons: 0, movementX: 0, movementY: 0}),
+    false,
+    'ペンは buttons 0 でも捨てない'
+  );
+  assert.equal(
+    syntheticMove({pointerType: 'mouse', buttons: 0, movementX: 3, movementY: 0}),
+    false,
+    '本当に動いたマウス'
+  );
+});

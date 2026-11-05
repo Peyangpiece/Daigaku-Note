@@ -10,7 +10,7 @@
 //   色の計算（フィルタ）だけで見え方を作ると、線のふちや色によって字や線がうっすら透けるため、描き分けて確実に隠す
 // 付箋の右下はめくれていて、押すか左上へ引くと、はがれて下の新しい紙になる。書いた線はこの画面を開いている間だけ覚える（保存しない）
 import {esc} from '../ui-kit.js';
-import {createCapture, drawMode, streamlineOf, strokePath} from '../../shared/ink.js';
+import {createCapture, drawMode, streamlineOf, strokePath, syntheticMove} from '../../shared/ink.js';
 import {PEN_SIZES, TOOL_TYPES, fadesUnderRedSheet, heldPen, itemOf, needsRedSheet} from '../../shared/stationery.js';
 
 const SIZE = 300; // 付箋の座標（75mm 角の付箋を 1 = 0.25mm で）
@@ -200,7 +200,7 @@ function startInk(e, svg) {
   draw();
   svg.setPointerCapture(e.pointerId);
   const move = (ev) => {
-    if (ev.pointerId !== e.pointerId || ev.buttons === 0) return; // 押していない合成の動きは線に入れない（v0.16.28）
+    if (ev.pointerId !== e.pointerId || syntheticMove(ev)) return; // 押していない合成の動きは線に入れない
     for (const c of ev.getCoalescedEvents?.() ?? [ev]) add(c);
     d.frame ||= requestAnimationFrame(draw);
   };

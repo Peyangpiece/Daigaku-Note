@@ -8,6 +8,7 @@ import {
   createDraft,
   decodePoints,
   drawMode,
+  syntheticMove,
   feelStyle,
   streamlineOf,
   encodePoints,
@@ -105,7 +106,7 @@ export const methods = {
       }
       if (!d || e.pointerId !== d.pointer) return;
       e.stopPropagation();
-      if (e.buttons === 0) return; // 押していない合成の動きは線に入れない（v0.16.28）
+      if (syntheticMove(e)) return; // 押していない合成の動きは線に入れない
       for (const ev of e.getCoalescedEvents?.() ?? [e]) {
         const [x, y, pr] = point(ev, d.box, d.pressure);
         d.cap.add(x, y, pr);

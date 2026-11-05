@@ -12,7 +12,15 @@ import {state} from './store.js';
 import {dressCase, refreshArt} from './model3d.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, isModKey, tearClip} from './desk-tools.js';
 import {DEFAULT_HIDER, eraserArt, heldPen, itemOf, stationeryState, toolArt, typeLabel} from '../shared/stationery.js';
-import {createCapture, createDraft, drawMode, streamlineOf, strokePath, touchesStroke} from '../shared/ink.js';
+import {
+  createCapture,
+  createDraft,
+  drawMode,
+  streamlineOf,
+  strokePath,
+  syntheticMove,
+  touchesStroke
+} from '../shared/ink.js';
 import {growFigure, openFigureEditor, renderFigure} from './figure-view.js';
 import {figureSize, growsWithSize} from '../shared/figures.js';
 
@@ -197,7 +205,7 @@ class Desk extends DeskTools {
       return [cx + x0, cy + y0];
     };
     const move = (ev) => {
-      if (ev.pointerId !== e.pointerId || ev.buttons === 0) return; // 押していない合成の動きは線に入れない（v0.16.28）
+      if (ev.pointerId !== e.pointerId || syntheticMove(ev)) return; // 押していない合成の動きは線に入れない
       for (const c of ev.getCoalescedEvents?.() ?? [ev]) this.drawAt(c, at);
     };
     const up = (ev) => {

@@ -128,6 +128,11 @@ export const methods = {
   onTouchStart(e) {
     if (e.touches.length !== 2 || !this.pages.length || (this.pinch && !this.pinch.touch) || this.drawing?.byPen)
       return;
+    // ペンを近くで使っている間の 2 か所の触れは手のひら：ピンチにしない（ページが動いて線が途切れるため。v0.16.29）
+    if (this.palmLikely?.()) {
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
     e.preventDefault(); // ブラウザのスクロールに渡さない（あとの touchmove を止められるように）
     this.cancelPointer();
     clearTimeout(this.pinchTimer);
