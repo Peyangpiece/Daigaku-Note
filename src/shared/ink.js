@@ -48,16 +48,17 @@ export function boundsOf(points, width = 0) {
  */
 export function strokeOutline(
   points,
-  {size = 1, thinning = 0.35, taperStart = 0, taperEnd = 0, sweet = 0, grain = 0} = {}
+  {size = 1, thinning = 0.35, taperStart = 0, taperEnd = 0, sweet = 0, grain = 0, from = 0, tail = true} = {}
 ) {
   if (!points.length) return [];
   const radius = (p) => Math.max(size * 0.08, (size / 2) * (1 + thinning * (p - 0.5) * 2));
-  // 長さ（書き始め・書き終わりを細くするのに使う）
-  const along = [0];
+  // 長さ（書き始め・書き終わりを細くするのに使う）。from：線の途中から描くとき（書いている間の区切り。createDraft）は、
+  // 線の始まりからこの点までの長さ。tail: false なら書き終わりを細くしない（まだ続く線の途中の区切り）
+  const along = [from];
   for (let i = 1; i < points.length; i++) along.push(along[i - 1] + dist(points[i - 1], points[i]));
-  const total = along.at(-1);
+  const total = along.at(-1) - from;
   // 押しただけ（点）：丸
-  if (points.length === 1 || total < size * 0.3) return circle(points[0], radius(points[0][2]));
+  if (points.length === 1 || (total < size * 0.3 && !from)) return circle(points[0], radius(points[0][2]));
   const ease = (t) => 1 - (1 - t) * (1 - t);
   // スイートスポット（sweet。v0.16.24）：ペン先の当たりのよい向き（縦の線）から外れるほど細くなる。
   // 縦の成分で決めるので、上下を返した座標（メモの手書き・書き出し）でも同じ形。前後の点の向きをならして、急に変わらない
@@ -72,7 +73,7 @@ export function strokeOutline(
   const rs = points.map((pt, i) => {
     let r = radius(pt[2]);
     if (taperStart > 0) r *= 0.35 + 0.65 * ease(Math.min(1, along[i] / taperStart));
-    if (taperEnd > 0) r *= 0.35 + 0.65 * ease(Math.min(1, (total - along[i]) / taperEnd));
+    if (taperEnd > 0 && tail) r *= 0.35 + 0.65 * ease(Math.min(1, (along.at(-1) - along[i]) / taperEnd));
     if (sweet > 0) r *= 1 - sweet * (1 - upright[i]);
     if (grain > 0) r *= 1 + grain * texture(along[i] / Math.max(0.2, size));
     return sweet > 0 || grain > 0 ? Math.max(size * 0.08, r) : r; // 前の版の線の形は変えない
@@ -207,6 +208,36 @@ export const feelStyle = (feel, mode, key = 'feel') => {
 /** 線のパス（SVG）。points・幅・筆圧が取れたか・書き味から一度に作る */
 export function strokePath(points, width, {pressure = true, flipY = false, feel = null} = {}) {
   return outlinePath(strokeOutline(points, strokeOptions(width, {pressure, feel})), {flipY});
+}
+
+/**
+ * 書いている間の線（下書き。v0.16.27）：遅れなく描くため、線を「もう変わらない区切り」と「書いている先（尾）」に分ける。
+ * 書き終わりを細くする範囲（taperEnd）より前の点は、もう太さが変わらないので、区切ってパスを固め、以後は描き直さない。
+ * 毎回描き直すのは尾だけなので、長い線でも 1 回の手間が増えない。固めた区切りと尾は 2 点重ね、丸い端で継ぎ目を隠す。
+ * update(points, extra) → {frozen: [新しく固めたパス…], live: 尾のパス}。extra は尾の先に足す点（今の指・ペンの位置や予測。保存しない）
+ */
+export function createDraft(width, {pressure = true, feel = null, chunk = 48} = {}) {
+  const opts = strokeOptions(width, {pressure, feel});
+  const margin = (opts.taperEnd || 0) + width * 2; // この長さより前の点は、もう太さが変わらない
+  const along = [0];
+  let start = 0; // 尾の始まり（点の番号）
+  return {
+    update(points, extra = []) {
+      for (let i = along.length; i < points.length; i++) along.push(along[i - 1] + dist(points[i - 1], points[i]));
+      const frozen = [];
+      const total = along[points.length - 1] ?? 0;
+      let j = points.length - 1;
+      while (j > start && along[j] > total - margin) j--;
+      if (j - start >= chunk) {
+        const s = Math.max(0, start - 2);
+        frozen.push(outlinePath(strokeOutline(points.slice(s, j + 1), {...opts, from: along[s], tail: false})));
+        start = j - 1;
+      }
+      const s = Math.max(0, start - 2);
+      const live = outlinePath(strokeOutline([...points.slice(s), ...extra], {...opts, from: along[s] ?? 0}));
+      return {frozen, live};
+    }
+  };
 }
 
 /**

@@ -5,13 +5,13 @@
 const NOTE_ERASE_R = 8; // 消しゴムの大きさ（吹き出しの px）
 import {
   createCapture,
+  createDraft,
   decodePoints,
   drawMode,
   feelStyle,
   streamlineOf,
   encodePoints,
   modeStyle,
-  strokePath,
   touchesStroke
 } from '../../../shared/ink.js';
 import {NOTE_INK_SCALE} from '../../../shared/annotation.js';
@@ -37,12 +37,17 @@ export const methods = {
       ev.clientY - box.top,
       pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5
     ];
+    // 下書き：固めた区切りは足すだけで、描き直すのは書いている先だけ。先は今のペン・指の位置（raw）までのばす（遅れなく見せる）
     const draw = () => {
       if (!d) return;
-      d.path.setAttribute(
-        'd',
-        strokePath(d.cap.points, d.pen.width * NOTE_INK_SCALE, {pressure: d.pressure, feel: d.pen.feel})
-      );
+      const tip = d.raw ? [[d.raw[0], d.raw[1], d.cap.points.at(-1)?.[2] ?? d.raw[2]]] : [];
+      const {frozen, live} = d.draft.update(d.cap.points, tip);
+      for (const f of frozen) {
+        const p = document.createElementNS(SVG_NS, 'path');
+        p.setAttribute('d', f);
+        d.path.insertBefore(p, d.live);
+      }
+      d.live.setAttribute('d', live);
     };
     // 消しゴム：なぞったところに触れた線を消す。ひとなぞりで消した分は 1 手で取り消せる
     let erasing = null;
@@ -72,14 +77,20 @@ export const methods = {
         return;
       }
       const pen = this.notePen();
-      const path = document.createElementNS(SVG_NS, 'path');
+      const path = document.createElementNS(SVG_NS, 'g');
       path.setAttribute('fill', pen.color);
+      const live = document.createElementNS(SVG_NS, 'path');
+      path.append(live);
       svg.append(path);
+      const pressure = drawMode(pen, e.pointerType);
       d = {
         pointer: e.pointerId,
         pen,
         path,
-        pressure: drawMode(pen, e.pointerType),
+        live,
+        raw: null,
+        draft: createDraft(pen.width * NOTE_INK_SCALE, {pressure, feel: pen.feel}),
+        pressure,
         box: svg.getBoundingClientRect(),
         cap: createCapture({minGap: 0.3, streamline: streamlineOf(pen.feel, e.pointerType)})
       };
@@ -98,6 +109,7 @@ export const methods = {
       e.stopPropagation();
       for (const ev of e.getCoalescedEvents?.() ?? [e]) {
         const [x, y, pr] = point(ev, d.box, d.pressure);
+        d.raw = [x, y, pr];
         d.cap.add(x, y, pr);
       }
       draw();

@@ -187,12 +187,15 @@ function startInk(e, svg) {
   const add = (ev) => {
     const [x, y] = toPaper(ev, d.rect);
     d.cap.add(x, y, d.pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
+    d.raw = [x, y];
   };
+  // 書いている間：手ぶれ補正で遅れた分は、今のペン・指の位置まで線の先をのばして見せる（v0.16.27）
   const draw = () => {
     d.frame = 0;
-    d.el.outerHTML = strokeSvg(d.ink, d.cap.points, d.pressure);
+    const pts = d.raw ? [...d.cap.points, [d.raw[0], d.raw[1], d.cap.points.at(-1)?.[2] ?? 0.5]] : d.cap.points;
+    d.el.outerHTML = strokeSvg(d.ink, pts, d.pressure);
     d.el = group.lastElementChild;
-    if (seenGroup) seenGroup.lastElementChild.innerHTML = seenSvg(d.ink, d.cap.points, d.pressure);
+    if (seenGroup) seenGroup.lastElementChild.innerHTML = seenSvg(d.ink, pts, d.pressure);
   };
   add(e);
   draw();

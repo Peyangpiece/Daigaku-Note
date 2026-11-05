@@ -177,3 +177,25 @@ test('書き味のクセ：スイートスポット（向きで細くなる）�
     '筆圧なしはクセもなし'
   );
 });
+
+test('書いている間の下書き（createDraft）：前の区切りは固め、描き直すのは先だけ。長い線でも 1 回の手間が増えない（v0.16.27）', async () => {
+  const {createDraft, strokeOutline} = await import('../src/shared/ink.js');
+  const pts = Array.from({length: 3000}, (_, i) => [i * 0.3, Math.sin(i / 20) * 20, 0.5 + 0.3 * Math.sin(i / 7)]);
+  const opts = {size: 1.1, thinning: 0.35, taperStart: 1.3, taperEnd: 1.6};
+  assert.deepEqual(
+    strokeOutline(pts.slice(0, 50), opts),
+    strokeOutline(pts.slice(0, 50), {...opts, from: 0, tail: true}),
+    '前の版と同じ形'
+  );
+  const draft = createDraft(1.1, {feel: {th: 0.35, ts: 1.2, te: 1.5}});
+  let frozen = 0;
+  let maxLive = 0;
+  for (let n = 1; n <= pts.length; n += 3) {
+    const r = draft.update(pts.slice(0, n), [[pts[n - 1][0] + 1, pts[n - 1][1], 0.5]]);
+    frozen += r.frozen.length;
+    maxLive = Math.max(maxLive, r.live.length);
+    assert.ok(r.live.startsWith('M'), '先のパス');
+  }
+  assert.ok(frozen > 30, `区切りを固める（${frozen}）`);
+  assert.ok(maxLive < 12000, `先のパスは短いまま（${maxLive} 文字）`);
+});

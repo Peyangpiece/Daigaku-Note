@@ -12,7 +12,7 @@ import {state} from './store.js';
 import {dressCase, refreshArt} from './model3d.js';
 import {CSS_UNITS, DeskTools, MEMO_DEPTH, MEMO_TOOTH, cornersHtml, isModKey, tearClip} from './desk-tools.js';
 import {DEFAULT_HIDER, eraserArt, heldPen, itemOf, stationeryState, toolArt, typeLabel} from '../shared/stationery.js';
-import {createCapture, drawMode, streamlineOf, strokePath, touchesStroke} from '../shared/ink.js';
+import {createCapture, createDraft, drawMode, streamlineOf, strokePath, touchesStroke} from '../shared/ink.js';
 import {growFigure, openFigureEditor, renderFigure} from './figure-view.js';
 import {figureSize, growsWithSize} from '../shared/figures.js';
 
@@ -208,9 +208,13 @@ class Desk extends DeskTools {
       const d = this.drawing;
       this.drawing = null;
       if (d?.kind === 'ink') {
+        cancelAnimationFrame(d.frame);
         const points = d.cap.finish(...at(ev), ev.pressure > 0 ? ev.pressure : 0.5);
         if (points.length) {
-          d.el.setAttribute('d', strokePath(points, d.width, {pressure: d.pressure, feel: d.feel}));
+          // 書き終わり：下書きの区切りをやめ、線全体を 1 本のパスにする（書き終わりも細くなる）
+          const path = document.createElementNS(SVG_NS, 'path');
+          path.setAttribute('d', strokePath(points, d.width, {pressure: d.pressure, feel: d.feel}));
+          d.el.replaceChildren(path);
           this.strokes.push({el: d.el, points, width: d.width});
         } else d.el.remove();
       }
@@ -218,16 +222,25 @@ class Desk extends DeskTools {
     if (this.held === 'eraser') this.drawing = {kind: 'eraser'};
     else {
       const look = strokeLook(this.held.item);
-      const el = document.createElementNS(SVG_NS, 'path');
+      // 下書き：固めた区切りのパスと、書いている先（尾）のパスを入れる箱（shared/ink.js の createDraft）
+      const el = document.createElementNS(SVG_NS, 'g');
       el.setAttribute('fill', this.held.item.color);
       if (look.blend) el.classList.add('is-marker');
+      const live = document.createElementNS(SVG_NS, 'path');
+      el.append(live);
       this.inkSvg.append(el);
+      const pressure = this.held.item.type === 'pen' ? drawMode(this.held.item, e.pointerType) : false;
+      const feel = this.held.item.feel ?? null; // ペンの書き味（型番ごと）
       this.drawing = {
         kind: 'ink',
         el,
+        live,
+        raw: null,
+        frame: 0,
+        draft: createDraft(look.width, {pressure, feel}),
         width: look.width,
-        pressure: this.held.item.type === 'pen' ? drawMode(this.held.item, e.pointerType) : false,
-        feel: this.held.item.feel ?? null, // ペンの書き味（型番ごと）
+        pressure,
+        feel,
         cap: createCapture({minGap: 0.3, streamline: streamlineOf(this.held.item.feel, e.pointerType)}),
         rule: this.held.item.type === 'pen' ? this.rulerEdgeAt(e.clientX, e.clientY) : null
       };
@@ -250,7 +263,21 @@ class Desk extends DeskTools {
       return;
     }
     d.cap.add(x, y, d.pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
-    d.el.setAttribute('d', strokePath(d.cap.points, d.width, {pressure: d.pressure, feel: d.feel}));
+    d.raw = [x, y];
+    // 描き直しは画面の描き直しごとに 1 回（細かく来る点のたびには描かない）。先は今の位置までのばす
+    if (d.frame) return;
+    d.frame = requestAnimationFrame(() => {
+      d.frame = 0;
+      if (this.drawing !== d) return;
+      const tip = d.raw ? [[d.raw[0], d.raw[1], d.cap.points.at(-1)?.[2] ?? 0.5]] : [];
+      const {frozen, live} = d.draft.update(d.cap.points, tip);
+      for (const f of frozen) {
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('d', f);
+        d.el.insertBefore(path, d.live);
+      }
+      d.live.setAttribute('d', live);
+    });
   }
 
   // ---- 貼りもの（下書きの層に置く。ドラッグで動かし、× で外す） ----
