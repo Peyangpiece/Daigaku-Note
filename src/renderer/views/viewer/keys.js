@@ -8,6 +8,7 @@ export const methods = {
    * 文字を打っている間（入力欄・メモの本文・文字入れの編集中・日本語入力の変換中）は、Esc 以外は何もしない
    */
   onKey(e) {
+    this.inputAt = performance.now(); // 打っている間はファイルに上書き保存しない（export.js）
     const t = e.target;
     if (this.$('export-dialog')?.open) return; // 書き出しの窓が開いている間は効かせない
     if (isTyping(e)) {

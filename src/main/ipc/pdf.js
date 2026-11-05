@@ -3,7 +3,8 @@ import {dialog, app} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {sha256} from '../sync/files.js';
-import {exportAnnotatedPdf, isPng} from '../pdf-export.js';
+import {isPng} from '../pdf-export.js';
+import {exportAnnotatedPdfOffThread, warmPdfWorker} from '../pdf-worker.js';
 import {annoKey, overwritePdf, readBase} from '../pdf-save.js';
 import {annotationToClient, normalizeAnnotation, clampSize} from '../../shared/annotation.js';
 import {normalizeBookmark} from '../../shared/bookmark.js';
@@ -25,6 +26,8 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
 
   handle('pdf.open', async ({materialId}) => {
     let m = pdfMaterial(materialId);
+    // 上書き保存で PDF を作るスレッドを、書き始める前に作っておく（作る間はメインが少し止まるため。pdf-worker.js）
+    setTimeout(warmPdfWorker, 300);
     // 上書き保存したことがあれば、注釈を描き込む前の写しを開く（描き込み済みの上に注釈を重ねて 2 重にしない）
     const base = await readBase(m, originalsDir()).catch(() =>
       bad('ファイルを読めませんでした（移動または削除された可能性があります）')
@@ -171,7 +174,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
     const base = await readBase(m, originalsDir()).catch(() => bad('元の PDF を読めませんでした'));
     if (!base.pristine) bad('元の PDF の写しが見つからないため書き出せません');
     const src = base.bytes;
-    const out = Buffer.from(await exportAnnotatedPdf(src, rows, {images, markers, notes}));
+    const out = await exportAnnotatedPdfOffThread(src, rows, {images, markers, notes});
     const dir = path.dirname(m.path);
     const opts = {
       title: '注釈付きで書き出す',

@@ -270,13 +270,18 @@ function render() {
       });
     }
     // PDF のまわりの紙に貼るシール（窓に固定。PDF の下に置く）。着せ替えやシールの画像が変わったら貼り直す
-    document.getElementById('viewer-stickers')?.remove();
+    // 同じなら貼り直さない（上書き保存のたびに状態を読み直すので、画像を作り直して書いている手を止めないように。v0.16.30）
     const layer = stickerLayer(skinOf(state.data, course ?? null).stickers, 'viewer', state.data);
-    if (layer)
+    const old = document.getElementById('viewer-stickers');
+    if ((old?.dataset.src ?? '') === (layer ?? '')) return;
+    old?.remove();
+    if (layer) {
       view.insertAdjacentHTML(
         'afterbegin',
         layer.replace('<div class="sticker-layer', '<div id="viewer-stickers" class="sticker-layer')
       );
+      document.getElementById('viewer-stickers').dataset.src = layer;
+    }
     return;
   }
   // 編集画面を出たら読み直す（足したしおりなどを授業画面に出すため）

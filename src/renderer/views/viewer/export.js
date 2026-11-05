@@ -39,7 +39,21 @@ export const methods = {
     this.fileDirty = true;
     clearTimeout(this.fileTimer);
     if (this.destroyed) return; // 閉じたあとは、閉じるときに始めた保存が拾う（画面がないので新しくは始めない）
-    this.fileTimer = setTimeout(() => !this.destroyed && this.saveFile(), FILE_SAVE_DELAY);
+    this.fileTimer = setTimeout(() => !this.destroyed && this.saveFileWhenIdle(), FILE_SAVE_DELAY);
+  },
+
+  /**
+   * 手を止めてからファイルに保存する（v0.16.30）。上書き保存は PDF 全体を作り直す重い処理なので、書いている間・
+   * ペンを画面に近づけている間・打っている間は待つ（注釈そのものは DB にすぐ保存している）
+   */
+  saveFileWhenIdle() {
+    const last = Math.max(this.inputAt ?? -Infinity, this.penAt ?? -Infinity);
+    if (this.drawing || this.drag || this.pinch || performance.now() - last < FILE_SAVE_DELAY) {
+      clearTimeout(this.fileTimer);
+      this.fileTimer = setTimeout(() => !this.destroyed && this.saveFileWhenIdle(), 1000);
+      return;
+    }
+    this.saveFile();
   },
 
   saveFile({manual = false} = {}) {
@@ -72,7 +86,7 @@ export const methods = {
         this.setStatus();
         if (this.fileAgain) {
           this.fileAgain = false;
-          if (this.fileDirty) this.saveFile();
+          if (this.fileDirty) this.markDirty();
         }
       }
     })();
@@ -119,11 +133,21 @@ export const methods = {
 
   async textImages(snaps) {
     const texts = [];
+    // 変わっていない文字入れ・貼りものは前に作った PNG を使う（上書き保存のたびに 288dpi で描き直さない。v0.16.30）
+    this.pngCache ??= new Map();
+    const keep = new Map();
     for (const s of snaps) {
       if (!s.a.id || s.a.removed) continue;
-      const png = s.stamp ? await this.stampToPng(s).catch(() => null) : await this.textToPng(s);
-      if (png) texts.push({id: s.a.id, png});
+      const {a, ...look} = s;
+      const key = JSON.stringify({...look, w: look.box.width, h: look.box.height, box: null});
+      const hit = this.pngCache.get(a.id);
+      const png =
+        hit?.key === key ? hit.png : s.stamp ? await this.stampToPng(s).catch(() => null) : await this.textToPng(s);
+      if (!png) continue;
+      keep.set(a.id, {key, png});
+      texts.push({id: a.id, png});
     }
+    this.pngCache = keep;
     return texts;
   },
 

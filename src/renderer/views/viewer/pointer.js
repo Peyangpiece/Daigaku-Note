@@ -12,6 +12,7 @@ const inBox = (el, e) => {
 
 export const methods = {
   onPointerDown(e) {
+    this.inputAt = performance.now(); // ファイルへの上書き保存は、手を止めてから（export.js）
     if (e.pointerType === 'pen') this.penAt = performance.now();
     if (e.pointerType === 'touch') {
       this.touchIds.add(e.pointerId);
@@ -147,7 +148,8 @@ export const methods = {
   },
 
   onPointerMove(e) {
-    if (e.pointerType === 'pen') this.penAt = performance.now(); // 浮かせたペンの動きも数える（Surface のペンは近づけると動きが来る）
+    if (e.pointerType === 'pen') this.penAt = performance.now();
+    else if (e.buttons) this.inputAt = performance.now(); // 浮かせたペンの動きも数える（Surface のペンは近づけると動きが来る）
     if (e.pointerType === 'touch' && this.palmLikely() && !this.pinch) return;
     if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);
     const pan = this.pan;
