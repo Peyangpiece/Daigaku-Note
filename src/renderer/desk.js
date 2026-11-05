@@ -197,7 +197,7 @@ class Desk extends DeskTools {
       return [cx + x0, cy + y0];
     };
     const move = (ev) => {
-      if (ev.pointerId !== e.pointerId) return;
+      if (ev.pointerId !== e.pointerId || ev.buttons === 0) return; // 押していない合成の動きは線に入れない（v0.16.28）
       for (const c of ev.getCoalescedEvents?.() ?? [ev]) this.drawAt(c, at);
     };
     const up = (ev) => {
@@ -235,7 +235,6 @@ class Desk extends DeskTools {
         kind: 'ink',
         el,
         live,
-        raw: null,
         frame: 0,
         draft: createDraft(look.width, {pressure, feel}),
         width: look.width,
@@ -263,14 +262,12 @@ class Desk extends DeskTools {
       return;
     }
     d.cap.add(x, y, d.pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
-    d.raw = [x, y];
     // 描き直しは画面の描き直しごとに 1 回（細かく来る点のたびには描かない）。先は今の位置までのばす
     if (d.frame) return;
     d.frame = requestAnimationFrame(() => {
       d.frame = 0;
       if (this.drawing !== d) return;
-      const tip = d.raw ? [[d.raw[0], d.raw[1], d.cap.points.at(-1)?.[2] ?? 0.5]] : [];
-      const {frozen, live} = d.draft.update(d.cap.points, tip);
+      const {frozen, live} = d.draft.update(d.cap.points);
       for (const f of frozen) {
         const path = document.createElementNS(SVG_NS, 'path');
         path.setAttribute('d', f);

@@ -147,6 +147,8 @@ export const methods = {
       return;
     }
     const dr = this.drawing;
+    // 書いている・消している・引いている間の、押していない合成の動き（buttons が 0）は使わない（書いていない線が出るため。v0.16.28）
+    if (dr?.pointer === e.pointerId && e.buttons === 0) return;
     if (dr?.pointer === e.pointerId && dr.kind === 'ink') {
       this.addInkPoint(dr, e);
       return this.drawInk();
