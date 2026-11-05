@@ -168,9 +168,13 @@ export function cleanFeel(f) {
 }
 /** 保存した線の書き味（style.feel・メモの線の f） */
 export const feelOf = (style) => cleanFeel(style?.feel ?? style?.f);
-/** 書くときの手ぶれ補正：ペン先（スタイラス）は書き味の st、指・マウスは少し強め */
+/**
+ * 書くときの手ぶれ補正：書き味の st の半分（ペン先は 0〜0.25）、指・マウスは 0.15 だけ強め（v0.16.28）。
+ * 補正が強いほど線の先がペン・指より遅れて見えるので、遅れが目立たない範囲にとどめる。
+ * 下書きに今の位置までの直線や予測の点を足して遅れを隠すと、急な曲がりで書いていない線が見えるため、それはしない
+ */
 export const streamlineOf = (feel, pointerType) =>
-  Math.min(FEEL_RANGE.st[1], (feel?.st ?? FEEL_DEFAULT.st) + (pointerType === 'pen' ? 0 : 0.2));
+  Math.min(0.4, (feel?.st ?? FEEL_DEFAULT.st) * 0.5 + (pointerType === 'pen' ? 0 : 0.15));
 
 /**
  * 書き味の設定（太さの変わり方）。pressure は 3 とおり：
@@ -211,7 +215,7 @@ export function strokePath(points, width, {pressure = true, flipY = false, feel 
 }
 
 /**
- * 書いている間の線（下書き。v0.16.27）：遅れなく描くため、線を「もう変わらない区切り」と「書いている先（尾）」に分ける。
+ * 書いている間の線（下書き。v0.16.27）：重くならないよう、線を「もう変わらない区切り」と「書いている先（尾）」に分ける。
  * 書き終わりを細くする範囲（taperEnd）より前の点は、もう太さが変わらないので、区切ってパスを固め、以後は描き直さない。
  * 毎回描き直すのは尾だけなので、長い線でも 1 回の手間が増えない。固めた区切りと尾は 2 点重ね、丸い端で継ぎ目を隠す。
  * update(points, extra) → {frozen: [新しく固めたパス…], live: 尾のパス}。extra は尾の先に足す点（今の指・ペンの位置や予測。保存しない）

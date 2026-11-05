@@ -66,7 +66,6 @@ export const methods = {
       el,
       live,
       draft: createDraft(this.penItem.width, {pressure, feel: this.penItem.feel}),
-      raw: null,
       cap,
       box,
       pressure,
@@ -75,7 +74,6 @@ export const methods = {
       item: this.penItem,
       sim: 0.5,
       last: null,
-      extra: [],
       rule: this.rulerEdgeAt(e.clientX, e.clientY) // 定規のふちのすぐ外から書き始めたら、ふちに沿わせる
     });
     this.addInkPoint(d, e);
@@ -102,21 +100,18 @@ export const methods = {
   },
 
   addInkPoint(d, e) {
+    // 押していない動き（buttons が 0）は線に入れない：ページの並びが変わった・スクロールしたあとに、ブラウザが押していない
+    // 合成の動きを送ることがあり（位置がずれていることもある）、書いていない線が出る（v0.16.28）
+    if (e.buttons === 0) return;
     // ページの画面の位置は動くたびに取り直す（書いている間にスクロール・ページが足されても、線が離れた所へ飛ばない。v0.16.27）
     d.box = d.p.el.getBoundingClientRect();
     // 間の点（画面の描き直しより細かく来る点）もすべて使う。線がかくかくしない
     const evs = e.getCoalescedEvents?.() ?? [];
     for (const ev of evs.length ? evs : [e]) {
       const [x, y, pr] = this.inkPoint(d, ev);
-      d.raw = [x, y, pr];
       if (!d.cap.add(x, y, pr) && d.cap.points.length >= 5000) return this.finishInk(e);
     }
-    // この先に来そうな点（予測）。線の先が指・ペンに遅れて見えないように、下書きにだけ足す
-    d.extra = (e.getPredictedEvents?.() ?? []).slice(0, 2).map((ev) => {
-      const [cx, cy] = this.onRule(d, ev.clientX, ev.clientY);
-      const [x, y] = d.p.viewport.convertToPdfPoint(cx - d.box.left, cy - d.box.top);
-      return [x, y, d.cap.points.at(-1)?.[2] ?? 0.5];
-    });
+    // 予測の点（getPredictedEvents）や今の位置までの直線は足さない：急な曲がり・止めで、書いていない線が一瞬見えるため（v0.16.28）
   },
 
   drawInk() {
@@ -125,10 +120,8 @@ export const methods = {
       this.inkFrame = 0;
       const d = this.drawing;
       if (d?.kind !== 'ink') return;
-      // 手ぶれ補正で遅れた分は、今のペン・指の位置（raw）まで尾をのばして見せる（線の先が遅れない）。
-      // 固めた区切りは足すだけで、描き直すのは尾だけ（長い線でも重くならない）
-      const tip = d.raw ? [[d.raw[0], d.raw[1], d.cap.points.at(-1)?.[2] ?? d.raw[2]]] : [];
-      const {frozen, live} = d.draft.update(d.cap.points, [...tip, ...d.extra]);
+      // 固めた区切りは足すだけで、描き直すのは尾だけ（長い線でも重くならない）。描くのは書いた点だけ
+      const {frozen, live} = d.draft.update(d.cap.points);
       for (const f of frozen) {
         const path = document.createElementNS(SVG_NS, 'path');
         path.setAttribute('d', f);

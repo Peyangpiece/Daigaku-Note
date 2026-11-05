@@ -37,11 +37,10 @@ export const methods = {
       ev.clientY - box.top,
       pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5
     ];
-    // 下書き：固めた区切りは足すだけで、描き直すのは書いている先だけ。先は今のペン・指の位置（raw）までのばす（遅れなく見せる）
+    // 下書き：固めた区切りは足すだけで、描き直すのは書いている先だけ。描くのは書いた点だけ
     const draw = () => {
       if (!d) return;
-      const tip = d.raw ? [[d.raw[0], d.raw[1], d.cap.points.at(-1)?.[2] ?? d.raw[2]]] : [];
-      const {frozen, live} = d.draft.update(d.cap.points, tip);
+      const {frozen, live} = d.draft.update(d.cap.points);
       for (const f of frozen) {
         const p = document.createElementNS(SVG_NS, 'path');
         p.setAttribute('d', f);
@@ -88,7 +87,6 @@ export const methods = {
         pen,
         path,
         live,
-        raw: null,
         draft: createDraft(pen.width * NOTE_INK_SCALE, {pressure, feel: pen.feel}),
         pressure,
         box: svg.getBoundingClientRect(),
@@ -107,9 +105,9 @@ export const methods = {
       }
       if (!d || e.pointerId !== d.pointer) return;
       e.stopPropagation();
+      if (e.buttons === 0) return; // 押していない合成の動きは線に入れない（v0.16.28）
       for (const ev of e.getCoalescedEvents?.() ?? [e]) {
         const [x, y, pr] = point(ev, d.box, d.pressure);
-        d.raw = [x, y, pr];
         d.cap.add(x, y, pr);
       }
       draw();

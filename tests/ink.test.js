@@ -199,3 +199,37 @@ test('書いている間の下書き（createDraft）：前の区切りは固め
   assert.ok(frozen > 30, `区切りを固める（${frozen}）`);
   assert.ok(maxLive < 12000, `先のパスは短いまま（${maxLive} 文字）`);
 });
+
+test('下書き（createDraft）は書いた線の外に線を描かない：急な曲がり・折り返しでも、輪郭はどれも線から太さの半分以内（v0.16.28）', async () => {
+  const {createDraft, segmentDistance} = await import('../src/shared/ink.js');
+  // ジグザグ・折り返し・小さな輪（字のはね・止めのような急な曲がり）
+  const pts = [];
+  for (let i = 0; i < 900; i++) {
+    const t = i / 15;
+    pts.push([
+      t * 6 + Math.cos(t * 2.3) * 8,
+      (i % 120 < 60 ? i % 60 : 60 - (i % 60)) * 0.9 + Math.sin(t * 5) * 6,
+      0.2 + ((i * 7) % 10) / 10
+    ]);
+  }
+  const width = 1.5;
+  const near = (x, y) => {
+    let m = Infinity;
+    for (let i = 1; i < pts.length; i++) m = Math.min(m, segmentDistance(x, y, pts[i - 1], pts[i]));
+    return m;
+  };
+  const coords = (d) =>
+    [...d.matchAll(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  for (const feel of [
+    {th: 0.35, ts: 1.2, te: 1.5},
+    {th: 0.6, ts: 2, te: 2.6, sw: 0.28, gr: 0.06}
+  ]) {
+    const draft = createDraft(width, {feel});
+    let worst = 0;
+    for (let n = 1; n <= pts.length; n += 4) {
+      const {frozen, live} = draft.update(pts.slice(0, n));
+      for (const d of [...frozen, live]) for (const [x, y] of coords(d)) worst = Math.max(worst, near(x, y));
+    }
+    assert.ok(worst <= width * 0.9 + 0.05, `輪郭が線から離れすぎ（${worst.toFixed(2)}）`);
+  }
+});

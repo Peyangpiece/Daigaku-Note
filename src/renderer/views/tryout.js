@@ -187,12 +187,11 @@ function startInk(e, svg) {
   const add = (ev) => {
     const [x, y] = toPaper(ev, d.rect);
     d.cap.add(x, y, d.pressure === true ? (ev.pressure > 0 ? ev.pressure : 0.5) : 0.5);
-    d.raw = [x, y];
   };
-  // 書いている間：手ぶれ補正で遅れた分は、今のペン・指の位置まで線の先をのばして見せる（v0.16.27）
+  // 書いている間の線（書いた点だけを描く）
   const draw = () => {
     d.frame = 0;
-    const pts = d.raw ? [...d.cap.points, [d.raw[0], d.raw[1], d.cap.points.at(-1)?.[2] ?? 0.5]] : d.cap.points;
+    const pts = d.cap.points; // 書いた点だけを描く（今の位置までの直線は足さない。v0.16.28）
     d.el.outerHTML = strokeSvg(d.ink, pts, d.pressure);
     d.el = group.lastElementChild;
     if (seenGroup) seenGroup.lastElementChild.innerHTML = seenSvg(d.ink, pts, d.pressure);
@@ -201,7 +200,7 @@ function startInk(e, svg) {
   draw();
   svg.setPointerCapture(e.pointerId);
   const move = (ev) => {
-    if (ev.pointerId !== e.pointerId) return;
+    if (ev.pointerId !== e.pointerId || ev.buttons === 0) return; // 押していない合成の動きは線に入れない（v0.16.28）
     for (const c of ev.getCoalescedEvents?.() ?? [ev]) add(c);
     d.frame ||= requestAnimationFrame(draw);
   };
