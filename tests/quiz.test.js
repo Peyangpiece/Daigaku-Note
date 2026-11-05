@@ -380,7 +380,9 @@ test('API キーがなければ作らずに知らせる', async (t) => {
   const events = [];
   const svc = createQuizService({repo, secrets: {get: async () => null}, notify: (ch, p) => events.push([ch, p])});
   svc.generate(['r3']);
-  await new Promise((r) => setTimeout(r, 50));
+  // 知らせが来るまで待つ（遅い CI でも落ちないよう 10 秒まで）
+  for (let i = 0; i < 500 && !events.some(([ch]) => ch === 'quiz.finished'); i++)
+    await new Promise((r) => setTimeout(r, 20));
   const fin = events.find(([ch]) => ch === 'quiz.finished');
   assert.equal(fin[1].ok, false);
   assert.equal(fin[1].message, 'クイズを作るには Claude API キーが必要です（設定 → クイズ）');
@@ -421,7 +423,8 @@ test('このパソコンの Claude Code で作る：探した場所を覚え、�
   svc.setEngine('claude-code');
   assert.deepEqual(await svc.keyInfo(), {set: true, engine: 'claude-code', apiKey: false});
   svc.generate(['r3']);
-  for (let i = 0; i < 50 && !events.some(([ch]) => ch === 'quiz.finished'); i++)
+  // 作り終わるまで待つ（遅い CI の Windows では 1 秒を超えることがあったので、10 秒まで。終わればすぐ進む）
+  for (let i = 0; i < 500 && !events.some(([ch]) => ch === 'quiz.finished'); i++)
     await new Promise((r) => setTimeout(r, 20));
   const fin = events.find(([ch]) => ch === 'quiz.finished');
   assert.equal(fin[1].ok, true, fin[1].message);
