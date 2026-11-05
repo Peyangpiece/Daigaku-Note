@@ -188,12 +188,11 @@ function importsPanel(data) {
       </div>
       ${
         p.source === 'teams' && p.host
-          ? `<label class="imports__remember"><input type="checkbox" data-import-remember checked> 入れるとき、${esc(p.host)} を大学の Teams の資料の置き場所として覚える（次からは大学の資料として扱います）</label>`
+          ? `<label class="imports__remember"><input type="checkbox" data-import-remember checked> 次から ${esc(p.host)} の資料を大学の資料にする</label>`
           : ''
       }
     </li>`;
   return `<section class="imports card" aria-labelledby="imports-title"><h2 class="home-sec" id="imports-title">振り分け待ち ${items.length}</h2>
-    <p class="muted">授業と回を選んで「入れる」と、その授業の資料になります（元のファイルはそのまま残ります）。</p>
     <ul class="imports__list">${items.map(row).join('')}</ul></section>`;
 }
 

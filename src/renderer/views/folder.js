@@ -38,7 +38,7 @@ function eachChoice(data) {
   return `<fieldset class="folder-new__scope">
       <legend>登録のしかた</legend>
       <label><input type="radio" name="fn-each" value="one"${each ? '' : ' checked'}> 選んだフォルダを 1 つ登録する</label>
-      <label><input type="radio" name="fn-each" value="each"${each ? ' checked' : ''}> 中のフォルダを 1 つずつ登録する <span class="muted">（授業ごとのフォルダが入ったフォルダを選ぶとき。名前はそれぞれのフォルダの名前）</span></label>
+      <label><input type="radio" name="fn-each" value="each"${each ? ' checked' : ''}> 中のフォルダを 1 つずつ登録する</label>
     </fieldset>`;
 }
 
@@ -56,16 +56,16 @@ export function renderFolderNew({data}, route) {
     <section class="card folder-new" data-form="folder-new-${mode}">
       ${
         mode === 'new'
-          ? `<p class="muted">保存先の中にフォルダを作ります。ファイルはあとからドラッグか「ファイルを追加」で入れます（元のファイルは残ります）。</p>
+          ? `<p class="muted">保存先の中にフォルダを作ります。</p>
         <label for="fn-name">フォルダの名前</label>
         <input class="input" id="fn-name" type="text" maxlength="80" placeholder="例：ゼミ・就活・資格の勉強" autocomplete="off">`
-          : `<p class="muted">パソコンのフォルダを、コピーせずにそのまま開きます。中身の変更は次に開いたときに反映されます。</p>
+          : `<p class="muted">パソコンのフォルダを、コピーせずに開きます。</p>
         ${eachChoice(data)}
-        <label for="fn-name">大学ノートでの名前 <span class="muted">（1 つ登録するとき。空ならフォルダの名前）</span></label>
+        <label for="fn-name">大学ノートでの名前 <span class="muted">（空ならフォルダの名前）</span></label>
         <input class="input" id="fn-name" type="text" maxlength="80" autocomplete="off">`
       }
       ${scopeChoice(useTerms)}
-      ${noTerm && useTerms ? '<p class="muted">学期が未設定のため、今日の日付から仮の学期を作ります（設定 → 授業と資料 → 学期 で直せます）。</p>' : ''}
+      ${noTerm && useTerms ? '<p class="muted">学期が未設定のため、仮の学期を作ります。</p>' : ''}
       <div class="actions">
         <button class="btn btn--primary" data-action="folder-create" data-mode="${mode}">${mode === 'new' ? '作る' : 'フォルダを選んで登録…'}</button>
       </div>
