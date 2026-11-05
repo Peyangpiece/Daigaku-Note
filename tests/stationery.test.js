@@ -523,3 +523,11 @@ test('一覧のペンの絵（flat）：3D モデルを光なしで描く 2D の
   assert.doesNotMatch(svg, /data-model-shot/, '斜めから照らした切り抜きではない');
   assert.match(toolArt(itemOf('pen-black-05')), /<ellipse/, 'ほかの所（PDF の編集画面の筆箱など）は前のまま');
 });
+
+test('一覧のペンケース・ポーチの絵（flat）：3D モデルを光なしで描く 2D の絵。影の楕円なし（v0.16.26）', () => {
+  const svg = caseArt(itemOf('case-canvas-navy'), {flat: true});
+  assert.match(svg, /data-flat-art="all"/);
+  assert.doesNotMatch(svg, /<ellipse/, '影なし');
+  assert.match(caseArt(itemOf('case-canvas-navy')), /<ellipse/, 'ほかの所は前のまま');
+  assert.match(caseArt(itemOf('pouch-flat-navy'), {flat: true}), /data-flat-art="all"/, 'ポーチも');
+});
