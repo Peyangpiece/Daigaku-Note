@@ -19,6 +19,14 @@ export const IMPORT_EXT = /\.(pdf|pptx?|docx?)$/i;
 const TEMP = /(^\.|^~\$|\.(crdownload|part|partial|download|tmp)$)/i;
 const MAX_SIZE = 300 * 1024 * 1024;
 const MAX_PENDING = 50;
+const MAX_SEEN = 3000; // 扱ったファイルの印（パス・大きさ・時刻）。探し直したとき、外したものをまた聞かない
+const MAX_SCAN = 500; // すでにあるファイルを探すときの上限（新しい順）
+
+/**
+ * ダウンロードした時刻：作った時刻と更新時刻の早いほう（ダウンロードは作ってから書くので作った時刻。コピーしてきたファイルは
+ * 作った時刻が新しくなり更新時刻は元のままなので、更新時刻）。作った時刻が取れない OS では更新時刻
+ */
+export const fileTime = (st) => (st.birthtimeMs > 0 ? Math.min(st.birthtimeMs, st.mtimeMs) : st.mtimeMs);
 
 const minutes = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
 const norm = (s) =>
@@ -162,17 +170,30 @@ export function createImporter({
     return {...r, label: labelOf(courseId, roundId)};
   }
 
-  /** 1 つのファイルを処理する（見張りから。テストからも呼ぶ） */
-  async function handle(file, from) {
+  const seenKeys = () => new Set(setting('import.seen', []) ?? []);
+  const markSeen = (key) => {
+    const list = (setting('import.seen', []) ?? []).filter((k) => k !== key);
+    list.push(key);
+    repo.setSetting('import.seen', list.slice(-MAX_SEEN));
+  };
+
+  /**
+   * 1 つのファイルを処理する（見張り・すでにあるファイルの取り込みから。テストからも呼ぶ）。
+   * backfill：設定する前からあったファイル（見張りを始めた時刻より前でも見る）。quiet：1 つずつ知らせない（まとめて知らせる）
+   */
+  async function handle(file, from, {backfill = false, quiet = false} = {}) {
     const name = path.basename(file);
     if (!IMPORT_EXT.test(name) || TEMP.test(name)) return {skipped: 'type'};
     const st = await fsp.stat(file).catch(() => null);
     if (!st?.isFile() || !st.size || st.size > MAX_SIZE) return {skipped: 'size'};
     // ダウンロードの見張りでは、見張りを始める前からあったファイル（名前を変えただけ・移しただけ）は見ない
-    if (from === 'downloads' && st.mtimeMs < startedAt - 2000) return {skipped: 'old'};
+    if (from === 'downloads' && !backfill && st.mtimeMs < startedAt - 2000) return {skipped: 'old'};
     const key = `${st.size}:${Math.round(st.mtimeMs)}`;
     if (done.get(file) === key) return {skipped: 'seen'};
+    // 前に扱ったもの（入れた・聞いた・外した・関係のないサイト）は、探し直してもまた聞かない
+    if (seenKeys().has(`${file}|${key}`)) return {skipped: 'seen'};
     done.set(file, key);
+    markSeen(`${file}|${key}`);
     let src = {kind: 'folder', host: ''};
     if (from === 'downloads') {
       src = judgeSource(await source(file).catch(() => []), {
@@ -188,7 +209,7 @@ export function createImporter({
     const courses = coursesNow();
     const guess = guessPlace({
       name,
-      at: new Date(st.mtimeMs || now().getTime()),
+      at: new Date(fileTime(st) || now().getTime()),
       courses,
       roundsOf: (id) => repo.listRounds(id),
       periodsOf
@@ -199,7 +220,7 @@ export function createImporter({
     if (sure && auto) {
       try {
         const r = await put({file, name, from}, guess.courseId, guess.roundId);
-        notify('import.done', {name, label: r.label, dup: r.result === 'dup'});
+        if (!quiet) notify('import.done', {name, label: r.label, dup: r.result === 'dup'});
         return {imported: r.result, courseId: guess.courseId, roundId: guess.roundId};
       } catch (e) {
         log(`取り込み：${name} を入れられませんでした（${e.message}）`);
@@ -218,7 +239,8 @@ export function createImporter({
       at: now().toISOString()
     };
     savePending([...pending().filter((p) => p.file !== file), item]);
-    notify('import.pending', {id: item.id, name, label: labelOf(guess.courseId, guess.roundId), source: src.kind});
+    if (!quiet)
+      notify('import.pending', {id: item.id, name, label: labelOf(guess.courseId, guess.roundId), source: src.kind});
     return {pending: item.id};
   }
 
@@ -297,5 +319,42 @@ export function createImporter({
     return {ok: true};
   }
 
-  return {refresh, list, accept, dismiss, close, handle};
+  /**
+   * 設定する前からダウンロードにあったファイルを取り込む（オンにしたとき・設定の「すでにダウンロードしたファイルを探す」）。
+   * ダウンロードした時刻（fileTime）が今学期の期間（日本時間の開始日 0 時〜終了日 24 時）のものだけ。新しい順に MAX_SCAN まで。
+   * 扱いは見張りと同じ（大学のサイトのものだけ。分からないものは聞く）。知らせは 1 つずつでなく、まとめて 1 回。
+   * 戻り：{term, checked, outside, other, pending, imported}（今学期がなければ {noTerm: true}）
+   */
+  async function scanExisting() {
+    const today = todayJst(now());
+    const term = currentTerm(repo.listTerms(), today);
+    if (!term) return {noTerm: true};
+    const from = Date.parse(`${term.start_date}T00:00:00+09:00`);
+    const to = Date.parse(`${term.end_date}T00:00:00+09:00`) + 86400000;
+    const dir = downloadsDir?.();
+    const out = {term: `${term.year} ${term.label}`, checked: 0, outside: 0, other: 0, pending: 0, imported: 0};
+    if (!dir) return out;
+    const files = [];
+    for (const name of await fsp.readdir(dir).catch(() => [])) {
+      if (!IMPORT_EXT.test(name) || TEMP.test(name)) continue;
+      const file = path.join(dir, name);
+      const st = await fsp.stat(file).catch(() => null);
+      if (!st?.isFile()) continue;
+      const t = fileTime(st);
+      if (t < from || t >= to) out.outside++;
+      else files.push([file, t]);
+    }
+    files.sort((a, b) => b[1] - a[1]);
+    for (const [file] of files.slice(0, MAX_SCAN)) {
+      out.checked++;
+      const r = await handle(file, 'downloads', {backfill: true, quiet: true}).catch(() => ({}));
+      if (r.pending) out.pending++;
+      else if (r.imported) out.imported++;
+      else if (r.skipped === 'other') out.other++;
+    }
+    if (out.pending || out.imported) notify('import.scanned', {pending: out.pending, imported: out.imported});
+    return out;
+  }
+
+  return {refresh, list, accept, dismiss, close, handle, scanExisting};
 }

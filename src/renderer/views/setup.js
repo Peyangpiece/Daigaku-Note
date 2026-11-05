@@ -6,6 +6,7 @@
 import {esc, toast} from '../ui-kit.js';
 import {navigate, reload} from '../store.js';
 import {termForm, readTermForm} from './term.js';
+import {scanDownloads} from './settings.js';
 import {ROLES, USES, features, isChukyo} from '../../shared/profile.js';
 import {LMS_FEATURE, LMS_NOTICE, LMS_TERMS, LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 
@@ -368,8 +369,11 @@ function bind() {
   if ($('su-materials'))
     $('su-materials').onclick = async () => {
       if ($('su-import-on')) {
-        const r = await api['settings.update']({patch: {importEnabled: $('su-import-on').checked}});
+        const on = $('su-import-on').checked;
+        const r = await api['settings.update']({patch: {importEnabled: on}});
         if (r?.error) return toast(r.error, {error: true});
+        // すでにダウンロードしたもの（今学期の期間）も探す。学期はこのあとの手順で決めるので、まだなければ探さない（設定からいつでも探せる）
+        if (on) scanDownloads({quietNoTerm: true}).catch(() => {});
       }
       next();
     };
@@ -380,6 +384,8 @@ function bind() {
     const r = await api['term.save']({term: readTermForm(null)});
     if (r.error) return (toast(r.error, {error: true}), false);
     draft.term = null;
+    // 授業資料を自動で取り込むをオンにしていれば、学期が決まったので、すでにダウンロードしたもの（その期間）を探す
+    if (draft.importOn) scanDownloads({quietNoTerm: true}).catch(() => {});
     return true;
   };
   if ($('su-pick'))

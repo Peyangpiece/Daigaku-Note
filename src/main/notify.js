@@ -56,6 +56,17 @@ export function createNotifier({repo, Notification, openWindow, log = () => {}, 
         body: `${payload.name ?? ''}${payload.label ? ` → ${payload.label}` : ''}`,
         route: null
       });
+    if (channel === 'import.scanned')
+      return show({
+        title: 'ダウンロード済みの授業資料を見つけました',
+        body: [
+          payload.imported ? `${payload.imported} 件を入れました` : '',
+          payload.pending ? `${payload.pending} 件は振り分け待ちです` : ''
+        ]
+          .filter(Boolean)
+          .join('・'),
+        route: null
+      });
     if (channel === 'import.pending')
       return show({
         title: payload.label ? `${payload.label} に入れますか` : '授業資料を取り込みますか',

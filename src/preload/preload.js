@@ -7,6 +7,7 @@ const INVOKE = [
   'import.list',
   'import.accept',
   'import.dismiss',
+  'import.scan',
   'setup.createConnection',
   'setup.excludeCourses',
   'connection.login',

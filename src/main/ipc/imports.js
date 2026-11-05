@@ -13,6 +13,13 @@ export function register({handle, ctx}) {
     ctx.notifyOthers?.(null, 'state.changed', {});
     return r;
   });
+  // 設定する前からダウンロードにあったファイル（今学期の期間にダウンロードしたものだけ）を取り込む
+  handle('import.scan', async () => {
+    if (!ctx.importer) bad('取り込みの準備ができていません');
+    const r = await ctx.importer.scanExisting();
+    ctx.notifyOthers?.(null, 'state.changed', {});
+    return r;
+  });
   handle('import.dismiss', ({id: itemId}) => {
     const r = importer().dismiss(id(itemId) ?? bad('振り分け待ちが不正です'));
     ctx.notifyOthers?.(null, 'state.changed', {});

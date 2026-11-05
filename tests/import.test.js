@@ -149,7 +149,14 @@ async function setup(t, settings = {}) {
   t.after(() => rm(dir, {recursive: true, force: true}));
   const store = {'import.enabled': true, 'profile.universityDomain': 'aichi-edu.ac.jp', ...settings};
   const added = [];
-  const term = {id: 't1', start_date: '2026-10-01', end_date: '2027-02-01', periods_json: JSON.stringify(PERIODS)};
+  const term = {
+    id: 't1',
+    year: 2026,
+    label: '後期',
+    start_date: '2026-10-01',
+    end_date: '2027-02-01',
+    periods_json: JSON.stringify(PERIODS)
+  };
   const courses = COURSES.map((c) => ({
     ...c,
     term_id: 't1',
@@ -258,4 +265,44 @@ test('取り込みフォルダ：本人が置いたものは推定できたら�
   await rm(path.join(s.dir, 'document.pdf'));
   await assert.rejects(s.importer.accept(s.importer.list()[0].id, 'c2'), /見つかりません/);
   assert.equal(s.importer.list().length, 0);
+});
+
+test('すでにダウンロードにあったファイル：今学期の期間にダウンロードしたものだけ取り込む。探し直しても同じものは聞かない', async (t) => {
+  const s = await setup(t);
+  s.urls['old-term.pdf'] = ['https://www.aichi-edu.ac.jp/a'];
+  s.urls['in-term.pdf'] = ['https://www.aichi-edu.ac.jp/b'];
+  s.urls['shop.pdf'] = ['https://shop.example.com/c'];
+  await s.put('old-term.pdf', 'a', '2026-09-20T12:00:00+09:00'); // 学期（10/1〜）の前
+  await s.put('in-term.pdf', 'b', '2026-10-05T20:00:00+09:00');
+  await s.put('shop.pdf', 'c', '2026-10-06T20:00:00+09:00');
+  await s.put('notes.txt', 'd', '2026-10-06T20:00:00+09:00'); // 種類が違う
+  const r = await s.importer.scanExisting();
+  assert.deepEqual(r, {term: '2026 後期', checked: 2, outside: 1, other: 1, pending: 1, imported: 0});
+  assert.deepEqual(
+    s.importer.list().map((p) => p.name),
+    ['in-term.pdf']
+  );
+  assert.deepEqual(
+    s.events.map(([ch]) => ch),
+    ['import.scanned'],
+    '知らせはまとめて 1 回'
+  );
+  // 外してから探し直しても、もう聞かない
+  s.importer.dismiss(s.importer.list()[0].id);
+  const again = await s.importer.scanExisting();
+  assert.equal(again.pending, 0);
+  assert.equal(s.importer.list().length, 0);
+});
+
+test('すでにダウンロードにあったファイル：今学期がなければ探さない', async (t) => {
+  const s = await setup(t);
+  s.importer.close();
+  const none = createImporter({
+    repo: {getSetting: (k, d) => d, setSetting: () => {}, listTerms: () => []},
+    files: {},
+    folders: {},
+    rootDir: () => s.dir,
+    downloadsDir: () => s.dir
+  });
+  assert.deepEqual(await none.scanExisting(), {noTerm: true});
 });

@@ -108,6 +108,29 @@ function quizSection(q) {
   </section>`;
 }
 
+/**
+ * 設定する前からダウンロードにあったファイルを探して取り込み、結果を知らせる（今学期の期間にダウンロードしたものだけ。v0.17.0）。
+ * オンにしたとき（セットアップ・設定）と、設定の「すでにダウンロードしたファイルを探す」から
+ */
+export async function scanDownloads({quietNoTerm = false} = {}) {
+  const r = await api['import.scan']();
+  if (r?.error) return toast(r.error, {error: true});
+  if (r.noTerm && quietNoTerm) return;
+  if (r.noTerm)
+    return toast(
+      '今学期が設定されていないため、すでにダウンロードしたファイルは探していません（学期を設定すると探せます）'
+    );
+  const parts = [
+    r.imported ? `${r.imported} 件を入れました` : '',
+    r.pending ? `${r.pending} 件はホームの「振り分け待ち」です` : ''
+  ].filter(Boolean);
+  toast(
+    parts.length
+      ? `ダウンロード済みの授業資料（${r.term}の期間）：${parts.join('・')}`
+      : `${r.term}の期間にダウンロードした授業資料で、新しく取り込むものはありませんでした`
+  );
+}
+
 /** ブラウザの準備の状態。技術的な文言は「くわしく」の中へ */
 export function browserState(b) {
   if (b?.state === 'ready') return '用意できています';
@@ -220,6 +243,8 @@ export function renderSettings({data}, route = '/settings') {
           imp.enabled
             ? `<label style="display:block; margin-top: var(--space-1)"><input type="radio" name="st-import-mode" value="ask" ${imp.mode === 'auto' ? '' : 'checked'}> 入れる前に聞く（ホームの「振り分け待ち」）</label>
         <label style="display:block"><input type="radio" name="st-import-mode" value="auto" ${imp.mode === 'auto' ? 'checked' : ''}> 授業と回が分かったら聞かずに入れる</label>
+        <div class="about__row" style="margin-top: var(--space-1)"><button class="btn btn--small" id="st-import-scan">すでにダウンロードしたファイルを探す</button></div>
+        <p class="muted" style="margin: 4px 0 0">今学期の期間にダウンロードしたものだけを探します（前に聞いたもの・外したものはもう一度聞きません）。</p>
         <p class="muted" style="margin: var(--space-2) 0 4px">大学のサイト：${s.universityDomain ? `<code>${esc(s.universityDomain)}</code>${s.university ? `（${esc(s.university)}）` : ''}` : '未登録（基本 → 大学のサイトの URL で登録できます）'}</p>
         <p class="muted" style="margin: 0 0 4px">ほかに大学の資料が置かれるサイト（Google ドライブ・OneDrive など）</p>
         ${imp.sites.length ? `<ul style="padding-left: 1.2em">${imp.sites.map((h) => `<li><code>${esc(h)}</code> <button class="btn btn--small btn--quiet" data-import-site-remove="${esc(h)}">外す</button></li>`).join('')}</ul>` : ''}
@@ -515,7 +540,16 @@ function bind() {
   $('st-univ')?.addEventListener('change', (e) => save({university: e.target.value}));
   $('st-univ-url')?.addEventListener('change', (e) => save({universityUrl: e.target.value}));
   // 授業資料の自動取り込み（v0.17.0）
-  $('st-import-on')?.addEventListener('change', (e) => save({importEnabled: e.target.checked}));
+  $('st-import-on')?.addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    await save({importEnabled: on});
+    if (on) await scanDownloads(); // オンにしたら、すでにダウンロードしたもの（今学期の期間）も探す
+  });
+  $('st-import-scan')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    await scanDownloads().finally(() => (e.target.disabled = false));
+    reload();
+  });
   document
     .querySelectorAll('input[name=st-import-mode]')
     .forEach((r) => r.addEventListener('change', () => save({importMode: r.value})));
