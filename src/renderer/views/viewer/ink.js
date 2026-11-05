@@ -3,13 +3,13 @@ import {snapRange} from '../../../shared/text-snap.js';
 import {
   boundsOf,
   createCapture,
+  createDraft,
   drawMode,
   feelStyle,
   streamlineOf,
   encodePoints,
   modeStyle,
   speedPressure,
-  strokePath,
   touchesStroke
 } from '../../../shared/ink.js';
 import {lineOf, ERASER_PX, SVG_NS} from './shared.js';
@@ -50,9 +50,12 @@ export const methods = {
     const box = pageEl.getBoundingClientRect();
     const pressure = drawMode(this.penItem, e.pointerType); // 筆圧を使わないペンは 'even'
     const vp = p.viewport;
-    const el = document.createElementNS(SVG_NS, 'path');
+    // 下書き：固めた区切りのパスと、書いている先（尾）のパスを入れる箱（shared/ink.js の createDraft。v0.16.27）
+    const el = document.createElementNS(SVG_NS, 'g');
     el.setAttribute('fill', this.penItem.color);
     el.classList.add('ink-draft');
+    const live = document.createElementNS(SVG_NS, 'path');
+    el.append(live);
     p.ink.append(el);
     // 間引き：画面で 0.3px より近い点は捨てる。なめらかさ：ペンは控えめ（遅れを小さく）、指・マウスは強め（手ぶれを抑える）
     // 手ぶれ補正はペンの書き味（型番ごと）。指・マウスは少し強め
@@ -61,6 +64,9 @@ export const methods = {
       kind: 'ink',
       p,
       el,
+      live,
+      draft: createDraft(this.penItem.width, {pressure, feel: this.penItem.feel}),
+      raw: null,
       cap,
       box,
       pressure,
@@ -96,10 +102,13 @@ export const methods = {
   },
 
   addInkPoint(d, e) {
+    // ページの画面の位置は動くたびに取り直す（書いている間にスクロール・ページが足されても、線が離れた所へ飛ばない。v0.16.27）
+    d.box = d.p.el.getBoundingClientRect();
     // 間の点（画面の描き直しより細かく来る点）もすべて使う。線がかくかくしない
     const evs = e.getCoalescedEvents?.() ?? [];
     for (const ev of evs.length ? evs : [e]) {
       const [x, y, pr] = this.inkPoint(d, ev);
+      d.raw = [x, y, pr];
       if (!d.cap.add(x, y, pr) && d.cap.points.length >= 5000) return this.finishInk(e);
     }
     // この先に来そうな点（予測）。線の先が指・ペンに遅れて見えないように、下書きにだけ足す
@@ -116,10 +125,16 @@ export const methods = {
       this.inkFrame = 0;
       const d = this.drawing;
       if (d?.kind !== 'ink') return;
-      d.el.setAttribute(
-        'd',
-        strokePath([...d.cap.points, ...d.extra], d.item.width, {pressure: d.pressure, feel: d.item.feel})
-      );
+      // 手ぶれ補正で遅れた分は、今のペン・指の位置（raw）まで尾をのばして見せる（線の先が遅れない）。
+      // 固めた区切りは足すだけで、描き直すのは尾だけ（長い線でも重くならない）
+      const tip = d.raw ? [[d.raw[0], d.raw[1], d.cap.points.at(-1)?.[2] ?? d.raw[2]]] : [];
+      const {frozen, live} = d.draft.update(d.cap.points, [...tip, ...d.extra]);
+      for (const f of frozen) {
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('d', f);
+        d.el.insertBefore(path, d.live);
+      }
+      d.live.setAttribute('d', live);
     });
   },
 
@@ -129,6 +144,7 @@ export const methods = {
     cancelAnimationFrame(this.inkFrame);
     this.inkFrame = 0;
     d.el.remove();
+    d.box = d.p.el.getBoundingClientRect();
     const [x, y, pr] = this.inkPoint(d, e);
     const points = d.cap.finish(x, y, pr);
     if (!points.length) return;
