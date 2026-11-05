@@ -303,7 +303,7 @@ export const methods = {
       if (!last) return false;
       if (record) this.pushStep({notePage: 'add'});
       // 書いている途中に足したとき（auto）は、見ている場所を動かさない
-      if (auto) toast(`下のほうまで書いたので、ページを足しました（${this.pages.length} ページ。↶ で取り消せます）`);
+      if (auto) toast(`ページを足しました（${this.pages.length} ページ）`);
       else {
         last.el.scrollIntoView({block: 'center', behavior: 'smooth'});
         toast(`ページを足しました（${this.pages.length} ページ）`);

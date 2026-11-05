@@ -32,8 +32,8 @@ function calendarSection(term, focus) {
     `<li${inTerm(e.date) ? '' : ' class="muted" title="学期の期間の外の日（数えません）"'}><span>${fmt(e.date)}</span>${kind === 'swap' ? `<span>→ ${esc(e.weekday)}曜日の授業</span>` : ''}${e.label ? `<span class="muted">${esc(e.label)}</span>` : ''}<button type="button" class="cal-remove" data-cal-remove="${kind}" data-date="${esc(e.date)}" aria-label="${fmt(e.date)} を消す" title="消す">×</button></li>`;
   return `<section class="card" style="max-width: 760px" id="tm-calendar"${focus ? ' data-scroll-into-view' : ''}>
       <h3>学年暦（授業回・休講日・振替授業日）</h3>
-      <p class="muted">大学の学年暦を入れると、回の日付と「今日の授業」が大学の予定どおりになります。学年暦に授業回（①〜⑮ や「第○回」）があれば、その日をそのまま第○回の日付にします。なければ、休講日を飛ばし、振替授業日（例：5/7（水）は月曜日の授業）を数えて計算します。祝日は自動で休みにします（祝日に授業を行う日は、その日の曜日で振替授業日に足してください）。</p>
-      <div class="actions"><button type="button" class="btn btn--primary" id="tm-cal-read">学年暦のファイルから読み取る…</button><span class="muted">PDF・Word・テキスト。授業回の丸数字・灰色のます目（休講）・「休講・休業・試験・○曜日の授業」などの言葉から読み取り、ここで確かめてから保存します（AI には送りません）</span></div>
+      <p class="muted">学年暦を入れると、回の日付が大学の予定どおりになります。祝日は自動で休みにします。</p>
+      <div class="actions"><button type="button" class="btn btn--primary" id="tm-cal-read">学年暦のファイルから読み取る…</button><span class="muted">PDF・Word・テキスト</span></div>
       ${cal.rounds?.length ? '<div class="cal-check" id="tm-round-check" aria-live="polite"></div>' : ''}
       <div class="cal-cols">
         <div>
@@ -47,7 +47,6 @@ function calendarSection(term, focus) {
           <div class="cal-add"><input type="date" class="input" id="tm-swap-date" aria-label="振替授業日"><select class="input" id="tm-swap-wd" aria-label="行う授業の曜日">${[...'月火水木金土'].map((w) => `<option>${w}</option>`).join('')}</select><span>曜日の授業</span><button type="button" class="btn btn--small" id="tm-swap-add">足す</button></div>
         </div>
       </div>
-      <p class="muted">学期の期間の外の日は数えません。保存すると、その学期の授業の回の日付をこの設定（授業回・休講日・振替授業日）にそろえます。</p>
       <div class="actions"><button type="button" class="btn btn--primary" data-tm-save>保存</button></div>
     </section>`;
 }
@@ -73,7 +72,7 @@ export function termForm(data, term, {compact = false} = {}) {
       <label>回数<select class="input" id="tm-rounds">${[...new Set([...ROUNDS, term?.rounds ?? 15])].map((n) => `<option ${n === (term?.rounds ?? 15) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       <label>時限の開始時刻<select class="input" id="tm-preset"><option value="">${term?.periods_json ? '（いまの設定のまま）' : '（あとで設定）'}</option>${(data.presets ?? []).map((p) => `<option>${esc(p)}</option>`).join('')}</select></label>
     </div>${compact ? '</details>' : ''}
-    <p class="muted">開始日・終了日を空にすると学期名からの既定（春・前期 4/1〜9/30、秋・後期 10/1〜3/31）になります。学期名を変えても日付は変わらないので、時期も変わるときは開始日・終了日を直してください。</p>`;
+    <p class="muted">開始日・終了日を空にすると、学期名からの既定の期間になります。</p>`;
 }
 
 /** 入力欄から term.save に渡す値。時限と休みの日は、選び直さなければいまの設定を引き継ぐ */
@@ -124,7 +123,7 @@ export function renderTerm({data}, route = '/settings/term') {
           ? `<p class="muted">この学期は ${over.map((t) => `${t.year} ${esc(t.label)}`).join('・')} と期間が重なっています。重なっている日は、期間の短い学期を「今の学期」として使います。</p>`
           : '';
       })()}
-      ${term ? '<p class="muted">年度・学期名を変えると、パソコンの学期フォルダ（例：2026_秋学期）の名前も変わります。授業や資料はこの学期に付いたままです。</p>' : ''}
+      ${term ? '<p class="muted">学期フォルダの名前も変わります。</p>' : ''}
       <div class="actions"><button class="btn btn--primary" id="tm-save">保存</button>${
         term && terms.length > 1 && !(data.courses ?? []).some((c) => c.term_id === term.id)
           ? '<button class="btn btn--quiet" id="tm-remove" title="授業・フォルダのない学期だけ消せます">この学期を消す</button>'
@@ -156,7 +155,7 @@ function renderRoundCheck() {
     }</li>`;
   const parts = [res.start && `開始日を ${fmt(res.start)}に`, res.end && `終了日を ${fmt(res.end)}に`].filter(Boolean);
   box.innerHTML = res.rows.length
-    ? `<h4>授業回 <span class="muted">学年暦の丸数字の日を、そのまま第○回の日付にします（第 N 回 ＝ その曜日の N 番目の丸数字の日）</span></h4>
+    ? `<h4>授業回</h4>
     <ul class="cal-check__list">${res.rows.map(li).join('')}</ul>
     ${parts.length ? `<p class="muted">学年暦の授業回が学期の期間からはみ出しています。</p><div class="actions"><button type="button" class="btn btn--small" id="tm-round-fix">期間を学年暦に合わせる（${parts.join('・')}）</button></div>` : ''}
     <div class="actions"><button type="button" class="btn btn--small btn--quiet" id="tm-round-clear">授業回を使わない（休講日・振替授業日から計算する）</button></div>`

@@ -121,27 +121,26 @@ function stepLms(data, n) {
       : '<button class="btn" data-action="nav" data-route="/settings?tab=lms">やめる</button>';
   if (!draft.connectionId)
     return `<h2>${n}. manabo とつなぐ</h2>
-    <p class="muted">manabo のトップページの URL（ブラウザで manabo を開いたときのアドレス）を入れて「次へ」を押します。つなぐと、授業の資料を自動で集めます（試験中）。</p>
+    <p class="muted">manabo のトップページの URL を入れてください。</p>
     <label class="sr-only" for="su-url">manabo の URL</label>
     <input class="input" id="su-url" type="url" placeholder="https://manabo.example-u.ac.jp/" value="${esc(draft.url)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)}${c.kind === 'manual' ? ` <span class="muted">${esc(KIND_LABEL.manual)}</span>` : ''}</label>`).join('')}</div>
     ${draft.connectorId ? `<label class="su-label">名前（ホームや設定に出ます）<input class="input" id="su-label" maxlength="60" placeholder="例：manabo" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
     <div class="actions">${back}<button class="btn btn--primary" id="su-next1">次へ</button></div>
-    ${draft.connectorId ? '' : draft.detected ? '<p role="status">manabo の URL ではないようです。ブラウザで manabo のトップページを開いたときのアドレスかどうか確かめてください。</p>' : '<p class="muted">「次へ」を押すと、manabo の URL か確かめます。</p>'}`;
+    ${draft.connectorId ? '' : draft.detected ? '<p role="status">manabo の URL ではないようです。</p>' : ''}`;
   const body =
     draft.kind === 'api'
-      ? `<p class="muted">Moodle の ID とパスワードを入れます。このパソコンの中だけに暗号化して保存し、トークンを取得します。</p>
+      ? `
          <label class="sr-only" for="su-user">ID</label><input class="input" id="su-user" placeholder="ID" autocomplete="username">
          <label class="sr-only" for="su-pass">パスワード</label><input class="input" id="su-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top: var(--space-1)">`
       : draft.kind === 'recipe'
-        ? `<p class="muted">manabo は、ブラウザの窓を開いてログインします。窓でいつもどおりログインすると、窓は自動で閉じます。あとで（設定 → 授業と manabo の「ログイン」から）ログインしてもかまいません。</p>
-           <label style="display:block; margin: var(--space-2) 0 var(--space-1)"><input type="checkbox" id="su-auto" checked> 次回から自動でログインする（ID とパスワードを、このパソコンの中だけに暗号化して保存します）</label>
+        ? `<p class="muted">開いた窓でログインしてください。</p>
+           <label style="display:block; margin: var(--space-2) 0 var(--space-1)"><input type="checkbox" id="su-auto" checked> 次回から自動でログインする</label>
            <div id="su-auto-fields">
              <label class="sr-only" for="su-user">ID</label><input class="input" id="su-user" placeholder="ID（学籍番号など）" autocomplete="username">
              <label class="sr-only" for="su-pass">パスワード</label><input class="input" id="su-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top: var(--space-1)">
-             <p class="muted">開いた窓にも ID とパスワードを入れておくので、「ログイン」を押すだけです。大学からメールで届く認証コードを聞かれたときだけ、コードを入れてください（アプリはメールを読みません）。</p>
            </div>`
-        : `<p class="muted">この接続では、ここでのログインはありません。次へ進んでください。</p>`;
+        : '';
   const main = draft.kind === 'api' ? 'ログインして次へ' : draft.kind === 'recipe' ? 'ログイン窓を開く' : '次へ';
   const name = draft.label || draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name || 'manabo';
   return `<h2>${n}. manabo とつなぐ</h2>
@@ -154,12 +153,12 @@ function stepLms(data, n) {
 // 授業の確認と最初の同期（SPEC §6.3 の手順 3・6 を 1 つに）：同期する授業を選んで、そのまま同期を始める
 function stepCoursesSync(data, n) {
   const list = draft.courses.length
-    ? `<p class="muted">同期する授業を選びます（既定は全部）。外した授業は同期せず、ホームでは「非表示」にまとめます（設定 → 授業 で戻せます）。</p>
+    ? `<p class="muted">同期する授業を選んでください。</p>
        <div id="su-courses">${draft.courses.map((c, i) => `<label style="display:block"><input type="checkbox" id="su-c${i}" checked data-lms="${esc(c.lmsId)}"> ${esc(c.name)}${c.weekday ? ` <span class="muted">${esc(c.weekday)}曜${c.period ? ` ${c.period}限` : ''}</span>` : ''}</label>`).join('')}</div>`
     : `<p class="muted">${draft.coursesLoaded ? '授業が取れませんでした。ログインできているか、学期が始まっているかを確かめてください。' : 'まだ授業の一覧を読んでいません（ログインがまだのため）。'}最初の同期で、全部の授業を取り込みます。</p>`;
   return `<h2>${n}. 授業の確認と最初の同期</h2>
     ${list}
-    <p class="muted">「同期を始める」で全授業・全回の資料を取り込みます。数分かかることがあります。進み具合はホームの下に出ます。</p>
+    <p class="muted">数分かかることがあります。</p>
     <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-sync">同期を始めてホームへ</button></div>`;
 }
 // 使う人と使い方を 1 つの画面で選ぶ（大学生のときだけ大学名を入れる。いまは記録するだけ）。使い方はいくつでも。ホームの並びと設定の項目がこれに合わせて変わる
@@ -179,13 +178,13 @@ function stepProfile(data, n) {
       role === 'student'
         ? `<label class="role-pick__univ">大学名（必須）<input class="input" id="su-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(university)}"></label>
     <label class="role-pick__univ">大学のサイトの URL（任意）<input class="input" id="su-univ-url" type="url" maxlength="300" placeholder="例：https://www.example-u.ac.jp/" value="${esc(draft.universityUrl ?? (data.settings.universityDomain ? `https://${data.settings.universityDomain}/` : ''))}"></label>
-    <p class="muted" style="margin-top: 4px">大学のホームページ・ポータル・LMS のどれかのアドレスです。授業資料を自動で取り込むとき、大学のサイトから落としたファイルかを見分けるのに使います（このパソコンの中だけに保存します）。</p>`
+`
         : ''
     }
     ${
       role
         ? `<h3 class="su-sub">何に使いますか</h3>
-    <p class="muted">いくつでも選べます（あとから 設定 → 基本 → 使い方 で変えられます）。</p>
+    <p class="muted">いくつでも選べます。</p>
     <div class="use-pick" role="group" aria-label="使い方">${USES[role]
       .map(
         ([k, l, d]) =>
@@ -230,7 +229,7 @@ function stepMaterials(data, n) {
       chukyo
         ? ''
         : `<label class="su-import-on"><input type="checkbox" id="su-import-on" ${importOn ? 'checked' : ''}> <strong>授業資料を自動で取り込む</strong></label>
-    <p class="muted" style="margin-top: 4px">大学のサイトからダウンロードした PDF・PowerPoint・Word を見つけて、授業と回を推定し「入れますか」と聞きます。大学と関係のないサイトのファイルには何もしません。あとから 設定 → 授業と資料 でも変えられます。</p>`
+`
     }
     <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-materials" ${m ? '' : 'disabled'}>次へ</button></div>`;
 }
@@ -249,7 +248,6 @@ function stepLmsTerms(data, n) {
 }
 function stepTerm(data, n) {
   return `<h2>${n}. 学期の設定</h2>
-    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 授業 → 学期 で直せます）。</p>
     ${termForm(data, null, {compact: true})}
     <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : ''}<button class="btn btn--primary" id="su-next4">保存して次へ</button></div>`;
 }
@@ -267,7 +265,6 @@ function stepTermRoot(data, n) {
     ${
       terms
         ? `<h3 class="su-sub">学期</h3>
-    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 授業 → 学期 で直せます）。</p>
     ${termForm(data, kept, {compact: true})}
     <h3 class="su-sub">保存先</h3>`
         : ''

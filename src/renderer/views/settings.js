@@ -22,12 +22,11 @@ function autoLogin(c) {
     }
   })();
   if (c.save_password)
-    return `<div class="muted" style="margin-top: 6px">自動ログイン：オン（保存した ID とパスワードで入ります）${learned ? '' : '。<strong>最初に一度「ログインし直す」で窓からログインしてください</strong>（通るページを覚えて、次から自動で入ります）'} <button class="btn btn--small" data-forget-pass="${esc(c.id)}">自動ログインをやめる</button></div>`;
-  return `<details style="margin-top: 6px"><summary class="muted">自動ログイン：オフ — ID とパスワードを保存して自動でログインする</summary>
+    return `<div class="muted" style="margin-top: 6px">自動ログイン：オン${learned ? '' : '。<strong>最初に一度「ログイン」で窓からログインしてください</strong>'} <button class="btn btn--small" data-forget-pass="${esc(c.id)}">自動ログインをやめる</button></div>`;
+  return `<details style="margin-top: 6px"><summary class="muted">自動ログイン：オフ</summary>
     <div data-form="${esc(c.id)}" style="display:grid; gap: var(--space-1); max-width: 360px; margin-top: var(--space-1)">
       <label class="sr-only" for="st-user-${esc(c.id)}">ID</label><input class="input" id="st-user-${esc(c.id)}" placeholder="ID（学籍番号など）" autocomplete="username">
       <label class="sr-only" for="st-pass-${esc(c.id)}">パスワード</label><input class="input" id="st-pass-${esc(c.id)}" type="password" placeholder="パスワード" autocomplete="current-password">
-      <p class="muted" style="margin:0">このパソコンの中だけに暗号化して保存します。メールの認証コードを聞かれたときは、要確認からログイン窓を開いてコードを入れてください。</p>
       <div><button class="btn btn--small" data-save-pass="${esc(c.id)}">保存してオンにする</button></div>
     </div></details>`;
 }
@@ -219,7 +218,6 @@ export function renderSettings({data}, route = '/settings') {
       ${
         showManabo
           ? `<section class="card" id="st-lms"><h3>manabo</h3>
-        <p class="muted">つなぐと、授業の資料を自動で集めます（試験中）。</p>
         ${
           lmsConns.length
             ? `<ul style="padding-left: 1.2em">${lmsConns
@@ -241,29 +239,27 @@ export function renderSettings({data}, route = '/settings') {
           : ''
       }
       <section class="card" id="st-import"><h3>授業資料を自動で取り込む</h3>
-        <p class="muted">大学のサイトからダウンロードした PDF・PowerPoint・Word を見つけて、授業と回を推定して入れます。保存先の「取り込み」フォルダに置いたファイルも入れます。大学と関係のないサイトのファイルには何もしません。元のファイルはそのまま残ります。</p>
+        <p class="muted">大学のサイトからダウンロードした資料を、授業ごとに入れます。</p>
         <label style="display:block"><input type="checkbox" id="st-import-on" ${imp.enabled ? 'checked' : ''}> 取り込む</label>
         ${
           imp.enabled
             ? `<label style="display:block; margin-top: var(--space-1)"><input type="radio" name="st-import-mode" value="ask" ${imp.mode === 'auto' ? '' : 'checked'}> 入れる前に聞く（ホームの「振り分け待ち」）</label>
         <label style="display:block"><input type="radio" name="st-import-mode" value="auto" ${imp.mode === 'auto' ? 'checked' : ''}> 授業と回が分かったら聞かずに入れる</label>
         <div class="about__row" style="margin-top: var(--space-1)"><button class="btn btn--small" id="st-import-scan">すでにダウンロードしたファイルを探す</button></div>
-        <p class="muted" style="margin: 4px 0 0">今学期の期間にダウンロードしたものだけを探します（前に聞いたもの・外したものはもう一度聞きません）。</p>
-        <p class="muted" style="margin: var(--space-2) 0 4px">大学のサイト：${s.universityDomain ? `<code>${esc(s.universityDomain)}</code>${s.university ? `（${esc(s.university)}）` : ''}` : '未登録（基本 → 大学のサイトの URL で登録できます）'}</p>
-        <p class="muted" style="margin: 0 0 4px">ほかに大学の資料が置かれるサイト（大学ごとのアドレスだけ。Google ドライブ・sharepoint.com のような、だれでも使う共通のサービスは足せません。Teams は下の「Teams と連携」から）</p>
+        <p class="muted" style="margin: var(--space-2) 0 4px">大学のサイト：${s.universityDomain ? `<code>${esc(s.universityDomain)}</code>${s.university ? `（${esc(s.university)}）` : ''}` : '未登録（基本 → 大学のサイトの URL）'}</p>
+        <p class="muted" style="margin: 0 0 4px">ほかの大学のサイト</p>
         ${others.length ? `<ul style="padding-left: 1.2em">${others.map((h) => `<li><code>${esc(h)}</code>${sharedHost(h) ? ' <span class="muted">（共通のサービスなので使っていません）</span>' : ''} <button class="btn btn--small btn--quiet" data-import-site-remove="${esc(h)}">外す</button></li>`).join('')}</ul>` : ''}
         <div class="about__row"><input class="input" id="st-import-site" type="url" placeholder="https://〇〇.app.box.com/" style="max-width: 22em"><button class="btn btn--small" id="st-import-site-add">足す</button></div>`
             : ''
         }
       </section>
       <details class="card st-teams" id="st-teams"><summary><h3>Teams と連携</h3>${teamsSites.length ? `<span class="muted">${teamsSites.length} か所を覚えています</span>` : ''}</summary>
-        <p class="muted">Teams で配られた資料は、大学ごとの SharePoint（〇〇.sharepoint.com）に置かれています。そのアドレスを覚えると、Teams からダウンロードした資料を大学の資料として取り込めます（「授業資料を自動で取り込む」をオンにして使います）。</p>
-        ${imp.enabled ? '' : '<p role="status">いまは「授業資料を自動で取り込む」がオフです。オンにすると使えます。</p>'}
+        <p class="muted">大学の SharePoint のアドレスを覚えると、Teams の資料を取り込めます。</p>
+        ${imp.enabled ? '' : '<p role="status">「授業資料を自動で取り込む」をオンにすると使えます。</p>'}
         <ol class="st-teams__how">
           <li>Teams で資料のファイルを開き、「…」→「ブラウザーで開く」（または「SharePoint で開く」）を押す</li>
           <li>ブラウザのアドレス欄の <code>https://〇〇.sharepoint.com/…</code> をコピーして、下に貼る</li>
         </ol>
-        <p class="muted">Teams から落とした資料をホームの「振り分け待ち」で入れるときに、「覚える」に印を付けても覚えられます。</p>
         ${teamsSites.length ? `<ul style="padding-left: 1.2em">${teamsSites.map((h) => `<li><code>${esc(h)}</code> <button class="btn btn--small btn--quiet" data-import-site-remove="${esc(h)}">外す</button></li>`).join('')}</ul>` : '<p class="muted">まだ覚えていません。</p>'}
         <div class="about__row"><input class="input" id="st-teams-site" type="url" placeholder="https://〇〇.sharepoint.com/sites/…" style="max-width: 24em"><button class="btn btn--small" id="st-teams-site-add">覚える</button></div>
       </details>
@@ -275,7 +271,6 @@ export function renderSettings({data}, route = '/settings') {
           <label>途中の確認<select class="input" id="st-every">${[0, 1, 3, 6].map((h) => `<option value="${h}" ${s.everyHours === h ? 'selected' : ''}>${h ? `${h} 時間ごと` : 'しない'}</option>`).join('')}</select></label>
         </div>
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-class" ${s.classStart ? 'checked' : ''}> 授業の始まる時刻にも同期する</label>
-        <p class="muted" style="margin: 4px 0 0">同期は大学ノートを開いている間に動きます。</p>
       </section>`
           : ''
       }`,
@@ -287,7 +282,7 @@ export function renderSettings({data}, route = '/settings') {
         <div class="about__row"><button class="btn btn--small" data-action="open-root">開く</button><button class="btn btn--small" data-action="pick-dir">変える…</button>${s.root !== s.defaultRoot ? '<button class="btn btn--small btn--quiet" data-action="reset-dir">既定に戻す</button>' : ''}</div>
       </section>
       <section class="card" id="st-data"><h3>バックアップ</h3>
-        <p class="muted">記録・書き込み・クイズ・設定をまとめたファイルです（資料のファイルは含みません）。毎日自動で 7 日分取っています。</p>
+        <p class="muted">資料のファイルは含みません。毎日自動で 7 日分取っています。</p>
         <div class="about__row"><button type="button" class="btn btn--small" data-backup="export">書き出す</button><button type="button" class="btn btn--small" data-backup="import">読み込む…</button><button type="button" class="btn btn--small btn--quiet" data-backup="dir">自動バックアップを開く</button></div>
       </section>`,
     about: `
@@ -337,7 +332,7 @@ async function renderMobile(box, st = null, pair = null) {
         .join('')}</ul>`
     : '<p class="muted">つないだスマホはまだありません。</p>';
   box.innerHTML = `
-    <p class="muted">同じ Wi-Fi のスマホで、資料・復習・書き込みを使えます。インターネットには送りません。</p>
+    <p class="muted">同じ Wi-Fi のスマホで使えます。</p>
     <label style="display:block"><input type="checkbox" data-mobile-on ${s.enabled ? 'checked' : ''}> スマホとつなぐ</label>
     ${
       s.enabled
@@ -608,7 +603,7 @@ function bind() {
       });
       if (r?.error) return toast(r.error, {error: true});
       $(`st-pass-${cid}`).value = '';
-      toast('自動ログインをオンにしました。次の同期から使います');
+      toast('自動ログインをオンにしました');
       reload();
     })
   );

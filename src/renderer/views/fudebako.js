@@ -663,7 +663,7 @@ function orderPage(s, id) {
       <p class="muted">注文番号 <code>${esc(o.id)}</code>・${esc(at)}・${esc(payLabel)}</p>
       <ul class="shop-rows">${rows}</ul>
       <dl class="shop-total">${o.points ? `<dt class="shop-total__sum">合計（ポイント）</dt><dd class="shop-total__sum">${pt(o.points)}</dd>` : ''}${o.total || !o.points ? `<dt class="shop-total__sum">合計（円）</dt><dd class="shop-total__sum">${yen(o.total)}</dd>` : ''}</dl>
-      <p class="muted">買った文房具は「わたしの筆箱」に入りました。筆箱に入れると PDF の編集画面で使えます。</p>
+      <p class="muted">買った文房具は「わたしの筆箱」に入りました。</p>
       <p class="shop-done__act"><button type="button" class="btn btn--primary" data-action="nav" data-route="/fudebako">持ち物の筆箱へ</button><button type="button" class="btn" data-action="nav" data-route="${SHOP}">ショップへ戻る</button></p>
     </div>`;
 }
