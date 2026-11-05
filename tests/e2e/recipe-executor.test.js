@@ -317,7 +317,7 @@ test(
  * 模擬の統合認証：LMS（127.0.0.1）に未ログインで来ると IdP（localhost。別のホスト）へ転送。
  * IdP は ID のページ → パスワードのページ →（code: true なら）認証コードのページ → LMS の /sso?ticket=… に戻して Cookie を付ける
  */
-async function mockSso({code = false, localLogin = false} = {}) {
+async function mockSso({code = false, localLogin = false, stale = 0} = {}) {
   const page = (body) => `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
   const send = (res, b, status = 200, headers = {}) => {
     res.writeHead(status, {'Content-Type': 'text/html; charset=utf-8', ...headers});
@@ -329,10 +329,18 @@ async function mockSso({code = false, localLogin = false} = {}) {
       req.on('data', (c) => (body += c));
       req.on('end', () => resolve(new URLSearchParams(body)));
     });
-  const seen = {users: [], passwords: 0, codes: [], local: 0};
+  const seen = {users: [], passwords: 0, codes: [], local: 0, stale: 0};
   let lmsBase = '';
   const idp = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
+    // stale：統合認証の「過去のリクエスト」の画面を、最初の stale 回だけ出す（戻る・再読み込みで同じ要求を送り直したとき）
+    if (url.pathname === '/idp/login' && req.method === 'GET' && seen.stale < stale) {
+      seen.stale++;
+      return send(
+        res,
+        '<h1>ウェブログインサービス - 過去のリクエスト</h1><p>セキュアなウェブサイトやアプリケーションを閲覧中にブラウザの[戻る]ボタンを使用したため、このページが表示されている可能性があります。</p>'
+      );
+    }
     if (url.pathname === '/idp/login' && req.method === 'GET')
       return send(
         res,
@@ -459,6 +467,46 @@ test(
       assert.deepEqual(await connector.login(on, 'headless'), {ok: true});
     } finally {
       await connector.releaseContext(on);
+    }
+  }
+);
+
+test(
+  '自動ログイン：統合認証の「過去のリクエスト」の画面が出たら、LMS の最初のページから 1 回だけやり直す（v0.16.31）',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor(recipeBase, {session, secrets});
+    const conn = {university_host: '127.0.0.1', allowed_hosts_json: '["localhost"]'};
+    const cred = {credentials: {user: 'stu', password: 'pw'}};
+
+    const once = await mockSso({stale: 1});
+    t.after(once.close);
+    const ctx = await connector.createContext({...conn, id: 'st1', base_url: once.base});
+    try {
+      assert.deepEqual(await connector.login(ctx, 'headless', cred), {ok: true});
+      assert.equal(once.seen.stale, 1, '過去のリクエストの画面が 1 回出た');
+      assert.equal(once.seen.passwords, 1);
+      assert.equal(await connector.ensureSession(ctx), 'ok');
+    } finally {
+      await connector.releaseContext(ctx);
+    }
+
+    // やり直しても続くときは、何度も試さず本人に任せる
+    const always = await mockSso({stale: 99});
+    t.after(always.close);
+    const ctx2 = await connector.createContext({...conn, id: 'st2', base_url: always.base});
+    try {
+      await assert.rejects(
+        connector.login(ctx2, 'headless', cred),
+        (e) => e.code === 'login-needs-user' && /過去のリクエスト/.test(e.message)
+      );
+      assert.equal(always.seen.stale, 2, 'やり直すのは 1 回だけ');
+      assert.equal(always.seen.passwords, 0);
+    } finally {
+      await connector.releaseContext(ctx2);
     }
   }
 );
@@ -690,5 +738,37 @@ test(
     await badPage.close(); // 本人が窓を閉じる
     assert.notEqual(await badDone, 'ok', '本人が閉じたらログインできていない');
     await connector.releaseContext(bad);
+  }
+);
+
+test(
+  '見えるログイン窓：統合認証の「過去のリクエスト」の画面が出たら、最初のページから開き直してログインを続ける（v0.16.31）',
+  {
+    skip:
+      (!playwright && 'Playwright が入っていません') ||
+      (process.platform === 'linux' && !process.env.DISPLAY && '画面がありません（xvfb-run で動かす）')
+  },
+  async (t) => {
+    const sso = await mockSso({stale: 1});
+    t.after(sso.close);
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor({...recipeBase, allowedHosts: ['localhost']}, {session, secrets});
+    await secrets.set('conn:vs:password', {user: 'stu', password: 'pw'});
+    const ctx = await connector.createContext({
+      id: 'vs',
+      base_url: sso.base,
+      university_host: '127.0.0.1',
+      save_password: 1
+    });
+    try {
+      const r = await connector.login(ctx, 'visible');
+      assert.equal(r.ok, true);
+      assert.equal(sso.seen.stale, 1, '過去のリクエストの画面が 1 回出た');
+      assert.equal(sso.seen.passwords, 1);
+    } finally {
+      await connector.releaseContext(ctx);
+    }
   }
 );

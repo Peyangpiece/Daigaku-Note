@@ -93,6 +93,21 @@ export function credentialUrlAllowed(url, {base, hosts = []} = {}) {
 }
 
 /**
+ * 統合認証（Shibboleth の IdP）の「過去のリクエスト（Stale Request）」の画面か（v0.16.31）。
+ * 同じログインの要求をもう一度送った（戻る・再読み込み・古い要求）ときに IdP が出す。アカウントの制限ではなく、
+ * LMS の最初のページからログインをやり直せば通る。url は IdP のページ（/idp/ を含む）、text は画面の文字
+ */
+export function staleSsoPage(url, text) {
+  let path = '';
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    return false;
+  }
+  return /\/idp\//i.test(path) && /過去のリクエスト|Stale Request/i.test(String(text ?? ''));
+}
+
+/**
  * ページの中で欄を探して印を付ける（Playwright の page.evaluate に渡すので、外の変数を使わない）。
  * 返り値：{user, password, submit, extra, code, filledUser, filledPassword}
  *   user / password / submit：見つけたか。extra：ID・パスワード以外に入力が要りそうな欄（認証コード・検索欄など）があるか。
