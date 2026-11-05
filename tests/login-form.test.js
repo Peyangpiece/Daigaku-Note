@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {credentialUrlAllowed, siteOf} from '../src/main/browser/login-form.js';
+import {credentialUrlAllowed, siteOf, staleSsoPage} from '../src/main/browser/login-form.js';
 
 test('ID・パスワードを入れてよいページ：https で、LMS と同じ組織のドメインかレシピのホストだけ', () => {
   assert.equal(siteOf('lms.example-u.ac.jp'), 'example-u.ac.jp');
@@ -36,4 +36,28 @@ test('ID・パスワードを入れてよいページ：https で、LMS と同�
   assert.ok(!credentialUrlAllowed('https://ac.jp/', {base}), 'ac.jp そのものは同じ組織ではない');
   assert.ok(credentialUrlAllowed('http://127.0.0.1:3000/login', {base: 'http://127.0.0.1:3000'}), '手元の試験用');
   assert.ok(!credentialUrlAllowed('not a url', {base}));
+});
+
+test('統合認証の「過去のリクエスト」の画面を見分ける（v0.16.31）', () => {
+  const ja =
+    'ウェブログインサービス - 過去のリクエスト\nセキュアなウェブサイトやアプリケーションを閲覧中にブラウザの[戻る]ボタンを…';
+  assert.equal(staleSsoPage('https://idp.example-u.ac.jp/idp/profile/SAML2/POST/SSO', ja), true);
+  assert.equal(
+    staleSsoPage(
+      'https://idp.example-u.ac.jp/idp/profile/SAML2/Redirect/SSO?execution=e1s1',
+      'Web Login Service - Stale Request'
+    ),
+    true
+  );
+  assert.equal(
+    staleSsoPage('https://idp.example-u.ac.jp/idp/profile/SAML2/POST/SSO', 'ログイン'),
+    false,
+    'ふつうのログイン画面'
+  );
+  assert.equal(
+    staleSsoPage('https://lms.example-u.ac.jp/course/view.php', '過去のリクエスト'),
+    false,
+    'IdP 以外のページ'
+  );
+  assert.equal(staleSsoPage('not a url', ja), false);
 });

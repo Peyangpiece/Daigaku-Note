@@ -13,6 +13,7 @@ import {
 import {parseRound} from '../../shared/rounds.js';
 import {parseSlot} from './slot.js';
 import {credentialUrlAllowed, markLoginForm, noAutofillHost} from '../browser/login-form.js';
+import {isStale} from '../browser/session.js';
 
 const META = new Set(['url', 'items', 'openBeforeRead', 'files', 'container']);
 const FILE_LINK =
@@ -377,9 +378,24 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       let sentUser = false;
       let sentPassword = false;
       let ssoClicks = 0;
+      let restarted = false;
       for (let step = 0; step < 8; step++) {
         const host = safeHost(page.url());
         if (host === baseHost && (await this._isLoggedIn(page, ctx))) return;
+        // 統合認証の「過去のリクエスト」の画面：LMS の最初のページから 1 回だけやり直す（v0.16.31。アカウントの制限ではない）
+        if (await isStale(page)) {
+          if (restarted)
+            throw err(
+              'login-needs-user',
+              '統合認証のページが「過去のリクエスト」になりました。設定 → 授業と LMS の「ログイン」で窓を開いてください'
+            );
+          restarted = true;
+          ssoClicks = 0;
+          // 「過去のリクエスト」はパスワードの誤りではないので、やり直しでは 1 回だけ送り直してよい（送るのは合わせて 2 回まで）
+          sentUser = sentPassword = false;
+          await this._goto(page, ctx, ctx.base + '/');
+          continue;
+        }
         if (!host || !allowed(host))
           throw err(
             'login-required',

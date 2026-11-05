@@ -1,7 +1,7 @@
 // Playwright のブラウザ文脈・Cookie の保存・見えるログイン窓（DESIGN-M0 §8.5）。
 // ふだんはヘッドレス。本人の操作が要るときだけ別の Chromium を画面に出す。開ける先は許可したホストだけ。
 import {hostAllowed} from '../../shared/recipe.js';
-import {credentialUrlAllowed, markLoginForm} from './login-form.js';
+import {credentialUrlAllowed, markLoginForm, staleSsoPage} from './login-form.js';
 
 const BLOCK_TYPES = new Set(['image', 'font', 'media']);
 
@@ -158,6 +158,7 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
           .catch(() => {});
       });
     const started = Date.now();
+    let restarts = 0;
     try {
       await page.goto(url, {waitUntil: 'domcontentloaded'}).catch(() => {});
       await pressSso();
@@ -167,6 +168,16 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
           throw Object.assign(new Error('ログイン窓が閉じられました'), {code: 'login-cancelled'});
         if (captured) break;
         if (await Promise.resolve(isLoggedIn?.(page)).catch(() => false)) break;
+        // 統合認証の「過去のリクエスト」の画面（戻る・再読み込みで同じ要求を送り直したとき）：最初のページから開き直す。
+        // 保存したパスワードは送り直さない（欄には入れる。押すのは本人）。3 回まで
+        if (restarts < 3 && (await isStale(page))) {
+          restarts++;
+          onStatus('ログインの画面を開き直しました');
+          await page.goto(url, {waitUntil: 'domcontentloaded'}).catch(() => {});
+          ssoAt = 0;
+          await pressSso();
+          continue;
+        }
         await pressSso();
         await page.waitForTimeout(1000);
       }
@@ -198,6 +209,14 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
   }
 
   return {open, save, close, loginVisible, shutdown};
+}
+
+/** 統合認証の「過去のリクエスト」の画面か（login-form.js の staleSsoPage） */
+export async function isStale(page) {
+  const url = page.url();
+  if (!/\/idp\//i.test(url)) return false;
+  const text = await page.evaluate(() => document.body?.innerText ?? '').catch(() => '');
+  return staleSsoPage(url, text);
 }
 
 function safeHost(url) {
