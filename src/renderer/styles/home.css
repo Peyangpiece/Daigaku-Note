@@ -496,3 +496,7 @@
   margin-top: 6px;
   font-size: 0.9em;
 }
+.imports__pick input {
+  width: 14em;
+  max-width: 100%;
+}

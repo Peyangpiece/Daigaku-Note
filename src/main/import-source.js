@@ -132,6 +132,38 @@ export function judgeSource(urls, {hosts = [], domain = '', sites = []} = {}) {
   return {kind: 'other', host: list[0]};
 }
 
+/**
+ * Teams のチーム（＝授業）の SharePoint の場所（v0.17.4）。ファイルのアドレスか共有リンクから読む：
+ * `https://〇〇.sharepoint.com/sites/2025-ICT303/…`・`/teams/…`・`/:p:/s/2025-ICT303/…`・`/:p:/r/sites/2025-ICT303/…`。
+ * 先生の OneDrive（/personal/…）は授業ごとでないので読まない。戻り：{key: 'ホスト/場所', host, site, name}（name は授業名の案。
+ * 先頭の年度「2025-」を外す）か null
+ */
+export function teamOf(urls) {
+  for (const raw of urls ?? []) {
+    let u;
+    try {
+      u = new URL(raw);
+    } catch {
+      continue;
+    }
+    const host = u.hostname.toLowerCase();
+    if (!tenantSharePoint(host)) continue;
+    let p = u.pathname;
+    try {
+      p = decodeURIComponent(p);
+    } catch {
+      /* そのまま使う */
+    }
+    const m = p.match(/^\/(?:sites|teams)\/([^/]+)/i) || p.match(/^\/:[a-z]+:\/(?:s|r\/sites|r\/teams)\/([^/]+)/i);
+    if (!m) continue;
+    const site = m[1].trim();
+    if (!site) continue;
+    const name = site.replace(/^(?:19|20)\d{2}[-_ ]+/, '') || site;
+    return {key: `${host}/${site.toLowerCase()}`, host, site, name};
+  }
+  return null;
+}
+
 /** 入力された URL（またはホスト名）から、大学の組織のドメイン（例 https://www.aichi-edu.ac.jp/ → aichi-edu.ac.jp）。読めなければ '' */
 export function domainOf(input) {
   const s = String(input ?? '').trim();

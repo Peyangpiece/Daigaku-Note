@@ -13,7 +13,7 @@ import {fileRound} from '../shared/rounds.js';
 import {jstNow, todayJst} from '../shared/schedule.js';
 import {currentTerm} from '../shared/term.js';
 import {importDir} from '../shared/paths.js';
-import {judgeSource, readSource, sharedHost} from './import-source.js';
+import {judgeSource, readSource, sharedHost, teamOf} from './import-source.js';
 
 export const IMPORT_EXT = /\.(pdf|pptx?|docx?)$/i;
 const TEMP = /(^\.|^~\$|\.(crdownload|part|partial|download|tmp)$)/i;
@@ -140,14 +140,19 @@ export function createImporter({
   };
 
   /** 入れる場所（ipc/materials.js の placeFor と同じ） */
-  const placeOf = (courseId, roundId) => {
+  const placeOf = (courseId, roundId, sub = '') => {
     const course = repo.get('course', courseId);
     if (!course) throw new Error('授業が見つかりません');
     const term = repo.get('term', course.term_id);
     if (!term) throw new Error('学期がありません');
     if (course.kind === 'folder') {
       if (!course.dir) throw new Error('このフォルダの場所が分かりません');
-      return {course, term, round: folders.roundOf(course)};
+      // sub：フォルダの中の回のフォルダ（「第3回」。Teams の授業で回の番号が分かったとき）
+      return {
+        course: sub ? {...course, dir: path.join(course.dir, sub)} : course,
+        term,
+        round: folders.roundOf(course)
+      };
     }
     const round = roundId ? repo.get('round', roundId) : null;
     if (round && round.course_id !== course.id) throw new Error('別の授業の回には入れられません');
@@ -162,12 +167,37 @@ export function createImporter({
   };
 
   /** ファイルを入れる。取り込みフォルダのものは、入れたあと取り込みフォルダから消す。戻り：{result, material, label} */
-  async function put({file, name, from}, courseId, roundId) {
-    const place = placeOf(courseId, roundId);
+  async function put({file, name, from}, courseId, roundId, sub = '') {
+    const place = placeOf(courseId, roundId, sub);
     const data = await fsp.readFile(file);
     const r = await files.addOwn({...place, name, data});
     if (from === 'folder') await fsp.rm(file, {force: true}).catch(() => {});
+    // 自分のフォルダ：中のフォルダ（第3回など）を付箋として出すため読み直す
+    if (place.course.kind === 'folder') await folders.scan?.(courseId).catch(() => {});
     return {...r, label: labelOf(courseId, roundId)};
+  }
+
+  const at = (st) => new Date(fileTime(st) || now().getTime());
+  /** Teams のチーム → 授業（設定 import.teams。消した授業は使わない） */
+  const teamCourseOf = (team) => {
+    const id = (setting('import.teams', {}) ?? {})[team.key];
+    const c = id ? repo.get('course', id) : null;
+    return c && !c.hidden ? c : null;
+  };
+  const saveTeam = (key, courseId) =>
+    repo.setSetting('import.teams', {...(setting('import.teams', {}) ?? {}), [key]: courseId});
+  /** Teams の授業へ入れる：自分のフォルダなら回の番号のフォルダ（第N回）へ、授業（LMS）なら推定した回へ */
+  async function putTeam(item, course, when) {
+    const n = fileRound(item.name);
+    if (course.kind === 'folder') return put(item, course.id, null, n ? `第${n}回` : '');
+    const g = guessPlace({
+      name: item.name,
+      at: when,
+      courses: [course],
+      roundsOf: (id) => repo.listRounds(id),
+      periodsOf
+    });
+    return put(item, course.id, g.roundId);
   }
 
   const seenKeys = () => new Set(setting('import.seen', []) ?? []);
@@ -195,8 +225,11 @@ export function createImporter({
     done.set(file, key);
     markSeen(`${file}|${key}`);
     let src = {kind: 'folder', host: ''};
+    let team = null;
     if (from === 'downloads') {
-      src = judgeSource(await source(file).catch(() => []), {
+      const urls = await source(file).catch(() => []);
+      team = teamOf(urls); // Teams のチーム（＝授業）の場所（v0.17.4）
+      src = judgeSource(urls, {
         hosts: universityHosts(),
         domain: setting('profile.universityDomain', ''),
         sites: setting('import.sites', []) ?? []
@@ -206,10 +239,21 @@ export function createImporter({
         return {skipped: 'other', host: src.host};
       }
     }
+    // 前に授業を決めた Teams のチーム：聞かずにその授業へ入れる（回の番号が分かれば「第N回」のフォルダへ）
+    const teamCourse = team ? teamCourseOf(team) : null;
+    if (teamCourse) {
+      try {
+        const r = await putTeam({file, name, from}, teamCourse, at(st));
+        if (!quiet) notify('import.done', {name, label: r.label, dup: r.result === 'dup'});
+        return {imported: r.result, courseId: teamCourse.id, team: team.key};
+      } catch (e) {
+        log(`取り込み：${name} を入れられませんでした（${e.message}）`);
+      }
+    }
     const courses = coursesNow();
     const guess = guessPlace({
       name,
-      at: new Date(fileTime(st) || now().getTime()),
+      at: at(st),
       courses,
       roundsOf: (id) => repo.listRounds(id),
       periodsOf
@@ -236,6 +280,7 @@ export function createImporter({
       host: src.host,
       courseId: guess.courseId,
       roundId: guess.roundId,
+      team: team && !teamCourse ? {key: team.key, site: team.site, name: team.name} : null,
       at: now().toISOString()
     };
     savePending([...pending().filter((p) => p.file !== file), item]);
@@ -304,14 +349,27 @@ export function createImporter({
    * 振り分け待ちを入れる。courseId・roundId は本人が選んだもの。
    * remember：ダウンロード元のサイト（Teams の SharePoint など）を大学のサイトとして覚える（次からは大学の資料として扱う。v0.17.2）
    */
-  async function accept(id, courseId, roundId = null, {remember = false} = {}) {
+  async function accept(id, courseId, roundId = null, {remember = false, newCourse = ''} = {}) {
     const item = pending().find((p) => p.id === id);
     if (!item) throw new Error('振り分け待ちに見つかりません');
     if (!(await fsp.stat(item.file).catch(() => null))) {
       savePending(pending().filter((p) => p.id !== id));
       throw new Error('ファイルが見つかりません（動かしたか、消した可能性があります）');
     }
-    const r = await put(item, courseId, roundId);
+    // Teams のチームから：新しい授業（今学期の自分のフォルダ）を作って入れる（v0.17.4）
+    if (newCourse) {
+      const c = await folders.create({name: newCourse, scope: 'term', mode: 'new'});
+      courseId = c.id;
+      roundId = null;
+    }
+    if (!courseId) throw new Error('授業を選んでください');
+    // チームを覚える（次からこの授業へ自動で）：チームのファイルは回の番号のフォルダへ
+    const course = repo.get('course', courseId);
+    const r =
+      item.team && remember && course?.kind === 'folder'
+        ? await putTeam(item, course, new Date(item.at))
+        : await put(item, courseId, roundId);
+    if (item.team && remember) saveTeam(item.team.key, courseId);
     savePending(pending().filter((p) => p.id !== id));
     let remembered = '';
     if (remember && item.host && item.source !== 'university' && !sharedHost(item.host)) {
@@ -319,7 +377,7 @@ export function createImporter({
       if (!sites.includes(item.host)) repo.setSetting('import.sites', [...sites, item.host].slice(-50));
       remembered = item.host;
     }
-    return {result: r.result, label: r.label, remembered};
+    return {result: r.result, label: r.label, remembered, team: !!(item.team && remember)};
   }
 
   /** 振り分け待ちから外す（ファイルはそのまま） */

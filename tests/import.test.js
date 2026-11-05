@@ -11,6 +11,7 @@ import {
   readSource,
   sharedHost,
   siteHost,
+  teamOf,
   tenantSharePoint
 } from '../src/main/import-source.js';
 import {createImporter, guessPlace} from '../src/main/import-watch.js';
@@ -151,6 +152,7 @@ async function setup(t, settings = {}) {
   t.after(() => rm(dir, {recursive: true, force: true}));
   const store = {'import.enabled': true, 'profile.universityDomain': 'aichi-edu.ac.jp', ...settings};
   const added = [];
+  const dirs = []; // 入れた場所（自分のフォルダの中のフォルダ）
   const term = {
     id: 't1',
     year: 2026,
@@ -183,10 +185,26 @@ async function setup(t, settings = {}) {
   const files = {
     addOwn: async (p) => (
       added.push({course: p.course.id, round: p.round?.id ?? null, name: p.name, size: p.data.length}),
+      dirs.push(p.course.dir),
       {result: 'saved'}
     )
   };
-  const folders = {roundOf: () => ({id: 'f1-root'})};
+  const folders = {
+    roundOf: (c) => ({id: `${c.id}-root`}),
+    // 新しい授業（今学期の自分のフォルダ）を作る
+    create: async ({name}) => {
+      const c = {
+        id: `new-${courses.length}`,
+        name,
+        kind: 'folder',
+        term_id: 't1',
+        scope: 'term',
+        dir: path.join(dir, name)
+      };
+      courses.push(c);
+      return c;
+    }
+  };
   const events = [];
   const urls = {};
   const importer = createImporter({
@@ -206,7 +224,7 @@ async function setup(t, settings = {}) {
     await utimes(f, t0, t0);
     return f;
   };
-  return {dir, store, added, events, urls, importer, put};
+  return {dir, store, added, dirs, events, urls, importer, put};
 }
 
 test('ダウンロード：大学と関係のないサイトのものは何もしない。大学のものは聞く（自動にすれば入れる）。分からないものは聞く', async (t) => {
@@ -372,4 +390,50 @@ test('Teams から落としたもの：振り分け待ちで入れるとき、Sh
   ];
   const next = await s.importer.handle(await s.put('経済学原論 第2回 補足.pdf', 'b2'), 'downloads');
   assert.equal(next.imported, 'saved');
+});
+
+test('Teams のチーム（＝授業）を読む：/sites/・/teams/・共有リンク。先生の OneDrive は読まない（v0.17.4）', () => {
+  const link =
+    'https://aueccaichieduacjp.sharepoint.com/:p:/s/2025-ICT303/IQDV_0VgodhjQLu7vitUuxKqAdtZ6GHLbfGzCE3jzNKiT74?e=jQPk8P&wdExp=TEAMS-TREATMENT&web=1';
+  assert.deepEqual(teamOf([link]), {
+    key: 'aueccaichieduacjp.sharepoint.com/2025-ict303',
+    host: 'aueccaichieduacjp.sharepoint.com',
+    site: '2025-ICT303',
+    name: 'ICT303'
+  });
+  assert.equal(
+    teamOf([
+      'https://teams.microsoft.com/v2/',
+      'https://x.sharepoint.com/sites/%E7%B5%8C%E6%B8%88%E5%AD%A6/Shared%20Documents/a.pdf'
+    ]).site,
+    '経済学'
+  );
+  assert.equal(teamOf(['https://x.sharepoint.com/teams/Seminar/Shared%20Documents/a.pdf']).site, 'Seminar');
+  assert.equal(teamOf(['https://x.sharepoint.com/:b:/r/sites/ABC/Shared%20Documents/a.pdf']).site, 'ABC');
+  assert.equal(teamOf(['https://x-my.sharepoint.com/personal/t_x/Documents/a.pdf']), null);
+  assert.equal(teamOf(['https://sharepoint.com/sites/ABC/a.pdf']), null);
+  assert.equal(teamOf(['https://teams.microsoft.com/l/file/1']), null);
+});
+
+test('Teams：知らないチームは「新しい授業を作る」で聞き、作ったら次から聞かずにその授業へ（回の番号のフォルダへ）', async (t) => {
+  const s = await setup(t);
+  const link = 'https://aueccaichieduacjp.sharepoint.com/sites/2025-ICT303/Shared%20Documents/a.pdf';
+  s.urls['ICT 第3回.pptx'] = ['https://teams.microsoft.com/v2/', link];
+  const r = await s.importer.handle(await s.put('ICT 第3回.pptx', 'p3', '2026-10-16T20:00:00+09:00'), 'downloads');
+  assert.ok(r.pending);
+  const [p] = s.importer.list();
+  assert.deepEqual(p.team, {key: 'aueccaichieduacjp.sharepoint.com/2025-ict303', site: '2025-ICT303', name: 'ICT303'});
+  const done = await s.importer.accept(p.id, null, null, {remember: true, newCourse: 'ICT303'});
+  assert.equal(done.result, 'saved');
+  const made = s.added.at(-1);
+  assert.equal(s.dirs.at(-1), path.join(s.dir, 'ICT303', '第3回'), '回の番号のフォルダへ');
+  assert.deepEqual(s.store['import.teams'], {'aueccaichieduacjp.sharepoint.com/2025-ict303': made.course});
+  assert.ok(s.store['import.sites'].includes('aueccaichieduacjp.sharepoint.com'), 'SharePoint も覚える');
+  // 次からは聞かずに入れる（「聞く」の設定でも。番号がなければフォルダの直下）
+  s.urls['補足資料.pdf'] = ['https://teams.microsoft.com/v2/', link];
+  const next = await s.importer.handle(await s.put('補足資料.pdf', 'pp', '2026-10-20T20:00:00+09:00'), 'downloads');
+  assert.equal(next.imported, 'saved');
+  assert.equal(s.added.at(-1).course, made.course);
+  assert.equal(s.dirs.at(-1), path.join(s.dir, 'ICT303'));
+  assert.equal(s.importer.list().length, 0);
 });

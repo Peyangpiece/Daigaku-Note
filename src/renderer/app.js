@@ -1328,8 +1328,11 @@ async function moveMaterial(materialId, place) {
 document.addEventListener('change', (e) => {
   const sel = e.target.closest?.('[data-import-course]');
   if (!sel) return;
-  const round = sel.closest('[data-import-id]').querySelector('[data-import-round]');
+  const li = sel.closest('[data-import-id]');
+  const round = li.querySelector('[data-import-round]');
   const course = state.data.courses.find((c) => c.id === sel.value);
+  const newName = li.querySelector('[data-import-newname]');
+  if (newName) newName.hidden = sel.value !== 'new';
   round.innerHTML = importRoundOptions(state.data, sel.value);
   round.hidden = !course || course.kind === 'folder';
 });
@@ -1348,11 +1351,20 @@ document.addEventListener('click', async (e) => {
       if (!courseId) return toast('入れる授業を選んでください', {error: true});
       const roundId = li.querySelector('[data-import-round]').value || null;
       const remember = !!li.querySelector('[data-import-remember]')?.checked;
-      const r = await api['import.accept']({id, courseId, roundId, remember});
+      // Teams のチーム：新しい授業（自分のフォルダ）を作って入れる
+      const newCourse = courseId === 'new' ? (li.querySelector('[data-import-newname]')?.value.trim() ?? '') : '';
+      if (courseId === 'new' && !newCourse) return toast('新しい授業の名前を入れてください', {error: true});
+      const r = await api['import.accept']({
+        id,
+        courseId: courseId === 'new' ? null : courseId,
+        roundId: courseId === 'new' ? null : roundId,
+        remember,
+        newCourse
+      });
       if (r?.error) toast(r.error, {error: true});
       else
         toast(
-          `${r.result === 'dup' ? `もう入っている資料でした（${r.label}）` : `${r.label} に入れました`}${r.remembered ? `。${r.remembered} を覚えました` : ''}`
+          `${r.result === 'dup' ? `もう入っている資料でした（${r.label}）` : `${r.label} に入れました`}${r.team ? '。次からこのチームの資料は自動で入れます' : r.remembered ? `。${r.remembered} を覚えました` : ''}`
         );
     }
   } finally {
