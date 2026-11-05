@@ -51,7 +51,8 @@ export function strokeOutline(
   {size = 1, thinning = 0.35, taperStart = 0, taperEnd = 0, sweet = 0, grain = 0, from = 0, tail = true} = {}
 ) {
   if (!points.length) return [];
-  const radius = (p) => Math.max(size * 0.08, (size / 2) * (1 + thinning * (p - 0.5) * 2));
+  // 筆圧での細り方は、太さの半分の 45% まで（弱く書いても線が消えない。v0.16.29。前の版の線〔thinning 0.35〕は 65% までなので変わらない）
+  const radius = (p) => Math.max(size * 0.08, (size / 2) * Math.max(0.45, 1 + thinning * (p - 0.5) * 2));
   // 長さ（書き始め・書き終わりを細くするのに使う）。from：線の途中から描くとき（書いている間の区切り。createDraft）は、
   // 線の始まりからこの点までの長さ。tail: false なら書き終わりを細くしない（まだ続く線の途中の区切り）
   const along = [from];
@@ -169,6 +170,12 @@ export function cleanFeel(f) {
 /** 保存した線の書き味（style.feel・メモの線の f） */
 export const feelOf = (style) => cleanFeel(style?.feel ?? style?.f);
 /**
+ * ブラウザが送る「押していない合成の動き」か（ページの並びが変わった・スクロールしたあとの、マウスの位置だけを知らせる動き）。
+ * 種類はマウス・ボタンは押していない・移動量は 0。ペン・指の動きや、本当に動かしたマウスは当てはまらない（v0.16.29。
+ * v0.16.28 は buttons が 0 の動きをすべて捨てていたため、そう知らせる機器では書いている間の点が落ちて線が途切れた）
+ */
+export const syntheticMove = (e) => e.pointerType === 'mouse' && e.buttons === 0 && !e.movementX && !e.movementY;
+/**
  * 書くときの手ぶれ補正：書き味の st の半分（ペン先は 0〜0.25）、指・マウスは 0.15 だけ強め（v0.16.28）。
  * 補正が強いほど線の先がペン・指より遅れて見えるので、遅れが目立たない範囲にとどめる。
  * 下書きに今の位置までの直線や予測の点を足して遅れを隠すと、急な曲がりで書いていない線が見えるため、それはしない
@@ -183,7 +190,10 @@ export const streamlineOf = (feel, pointerType) =>
  */
 export function strokeOptions(width, {pressure = true, feel = null} = {}) {
   if (pressure === 'even') return {size: width, thinning: 0, taperStart: 0, taperEnd: 0};
-  const f = cleanFeel(feel) ?? FEEL_DEFAULT;
+  const g = cleanFeel(feel) ?? FEEL_DEFAULT;
+  // 書き味は、筆圧の効き・入り・抜きを書き味のない線（FEEL_DEFAULT）より強くしない（v0.16.29）。強いと、短い線（字の画）や
+  // 軽く書いた所が細くなりすぎて途切れて見え、書いている先が細いまま遅れて見えたため
+  const f = {...g, th: Math.min(g.th, 0.45), ts: Math.min(g.ts, FEEL_DEFAULT.ts), te: Math.min(g.te, FEEL_DEFAULT.te)};
   // 指・マウス：筆圧の代わりに速さで変えるので、筆圧の効きは弱め、入り・抜きは長め（前の版の 0.25・2 倍・3 倍と同じ割合）
   const extra = {sweet: f.sw ?? 0, grain: f.gr ?? 0};
   return pressure
@@ -238,7 +248,10 @@ export function createDraft(width, {pressure = true, feel = null, chunk = 48} = 
         start = j - 1;
       }
       const s = Math.max(0, start - 2);
-      const live = outlinePath(strokeOutline([...points.slice(s), ...extra], {...opts, from: along[s] ?? 0}));
+      // 書いている先は細くしない（書き終わりの細りは離したあとに付く）。先が細いまま遅れて見えないように（v0.16.29）
+      const live = outlinePath(
+        strokeOutline([...points.slice(s), ...extra], {...opts, from: along[s] ?? 0, tail: false})
+      );
       return {frozen, live};
     }
   };

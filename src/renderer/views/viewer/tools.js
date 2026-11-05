@@ -339,6 +339,7 @@ export const methods = {
       const before = parseFloat(this.pagesEl.style.marginTop) || 0;
       const next = Math.max(0, h + 24 - top);
       this.pagesEl.style.marginTop = `${next}px`;
+      if (this.drawing) this.drawing.sx = null; // ページが動いた：書いている線の位置の基準を取り直させる（viewer/ink.js）
       this.root.style.setProperty('--bar-h', `${bar.offsetHeight}px`);
       if (window.scrollY > 0 && next !== before) window.scrollBy(0, next - before);
     });
@@ -478,6 +479,9 @@ export const methods = {
     this.on(el, 'pointermove', (e) => this.onPointerMove(e));
     this.on(el, 'pointerup', (e) => this.onPointerUp(e));
     this.on(el, 'pointercancel', (e) => {
+      // ペンで書いている途中に OS・ブラウザが操作を引き取った：そこまで書いた線は残す（捨てると線が途切れて消える。v0.16.29）。
+      // 2 本目の指が触れたとき（ピンチ）は onTouchStart が cancelPointer で書きかけを捨てる
+      if (this.drawing?.kind === 'ink' && this.drawing.pointer === e.pointerId) return this.finishInk(e);
       if ([this.drawing, this.drag, this.tap, this.pan].some((t) => t?.pointer === e.pointerId)) this.cancelPointer();
     });
     // 画面に触れている指（ページの外で離したときも数え落とさないよう window で受ける）
