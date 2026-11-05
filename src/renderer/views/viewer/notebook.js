@@ -581,7 +581,7 @@ export const methods = {
       input.value = '';
     });
     this.on(document, 'paste', (e) => {
-      if (this.destroyed || isTyping(e.target) || this.editing) return;
+      if (this.destroyed || isTyping(e) || this.editing) return; // 入力欄に貼るときは写真にしない
       const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
       if (!files.length) return;
       e.preventDefault();

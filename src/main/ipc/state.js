@@ -102,6 +102,7 @@ export function register({handle, ctx, repo}) {
       ),
       rounds,
       materials,
+      imports: ctx.importer?.list() ?? [], // 授業資料の自動取り込みの振り分け待ち（import-watch.js）
       settings: {
         root: ctx.rootDir(),
         defaultRoot: defaultRoot(app.getPath('desktop')),
@@ -114,6 +115,14 @@ export function register({handle, ctx, repo}) {
         role: repo.getSetting('profile.role', null), // 使う人（profile.js の ROLES）。まだ選んでいなければ null
         uses: repo.getSetting('profile.uses', []), // 使い方（profile.js の USES の鍵）
         university: repo.getSetting('profile.university', ''),
+        universityDomain: repo.getSetting('profile.universityDomain', ''), // 大学のサイトの組織のドメイン（例 aichi-edu.ac.jp）
+        // 授業資料の自動取り込み（import-watch.js）：オンか・聞くか自動か・足したサイト・振り分け待ちの数
+        import: {
+          enabled: repo.getSetting('import.enabled', false) === true,
+          mode: repo.getSetting('import.mode', 'ask'),
+          sites: repo.getSetting('import.sites', []) ?? [],
+          pending: (repo.getSetting('import.pending', []) ?? []).length
+        },
         lmsTerms: repo.getSetting('lms.terms', null), // 大学サービスとの連携の利用規約に同意した版と日時
         aiConsent: repo.getSetting('quiz.consent', null), // AI に送るものへの同意（版と日時。shared/policy.js）
         experiments: repo.getSetting('experiments.makerPens', false), // 実験：既製品の見た目のペンをショップに出す（個人の試作）

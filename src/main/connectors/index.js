@@ -67,11 +67,8 @@ export function createRegistry({
     },
     /** URL（と取得した HTML）から候補を確からしさの順に返す */
     async detect(url, html = '') {
+      // 大学の LMS とつなぐのは manabo だけ（v0.17.0）。Moodle（API 型）は候補に出さない（前につないだ接続はそのまま使える）
       const out = [];
-      for (const [id, c] of Object.entries(apis)) {
-        const score = await c.detect(url, html).catch(() => 0);
-        if (score > 0) out.push({connectorId: id, kind: 'api', name: c.name, score});
-      }
       for (const r of recipes) {
         const score = detectScore(r, url, html);
         if (score > 0) out.push({connectorId: r.id, kind: 'recipe', name: r.name, score});

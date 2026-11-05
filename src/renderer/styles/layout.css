@@ -217,7 +217,7 @@
 .settings .card {
   scroll-margin-top: 80px;
 }
-/* 設定のタブ（基本・授業と LMS・クイズ・スマホ・データ・情報） */
+/* 設定のタブ（基本・授業と資料・クイズ・スマホ・データ・情報） */
 .settings__tabs {
   display: flex;
   flex-wrap: wrap;

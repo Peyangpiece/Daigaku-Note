@@ -65,7 +65,7 @@ export function renderFolderNew({data}, route) {
         <input class="input" id="fn-name" type="text" maxlength="80" autocomplete="off">`
       }
       ${scopeChoice(useTerms)}
-      ${noTerm && useTerms ? '<p class="muted">学期が未設定のため、今日の日付から仮の学期を作ります（設定 → 授業と LMS → 学期 で直せます）。</p>' : ''}
+      ${noTerm && useTerms ? '<p class="muted">学期が未設定のため、今日の日付から仮の学期を作ります（設定 → 授業と資料 → 学期 で直せます）。</p>' : ''}
       <div class="actions">
         <button class="btn btn--primary" data-action="folder-create" data-mode="${mode}">${mode === 'new' ? '作る' : 'フォルダを選んで登録…'}</button>
       </div>

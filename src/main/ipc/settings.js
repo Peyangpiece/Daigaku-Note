@@ -6,6 +6,7 @@ import {cleanUses, isRole} from '../../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 import {ORDER_SCOPE, cleanColor, cleanKeys} from '../../shared/arrange.js';
 import {id, httpsUrl, loginItem, FOLDER_LOOK_PARTS, bad} from './common.js';
+import {domainOf, siteHost} from '../import-source.js';
 
 export function register({handle, ctx, repo}) {
   handle('settings.pickDownloadDir', async () => {
@@ -17,6 +18,7 @@ export function register({handle, ctx, repo}) {
     if (r.canceled) return {dir: null};
     const dir = checkDownloadDir(r.filePaths[0], app.getPath('home'));
     repo.setSetting('storage.root', dir);
+    ctx.importer?.refresh().catch(() => {}); // 取り込みフォルダは保存先の中
     return {dir};
   });
 
@@ -46,6 +48,31 @@ export function register({handle, ctx, repo}) {
       repo.setSetting('lms.terms', {version: LMS_TERMS_VERSION, at: new Date().toISOString()});
     if (typeof patch.university === 'string')
       repo.setSetting('profile.university', patch.university.trim().slice(0, 60));
+    // 大学のサイト（ホームページ・ポータルなどの URL）：組織のドメインだけを覚える（授業資料の自動取り込みで、大学のサイトか見分ける。v0.17.0）
+    if (typeof patch.universityUrl === 'string') {
+      const d = domainOf(patch.universityUrl);
+      if (patch.universityUrl.trim() && !d)
+        bad('大学のサイトの URL を読めませんでした（例：https://www.example-u.ac.jp/）');
+      repo.setSetting('profile.universityDomain', d);
+    }
+    // 授業資料の自動取り込み（ダウンロードの見張り。import-watch.js）
+    let importChanged = false;
+    if (typeof patch.importEnabled === 'boolean') {
+      repo.setSetting('import.enabled', patch.importEnabled);
+      importChanged = true;
+    }
+    if (['ask', 'auto'].includes(patch.importMode)) repo.setSetting('import.mode', patch.importMode);
+    if (typeof patch.importSiteAdd === 'string') {
+      const h =
+        siteHost(patch.importSiteAdd) || bad('サイトの URL を読めませんでした（例：https://drive.example.com/）');
+      repo.setSetting('import.sites', [...new Set([...(repo.getSetting('import.sites', []) ?? []), h])].slice(0, 50));
+    }
+    if (typeof patch.importSiteRemove === 'string')
+      repo.setSetting(
+        'import.sites',
+        (repo.getSetting('import.sites', []) ?? []).filter((h) => h !== patch.importSiteRemove)
+      );
+    if (importChanged) ctx.importer?.refresh().catch(() => {});
     // フォルダごとの色（タブ・フォルダ・マスキングテープ・新着の知らせ）。color が null ならその色を元に戻す。reset ですべて元に戻す
     if (patch.folderLook && typeof patch.folderLook === 'object') {
       const {courseId: fcid, part, color: c, reset} = patch.folderLook;
@@ -95,7 +122,10 @@ export function register({handle, ctx, repo}) {
       else delete map[cid];
       repo.setSetting('ui.stickyColors', map);
     }
-    if (patch.resetRoot === true) repo.setSetting('storage.root', null);
+    if (patch.resetRoot === true) {
+      repo.setSetting('storage.root', null);
+      ctx.importer?.refresh().catch(() => {}); // 取り込みフォルダは保存先の中
+    }
     if (patch.skipSetup === true) repo.setSetting('setup.skipped', true); // 初回のセットアップを終えた（次から起動時に出さない。LMS は任意で、設定からつなぐ）
     if (typeof patch.openAtLogin === 'boolean') {
       if (!loginItem().available) bad('ログイン時の起動は、アプリとして入れた大学ノートでだけ設定できます');

@@ -30,6 +30,7 @@ import {createQuizService} from './quiz/service.js';
 import {runSelfTest, selfTestPath} from './self-check.js';
 import {applyStagedRestore, runBackup} from './backup.js';
 import {createNotifier} from './notify.js';
+import {createImporter} from './import-watch.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(here, '..', 'renderer', 'index.html');
@@ -368,6 +369,20 @@ app.whenReady().then(async () => {
     ctx.jobs = new JobRunner(ctx, {notify});
     ctx.scheduler = new Scheduler(ctx);
     ctx.quiz = createQuizService({repo, secrets: ctx.secrets, log: (m) => log.info(m), notify});
+    // 授業資料の自動取り込み（ダウンロード・取り込みフォルダの見張り。設定でオンにしたときだけ。import-watch.js）
+    ctx.importer = createImporter({
+      repo,
+      files: ctx.files,
+      folders: ctx.folders,
+      rootDir: () => ctx.rootDir(),
+      downloadsDir: () => app.getPath('downloads'),
+      notify: (ch, payload) => {
+        notify(ch, payload);
+        sendAll(win?.webContents, 'state.changed', {});
+      },
+      log: (m) => log.info(m)
+    });
+    ctx.importer.refresh().catch((e) => log.warn(`取り込みの見張りを始められませんでした: ${e.message}`));
     registerIpc(ctx, {getWindow: () => win});
     // スマホ連携（docs/MOBILE.md）。オンにしてあれば、同じ Wi-Fi のスマホに向けて始める
     {

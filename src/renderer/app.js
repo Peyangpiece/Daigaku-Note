@@ -6,7 +6,7 @@ import {canRename, navigate, reload, setHooks, state} from './store.js';
 // 以前は app.js が持っていたもの。画面（views）は ui-kit.js と store.js を直接読む
 export {esc, jaWrap, isTyping, confirmDialog, promptDialog, textDialog, toast, progressText} from './ui-kit.js';
 export {state, navigate, reload, refresh, canRename} from './store.js';
-import {renderHome} from './views/home.js';
+import {importRoundOptions, renderHome} from './views/home.js';
 import {closeSkinPicker, openSkinPicker, renderKisekae} from './views/kisekae.js';
 import {renderFudebako} from './views/fudebako.js';
 import {pt} from '../shared/points.js';
@@ -386,7 +386,7 @@ api.on('sync.finished', (r) => {
     return; // login.required の知らせで出す
   else if (r.status === 'failed' || r.status === 'browser-not-ready')
     toast(r.message || '同期に失敗しました', {error: true, detail: r.detail});
-  else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 授業と LMS → 学期）', {error: true});
+  else if (r.status === 'no-term') toast('学期の設定がありません（設定 → 授業と資料 → 学期）', {error: true});
   else if (r.status === 'terms-required') toast(r.message, {error: true});
   else
     toast(
@@ -410,7 +410,7 @@ document.addEventListener('submit', (e) => {
     quizSubmitAsk(e.target);
   }
 });
-// LMS へのログインが要るとき：短い 1 行と「ログイン」（設定の 授業と LMS へ）。くわしい理由は「くわしく」に
+// LMS へのログインが要るとき：短い 1 行と「ログイン」（設定の 授業と資料 へ）。くわしい理由は「くわしく」に
 api.on('login.required', ({label, message}) => {
   if (EMBED) return;
   const text = `${label ?? 'LMS'} へのログインが必要です`;
@@ -718,7 +718,7 @@ document.addEventListener('click', async (e) => {
       if (r?.error) toast(r.error, {error: true});
       else if (!r.canceled) uploaded(r);
     } else if (action === 'finish-setup') {
-      // 初回のセットアップを終える（次から起動時に出さない。LMS はあとからでも 設定 → 授業と LMS からつなげる）
+      // 初回のセットアップを終える（次から起動時に出さない。LMS はあとからでも 設定 → 授業と資料 からつなげる）
       await api['settings.update']({patch: {skipSetup: true}});
       await reload();
       navigate(el.dataset.next || '/');
@@ -1324,6 +1324,48 @@ async function moveMaterial(materialId, place) {
   if (r?.error) toast(r.error, {error: true});
   reload();
 }
+// 授業資料の自動取り込みの振り分け待ち（ホーム。v0.17.0）：授業を選び直したら回の選択肢を入れ替え、「入れる」「取り込まない」
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest?.('[data-import-course]');
+  if (!sel) return;
+  const round = sel.closest('[data-import-id]').querySelector('[data-import-round]');
+  const course = state.data.courses.find((c) => c.id === sel.value);
+  round.innerHTML = importRoundOptions(state.data, sel.value);
+  round.hidden = !course || course.kind === 'folder';
+});
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest?.('[data-import-accept], [data-import-dismiss]');
+  if (!btn) return;
+  const li = btn.closest('[data-import-id]');
+  const id = li.dataset.importId;
+  btn.disabled = true;
+  try {
+    if (btn.matches('[data-import-dismiss]')) {
+      const r = await api['import.dismiss']({id});
+      if (r?.error) toast(r.error, {error: true});
+    } else {
+      const courseId = li.querySelector('[data-import-course]').value;
+      if (!courseId) return toast('入れる授業を選んでください', {error: true});
+      const roundId = li.querySelector('[data-import-round]').value || null;
+      const r = await api['import.accept']({id, courseId, roundId});
+      if (r?.error) toast(r.error, {error: true});
+      else toast(r.result === 'dup' ? `もう入っている資料でした（${r.label}）` : `${r.label} に入れました`);
+    }
+  } finally {
+    btn.disabled = false;
+    reload();
+  }
+});
+api.on('import.pending', (p) => {
+  if (EMBED) return;
+  toast(p.label ? `${p.name} を ${p.label} に入れますか` : `${p.name} を取り込みますか`, {
+    action: {label: '振り分ける', run: () => navigate('/')}
+  });
+});
+api.on('import.done', (p) => {
+  if (EMBED) return;
+  toast(p.dup ? `${p.name} はもう入っていました` : `${p.name} を ${p.label} に入れました`);
+});
 document.addEventListener('change', (e) => {
   const sel = e.target.closest?.('[data-move-material]');
   if (sel && sel.value)

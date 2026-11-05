@@ -214,13 +214,12 @@ test('launch.php のトークンの取り出しと URL', () => {
   );
 });
 
-test('登録：URL から候補を順に返す', async (t) => {
+test('登録：URL から候補を返す（manabo だけ）', async (t) => {
   const {server, base} = await mockMoodle();
   t.after(() => server.close());
   const registry = createRegistry({secrets: memSecrets()});
-  const cands = await registry.detect(base + '/', '');
-  assert.equal(cands[0].connectorId, 'moodle');
-  assert.ok(!cands.some((c) => c.connectorId === 'generic')); // 汎用型はまだ同期できないので出さない
+  // 大学の LMS とつなぐのは manabo だけ（v0.17.0）：Moodle・汎用型は候補に出さない（前につないだ Moodle の接続は使える）
+  assert.deepEqual(await registry.detect(base + '/', ''), []);
   assert.deepEqual(await registry.detect('https://unknown.example.ac.jp/', '<html></html>'), []);
   const manabo = await registry.detect('https://manabo.example.ac.jp/', '<div id="div-class-directories"></div>');
   assert.equal(manabo[0].connectorId, 'manabo');

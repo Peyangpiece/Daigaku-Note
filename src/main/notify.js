@@ -49,10 +49,23 @@ export function createNotifier({repo, Notification, openWindow, log = () => {}, 
         });
       return false;
     }
+    // 授業資料の自動取り込み（import-watch.js）：入れたもの・聞きたいもの
+    if (channel === 'import.done')
+      return show({
+        title: payload.dup ? 'もう入っている資料でした' : '授業資料を取り込みました',
+        body: `${payload.name ?? ''}${payload.label ? ` → ${payload.label}` : ''}`,
+        route: null
+      });
+    if (channel === 'import.pending')
+      return show({
+        title: payload.label ? `${payload.label} に入れますか` : '授業資料を取り込みますか',
+        body: `${payload.name ?? ''}（ホームの「振り分け待ち」で選べます）`,
+        route: null
+      });
     if (channel === 'login.required')
       return show({
         title: 'LMS へのログインが必要です',
-        body: payload.message || `${payload.label ?? 'LMS'} にログインし直してください（設定 → 授業と LMS）`,
+        body: payload.message || `${payload.label ?? 'LMS'} にログインし直してください（設定 → 授業と資料）`,
         route: '/settings',
         oncePerDay: `login:${payload.connectionId ?? payload.label ?? ''}`
       });

@@ -1,11 +1,12 @@
 // セットアップ（SPEC §6.3）。1 ページ 1 手順、付箋が順に貼られる表現。手順は多くても 6（SPEC §6.3）。
-// 初回（#/setup）は あなたと使い方・授業の資料・（利用規約）・学期と保存先、大学の LMS とつなぐ人はそのまま LMS とつなぐ（URL とログイン）・授業の確認と同期（1 本の連番）。
-// あとから LMS とつなぐ手順（#/settings/lms）は 設定 → 授業と LMS から入る
+// 初回（#/setup）は あなたと使い方（大学生は大学も）・授業の資料・（利用規約）・学期と保存先、manabo とつなぐ人（中京大学の学生だけ）は
+// そのまま manabo とつなぐ（URL とログイン）・授業の確認と同期（1 本の連番）。ほかの大学の学生は、授業の資料で「自動で取り込む」を選べる。
+// あとから manabo とつなぐ手順（#/settings/lms）は 設定 → 授業と manabo から入る（v0.17.0。大学の LMS とつなぐのは manabo だけ）
 // （利用規約に同意していなければ最初に同意。Moodle の ID・パスワードと画面操作型のブラウザ窓。学期がまだなければ学期の設定も挟む）
 import {esc, toast} from '../ui-kit.js';
 import {navigate, reload} from '../store.js';
 import {termForm, readTermForm} from './term.js';
-import {ROLES, USES, features} from '../../shared/profile.js';
+import {ROLES, USES, features, isChukyo} from '../../shared/profile.js';
 import {LMS_FEATURE, LMS_NOTICE, LMS_TERMS, LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 
 const api = window.daigaku;
@@ -16,14 +17,14 @@ const FLOWS = {
     ['授業の資料', stepMaterials],
     ['利用規約', stepLmsTerms],
     ['学期と保存先', stepTermRoot], // 学期を使わない人（社会人）には「保存先」と出す
-    ['LMS とつなぐ', stepLms],
+    ['manabo とつなぐ', stepLms],
     ['授業の確認と同期', stepCoursesSync]
   ],
   // 規約の版が上がったとき、今ある接続のために同意し直すだけの手順
   terms: [['利用規約', stepLmsTerms]],
   lms: [
     ['利用規約', stepLmsTerms],
-    ['LMS とつなぐ', stepLms],
+    ['manabo とつなぐ', stepLms],
     ['学期の設定', stepTerm],
     ['授業の確認と同期', stepCoursesSync]
   ]
@@ -42,6 +43,8 @@ const blank = () => ({
   role: null,
   uses: null,
   university: null,
+  universityUrl: null, // 大学のサイトの URL（自動取り込みで、大学のサイトから落としたファイルか見分ける）
+  importOn: null, // 授業資料を自動で取り込む（中京大学以外の学生。授業の資料の手順で選ぶ）
   materials: null, // 授業の資料の集め方：'folder'（PC の授業フォルダ）・'service'（大学の LMS とつなぐ）・'later'
   imported: null, // 登録した授業フォルダの結果
   detected: false, // 「種類を判定」を押した（候補がなければ、まだ対応していないと知らせる）
@@ -67,13 +70,13 @@ export function resetSetup(kind = 'first', data = null) {
         : FLOWS.first;
 }
 const termsAccepted = (data) => data.settings.lmsTerms?.version === LMS_TERMS_VERSION;
-const LMS_STEPS = new Set(['LMS とつなぐ', '授業の確認と同期']);
-/** 初回の流れで、大学の LMS とつなぐ手順まで進む人か：大学生は「授業の資料」で LMS を選んだとき、社会人は講座で LMS を使うとき */
+const LMS_STEPS = new Set(['manabo とつなぐ', '授業の確認と同期']);
+/** 初回の流れで、manabo とつなぐ手順まで進む人か：中京大学の学生が「授業の資料」で manabo を選んだときだけ（v0.17.0） */
 function wantsLms(data) {
   const role = draft.role ?? data.settings.role;
-  const uses = draft.uses ?? data.settings.uses ?? [];
-  return role === 'student' ? draft.materials === 'service' : features({role, uses}).lms;
+  return role === 'student' && isChukyo(universityOf(data)) && draft.materials === 'service';
 }
+const universityOf = (data) => draft.university ?? data.settings.university ?? '';
 /** 選んだものに合わせた手順。授業の資料は大学生で「授業の資料を活用」を選んだときだけ、利用規約と LMS の手順は大学の LMS とつなぐときだけ（同意済みなら規約は出さない） */
 function stepsOf(data) {
   const role = draft.role ?? data.settings.role;
@@ -105,7 +108,7 @@ export function renderSetup({data}) {
     .join('');
   const body = steps[step][1](data, step + 1);
   queueMicrotask(bind);
-  const title = flow === FLOWS.first ? 'はじめに' : flow === FLOWS.terms ? '利用規約への同意' : 'LMS とつなぐ';
+  const title = flow === FLOWS.first ? 'はじめに' : flow === FLOWS.terms ? '利用規約への同意' : 'manabo とつなぐ';
   return `<div style="max-width: 720px"><p class="muted" style="margin: 0 0 var(--space-1)">${title}</p><ol class="steps" aria-label="${title}の手順">${list}</ol><section class="card">${body}</section></div>`;
 }
 
@@ -116,21 +119,21 @@ function stepLms(data, n) {
       ? '<button class="btn" data-setup-back>戻る</button>'
       : '<button class="btn" data-action="nav" data-route="/settings?tab=lms">やめる</button>';
   if (!draft.connectionId)
-    return `<h2>${n}. 大学の LMS とつなぐ</h2>
-    <p class="muted">大学の LMS（manaba・Moodle などの学習支援サービス）のトップページの URL を入れて「種類を判定」を押します。いま使えるのは Moodle と manabo（試験中）です。つなぐと、授業の資料を自動で集めます。</p>
-    <label class="sr-only" for="su-url">LMS の URL</label>
-    <input class="input" id="su-url" type="url" placeholder="https://lms.example-u.ac.jp/" value="${esc(draft.url)}">
+    return `<h2>${n}. manabo とつなぐ</h2>
+    <p class="muted">manabo のトップページの URL（ブラウザで manabo を開いたときのアドレス）を入れて「次へ」を押します。つなぐと、授業の資料を自動で集めます（試験中）。</p>
+    <label class="sr-only" for="su-url">manabo の URL</label>
+    <input class="input" id="su-url" type="url" placeholder="https://manabo.example-u.ac.jp/" value="${esc(draft.url)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)}${c.kind === 'manual' ? ` <span class="muted">${esc(KIND_LABEL.manual)}</span>` : ''}</label>`).join('')}</div>
-    ${draft.connectorId ? `<label class="su-label">LMS の名前（ホームや設定に出ます）<input class="input" id="su-label" maxlength="60" placeholder="例：manaba・〇〇大学 LMS" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
+    ${draft.connectorId ? `<label class="su-label">名前（ホームや設定に出ます）<input class="input" id="su-label" maxlength="60" placeholder="例：manabo" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
     <div class="actions">${back}<button class="btn btn--primary" id="su-next1">次へ</button></div>
-    ${draft.connectorId ? '' : draft.detected ? '<p role="status">この LMS には、まだ対応していません（いま使えるのは Moodle と manabo（試験中）です）。URL がトップページかどうかも確かめてください。</p>' : '<p class="muted">「次へ」を押すと、URL から LMS の種類を調べます。</p>'}`;
+    ${draft.connectorId ? '' : draft.detected ? '<p role="status">manabo の URL ではないようです。ブラウザで manabo のトップページを開いたときのアドレスかどうか確かめてください。</p>' : '<p class="muted">「次へ」を押すと、manabo の URL か確かめます。</p>'}`;
   const body =
     draft.kind === 'api'
       ? `<p class="muted">Moodle の ID とパスワードを入れます。このパソコンの中だけに暗号化して保存し、トークンを取得します。</p>
          <label class="sr-only" for="su-user">ID</label><input class="input" id="su-user" placeholder="ID" autocomplete="username">
          <label class="sr-only" for="su-pass">パスワード</label><input class="input" id="su-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top: var(--space-1)">`
       : draft.kind === 'recipe'
-        ? `<p class="muted">この LMS は、ブラウザの窓を開いてログインします。窓でいつもどおりログインすると、窓は自動で閉じます。あとで（設定 → LMS との連携 の「ログインし直す」から）ログインしてもかまいません。</p>
+        ? `<p class="muted">manabo は、ブラウザの窓を開いてログインします。窓でいつもどおりログインすると、窓は自動で閉じます。あとで（設定 → 授業と manabo の「ログイン」から）ログインしてもかまいません。</p>
            <label style="display:block; margin: var(--space-2) 0 var(--space-1)"><input type="checkbox" id="su-auto" checked> 次回から自動でログインする（ID とパスワードを、このパソコンの中だけに暗号化して保存します）</label>
            <div id="su-auto-fields">
              <label class="sr-only" for="su-user">ID</label><input class="input" id="su-user" placeholder="ID（学籍番号など）" autocomplete="username">
@@ -139,8 +142,8 @@ function stepLms(data, n) {
            </div>`
         : `<p class="muted">この接続では、ここでのログインはありません。次へ進んでください。</p>`;
   const main = draft.kind === 'api' ? 'ログインして次へ' : draft.kind === 'recipe' ? 'ログイン窓を開く' : '次へ';
-  const name = draft.label || draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name || 'LMS';
-  return `<h2>${n}. 大学の LMS とつなぐ</h2>
+  const name = draft.label || draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name || 'manabo';
+  return `<h2>${n}. manabo とつなぐ</h2>
     <p class="muted">${esc(name)}：<code>${esc(draft.base || draft.url)}</code> <button type="button" class="link" id="su-url-edit">URL を変える</button></p>
     <h3 class="su-sub">ログイン</h3>
     ${body}
@@ -171,7 +174,13 @@ function stepProfile(data, n) {
           `<button type="button" class="role-pick__item" role="radio" data-role="${k}" aria-checked="${role === k}">${l}</button>`
       )
       .join('')}</div>
-    ${role === 'student' ? `<label class="role-pick__univ">大学名<input class="input" id="su-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(university)}"></label>` : ''}
+    ${
+      role === 'student'
+        ? `<label class="role-pick__univ">大学名（必須）<input class="input" id="su-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(university)}"></label>
+    <label class="role-pick__univ">大学のサイトの URL（任意）<input class="input" id="su-univ-url" type="url" maxlength="300" placeholder="例：https://www.example-u.ac.jp/" value="${esc(draft.universityUrl ?? (data.settings.universityDomain ? `https://${data.settings.universityDomain}/` : ''))}"></label>
+    <p class="muted" style="margin-top: 4px">大学のホームページ・ポータル・LMS のどれかのアドレスです。授業資料を自動で取り込むとき、大学のサイトから落としたファイルかを見分けるのに使います（このパソコンの中だけに保存します）。</p>`
+        : ''
+    }
     ${
       role
         ? `<h3 class="su-sub">何に使いますか</h3>
@@ -184,41 +193,50 @@ function stepProfile(data, n) {
       .join('')}</div>`
         : ''
     }
-    <div class="actions"><button class="btn btn--primary" id="su-profile" ${role && uses.length ? '' : 'disabled'}>次へ</button></div>`;
+    <div class="actions"><button class="btn btn--primary" id="su-profile" ${role && uses.length && (role !== 'student' || university.trim()) ? '' : 'disabled'}>次へ</button></div>`;
 }
 // 授業の資料の集め方を選ぶ。パソコンの授業フォルダはその場で登録する（ホームの「パソコンのフォルダを登録」で、中のフォルダを
 // 1 つずつ登録するのと同じ）。大学サービスとの連携は、次の手順で利用規約に同意してから
+// manabo とつなぐのは中京大学の学生だけ（v0.17.0）。ほかの大学の学生は「授業資料を自動で取り込む」をオンにできる
 const MATERIALS = [
   [
     'folder',
     'パソコンのフォルダを登録',
     '授業ごとのフォルダが入ったフォルダを選ぶと、中のフォルダを 1 つずつ登録して、そのまま使えます（コピーしません）'
   ],
-  [
-    'service',
-    '大学の LMS とつなぐ',
-    '大学の LMS（manaba・Moodle などの学習支援サービス）から授業の資料を自動でダウンロードします'
-  ],
+  ['service', 'manabo とつなぐ', 'manabo から授業の資料を自動でダウンロードします（試験中）'],
   ['later', 'あとで設定', '設定からいつでも選べます']
 ];
 function stepMaterials(data, n) {
+  const chukyo = isChukyo(universityOf(data));
   const m = draft.materials;
+  const importOn = draft.importOn ?? data.settings.import?.enabled ?? false;
   const r = draft.imported;
   const done = r
     ? `<p role="status">${r.added.length ? `${r.added.length} 個のフォルダを登録しました（${r.added.map(esc).join('・')}）` : '登録できるフォルダがありませんでした'}${r.failed.length ? `<br><span class="muted">登録できなかったもの：${r.failed.map((f) => `${esc(f.name)}（${esc(f.message)}）`).join('・')}</span>` : ''}</p>`
     : '';
   return `<h2>${n}. 授業の資料をどうしますか</h2>
-    <div class="use-pick use-pick--one" role="radiogroup" aria-label="授業の資料の集め方">${MATERIALS.map(
-      ([k, l, d]) =>
-        `<button type="button" class="use-pick__item" role="radio" data-materials="${k}" aria-checked="${m === k}"><strong>${esc(l)}</strong><span class="muted">${esc(d)}</span></button>`
-    ).join('')}</div>
+    <div class="use-pick use-pick--one" role="radiogroup" aria-label="授業の資料の集め方">${MATERIALS.filter(
+      ([k]) => k !== 'service' || chukyo
+    )
+      .map(
+        ([k, l, d]) =>
+          `<button type="button" class="use-pick__item" role="radio" data-materials="${k}" aria-checked="${m === k}"><strong>${esc(l)}</strong><span class="muted">${esc(d)}</span></button>`
+      )
+      .join('')}</div>
     ${m === 'folder' ? `<div class="actions"><button class="btn" id="su-import">フォルダを選ぶ…</button></div>${done}` : ''}
+    ${
+      chukyo
+        ? ''
+        : `<label class="su-import-on"><input type="checkbox" id="su-import-on" ${importOn ? 'checked' : ''}> <strong>授業資料を自動で取り込む</strong></label>
+    <p class="muted" style="margin-top: 4px">大学のサイトからダウンロードした PDF・PowerPoint・Word を見つけて、授業と回を推定し「入れますか」と聞きます。大学と関係のないサイトのファイルには何もしません。あとから 設定 → 授業と資料 でも変えられます。</p>`
+    }
     <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn btn--primary" id="su-materials" ${m ? '' : 'disabled'}>次へ</button></div>`;
 }
 // 大学サービスとの連携の注意書きと利用規約。同意にチェックしないと先へ進めない
 function stepLmsTerms(data, n) {
   const ok = draft.agreed;
-  return `<h2>${n}. 大学の LMS とつなぐ機能の利用規約</h2>
+  return `<h2>${n}. manabo とつなぐ機能の利用規約</h2>
     <aside class="sticky lms-notice" style="--sticky-color: var(--c2)"><strong>使う前に</strong><ul>${LMS_NOTICE.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></aside>
     <div class="lms-terms" tabindex="0" role="document" aria-label="利用規約">
       <h3>${esc(LMS_FEATURE)} 利用規約</h3>
@@ -230,7 +248,7 @@ function stepLmsTerms(data, n) {
 }
 function stepTerm(data, n) {
   return `<h2>${n}. 学期の設定</h2>
-    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 授業と LMS → 学期 で直せます）。</p>
+    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 授業 → 学期 で直せます）。</p>
     ${termForm(data, null, {compact: true})}
     <div class="actions">${n > 1 ? '<button class="btn" data-setup-back>戻る</button>' : ''}<button class="btn btn--primary" id="su-next4">保存して次へ</button></div>`;
 }
@@ -248,14 +266,14 @@ function stepTermRoot(data, n) {
     ${
       terms
         ? `<h3 class="su-sub">学期</h3>
-    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 授業と LMS → 学期 で直せます）。</p>
+    <p class="muted">年度と学期名だけで始められます（期間は学期名からの既定。あとから 設定 → 授業 → 学期 で直せます）。</p>
     ${termForm(data, kept, {compact: true})}
     <h3 class="su-sub">保存先</h3>`
         : ''
     }
     <p>${terms ? '資料はここに「学期 → 授業 → 回」のフォルダで保存します。' : '資料はここに保存します。'}</p>
     <p><code>${esc(data.settings.root)}</code></p>
-    ${toLms ? `<p>次は、大学の LMS とつなぎます（あと ${steps.length - n} 手順）。</p>` : ''}
+    ${toLms ? `<p>次は、manabo とつなぎます（あと ${steps.length - n} 手順）。</p>` : ''}
     <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn" id="su-pick">フォルダを選択…</button>${toLms ? '<button class="btn btn--primary" id="su-root-next">次へ</button>' : '<button class="btn btn--primary" id="su-finish">始める</button>'}</div>`;
 }
 
@@ -272,7 +290,7 @@ function bind() {
     .forEach((b) => (b.onclick = () => ((step = Math.max(0, step - 1)), reload())));
   const detect = async () => {
     draft.url = $('su-url').value.trim();
-    if (!draft.url) return toast('LMS の URL を入れてください', {error: true});
+    if (!draft.url) return toast('manabo の URL を入れてください', {error: true});
     const r = await api['setup.detect']({url: draft.url});
     if (r.error) return toast(r.error, {error: true});
     draft.candidates = r.candidates;
@@ -283,10 +301,15 @@ function bind() {
     draft.detected = true;
     reload();
   };
+  // 描き直しても入れかけの大学名・URL が消えないように
+  const keepUniv = () => {
+    if ($('su-univ')) draft.university = $('su-univ').value;
+    if ($('su-univ-url')) draft.universityUrl = $('su-univ-url').value;
+  };
   document.querySelectorAll('[data-role]').forEach(
     (b) =>
       (b.onclick = () => {
-        if ($('su-univ')) draft.university = $('su-univ').value;
+        keepUniv();
         if (draft.role !== b.dataset.role) draft.uses = null; // 人を変えたら使い方は選び直す
         draft.role = b.dataset.role;
         reload();
@@ -296,16 +319,25 @@ function bind() {
     $('su-profile').onclick = async () => {
       const role = draft.role ?? document.querySelector('[data-role][aria-checked=true]')?.dataset.role;
       const university = $('su-univ')?.value.trim() ?? '';
+      const universityUrl = $('su-univ-url')?.value.trim() ?? '';
+      if (role === 'student' && !university) return toast('大学名を入れてください', {error: true});
       const uses = [...document.querySelectorAll('[data-use][aria-pressed=true]')].map((x) => x.dataset.use);
-      const r = await api['settings.update']({patch: {role, uses, ...(role === 'student' ? {university} : {})}});
+      const r = await api['settings.update']({
+        patch: {role, uses, ...(role === 'student' ? {university, universityUrl} : {})}
+      });
       if (r?.error) return toast(r.error, {error: true});
       draft.role = role;
       draft.uses = uses;
+      draft.university = role === 'student' ? university : null;
+      draft.universityUrl = role === 'student' ? universityUrl : null;
+      // 大学を変えて manabo が出なくなったら、選んでいた「manabo とつなぐ」を外す
+      if (draft.materials === 'service' && !isChukyo(university)) draft.materials = null;
       next();
     };
   document.querySelectorAll('[data-use]').forEach(
     (b) =>
       (b.onclick = () => {
+        keepUniv();
         const now = [...document.querySelectorAll('[data-use][aria-pressed=true]')].map((x) => x.dataset.use);
         draft.uses = now.includes(b.dataset.use) ? now.filter((u) => u !== b.dataset.use) : [...now, b.dataset.use];
         reload();
@@ -326,7 +358,21 @@ function bind() {
       draft.imported = r;
       reload();
     };
-  if ($('su-materials')) $('su-materials').onclick = next;
+  // 大学名が空のあいだは「次へ」を押せない（大学生は大学も登録する。v0.17.0）
+  if ($('su-univ'))
+    $('su-univ').oninput = () => {
+      const ok = !!$('su-univ').value.trim() && document.querySelectorAll('[data-use][aria-pressed=true]').length > 0;
+      if ($('su-profile')) $('su-profile').disabled = !ok;
+    };
+  if ($('su-import-on')) $('su-import-on').onchange = (e) => (draft.importOn = e.target.checked);
+  if ($('su-materials'))
+    $('su-materials').onclick = async () => {
+      if ($('su-import-on')) {
+        const r = await api['settings.update']({patch: {importEnabled: $('su-import-on').checked}});
+        if (r?.error) return toast(r.error, {error: true});
+      }
+      next();
+    };
   // 学期と保存先：学期の欄があれば保存してから進む。「次へ」は初回のセットアップを済んだことにして（次の起動で出さない）、
   // 同じ流れのまま LMS の手順へ。「始める」はホームへ
   const saveTerm = async () => {

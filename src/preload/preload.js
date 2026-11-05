@@ -4,6 +4,9 @@ const {contextBridge, ipcRenderer, webFrame} = require('electron');
 const INVOKE = [
   'state.get',
   'setup.detect',
+  'import.list',
+  'import.accept',
+  'import.dismiss',
   'setup.createConnection',
   'setup.excludeCourses',
   'connection.login',
@@ -98,6 +101,8 @@ const ON = [
   'quiz.progress',
   'quiz.finished',
   'state.changed',
+  'import.pending',
+  'import.done',
   'sync.progress',
   'sync.finished',
   'login.required',

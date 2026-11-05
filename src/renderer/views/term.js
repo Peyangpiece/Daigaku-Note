@@ -1,4 +1,4 @@
-// 学期の設定（SPEC §6.14・§12.2）。セットアップの手順 4 と、設定 → 授業と LMS → 学期 の編集画面で同じ入力欄を使う。
+// 学期の設定（SPEC §6.14・§12.2）。セットアップの手順 4 と、設定 → 授業と資料 → 学期 の編集画面で同じ入力欄を使う。
 // 学期名は候補から選ぶか、自由に入力する（大学によって「1学期」「Fall」などがあるため）
 import {confirmDialog, esc, toast} from '../ui-kit.js';
 import {navigate, refresh, reload} from '../store.js';
