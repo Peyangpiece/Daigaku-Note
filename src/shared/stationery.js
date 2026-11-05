@@ -1019,9 +1019,13 @@ export function eraserArt() {
 }
 
 /** ペンケースの絵。viewBox 0 0 200 80。3D モデルの品は、モデルを斜め上から描いた画像（renderer/model3d.js が入れる） */
-export function caseArt(item) {
+export function caseArt(item, {flat = false} = {}) {
   const {style, base, trim} = item;
   const title = `<title>${esc(item.name)}</title>`;
+  // flat（v0.16.26。持ち物・ショップ）：3D モデルを光・陰影・影なしの平らな塗りで描いた 2D の絵（部品の輪郭線つき）。下の影も描かない
+  if (item.art === 'model' && flat)
+    return `<svg class="st-art st-art--case" viewBox="0 0 200 80" role="img" data-model="${esc(item.model)}" data-item="${esc(item.id)}" data-flat-art="all">${title}
+      <image data-model-img x="0" y="0" width="200" height="80" preserveAspectRatio="xMidYMid meet"/></svg>`;
   if (item.art === 'model')
     return `<svg class="st-art st-art--case" viewBox="0 0 200 80" role="img" data-model="${esc(item.model)}" data-item="${esc(item.id)}">${title}
       <ellipse cx="100" cy="74" rx="90" ry="4" fill="#000" opacity="0.10"/><image data-model-img x="0" y="0" width="200" height="80" preserveAspectRatio="xMidYMid meet"/></svg>`;

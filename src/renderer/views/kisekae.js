@@ -435,17 +435,37 @@ const editAttr = (part, label) => `data-edit="${part}" title="押すと${label}�
 const isOn = (part, kind = null) =>
   ui.part === part && (kind == null || ui.fileKind === kind) && ui.selected == null ? ' is-editing' : '';
 
-function homeScene(data, {first, second, note, skin1, skin2}) {
+/**
+ * ホームの見本のフォルダ（v0.16.26）：テープの色・タブの色の組の色の数だけ（少なくとも 2 つ）。i 番目のフォルダは月・火…の曜日と
+ * 色の番号 i+1 にするので、曜日ごとでもカスタムでも i 番目の色になる（shared/skin.js の setColorFor）
+ */
+const setCount = (v) => (v && typeof v === 'object' ? v.colors.length : 1);
+function homeSamples(data, skin) {
+  const n = Math.max(2, setCount(skin.tape.color), setCount(skin.folder.tab));
+  const list = courses(data);
+  return Array.from({length: n}, (_, i) => ({
+    ...(list[i] ?? SAMPLE[i % SAMPLE.length]),
+    id: list[i]?.id ?? `sample-${i + 1}`,
+    name: SAMPLE_NAME,
+    weekday: SET_WEEKDAYS[i % SET_WEEKDAYS.length],
+    color: i + 1
+  }));
+}
+function homeScene(data, {note, skin1}) {
   const render = (st) => stageSticker(data, st, {base: STICKER_BASE.folder});
+  const folders = homeSamples(data, skin1)
+    .map((c, i) =>
+      i === 0
+        ? `<div class="ks-target${isOn('folder')}">${folderCard(c, {data, skin: skin1, edit: {render}})}</div>`
+        : folderCard(c, {data, skin: skin1, edit: {still: true}})
+    )
+    .join('');
   return noteSwatch(
     note,
     `ks-stage ks-stage--home${isOn('note')}`,
     `
     <div class="ks-place" data-drop-place="home" ${editAttr('note', '背景（紙と線）')}>${stageLayer(data, skin1.stickers, 'home')}</div>
-    <div class="folders ks-stage__folders">
-      <div class="ks-target${isOn('folder')}">${folderCard(first, {data, skin: skin1, edit: {render}})}</div>
-      ${folderCard(second, {data, skin: skin2, edit: {still: true}})}
-    </div>`
+    <div class="folders ks-stage__folders">${folders}</div>`
   );
 }
 // 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では 5 回に 2 つずつ

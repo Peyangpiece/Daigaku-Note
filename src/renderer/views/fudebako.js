@@ -99,7 +99,7 @@ function spec(item) {
 /** 札の絵。3D モデルの品は、ドラッグで回せる 3D 表示（renderer/model3d.js が中を作る）。big は詳細ページ（拡大もできる）。foot: false で下の説明を省く */
 const art = (item, {big = false, foot = true} = {}) =>
   isGear(item) && !big
-    ? caseArt(item)
+    ? caseArt(item, {flat: true})
     : item.art === 'model'
       ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}" data-item="${esc(item.id)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
         ${
@@ -112,7 +112,7 @@ const art = (item, {big = false, foot = true} = {}) =>
             : ''
         }`
       : isGear(item)
-        ? caseArt(item)
+        ? caseArt(item, {flat: true})
         : toolArt(item);
 const detailRoute = (item) => `/fudebako/item/${encodeURIComponent(item.id)}`;
 const SHOP = '/fudebako?tab=shop';
@@ -168,7 +168,7 @@ function pouchPage(s) {
         (
           it
         ) => `<button type="button" class="fb-card fb-card--case${s[GEAR[type]] === it.id ? ' is-in' : ''}" data-fb="gear" data-id="${esc(it.id)}" aria-pressed="${s[GEAR[type]] === it.id}">
-          <div class="fb-card__art">${caseArt(it)}</div><div class="fb-card__name">${esc(it.name)}</div>
+          <div class="fb-card__art">${caseArt(it, {flat: true})}</div><div class="fb-card__name">${esc(it.name)}</div>
           <span class="muted fb-card__state">${s[GEAR[type]] === it.id ? '使っています' : '押して使う'}</span></button>`
       )
       .join('')}</div></section>`;
@@ -236,7 +236,7 @@ function mine(s) {
   const cases = owned.filter((it) => it.type === 'case');
   return `
     <div class="fb-case" style="--case-base: ${kase.base}; --case-trim: ${kase.trim}">
-      <div class="fb-case__art">${caseArt(kase)}</div>
+      <div class="fb-case__art">${caseArt(kase, {flat: true})}</div>
       <div class="fb-case__slots">${slots}</div>
       <p class="muted fb-case__hint">PDF を開いた画面の横に出ます（1〜6 キーでも持てます）。場所を選んで、下の一覧の「入れる」で入れ替えます。</p>
     </div>
@@ -246,7 +246,7 @@ function mine(s) {
           (
             it
           ) => `<button type="button" class="fb-card fb-card--case${it.id === s.caseId ? ' is-in' : ''}" data-fb="case" data-id="${it.id}" aria-pressed="${it.id === s.caseId}">
-            <div class="fb-card__art">${caseArt(it)}</div><div class="fb-card__name">${esc(it.name)}</div>
+            <div class="fb-card__art">${caseArt(it, {flat: true})}</div><div class="fb-card__name">${esc(it.name)}</div>
             <span class="muted fb-card__state">${it.id === s.caseId ? '使っています' : '押して使う'}</span></button>`
         )
         .join('')}
@@ -323,7 +323,7 @@ function seriesCard(series, s) {
   else if (it.type === 'hider') sub.push('赤シートで隠れる');
   return `<article class="shop-card shop-card--${tier.id}${owned ? ' is-owned' : ''}" data-series="${esc(series.id)}">
     ${ribbons(it)}
-    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it, {flat: true})}</button>
+    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it, {flat: true}) : toolArt(it, {flat: true})}</button>
     <button type="button" class="shop-card__name" data-action="nav" data-route="${detailRoute(it)}">${esc(series.name)}</button>
     <div class="muted shop-card__spec">${sub.map(esc).join('・')}</div>
     <div class="shop-card__foot">${priceTag(it, owned)}${dots(series, it)}</div>
@@ -550,7 +550,7 @@ const rowSpec = (it) =>
   [it.experimental ? '' : (it.maker ?? '大学ノート'), spec(it) || typeLabel(it)].filter(Boolean).join('・');
 const orderRow = (it, {remove = false} = {}) =>
   `<li class="shop-row">
-    <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it, {flat: true})}</button>
+    <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it, {flat: true}) : toolArt(it, {flat: true})}</button>
     <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${rowSpec(it)}</div></div>
     <div class="shop-row__price">${priceLabel(it)}</div>
     ${remove ? `<button type="button" class="btn btn--small btn--quiet" data-shop="remove" data-id="${esc(it.id)}" aria-label="${esc(it.name)}をカートから外す">外す</button>` : ''}
@@ -651,7 +651,7 @@ function orderPage(s, id) {
               : swapButtons(s, it);
       }
       return `<li class="shop-row">
-        <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it) : toolArt(it, {flat: true})}</button>
+        <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it, {flat: true}) : toolArt(it, {flat: true})}</button>
         <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${esc(it.maker ?? '大学ノート')}</div></div>
         <div class="shop-row__price">${cost(x)}</div>
         <div class="shop-row__act">${act}</div>
