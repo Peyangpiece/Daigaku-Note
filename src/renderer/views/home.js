@@ -171,25 +171,34 @@ function importsPanel(data) {
   const from = (p) =>
     p.from === 'folder'
       ? '取り込みフォルダから'
-      : p.source === 'university'
-        ? `大学のサイト（${esc(p.host)}）から`
-        : p.source === 'teams'
-          ? `Teams${p.host ? `（${esc(p.host)}）` : ''}から`
-          : 'ダウンロード元が分からないファイル';
+      : p.team
+        ? `Teams「${esc(p.team.site)}」から`
+        : p.source === 'university'
+          ? `大学のサイト（${esc(p.host)}）から`
+          : p.source === 'teams'
+            ? `Teams${p.host ? `（${esc(p.host)}）` : ''}から`
+            : 'ダウンロード元が分からないファイル';
   const row = (p) => `<li class="imports__item" data-import-id="${esc(p.id)}">
       <div class="imports__name"><strong>${esc(p.name)}</strong> <span class="muted">${from(p)}</span></div>
       <div class="imports__pick">
-        <select class="input" data-import-course aria-label="入れる授業"><option value="">授業を選ぶ</option>${targets
+        <select class="input" data-import-course aria-label="入れる授業">${
+          p.team
+            ? `<option value="new" ${p.courseId ? '' : 'selected'}>新しい授業を作る</option>`
+            : '<option value="">授業を選ぶ</option>'
+        }${targets
           .map((c) => `<option value="${esc(c.id)}" ${c.id === p.courseId ? 'selected' : ''}>${esc(c.name)}</option>`)
           .join('')}</select>
+        ${p.team ? `<input class="input" data-import-newname aria-label="新しい授業の名前" maxlength="80" value="${esc(p.team.name)}" ${p.courseId ? 'hidden' : ''}>` : ''}
         <select class="input" data-import-round aria-label="入れる回" ${p.courseId && data.courses.find((c) => c.id === p.courseId)?.kind !== 'folder' ? '' : 'hidden'}>${importRoundOptions(data, p.courseId, p.roundId)}</select>
         <button class="btn btn--small btn--primary" data-import-accept>入れる</button>
         <button class="btn btn--small btn--quiet" data-import-dismiss>取り込まない</button>
       </div>
       ${
-        p.source === 'teams' && p.host
-          ? `<label class="imports__remember"><input type="checkbox" data-import-remember checked> 次から ${esc(p.host)} の資料を大学の資料にする</label>`
-          : ''
+        p.team
+          ? `<label class="imports__remember"><input type="checkbox" data-import-remember checked> 次から「${esc(p.team.site)}」の資料はこの授業に自動で入れる</label>`
+          : p.source === 'teams' && p.host
+            ? `<label class="imports__remember"><input type="checkbox" data-import-remember checked> 次から ${esc(p.host)} の資料を大学の資料にする</label>`
+            : ''
       }
     </li>`;
   return `<section class="imports card" aria-labelledby="imports-title"><h2 class="home-sec" id="imports-title">振り分け待ち ${items.length}</h2>

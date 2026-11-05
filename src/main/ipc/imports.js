@@ -4,12 +4,14 @@ import {id, bad} from './common.js';
 export function register({handle, ctx}) {
   const importer = () => ctx.importer ?? bad('取り込みの準備ができていません');
   handle('import.list', () => importer().list());
-  handle('import.accept', async ({id: itemId, courseId, roundId = null, remember = false}) => {
+  handle('import.accept', async ({id: itemId, courseId = null, roundId = null, remember = false, newCourse = ''}) => {
+    // newCourse：Teams のチームから、新しい授業（自分のフォルダ）を作って入れるときの名前
+    const name = typeof newCourse === 'string' ? newCourse.trim().slice(0, 80) : '';
     const r = await importer().accept(
       id(itemId) ?? bad('振り分け待ちが不正です'),
-      id(courseId) ?? bad('授業を選んでください'),
-      roundId === null ? null : (id(roundId) ?? bad('回が不正です')),
-      {remember: remember === true}
+      name ? null : (id(courseId) ?? bad('授業を選んでください')),
+      roundId === null || name ? null : (id(roundId) ?? bad('回が不正です')),
+      {remember: remember === true, newCourse: name}
     );
     ctx.notifyOthers?.(null, 'state.changed', {});
     return r;
