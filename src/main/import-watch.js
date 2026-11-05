@@ -13,7 +13,7 @@ import {fileRound} from '../shared/rounds.js';
 import {jstNow, todayJst} from '../shared/schedule.js';
 import {currentTerm} from '../shared/term.js';
 import {importDir} from '../shared/paths.js';
-import {judgeSource, readSource} from './import-source.js';
+import {judgeSource, readSource, sharedHost} from './import-source.js';
 
 export const IMPORT_EXT = /\.(pdf|pptx?|docx?)$/i;
 const TEMP = /(^\.|^~\$|\.(crdownload|part|partial|download|tmp)$)/i;
@@ -300,8 +300,11 @@ export function createImporter({
     return pending().map((p) => ({...p, label: labelOf(p.courseId, p.roundId)}));
   }
 
-  /** 振り分け待ちを入れる。courseId・roundId は本人が選んだもの */
-  async function accept(id, courseId, roundId = null) {
+  /**
+   * 振り分け待ちを入れる。courseId・roundId は本人が選んだもの。
+   * remember：ダウンロード元のサイト（Teams の SharePoint など）を大学のサイトとして覚える（次からは大学の資料として扱う。v0.17.2）
+   */
+  async function accept(id, courseId, roundId = null, {remember = false} = {}) {
     const item = pending().find((p) => p.id === id);
     if (!item) throw new Error('振り分け待ちに見つかりません');
     if (!(await fsp.stat(item.file).catch(() => null))) {
@@ -310,7 +313,13 @@ export function createImporter({
     }
     const r = await put(item, courseId, roundId);
     savePending(pending().filter((p) => p.id !== id));
-    return {result: r.result, label: r.label};
+    let remembered = '';
+    if (remember && item.host && item.source !== 'university' && !sharedHost(item.host)) {
+      const sites = setting('import.sites', []) ?? [];
+      if (!sites.includes(item.host)) repo.setSetting('import.sites', [...sites, item.host].slice(-50));
+      remembered = item.host;
+    }
+    return {result: r.result, label: r.label, remembered};
   }
 
   /** 振り分け待ちから外す（ファイルはそのまま） */

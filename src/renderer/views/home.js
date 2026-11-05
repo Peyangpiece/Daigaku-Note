@@ -173,7 +173,9 @@ function importsPanel(data) {
       ? '取り込みフォルダから'
       : p.source === 'university'
         ? `大学のサイト（${esc(p.host)}）から`
-        : 'ダウンロード元が分からないファイル';
+        : p.source === 'teams'
+          ? `Teams${p.host ? `（${esc(p.host)}）` : ''}から`
+          : 'ダウンロード元が分からないファイル';
   const row = (p) => `<li class="imports__item" data-import-id="${esc(p.id)}">
       <div class="imports__name"><strong>${esc(p.name)}</strong> <span class="muted">${from(p)}</span></div>
       <div class="imports__pick">
@@ -184,6 +186,11 @@ function importsPanel(data) {
         <button class="btn btn--small btn--primary" data-import-accept>入れる</button>
         <button class="btn btn--small btn--quiet" data-import-dismiss>取り込まない</button>
       </div>
+      ${
+        p.source === 'teams' && p.host
+          ? `<label class="imports__remember"><input type="checkbox" data-import-remember checked> 入れるとき、${esc(p.host)} を大学の Teams の資料の置き場所として覚える（次からは大学の資料として扱います）</label>`
+          : ''
+      }
     </li>`;
   return `<section class="imports card" aria-labelledby="imports-title"><h2 class="home-sec" id="imports-title">振り分け待ち ${items.length}</h2>
     <p class="muted">授業と回を選んで「入れる」と、その授業の資料になります（元のファイルはそのまま残ります）。</p>

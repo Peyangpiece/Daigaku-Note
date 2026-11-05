@@ -8,6 +8,7 @@
 import {execFile} from 'node:child_process';
 import {promises as fsp} from 'node:fs';
 import {siteOf} from './browser/login-form.js';
+import {sharedHost, tenantSharePoint} from '../shared/import-sites.js';
 
 /** Zone.Identifier の中身から URL を読む。戻り：[開いていたページ, ファイルの URL]（ないものは除く） */
 export function parseZoneIdentifier(text) {
@@ -102,11 +103,15 @@ const hostOf = (u) => {
 };
 const matchHost = (host, h) => host === h || host.endsWith('.' + h);
 
+export {sharedHost, tenantSharePoint};
+
+const teamsHost = (h) => matchHost(h, 'teams.microsoft.com') || matchHost(h, 'teams.live.com');
+
 /**
  * ダウンロード元が大学のサイトか。urls は readSource の戻り。
  * hosts：つないだ LMS とログインで通ったホスト（そのまま一致）。domain：登録した大学のサイト（例 aichi-edu.ac.jp。同じ組織なら大学）。
  * sites：自分で足したサイト（そのホストと下のホスト）。
- * 戻り：{kind: 'university'|'other'|'unknown', host}
+ * 戻り：{kind: 'university'|'teams'|'other'|'unknown', host}
  */
 export function judgeSource(urls, {hosts = [], domain = '', sites = []} = {}) {
   const list = (urls ?? []).map(hostOf).filter(Boolean);
@@ -115,8 +120,15 @@ export function judgeSource(urls, {hosts = [], domain = '', sites = []} = {}) {
   for (const host of list) {
     if (hosts.some((h) => host === String(h).toLowerCase())) return {kind: 'university', host};
     if (org && siteOf(host) === org) return {kind: 'university', host};
-    if (sites.some((h) => matchHost(host, String(h).toLowerCase()))) return {kind: 'university', host};
+    // 足したサイト（共通のサービスは、前の版で足していても使わない）
+    if (sites.some((h) => !sharedHost(h) && matchHost(host, String(h).toLowerCase())))
+      return {kind: 'university', host};
   }
+  // Teams（大学ごとの SharePoint）から落としたもの：まだ大学のサイトとして覚えていなければ、取り込むか聞く（v0.17.2）。
+  // host は覚えるときに使う SharePoint のホスト（分からなければ ''）
+  const sp = list.find(tenantSharePoint);
+  if (sp) return {kind: 'teams', host: sp};
+  if (list.some(teamsHost)) return {kind: 'teams', host: ''};
   return {kind: 'other', host: list[0]};
 }
 

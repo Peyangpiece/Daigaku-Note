@@ -9,7 +9,9 @@ import {
   parseWhereFroms,
   parseZoneIdentifier,
   readSource,
-  siteHost
+  sharedHost,
+  siteHost,
+  tenantSharePoint
 } from '../src/main/import-source.js';
 import {createImporter, guessPlace} from '../src/main/import-watch.js';
 
@@ -305,4 +307,69 @@ test('すでにダウンロードにあったファイル：今学期がなけ�
     downloadsDir: () => s.dir
   });
   assert.deepEqual(await none.scanExisting(), {noTerm: true});
+});
+
+test('Teams：大学ごとの SharePoint から落としたものは聞く。覚えれば大学の資料。共通のサービスは足せない（v0.17.2）', () => {
+  const o = {domain: 'aichi-edu.ac.jp'};
+  const sp = 'https://aichiedu.sharepoint.com/sites/class/Shared%20Documents/a.pdf';
+  // ブラウザの Teams：開いていたページは teams.microsoft.com、ファイルは SharePoint
+  assert.deepEqual(judgeSource(['https://teams.microsoft.com/v2/', sp], o), {
+    kind: 'teams',
+    host: 'aichiedu.sharepoint.com'
+  });
+  assert.deepEqual(
+    judgeSource(['https://teams.microsoft.com/v2/'], o),
+    {kind: 'teams', host: ''},
+    'SharePoint が分からない'
+  );
+  assert.equal(judgeSource([sp], {...o, sites: ['aichiedu.sharepoint.com']}).kind, 'university', '覚えたら大学の資料');
+  assert.equal(
+    judgeSource(['https://other-co.sharepoint.com/x.pdf'], {...o, sites: ['aichiedu.sharepoint.com']}).kind,
+    'teams',
+    'ほかの組織の SharePoint は覚えたものと別'
+  );
+  // 前の版で共通のサービスを足していても使わない
+  assert.equal(
+    judgeSource(['https://drive.google.com/x'], {...o, sites: ['drive.google.com', 'sharepoint.com']}).kind,
+    'other'
+  );
+  for (const h of [
+    'sharepoint.com',
+    'teams.microsoft.com',
+    'drive.google.com',
+    'doc-0s-1c.docs.googleusercontent.com',
+    'onedrive.live.com',
+    'www.dropbox.com',
+    'app.box.com'
+  ])
+    assert.ok(sharedHost(h), h);
+  for (const h of ['aichiedu.sharepoint.com', 'aichiedu-my.sharepoint.com', 'aue.app.box.com', 'lms.example-u.ac.jp'])
+    assert.ok(!sharedHost(h), h);
+  assert.ok(tenantSharePoint('aichiedu-my.sharepoint.com'));
+  assert.ok(
+    !tenantSharePoint('sharepoint.com') &&
+      !tenantSharePoint('a.b.sharepoint.com') &&
+      !tenantSharePoint('teams.microsoft.com')
+  );
+});
+
+test('Teams から落としたもの：振り分け待ちで入れるとき、SharePoint を大学のサイトとして覚えられる', async (t) => {
+  const s = await setup(t);
+  s.urls['経済学原論 第2回.pdf'] = ['https://teams.microsoft.com/v2/', 'https://aichiedu.sharepoint.com/sites/x/a.pdf'];
+  s.store['import.mode'] = 'auto';
+  const r = await s.importer.handle(await s.put('経済学原論 第2回.pdf'), 'downloads');
+  assert.ok(r.pending, '覚える前は、自動にしていても聞く');
+  const [p] = s.importer.list();
+  assert.equal(p.source, 'teams');
+  assert.equal(p.host, 'aichiedu.sharepoint.com');
+  const done = await s.importer.accept(p.id, 'c2', 'r21', {remember: true});
+  assert.equal(done.remembered, 'aichiedu.sharepoint.com');
+  assert.deepEqual(s.store['import.sites'], ['aichiedu.sharepoint.com']);
+  // 次からは大学の資料（自動なら聞かずに入れる）
+  s.urls['経済学原論 第2回 補足.pdf'] = [
+    'https://teams.microsoft.com/v2/',
+    'https://aichiedu.sharepoint.com/sites/x/b.pdf'
+  ];
+  const next = await s.importer.handle(await s.put('経済学原論 第2回 補足.pdf', 'b2'), 'downloads');
+  assert.equal(next.imported, 'saved');
 });
