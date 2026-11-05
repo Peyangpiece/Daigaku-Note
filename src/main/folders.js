@@ -99,7 +99,7 @@ export async function listFiles(dir, {max = MAX_FILES} = {}) {
 }
 
 export function createFolders({repo, rootDir, today = () => todayJst(), log = () => {}}) {
-  // LMS をつながずに使い始めたときは学期がまだないので、今日の日付から仮の学期を作る（設定 → 授業と LMS → 学期 で直せる）
+  // LMS をつながずに使い始めたときは学期がまだないので、今日の日付から仮の学期を作る（設定 → 授業と資料 → 学期 で直せる）
   const termNow = () => {
     const terms = repo.listTerms();
     if (!terms.length) {
@@ -125,7 +125,7 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
   async function create({name, scope, mode, dir = null}) {
     if (!['term', 'always'].includes(scope)) throw err('フォルダの種類が不正です');
     const term = termNow();
-    if (!term) throw err('先に学期を設定してください（設定 → 授業と LMS → 学期）');
+    if (!term) throw err('先に学期を設定してください（設定 → 授業と資料 → 学期）');
     const root = path.resolve(rootDir());
     let target;
     if (mode === 'new') {

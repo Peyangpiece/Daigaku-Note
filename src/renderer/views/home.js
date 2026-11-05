@@ -138,6 +138,58 @@ function syncBox(data, progress, syncing) {
     </div>`;
 }
 
+/** 振り分け待ちの授業の候補：今学期の授業と、いま出している自分のフォルダ */
+export function importTargets(data) {
+  return data.courses.filter(
+    (c) => !c.hidden && (c.kind === 'folder' ? folderShown(c, data.currentTermId) : c.term_id === data.currentTermId)
+  );
+}
+
+/** 回の選択肢（授業ごと）。自分のフォルダには回がない */
+export function importRoundOptions(data, courseId, selected = null) {
+  const course = data.courses.find((c) => c.id === courseId);
+  if (!course || course.kind === 'folder') return '';
+  const rounds = (data.rounds ?? [])
+    .filter((r) => r.course_id === courseId)
+    .sort((a, b) => (a.number || 999) - (b.number || 999));
+  const name = (r) =>
+    r.user_made
+      ? `付箋「${r.title_user || r.number}」`
+      : r.number
+        ? `第${r.number}回${r.title ? ` ${r.title}` : ''}`
+        : 'その他';
+  return `<option value="">回を選ばない（振り分け前）</option>${rounds
+    .map((r) => `<option value="${esc(r.id)}" ${r.id === selected ? 'selected' : ''}>${esc(name(r))}</option>`)
+    .join('')}`;
+}
+
+// 授業資料の自動取り込みの振り分け待ち（import-watch.js）：授業と回を選んで「入れる」。推定できたものは選んである
+function importsPanel(data) {
+  const items = data.imports ?? [];
+  if (!items.length) return '';
+  const targets = importTargets(data);
+  const from = (p) =>
+    p.from === 'folder'
+      ? '取り込みフォルダから'
+      : p.source === 'university'
+        ? `大学のサイト（${esc(p.host)}）から`
+        : 'ダウンロード元が分からないファイル';
+  const row = (p) => `<li class="imports__item" data-import-id="${esc(p.id)}">
+      <div class="imports__name"><strong>${esc(p.name)}</strong> <span class="muted">${from(p)}</span></div>
+      <div class="imports__pick">
+        <select class="input" data-import-course aria-label="入れる授業"><option value="">授業を選ぶ</option>${targets
+          .map((c) => `<option value="${esc(c.id)}" ${c.id === p.courseId ? 'selected' : ''}>${esc(c.name)}</option>`)
+          .join('')}</select>
+        <select class="input" data-import-round aria-label="入れる回" ${p.courseId && data.courses.find((c) => c.id === p.courseId)?.kind !== 'folder' ? '' : 'hidden'}>${importRoundOptions(data, p.courseId, p.roundId)}</select>
+        <button class="btn btn--small btn--primary" data-import-accept>入れる</button>
+        <button class="btn btn--small btn--quiet" data-import-dismiss>取り込まない</button>
+      </div>
+    </li>`;
+  return `<section class="imports card" aria-labelledby="imports-title"><h2 class="home-sec" id="imports-title">振り分け待ち ${items.length}</h2>
+    <p class="muted">授業と回を選んで「入れる」と、その授業の資料になります（元のファイルはそのまま残ります）。</p>
+    <ul class="imports__list">${items.map(row).join('')}</ul></section>`;
+}
+
 export function renderHome({data, progress}) {
   const all = data.courses.filter((c) => !c.hidden && c.kind !== 'folder');
   // 今日の授業（なければ次の授業）を上の 1 行に。学期の学年暦（休講日・振替授業日）があればそれで数える
@@ -210,14 +262,15 @@ export function renderHome({data, progress}) {
     : hasLms
       ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
       : features(data.settings).lms
-        ? `<div class="empty"><p>大学の LMS（manaba・Moodle など）とつなぐと、授業の資料が自動で集まり、ここに授業のフォルダが貼られます。</p><button class="btn btn--primary" data-action="nav" data-route="/settings/lms">大学の LMS とつなぐ</button></div>`
-        : ''; /* LMS を使わない人には授業の段を出さない（自分のフォルダだけ） */
+        ? `<div class="empty"><p>manabo とつなぐと、授業の資料が自動で集まり、ここに授業のフォルダが貼られます。</p><button class="btn btn--primary" data-action="nav" data-route="/settings/lms">manabo とつなぐ</button></div>`
+        : ''; /* manabo を使わない人には授業の段を出さない（自分のフォルダだけ。授業資料はダウンロードから取り込む） */
   return `
     ${stickerLayer(skinOf(data).stickers, 'home', data)}
     <div class="home${attention.length ? ' home--attention' : ''}">
       ${attention.length ? `<aside class="sticky attention" style="--sticky-color: var(--c2)" aria-labelledby="attention-title"><strong id="attention-title">要確認</strong><ul>${attention.join('')}</ul></aside>` : ''}
       <div class="home__main">
       ${top}
+      ${importsPanel(data)}
       ${reviewEntry(data)}
       ${tip}
       ${foldersFirst ? myFolders : ''}

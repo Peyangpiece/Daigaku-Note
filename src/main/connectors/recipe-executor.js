@@ -387,7 +387,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           if (restarted)
             throw err(
               'login-needs-user',
-              '統合認証のページが「過去のリクエスト」になりました。設定 → 授業と LMS の「ログイン」で窓を開いてください'
+              '統合認証のページが「過去のリクエスト」になりました。設定 → 授業と資料 の「ログイン」で窓を開いてください'
             );
           restarted = true;
           ssoClicks = 0;
@@ -445,7 +445,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           if (sentPassword)
             throw err(
               'login-bad-credentials',
-              '保存した ID かパスワードでログインできませんでした。設定 → 授業と LMS で入れ直してください（自動ログインは止めました）'
+              '保存した ID かパスワードでログインできませんでした。設定 → 授業と資料 で入れ直してください（自動ログインは止めました）'
             );
           if (f.user) await loc('user').fill(cred.user);
           await loc('password').fill(cred.password);
@@ -456,14 +456,14 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         } else if (f.user && sentUser && !sentPassword) {
           throw err(
             'login-bad-credentials',
-            '保存した ID でログインできませんでした。設定 → 授業と LMS で入れ直してください（自動ログインは止めました）'
+            '保存した ID でログインできませんでした。設定 → 授業と資料 で入れ直してください（自動ログインは止めました）'
           );
         } else if (sentPassword || sentUser) {
           // パスワードを送ったあと、ID・パスワード以外の画面（認証コード・同意など）。転送の途中なら少し待って見直す
           if (await this._settle(page, ctx, baseHost)) continue;
           throw err(
             'login-needs-user',
-            '認証コードなど、本人の入力が要る画面になりました。設定 → 授業と LMS の「ログイン」で窓を開いてください（ID とパスワードは入れておきます）'
+            '認証コードなど、本人の入力が要る画面になりました。設定 → 授業と資料 の「ログイン」で窓を開いてください（ID とパスワードは入れておきます）'
           );
         } else {
           if (await this._settle(page, ctx, baseHost)) continue;
@@ -516,7 +516,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         if (!cred?.user)
           throw err(
             'login-required',
-            'ブラウザ窓でログインしてください（自動ログインを使うには、設定 → 授業と LMS で ID とパスワードを保存します）'
+            'ブラウザ窓でログインしてください（自動ログインを使うには、設定 → 授業と資料 で ID とパスワードを保存します）'
           );
         const page = await this._page(ctx);
         try {

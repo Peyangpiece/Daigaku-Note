@@ -14,6 +14,7 @@ import * as quizIpc from './quiz.js';
 import * as settingsIpc from './settings.js';
 import * as appIpc from './app.js';
 import * as mobileIpc from './mobile.js';
+import * as importsIpc from './imports.js';
 
 export function registerIpc(ctx, {getWindow = () => null} = {}) {
   const {repo, registry, jobs, files, secrets, log, folders} = ctx;
@@ -52,7 +53,8 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
     quizIpc,
     settingsIpc,
     appIpc,
-    mobileIpc
+    mobileIpc,
+    importsIpc
   ])
     m.register(c);
 }

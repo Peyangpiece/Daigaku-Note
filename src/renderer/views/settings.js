@@ -2,7 +2,7 @@
 import {AI_CONSENT_VERSION, AI_NOT_SENDS, AI_SENDS} from '../../shared/policy.js';
 import {confirmDialog, esc, toast} from '../ui-kit.js';
 import {reload} from '../store.js';
-import {ROLES, USES, features} from '../../shared/profile.js';
+import {ROLES, USES, features, isChukyo} from '../../shared/profile.js';
 
 const api = window.daigaku;
 const fmtDate = (iso) =>
@@ -108,6 +108,29 @@ function quizSection(q) {
   </section>`;
 }
 
+/**
+ * 設定する前からダウンロードにあったファイルを探して取り込み、結果を知らせる（今学期の期間にダウンロードしたものだけ。v0.17.0）。
+ * オンにしたとき（セットアップ・設定）と、設定の「すでにダウンロードしたファイルを探す」から
+ */
+export async function scanDownloads({quietNoTerm = false} = {}) {
+  const r = await api['import.scan']();
+  if (r?.error) return toast(r.error, {error: true});
+  if (r.noTerm && quietNoTerm) return;
+  if (r.noTerm)
+    return toast(
+      '今学期が設定されていないため、すでにダウンロードしたファイルは探していません（学期を設定すると探せます）'
+    );
+  const parts = [
+    r.imported ? `${r.imported} 件を入れました` : '',
+    r.pending ? `${r.pending} 件はホームの「振り分け待ち」です` : ''
+  ].filter(Boolean);
+  toast(
+    parts.length
+      ? `ダウンロード済みの授業資料（${r.term}の期間）：${parts.join('・')}`
+      : `${r.term}の期間にダウンロードした授業資料で、新しく取り込むものはありませんでした`
+  );
+}
+
 /** ブラウザの準備の状態。技術的な文言は「くわしく」の中へ */
 export function browserState(b) {
   if (b?.state === 'ready') return '用意できています';
@@ -118,7 +141,7 @@ export function browserState(b) {
 // 設定のタブ。#/settings?tab=<鍵>（focus=quiz はクイズのタブ）。前は 1 枚に全部並べていて、探しにくかった
 const TABS = [
   ['basic', '基本'],
-  ['lms', '授業と LMS'],
+  ['lms', '授業と資料'],
   ['quiz', 'クイズ'],
   ['mobile', 'スマホ'],
   ['data', 'データ'],
@@ -137,7 +160,10 @@ export function renderSettings({data}, route = '/settings') {
   const lmsConns = data.connections.filter((c) => c.kind !== 'manual');
   const hasLms = lmsConns.length > 0;
   const tab = settingsTab(route);
-  const f = features({role: s.role, uses: s.uses});
+  const f = features({role: s.role, uses: s.uses, university: s.university});
+  // manabo の欄：中京大学の学生だけ（前につないだ接続がある人には、その接続を出す。v0.17.0）
+  const showManabo = hasLms || (s.role === 'student' && isChukyo(s.university)) || !s.role;
+  const imp = s.import ?? {enabled: false, mode: 'ask', sites: []};
   queueMicrotask(bind);
   const tabs = `<nav class="settings__tabs" role="tablist" aria-label="設定">${TABS.map(
     ([k, l]) =>
@@ -152,7 +178,7 @@ export function renderSettings({data}, route = '/settings') {
           )
             .map(([v, l]) => `<option value="${v}" ${s.role === v ? 'selected' : ''}>${l}</option>`)
             .join('')}</select></label>
-          ${s.role === 'student' ? `<label>大学名<input class="input" id="st-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(s.university ?? '')}"></label>` : ''}
+          ${s.role === 'student' ? `<label>大学名<input class="input" id="st-univ" maxlength="60" placeholder="例：〇〇大学" value="${esc(s.university ?? '')}"></label><label>大学のサイトの URL<input class="input" id="st-univ-url" type="url" maxlength="300" placeholder="例：https://www.example-u.ac.jp/" value="${esc(s.universityDomain ? `https://${s.universityDomain}/` : '')}"></label>` : ''}
         </div>
         ${s.role ? `<p class="muted" style="margin: var(--space-2) 0 4px">使う機能（ホームに出すもの）</p>${USES[s.role].map(([k, l]) => `<label style="display:block"><input type="checkbox" data-st-use="${k}" ${s.uses.includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}` : ''}
       </section>
@@ -186,8 +212,10 @@ export function renderSettings({data}, route = '/settings') {
       </section>`
           : ''
       }
-      <section class="card" id="st-lms"><h3>大学の LMS</h3>
-        <p class="muted">つなぐと、授業の資料を自動で集めます（Moodle・manabo）。</p>
+      ${
+        showManabo
+          ? `<section class="card" id="st-lms"><h3>manabo</h3>
+        <p class="muted">つなぐと、授業の資料を自動で集めます（試験中）。</p>
         ${
           lmsConns.length
             ? `<ul style="padding-left: 1.2em">${lmsConns
@@ -203,8 +231,26 @@ export function renderSettings({data}, route = '/settings') {
                 .join('')}</ul>`
             : ''
         }
-        <button class="btn${lmsConns.length ? ' btn--small' : ' btn--primary'}" data-action="nav" data-route="/settings/lms">${lmsConns.length ? '別の LMS を追加' : 'LMS とつなぐ'}</button>
-        ${data.browser?.state === 'failed' || data.browser?.state === 'pending' ? `<div class="muted" style="margin-top: var(--space-2)">LMS を読むブラウザ：${browserState(data.browser)} <button class="btn btn--small" data-action="install-browser" ${data.browser?.state === 'pending' ? 'disabled' : ''}>準備し直す</button></div>` : ''}
+        ${lmsConns.length ? '' : '<button class="btn btn--primary" data-action="nav" data-route="/settings/lms">manabo とつなぐ</button>'}
+        ${data.browser?.state === 'failed' || data.browser?.state === 'pending' ? `<div class="muted" style="margin-top: var(--space-2)">manabo を読むブラウザ：${browserState(data.browser)} <button class="btn btn--small" data-action="install-browser" ${data.browser?.state === 'pending' ? 'disabled' : ''}>準備し直す</button></div>` : ''}
+      </section>`
+          : ''
+      }
+      <section class="card" id="st-import"><h3>授業資料を自動で取り込む</h3>
+        <p class="muted">大学のサイトからダウンロードした PDF・PowerPoint・Word を見つけて、授業と回を推定して入れます。保存先の「取り込み」フォルダに置いたファイルも入れます。大学と関係のないサイトのファイルには何もしません。元のファイルはそのまま残ります。</p>
+        <label style="display:block"><input type="checkbox" id="st-import-on" ${imp.enabled ? 'checked' : ''}> 取り込む</label>
+        ${
+          imp.enabled
+            ? `<label style="display:block; margin-top: var(--space-1)"><input type="radio" name="st-import-mode" value="ask" ${imp.mode === 'auto' ? '' : 'checked'}> 入れる前に聞く（ホームの「振り分け待ち」）</label>
+        <label style="display:block"><input type="radio" name="st-import-mode" value="auto" ${imp.mode === 'auto' ? 'checked' : ''}> 授業と回が分かったら聞かずに入れる</label>
+        <div class="about__row" style="margin-top: var(--space-1)"><button class="btn btn--small" id="st-import-scan">すでにダウンロードしたファイルを探す</button></div>
+        <p class="muted" style="margin: 4px 0 0">今学期の期間にダウンロードしたものだけを探します（前に聞いたもの・外したものはもう一度聞きません）。</p>
+        <p class="muted" style="margin: var(--space-2) 0 4px">大学のサイト：${s.universityDomain ? `<code>${esc(s.universityDomain)}</code>${s.university ? `（${esc(s.university)}）` : ''}` : '未登録（基本 → 大学のサイトの URL で登録できます）'}</p>
+        <p class="muted" style="margin: 0 0 4px">ほかに大学の資料が置かれるサイト（Google ドライブ・OneDrive など）</p>
+        ${imp.sites.length ? `<ul style="padding-left: 1.2em">${imp.sites.map((h) => `<li><code>${esc(h)}</code> <button class="btn btn--small btn--quiet" data-import-site-remove="${esc(h)}">外す</button></li>`).join('')}</ul>` : ''}
+        <div class="about__row"><input class="input" id="st-import-site" type="url" placeholder="https://drive.example.com/" style="max-width: 22em"><button class="btn btn--small" id="st-import-site-add">足す</button></div>`
+            : ''
+        }
       </section>
       ${
         hasLms
@@ -492,6 +538,28 @@ function bind() {
       )
     );
   $('st-univ')?.addEventListener('change', (e) => save({university: e.target.value}));
+  $('st-univ-url')?.addEventListener('change', (e) => save({universityUrl: e.target.value}));
+  // 授業資料の自動取り込み（v0.17.0）
+  $('st-import-on')?.addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    await save({importEnabled: on});
+    if (on) await scanDownloads(); // オンにしたら、すでにダウンロードしたもの（今学期の期間）も探す
+  });
+  $('st-import-scan')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    await scanDownloads().finally(() => (e.target.disabled = false));
+    reload();
+  });
+  document
+    .querySelectorAll('input[name=st-import-mode]')
+    .forEach((r) => r.addEventListener('change', () => save({importMode: r.value})));
+  $('st-import-site-add')?.addEventListener('click', () => {
+    const v = $('st-import-site').value.trim();
+    if (v) save({importSiteAdd: v});
+  });
+  document
+    .querySelectorAll('[data-import-site-remove]')
+    .forEach((b) => b.addEventListener('click', () => save({importSiteRemove: b.dataset.importSiteRemove})));
   document.querySelectorAll('[data-login]').forEach((b) =>
     b.addEventListener('click', async () => {
       b.disabled = true;
