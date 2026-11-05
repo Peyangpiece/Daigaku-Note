@@ -6,7 +6,7 @@ import {cleanUses, isRole} from '../../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 import {ORDER_SCOPE, cleanColor, cleanKeys} from '../../shared/arrange.js';
 import {id, httpsUrl, loginItem, FOLDER_LOOK_PARTS, bad} from './common.js';
-import {domainOf, siteHost} from '../import-source.js';
+import {domainOf, sharedHost, siteHost, tenantSharePoint} from '../import-source.js';
 
 export function register({handle, ctx, repo}) {
   handle('settings.pickDownloadDir', async () => {
@@ -62,9 +62,19 @@ export function register({handle, ctx, repo}) {
       importChanged = true;
     }
     if (['ask', 'auto'].includes(patch.importMode)) repo.setSetting('import.mode', patch.importMode);
-    if (typeof patch.importSiteAdd === 'string') {
-      const h =
-        siteHost(patch.importSiteAdd) || bad('サイトの URL を読めませんでした（例：https://drive.example.com/）');
+    if (typeof patch.importSiteAdd === 'string' || typeof patch.teamsSiteAdd === 'string') {
+      const teams = typeof patch.teamsSiteAdd === 'string';
+      const h = siteHost(teams ? patch.teamsSiteAdd : patch.importSiteAdd) || bad('サイトの URL を読めませんでした');
+      // Teams の欄：大学ごとの SharePoint（〇〇.sharepoint.com）だけ。Teams のアドレス（teams.microsoft.com）は大学ごとでない
+      if (teams && !tenantSharePoint(h))
+        bad(
+          'Teams の資料の置き場所（大学ごとの SharePoint）のアドレスを入れてください。Teams でファイルを「ブラウザーで開く」と、アドレス欄に https://〇〇.sharepoint.com/… と出ます'
+        );
+      // 共通のサービス（Google ドライブ・sharepoint.com など）は、だれの資料でも同じホストなので足せない（v0.17.2）
+      if (sharedHost(h))
+        bad(
+          `${h} はだれでも使う共通のサービスなので、大学のサイトとしては足せません（大学と関係のないファイルまで取り込んでしまうため）。大学ごとのアドレス（〇〇.sharepoint.com など）を入れてください`
+        );
       repo.setSetting('import.sites', [...new Set([...(repo.getSetting('import.sites', []) ?? []), h])].slice(0, 50));
     }
     if (typeof patch.importSiteRemove === 'string')

@@ -3,6 +3,7 @@ import {AI_CONSENT_VERSION, AI_NOT_SENDS, AI_SENDS} from '../../shared/policy.js
 import {confirmDialog, esc, toast} from '../ui-kit.js';
 import {reload} from '../store.js';
 import {ROLES, USES, features, isChukyo} from '../../shared/profile.js';
+import {sharedHost} from '../../shared/import-sites.js';
 
 const api = window.daigaku;
 const fmtDate = (iso) =>
@@ -164,6 +165,9 @@ export function renderSettings({data}, route = '/settings') {
   // manabo の欄：中京大学の学生だけ（前につないだ接続がある人には、その接続を出す。v0.17.0）
   const showManabo = hasLms || (s.role === 'student' && isChukyo(s.university)) || !s.role;
   const imp = s.import ?? {enabled: false, mode: 'ask', sites: []};
+  // Teams の資料の置き場所（大学ごとの SharePoint）と、ほかのサイト（v0.17.2）
+  const teamsSites = imp.sites.filter((h) => /\.sharepoint\.com$/.test(h));
+  const others = imp.sites.filter((h) => !/\.sharepoint\.com$/.test(h));
   queueMicrotask(bind);
   const tabs = `<nav class="settings__tabs" role="tablist" aria-label="設定">${TABS.map(
     ([k, l]) =>
@@ -246,12 +250,23 @@ export function renderSettings({data}, route = '/settings') {
         <div class="about__row" style="margin-top: var(--space-1)"><button class="btn btn--small" id="st-import-scan">すでにダウンロードしたファイルを探す</button></div>
         <p class="muted" style="margin: 4px 0 0">今学期の期間にダウンロードしたものだけを探します（前に聞いたもの・外したものはもう一度聞きません）。</p>
         <p class="muted" style="margin: var(--space-2) 0 4px">大学のサイト：${s.universityDomain ? `<code>${esc(s.universityDomain)}</code>${s.university ? `（${esc(s.university)}）` : ''}` : '未登録（基本 → 大学のサイトの URL で登録できます）'}</p>
-        <p class="muted" style="margin: 0 0 4px">ほかに大学の資料が置かれるサイト（Google ドライブ・OneDrive など）</p>
-        ${imp.sites.length ? `<ul style="padding-left: 1.2em">${imp.sites.map((h) => `<li><code>${esc(h)}</code> <button class="btn btn--small btn--quiet" data-import-site-remove="${esc(h)}">外す</button></li>`).join('')}</ul>` : ''}
-        <div class="about__row"><input class="input" id="st-import-site" type="url" placeholder="https://drive.example.com/" style="max-width: 22em"><button class="btn btn--small" id="st-import-site-add">足す</button></div>`
+        <p class="muted" style="margin: 0 0 4px">ほかに大学の資料が置かれるサイト（大学ごとのアドレスだけ。Google ドライブ・sharepoint.com のような、だれでも使う共通のサービスは足せません。Teams は下の「Teams と連携」から）</p>
+        ${others.length ? `<ul style="padding-left: 1.2em">${others.map((h) => `<li><code>${esc(h)}</code>${sharedHost(h) ? ' <span class="muted">（共通のサービスなので使っていません）</span>' : ''} <button class="btn btn--small btn--quiet" data-import-site-remove="${esc(h)}">外す</button></li>`).join('')}</ul>` : ''}
+        <div class="about__row"><input class="input" id="st-import-site" type="url" placeholder="https://〇〇.app.box.com/" style="max-width: 22em"><button class="btn btn--small" id="st-import-site-add">足す</button></div>`
             : ''
         }
       </section>
+      <details class="card st-teams" id="st-teams"><summary><h3>Teams と連携</h3>${teamsSites.length ? `<span class="muted">${teamsSites.length} か所を覚えています</span>` : ''}</summary>
+        <p class="muted">Teams で配られた資料は、大学ごとの SharePoint（〇〇.sharepoint.com）に置かれています。そのアドレスを覚えると、Teams からダウンロードした資料を大学の資料として取り込めます（「授業資料を自動で取り込む」をオンにして使います）。</p>
+        ${imp.enabled ? '' : '<p role="status">いまは「授業資料を自動で取り込む」がオフです。オンにすると使えます。</p>'}
+        <ol class="st-teams__how">
+          <li>Teams で資料のファイルを開き、「…」→「ブラウザーで開く」（または「SharePoint で開く」）を押す</li>
+          <li>ブラウザのアドレス欄の <code>https://〇〇.sharepoint.com/…</code> をコピーして、下に貼る</li>
+        </ol>
+        <p class="muted">Teams から落とした資料をホームの「振り分け待ち」で入れるときに、「覚える」に印を付けても覚えられます。</p>
+        ${teamsSites.length ? `<ul style="padding-left: 1.2em">${teamsSites.map((h) => `<li><code>${esc(h)}</code> <button class="btn btn--small btn--quiet" data-import-site-remove="${esc(h)}">外す</button></li>`).join('')}</ul>` : '<p class="muted">まだ覚えていません。</p>'}
+        <div class="about__row"><input class="input" id="st-teams-site" type="url" placeholder="https://〇〇.sharepoint.com/sites/…" style="max-width: 24em"><button class="btn btn--small" id="st-teams-site-add">覚える</button></div>
+      </details>
       ${
         hasLms
           ? `<section class="card"><h3>同期</h3>
@@ -556,6 +571,10 @@ function bind() {
   $('st-import-site-add')?.addEventListener('click', () => {
     const v = $('st-import-site').value.trim();
     if (v) save({importSiteAdd: v});
+  });
+  $('st-teams-site-add')?.addEventListener('click', () => {
+    const v = $('st-teams-site').value.trim();
+    if (v) save({teamsSiteAdd: v});
   });
   document
     .querySelectorAll('[data-import-site-remove]')

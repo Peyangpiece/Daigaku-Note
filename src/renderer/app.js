@@ -1347,9 +1347,13 @@ document.addEventListener('click', async (e) => {
       const courseId = li.querySelector('[data-import-course]').value;
       if (!courseId) return toast('入れる授業を選んでください', {error: true});
       const roundId = li.querySelector('[data-import-round]').value || null;
-      const r = await api['import.accept']({id, courseId, roundId});
+      const remember = !!li.querySelector('[data-import-remember]')?.checked;
+      const r = await api['import.accept']({id, courseId, roundId, remember});
       if (r?.error) toast(r.error, {error: true});
-      else toast(r.result === 'dup' ? `もう入っている資料でした（${r.label}）` : `${r.label} に入れました`);
+      else
+        toast(
+          `${r.result === 'dup' ? `もう入っている資料でした（${r.label}）` : `${r.label} に入れました`}${r.remembered ? `。${r.remembered} を覚えました` : ''}`
+        );
     }
   } finally {
     btn.disabled = false;

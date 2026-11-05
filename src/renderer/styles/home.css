@@ -491,3 +491,8 @@
   max-width: 100%;
   min-width: 10em;
 }
+.imports__remember {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.9em;
+}

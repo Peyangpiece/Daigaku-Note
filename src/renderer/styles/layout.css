@@ -245,3 +245,26 @@
   font-weight: 700;
   box-shadow: var(--card-shadow);
 }
+
+/* 設定の「Teams と連携」（折り畳み。v0.17.2） */
+.st-teams > summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  cursor: pointer;
+  list-style-position: outside;
+}
+.st-teams > summary h3 {
+  display: inline;
+  margin: 0;
+}
+.st-teams[open] > summary {
+  margin-bottom: var(--space-2);
+}
+.st-teams__how {
+  padding-left: 1.4em;
+  margin: var(--space-1) 0;
+}
+.st-teams__how code {
+  overflow-wrap: anywhere;
+}

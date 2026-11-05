@@ -4,11 +4,12 @@ import {id, bad} from './common.js';
 export function register({handle, ctx}) {
   const importer = () => ctx.importer ?? bad('取り込みの準備ができていません');
   handle('import.list', () => importer().list());
-  handle('import.accept', async ({id: itemId, courseId, roundId = null}) => {
+  handle('import.accept', async ({id: itemId, courseId, roundId = null, remember = false}) => {
     const r = await importer().accept(
       id(itemId) ?? bad('振り分け待ちが不正です'),
       id(courseId) ?? bad('授業を選んでください'),
-      roundId === null ? null : (id(roundId) ?? bad('回が不正です'))
+      roundId === null ? null : (id(roundId) ?? bad('回が不正です')),
+      {remember: remember === true}
     );
     ctx.notifyOthers?.(null, 'state.changed', {});
     return r;
