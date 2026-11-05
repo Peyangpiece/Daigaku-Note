@@ -1,12 +1,26 @@
 // PDF の上書き保存。注釈を描き込んだ PDF で元のファイルを置き換え、Finder（エクスプローラー）で開いても注釈が見えるようにする。
 // 注釈はアプリの中でも編集し続けられるよう、元の PDF の写しを userData/originals/<元の SHA-256>.pdf に取っておき、
 // 描き込むときはいつもその写しから作る（描き込んだ PDF にもう一度描き込まない）。注釈・しおりは元の SHA-256 に結び付いたまま
+import {createHash} from 'node:crypto';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
-import {exportAnnotatedPdf} from './pdf-export.js';
+import {exportAnnotatedPdfOffThread} from './pdf-worker.js';
 import {sha256} from './sync/files.js';
 
 const err = (code, message) => Object.assign(new Error(message), {code});
+
+/**
+ * SHA-256 を少しずつ求める（v0.16.30）。メインのプロセスは窓への入力も受け渡すので、大きな PDF でも長く止めない。
+ * 値は sync/files.js の sha256 と同じ
+ */
+export async function sha256Async(buf, chunk = 2 * 1024 * 1024) {
+  const h = createHash('sha256');
+  for (let i = 0; i < buf.length; i += chunk) {
+    h.update(buf.subarray(i, i + chunk));
+    if (i + chunk < buf.length) await new Promise((resolve) => setImmediate(resolve));
+  }
+  return h.digest('hex');
+}
 
 /** 注釈・しおりの鍵（元の PDF の SHA-256） */
 export const annoKey = (m) => m.base_sha256 || m.sha256;
@@ -60,15 +74,16 @@ export async function overwritePdf({repo, material, annotations, images = new Ma
   });
   // 前の上書き保存が、ファイルを置き換えたあと記録を直す前に止まっていた（アプリが落ちたなど）：記録を直して続ける。
   // 置き換える前に止まっていたなら、置き換えの記録を捨てるだけ
+  const curHash = await sha256Async(cur);
   const pending = repo.getSetting(JOURNAL, {})?.[m.id];
   if (pending) {
-    if (sha256(cur) === pending.to) {
+    if (curHash === pending.to) {
       m = repo.updateMaterial(m.id, {sha256: pending.to, size: cur.length, base_sha256: pending.base});
     }
     journal(repo, m.id, null);
   }
   // 大学ノートの外（プレビューなど）で変えられていたら上書きしない（その変更を消さないため）
-  if (sha256(cur) !== m.sha256)
+  if (curHash !== m.sha256)
     throw err(
       'conflict',
       'PDF がほかのアプリで変更されたため上書きしませんでした。編集画面の「書き出す…」で別の名前で保存してください'
@@ -77,7 +92,8 @@ export async function overwritePdf({repo, material, annotations, images = new Ma
   let src;
   if (m.base_sha256) {
     src = await fsp.readFile(originalPath(originalsDir, base)).catch(() => null);
-    if (!src || sha256(src) !== base) throw err('no-original', '元の PDF の写しが見つからないため上書きできません');
+    if (!src || (await sha256Async(src)) !== base)
+      throw err('no-original', '元の PDF の写しが見つからないため上書きできません');
   } else {
     src = cur;
     await fsp.mkdir(originalsDir, {recursive: true});
@@ -85,9 +101,9 @@ export async function overwritePdf({repo, material, annotations, images = new Ma
     if (!(await fsp.stat(keep).catch(() => null))) await replaceFile(keep, src);
   }
   const out = annotations.length
-    ? Buffer.from(await exportAnnotatedPdf(src, annotations, {images, markers: 'blue', notes: true}))
+    ? await exportAnnotatedPdfOffThread(src, annotations, {images, markers: 'blue', notes: true}) // 別のスレッドで作る
     : src;
-  const h = sha256(out);
+  const h = await sha256Async(out);
   if (h === m.sha256) return {changed: false, sha256: h, size: out.length};
   const next = annotations.length ? base : null;
   journal(repo, m.id, {to: h, base: next}); // 置き換えてから記録を直すまでに落ちても、次に直せるように

@@ -21,6 +21,12 @@ const hexToRgb = (hex) => {
 // 貼りものの上に文字入れ、その上にマーカー・ペンの線（文字の上から線を引ける。画面と同じ）、いちばん上に付箋
 const ORDER = {stamp: 0, text: 1, mask: 2, line: 2, ink: 3, note: 4};
 const isHex = (v) => /^#[0-9a-f]{6}$/i.test(v ?? '');
+// メインのプロセスは窓への入力（ペン・マウス・キー）も受け渡すので、長く止めない（v0.16.30）。
+// 注釈を描く合間に、これだけ続けたら一度ほかの仕事に譲る（ms）。保存も少しずつ書き出す
+const SLICE_MS = 8;
+const SAVE_OBJECTS_PER_TICK = 10;
+const LOAD_OBJECTS_PER_TICK = 20;
+const yieldNow = () => new Promise((resolve) => setImmediate(resolve));
 
 /**
  * 回転したページ（/Rotate。時計回り）でも、画面で見たとおりの向きで画像を置く位置と角度。
@@ -58,7 +64,7 @@ export async function exportAnnotatedPdf(
 ) {
   let doc;
   try {
-    doc = await PDFDocument.load(bytes, {updateMetadata: false});
+    doc = await PDFDocument.load(bytes, {updateMetadata: false, parseSpeed: LOAD_OBJECTS_PER_TICK});
   } catch (e) {
     throw new Error(
       /encrypt/i.test(e.message) ? '暗号化された PDF は書き出せません' : `PDF を読めませんでした（${e.message}）`
@@ -68,7 +74,12 @@ export async function exportAnnotatedPdf(
   const list = [...annotations].sort(
     (a, b) => a.page - b.page || ORDER[a.kind] - ORDER[b.kind] || (a.z ?? 0) - (b.z ?? 0)
   );
+  let slice = performance.now();
   for (const a of list) {
+    if (performance.now() - slice > SLICE_MS) {
+      await yieldNow();
+      slice = performance.now();
+    }
     const page = pages[a.page - 1];
     if (!page) continue;
     const {x, y, w, h} = a.rect;
@@ -129,7 +140,7 @@ export async function exportAnnotatedPdf(
     }
   }
   doc.setProducer('大学ノート');
-  return doc.save();
+  return doc.save({objectsPerTick: SAVE_OBJECTS_PER_TICK});
 }
 
 /**
