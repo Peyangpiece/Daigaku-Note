@@ -62,6 +62,17 @@
     0 0 0 6px color-mix(in srgb, var(--paper) 85%, transparent),
     var(--card-shadow);
 }
+/* 窓が狭いとき（app.js の head-stacked）：アプリ名の下の段に置く。上余白（96px）の中に収める */
+.head-stacked .topnav {
+  top: 50px;
+  right: 16px;
+  max-width: calc(100vw - 32px);
+  overflow-x: auto;
+}
+.head-stacked .notebook-head {
+  height: 50px;
+  padding-right: var(--space-6);
+}
 .topnav__btn {
   padding: 7px 14px; /* 高さおよそ 32px */
   border: 0;

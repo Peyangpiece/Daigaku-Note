@@ -75,13 +75,45 @@
   margin: var(--space-1) 0;
 }
 
+.quiz-stage {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.quiz-stage .page-nav h2 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* 見出しの添え書き（まちがえた問題・カードなど） */
+.quiz-mode {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+  font-size: var(--fs-small);
+  font-weight: 400;
+  vertical-align: 3px;
+}
+/* 進み具合：帯と「2 / 5」 */
+.quiz-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: var(--space-2);
+}
+.quiz-progress__n {
+  flex: none;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 .quiz-progress {
-  height: 6px;
-  max-width: 720px;
+  flex: 1;
+  height: 10px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--paper-ink) 12%, transparent);
   overflow: hidden;
-  margin-bottom: var(--space-2);
 }
 .quiz-progress span {
   display: block;
@@ -92,7 +124,6 @@
 /* 単語カード：左上に穴、横罫の紙 */
 .qcard {
   position: relative;
-  max-width: 720px;
   padding: var(--space-3) var(--space-3) var(--space-3) 56px;
   background: var(--card);
   border-radius: 12px;
@@ -127,13 +158,17 @@
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
 }
+/* 要確認・報告の印：ボタンに見えないよう、枠だけの小さな札 */
 .qcard__flag {
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
-  background: var(--paper-ink);
-  color: var(--paper);
-  font-size: var(--fs-small);
-  font-weight: 700;
+  display: inline-block;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--danger-ink) 55%, transparent);
+  border-radius: var(--radius-s, 6px);
+  color: var(--danger-ink);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+  vertical-align: 1px;
 }
 .qcard__q {
   font-size: 18px;
@@ -146,6 +181,12 @@
   min-width: 4em;
   border-bottom: 2px solid var(--paper-ink);
   text-align: center;
+}
+.qcard__blank--filled {
+  min-width: 0;
+  padding: 0 6px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--c3) 30%, transparent);
 }
 .qcard__choices {
   list-style: none;
@@ -191,12 +232,123 @@
   align-items: center;
   max-width: 420px;
 }
+.qcard__num .input {
+  flex: 1;
+  min-width: 0;
+}
+.qcard__num button,
+.qcard__num span {
+  flex: none;
+  white-space: nowrap;
+}
+/* 正誤：○・× を左右に大きく */
+.qcard__choices--tf {
+  grid-template-columns: 1fr 1fr;
+}
+.choice--tf {
+  justify-content: center;
+  position: relative;
+  padding: 18px 14px;
+}
+.choice--tf .choice__key {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+}
+.choice__mark {
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 700;
+}
+/* 答えたあとの選択肢：正解に ✓（緑）、選んだ誤答に ✕（赤）。ほかは薄く */
+.choice--done {
+  cursor: default;
+  align-items: flex-start;
+  opacity: 0.7;
+}
+.choice--done:hover {
+  border-color: color-mix(in srgb, var(--paper-ink) 35%, transparent);
+  box-shadow: none;
+}
+.choice--done .choice__key {
+  background: transparent;
+}
+.choice--ok,
+.choice--ng {
+  opacity: 1;
+  border-width: 2px;
+}
+.choice--ok,
+.choice--ok:hover {
+  border-color: #2e9d6f;
+  background: color-mix(in srgb, var(--c3) 22%, var(--paper));
+}
+.choice--ok .choice__key {
+  background: #2e9d6f;
+  color: #fff;
+}
+.choice--ng,
+.choice--ng:hover {
+  border-color: var(--danger-ink);
+  background: color-mix(in srgb, var(--danger-ink) 8%, var(--paper));
+}
+.choice--ng .choice__key {
+  background: var(--danger-ink);
+  color: #fff;
+}
+.choice--tf.choice--done {
+  flex-direction: column;
+  align-items: center;
+}
+.choice__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.choice--tf .choice__body {
+  justify-items: center;
+}
+.choice__tag {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 700;
+}
+.choice--ok .choice__tag {
+  color: #1f7a54;
+}
+.choice--ng .choice__tag {
+  color: var(--danger-ink);
+}
+.choice__why {
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+}
+/* 答えが確かめきれていない問題の注意（答えたあとに出す） */
+.qcard__caution {
+  margin: var(--space-1) 0 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-s, 6px);
+  background: color-mix(in srgb, var(--pop1) 25%, transparent);
+  font-size: var(--fs-small);
+}
 .qcard__actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
   align-items: center;
   margin-top: var(--space-2);
+}
+/* 「次へ」は画面の下に貼り付けて、解説が長くても押せるように */
+.qcard__actions--next {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: var(--space-2) calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) -56px;
+  padding: 12px var(--space-3) 12px 56px;
+  background: var(--card);
+  border-top: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
+  border-radius: 0 0 12px 12px;
 }
 .qcard__answer {
   padding: 12px 14px;
@@ -251,14 +403,16 @@
   cursor: pointer;
 }
 .quiz-keys {
-  max-width: 720px;
+  text-align: center;
 }
 .quiz-result {
   display: flex;
   gap: var(--space-3);
   align-items: center;
-  max-width: 720px;
   margin-bottom: var(--space-3);
+}
+.quiz-result h3 {
+  margin-top: 0;
 }
 .ring {
   --pct: 0;
@@ -268,10 +422,21 @@
   border-radius: var(--radius-pill);
   display: grid;
   place-items: center;
+  --ring: var(--paper-ink);
   background: conic-gradient(
-    var(--paper-ink) calc(var(--pct) * 1%),
+    var(--ring) calc(var(--pct) * 1%),
     color-mix(in srgb, var(--paper-ink) 12%, transparent) 0
   );
+}
+/* 色は一覧の正答率の帯と同じ（80% 以上・50% 以上・それ未満） */
+.ring--good {
+  --ring: var(--pop3);
+}
+.ring--mid {
+  --ring: var(--pop1);
+}
+.ring--low {
+  --ring: var(--pop2);
 }
 .ring span {
   width: 84px;
@@ -284,16 +449,76 @@
   font-weight: 700;
   font-size: 22px;
 }
+.wrong-list {
+  margin: 0;
+  padding-left: 1.4em;
+}
 .wrong-list li {
-  margin-bottom: var(--space-1);
+  padding: var(--space-1) 0;
+  border-top: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
+}
+.wrong-list li:first-child {
+  border-top: 0;
 }
 .wrong-list p {
   margin: 0;
+}
+.wrong-list__q {
+  overflow-wrap: anywhere;
+}
+.wrong-list__mine {
+  color: var(--danger-ink);
+}
+.wrong-list__n {
+  margin-top: 4px !important;
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
+}
+.wrong-list__src {
+  margin-top: 2px !important;
+  font-size: var(--fs-small);
 }
 .qedit-list {
   display: grid;
   gap: var(--space-2);
   max-width: 820px;
+}
+.qedit__bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow-hover);
+}
+.page-nav .btn {
+  flex: none;
+  white-space: nowrap;
+}
+.qedit label {
+  display: grid;
+  gap: 2px;
+}
+.qedit__opts {
+  display: grid;
+  gap: 8px;
+}
+.qedit__opt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .qedit__opt {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.qedit__why {
+  color: var(--paper-ink-weak);
+  font-size: var(--fs-small);
 }
 .qedit {
   display: grid;
@@ -428,30 +653,13 @@ textarea.input {
 .qz-hub__none {
   margin: 0 0 var(--space-2);
 }
-.qz-hub__sum {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: var(--space-1);
+.qz-hub__line {
   margin: var(--space-2) 0;
-}
-.qz-hub__sum > div {
-  display: grid;
-  gap: 2px;
-  padding: 10px 14px;
-  border-radius: var(--radius);
-  background: var(--card);
-  box-shadow: var(--card-shadow);
-}
-.qz-hub__sum b {
-  font-size: var(--fs-h3);
-}
-.qz-hub__sum span {
   color: var(--paper-ink-weak);
-  font-size: var(--fs-small);
 }
-.qz-hub__note {
-  margin: 0 0 var(--space-2);
-  font-size: var(--fs-small);
+.qz-hub__line b {
+  color: var(--paper-ink);
+  font-size: var(--fs-h3);
 }
 .qz-hub__course {
   margin-bottom: var(--space-3);
@@ -475,32 +683,99 @@ textarea.input {
 .qz-hub__head .qz-hub__acts {
   margin-left: auto;
 }
-.qz-hub__scroll {
-  overflow-x: auto;
-}
+/* 表：列の幅を決め（table-layout: fixed）、行の線を端から端までそろえる。狭い窓では 1 行を札のように縦に積む */
 .qz-hub__table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--fs-small);
+}
+.qz-hub__c-rate {
+  width: 130px;
+}
+.qz-hub__c-done {
+  width: 96px;
+}
+.qz-hub__c-wrong {
+  width: 64px;
+}
+.qz-hub__c-last {
+  width: 104px;
+}
+.qz-hub__c-acts {
+  width: 120px;
 }
 .qz-hub__table th,
 .qz-hub__table td {
   padding: 8px 10px;
   text-align: left;
-  white-space: nowrap;
+  vertical-align: middle;
   border-top: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
 }
 .qz-hub__table thead th {
   border-top: 0;
   color: var(--paper-ink-weak);
   font-weight: 400;
+  white-space: nowrap;
 }
 .qz-hub__table tbody th {
-  white-space: normal;
-  min-width: 180px;
+  overflow-wrap: anywhere;
+}
+.qz-hub__table td.qz-hub__acts {
+  display: table-cell;
+  text-align: right;
+  white-space: nowrap;
+}
+.qz-hub__table td.qz-hub__acts .btn + .btn {
+  margin-left: 4px;
 }
 .qz-hub__wrong {
   color: var(--danger-ink);
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .qz-hub__table,
+  .qz-hub__table tbody,
+  .qz-hub__table tr,
+  .qz-hub__table th,
+  .qz-hub__table td {
+    display: block;
+  }
+  .qz-hub__table colgroup,
+  .qz-hub__table thead {
+    display: none;
+  }
+  .qz-hub__table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+    padding: 10px 0;
+    border-top: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
+  }
+  .qz-hub__table tbody th,
+  .qz-hub__table td {
+    padding: 0;
+    border-top: 0;
+  }
+  .qz-hub__table tbody th,
+  .qz-hub__table td.qz-hub__acts {
+    grid-column: 1 / -1;
+  }
+  .qz-hub__table tbody th {
+    font-size: var(--fs-body, 15px);
+  }
+  .qz-hub__table td[data-label]::before {
+    content: attr(data-label) '　';
+    color: var(--paper-ink-weak);
+  }
+  .qz-hub__table td.qz-hub__acts {
+    display: flex;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .qz-hub__table td.qz-hub__acts .btn + .btn {
+    margin-left: 0;
+  }
 }
 .qz-rate {
   display: inline-flex;

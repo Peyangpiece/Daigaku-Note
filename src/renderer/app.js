@@ -22,6 +22,7 @@ import {
   leaveQuizEdit,
   quizAction,
   quizEditAction,
+  quizEditInput,
   quizKey,
   quizSubmitAsk,
   quizSubmitNum,
@@ -123,11 +124,26 @@ function head() {
   chip.title = 'ポイント：復習のクイズに正解したり、毎日開いたりするとたまります。持ち物のショップで使えます';
 }
 // 上の固定ボタンの実際の幅を、上余白の右の空き（--topnav-w）にする。文字の大きさ・数の札で幅が変わっても重ならない
+// 窓が狭くてアプリ名・ポイントと 1 行に収まらないときは、上のボタンをアプリ名の下の段に下ろす（head-stacked。v0.17.5）
 const topnav = document.querySelector('.topnav');
-if (topnav)
-  new ResizeObserver(() =>
-    document.documentElement.style.setProperty('--topnav-w', `${Math.ceil(topnav.getBoundingClientRect().width)}px`)
-  ).observe(topnav);
+if (topnav) {
+  const fit = () => {
+    const w = Math.ceil(topnav.getBoundingClientRect().width);
+    document.documentElement.style.setProperty('--topnav-w', `${w}px`);
+    const head = document.querySelector('.notebook-head');
+    const used = [...(head?.querySelectorAll('h1, #head-points:not([hidden])') ?? [])].reduce(
+      (n, el) => n + el.getBoundingClientRect().width + 24,
+      0
+    );
+    // 左右の余白（--space-6 の 2 つ分）とすき間 16px
+    const space = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--space-6')) || 48;
+    document.documentElement.classList.toggle('head-stacked', used + w + space * 2 + 16 > window.innerWidth);
+  };
+  new ResizeObserver(fit).observe(topnav);
+  window.addEventListener('resize', fit);
+  const points = document.getElementById('head-points');
+  if (points) new MutationObserver(fit).observe(points, {attributes: true, attributeFilter: ['hidden']});
+}
 /** ポイントの印（筆箱のショップの札と同じ） */
 const COIN =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#f5c542" stroke="#b8860b" stroke-width="1.6"/><text x="12" y="16.2" text-anchor="middle" font-size="11" font-weight="700" fill="#7a5600" font-family="sans-serif">P</text></svg>';
@@ -1324,6 +1340,10 @@ async function moveMaterial(materialId, place) {
   if (r?.error) toast(r.error, {error: true});
   reload();
 }
+// 問題の編集：欄を変えたら下書きに覚える（「変更を保存」でまとめて保存。v0.17.5）
+document.addEventListener('input', (e) => {
+  if (e.target.closest?.('[data-qe]')) quizEditInput(e.target);
+});
 // 授業資料の自動取り込みの振り分け待ち（ホーム。v0.17.0）：授業を選び直したら回の選択肢を入れ替え、「入れる」「取り込まない」
 document.addEventListener('change', (e) => {
   const sel = e.target.closest?.('[data-import-course]');

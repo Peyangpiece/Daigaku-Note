@@ -133,6 +133,11 @@ export function register({handle, repo, log, quiz}) {
       allowed.o_json = JSON.stringify(
         patch.o.slice(0, 3).map((x) => str(String(x).trim(), 120) ?? bad('誤答が長すぎます'))
       );
+    // 誤答ごとの「なぜ違うか」（o と同じ順。v0.17.5 で編集できるように）
+    if (Array.isArray(patch.why))
+      allowed.why_json = JSON.stringify(
+        patch.why.slice(0, 3).map((x) => str(String(x ?? '').trim(), 200) ?? bad('違う理由が長すぎます'))
+      );
     if (patch.reviewed === true) allowed.review = null;
     if (typeof patch.report === 'string') allowed.report_reason = str(patch.report, 60) || null;
     if (patch.report === null) allowed.report_reason = null;
