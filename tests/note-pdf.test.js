@@ -39,7 +39,7 @@ test('ノートの線の色：新しいノートは灰色。前の版のノー�
   };
   const gray = await createNotePdf(cleanPaper({}));
   const g = await strokes(gray, 0);
-  assert.match(g, /0\.623\d* 0\.705\d* 0\.8\d* RG/, '灰色 #9fb4cc');
+  assert.match(g, /0\.788\d* 0\.811\d* 0\.839\d* RG/, '灰色 #c9cfd6');
   const old = {v: 2, type: 'ruled', gap: 6}; // 0.17.9 までに作ったノートの覚え方
   const blueDoc = await createNotePdf(old);
   const more = await appendNotePage(blueDoc, old);

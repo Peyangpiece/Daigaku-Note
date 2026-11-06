@@ -11,9 +11,9 @@ const MM = 72 / 25.4;
 
 // ---- 紙（v0.14.2〜） ----
 export const NOTE_PAPER = '#ffffff';
-// 線の色（v0.17.10 から灰色。試し書きの付箋の罫線と同じ）。前の版で作ったノートは、足すページも青のまま（design.line がない）
+// 線の色（v0.17.10 から灰色。試し書きの付箋の罫線の見え方に近い、彩度を落とした淡い灰色）。前の版で作ったノートは、足すページも青のまま（design.line がない）
 export const NOTE_LINES = {
-  gray: {line: '#9fb4cc', head: '#7f94ad'}, // 罫線・題の欄の下の線（少し濃い灰色）
+  gray: {line: '#c9cfd6', head: '#a7afb9'}, // 罫線・題の欄の下の線（少し濃い灰色）。彩度を落とした淡い灰色
   blue: {line: '#9cc0e6', head: '#6f9fd6'} // よくある学習ノートの青（v0.14.2〜0.17.9）
 };
 export const NOTE_TYPES_V2 = ['ruled', 'grid'];
