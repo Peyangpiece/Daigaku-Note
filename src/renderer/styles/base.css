@@ -172,6 +172,35 @@ h3,
 h1 {
   font-size: var(--fs-h1);
 }
+/* アプリ名のロゴ（英字。index.html に埋め込んだ SVG）。字は文字の色（着せ替え・暗い表示に合わせる）、「o」は朱、
+   蛍光ペンはブランドの 5 色（月〜金。暗い表示では暗めにして、白い字が読めるように） */
+.app-logo {
+  display: block;
+  height: 40px;
+  width: auto;
+  overflow: visible;
+}
+.app-logo__ink {
+  fill: currentColor;
+}
+.app-logo__acc {
+  fill: #e04a2f;
+}
+.app-logo__b1 {
+  fill: var(--logo-band-1);
+}
+.app-logo__b2 {
+  fill: var(--logo-band-2);
+}
+.app-logo__b3 {
+  fill: var(--logo-band-3);
+}
+.app-logo__b4 {
+  fill: var(--logo-band-4);
+}
+.app-logo__b5 {
+  fill: var(--logo-band-5);
+}
 h2 {
   font-size: var(--fs-h2);
 }
