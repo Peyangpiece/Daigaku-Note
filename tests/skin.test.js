@@ -46,13 +46,13 @@ test('テンプレートの形：知らない項目は捨て、範囲外は既�
   assert.deepEqual(t.parts.note, {type: 'ruled', paper: 'default', line: '#abcdef', gap: 'wide', margin: true});
   assert.deepEqual(
     t.parts.folder,
-    {card: '#ffffff', tab: {mode: 'weekday', colors: ['#fcc9c4', '#fdd6c2', '#d3e3fe', '#d3f6d1', '#fbebc3']}},
+    {card: '#ffffff', tab: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']}},
     'タブに course は使えない（既定の曜日ごと）'
   );
   assert.deepEqual(
     t.parts.tape,
     {
-      color: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']},
+      color: {mode: 'weekday', colors: ['#fbb1a9', '#fcc3a6', '#c0d6fd', '#bff2bc', '#f9e2a8']},
       pattern: 'check',
       image: null
     },
@@ -112,11 +112,11 @@ test('クラシック：テーマの色・曜日ごとのテープ', () => {
   const c = BUILTIN_TEMPLATES.find((t) => t.id === CLASSIC_ID);
   assert.deepEqual(
     c.parts.folder,
-    {card: 'default', tab: {mode: 'weekday', colors: ['#fcc9c4', '#fdd6c2', '#d3e3fe', '#d3f6d1', '#fbebc3']}},
+    {card: 'default', tab: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']}},
     'クラシックのタブはテープと同じ曜日ごと（v0.17.8）'
   );
   assert.deepEqual(c.parts.tape, {
-    color: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']},
+    color: {mode: 'weekday', colors: ['#fbb1a9', '#fcc3a6', '#c0d6fd', '#bff2bc', '#f9e2a8']},
     pattern: 'course',
     image: null
   });
@@ -174,12 +174,12 @@ test('シールの場所：フォルダ・ホームの余白・授業ページ�
 
 test('テープの柄に画像：画像がなければ無地に戻す', () => {
   assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: SHA}}}).parts.tape, {
-    color: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']},
+    color: {mode: 'weekday', colors: ['#fbb1a9', '#fcc3a6', '#c0d6fd', '#bff2bc', '#f9e2a8']},
     pattern: 'image',
     image: SHA
   });
   assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: 'x'}}}).parts.tape, {
-    color: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']},
+    color: {mode: 'weekday', colors: ['#fbb1a9', '#fcc3a6', '#c0d6fd', '#bff2bc', '#f9e2a8']},
     pattern: 'plain',
     image: null
   });

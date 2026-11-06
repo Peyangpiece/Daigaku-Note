@@ -75,10 +75,10 @@ export const SET_MAX = 5;
 export const SET_WEEKDAYS = ['月', '火', '水', '木', '金'];
 export const SET_MODES = ['custom', 'weekday'];
 export const SET_MODE_LABEL = {default: '標準', custom: 'カスタム', weekday: '曜日ごと'};
-// 曜日ごとのテープの色（月・火・水・木・金。赤・橙・青・緑・黄。v0.17.8）
-export const TAPE_WEEKDAY = ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60'];
-// フォルダのタブの曜日ごとの色（テープと同じ並びの淡い色。v0.17.8）
-export const TAB_WEEKDAY = ['#fcc9c4', '#fdd6c2', '#d3e3fe', '#d3f6d1', '#fbebc3'];
+// 曜日ごとのテープの色（月・火・水・木・金。赤・橙・青・緑・黄の淡い色。タブより淡く。v0.17.8）
+export const TAPE_WEEKDAY = ['#fbb1a9', '#fcc3a6', '#c0d6fd', '#bff2bc', '#f9e2a8'];
+// フォルダのタブの曜日ごとの色（月から赤・橙・青・緑・黄。テープより濃く。v0.17.8）
+export const TAB_WEEKDAY = ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60'];
 const hexList = (v, min, max) =>
   Array.isArray(v) && v.length >= min && v.length <= max && v.every(isHex) ? v.map((c) => c.toLowerCase()) : null;
 function colorSet(v, weekday, fallback, {allowDefault = false, course = false} = {}) {
