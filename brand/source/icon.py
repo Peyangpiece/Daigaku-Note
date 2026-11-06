@@ -34,9 +34,9 @@ def band_hole(x,y,w,h,slant=0.55):  # 1 色の版で抜く形
     s=h*slant
     return f'M{x+s:.1f} {y:.1f}L{x+w:.1f} {y:.1f}L{x+w-s:.1f} {y+h:.1f}L{x:.1f} {y+h:.1f}Z'
 def mark(cx,cy,u,small=False,mono=None,page=None,rule=RULE):
-    """ページ＋曜日のタブ。いちばん上の行は 5 色の蛍光ペン（ロゴの蛍光ペンとつなぐ）。
-    u は 1024 の版での 1 の大きさ。small は小さい表示用（タブ 3 つを大きく、行は蛍光ペン 1 本だけ）。
-    mono は 1 色（黒など。行は抜き）、page はページを塗る色（明るい地のロゴ用：紺のページ）"""
+    """ページ＋曜日のタブ。行は灰色の罫線（4 本。最後の 1 本は短い）。
+    u は 1024 の版での 1 の大きさ。small は小さい表示用（タブ 3 つを大きく、罫線 2 本）。
+    mono は 1 色（黒など。罫線は抜き）、page はページを塗る色（明るい地のロゴ用：紺のページに白い罫線）"""
     pw,ph=440*u,560*u
     tabs=3 if small else 5; tab_out=(132 if small else 84)*u; gap=(26 if small else 18)*u
     gx=cx-(pw+tab_out)/2; gy=cy-ph/2
@@ -47,27 +47,16 @@ def mark(cx,cy,u,small=False,mono=None,page=None,rule=RULE):
         c=mono if (mono and not page) else cols[i]
         g+=f'<path fill="{c}" d="{rr(gx+pw-60*u,ty+i*(th+gap),60*u+tab_out,th,min(24*u,th/2))}"/>'
     page_d=rr(gx,gy,pw,ph,46*u)
-    lx=gx+64*u; lw=pw-128*u
-    if small:
-        bh=96*u; by=gy+ph/2-bh/2-20*u; rules=[]
-    else:
-        # 4 行のうち 2 行目を蛍光ペンにする（文章の 1 行に線を引いた形。いちばん上の帯にすると、ほかのメモのアプリの見出しの帯に似る）
-        bh=50*u; ys=[gy+150*u+i*100*u for i in range(4)]
-        by=ys[1]-bh/2; rules=[ys[0],ys[2],ys[3]]
+    n=2 if small else 4; rh=(36 if small else 24)*u
+    ys=[gy+150*u+i*((ph-260*u)/(n-1)) for i in range(n)] if not small else [gy+ph*0.38,gy+ph*0.62]
     holes=''
-    for i,y in enumerate(rules):
-        w=lw*(0.62 if i==len(rules)-1 else (0.86 if i==0 and not small else 1))
-        holes+=rr(lx,y-12*u,w,24*u,12*u)
-    if mono and not page:
-        # 1 色：蛍光ペンも行と同じく抜く
-        g+=f'<path fill="{mono}" fill-rule="evenodd" d="{page_d}{holes}{band_hole(lx,by,lw,bh)}"/>'
-        return g
-    if page:
-        g+=f'<path fill="{page}" fill-rule="evenodd" d="{page_d}{holes}"/>'
-        g+=band(lx,by,lw,bh,cols if small else WEEK)
+    for i,y in enumerate(ys):
+        w=(pw-128*u)*(0.62 if i==n-1 else 1)
+        holes+=rr(gx+64*u,y-rh/2,w,rh,rh/2)
+    if mono or page:
+        g+=f'<path fill="{mono or page}" fill-rule="evenodd" d="{page_d}{holes}"/>'
     else:
-        g+=f'<path fill="{PAPER}" d="{page_d}"/><path fill="{rule}" d="{holes}"/>'
-        g+=band(lx,by,lw,bh,[mix(c,PAPER,0.15) for c in (cols if small else WEEK)])
+        g+=f'<path fill="{PAPER}" d="{page_d}"/><path fill="{"#9FAEC0" if small else rule}" d="{holes}"/>'
     return g
 def shadow_defs():
     return (f'<defs><filter id="s" x="-10%" y="-10%" width="120%" height="125%"><feGaussianBlur in="SourceAlpha" stdDeviation="14"/>'
