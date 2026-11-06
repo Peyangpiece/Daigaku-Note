@@ -1,4 +1,4 @@
-/* 大学ノートの画面：紙・罫線・見出し・共通の小さな部品（.muted・.sr-only）。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* パレットノートの画面：紙・罫線・見出し・共通の小さな部品（.muted・.sr-only）。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
 /* 罫線ノート・マスキングテープのフォルダ・付箋・バッジ（SPEC §8.0） */
 * {
   box-sizing: border-box;

@@ -124,7 +124,7 @@ const marker = (id, name, color, thick = false) => ({
   model: thick ? 'marker-wide' : 'marker'
 });
 /**
- * シャープペンシル（大学ノートのオリジナル。製図用の形）：書く道具としてはペン（type: 'pen'）。線は黒鉛の灰色で、
+ * シャープペンシル（パレットノートのオリジナル。製図用の形）：書く道具としてはペン（type: 'pen'）。線は黒鉛の灰色で、
  * 太さは芯の太さで決まる（PENCIL_WIDTH）。芯の硬さは HB。見た目は 3D モデル pencil-mech
  */
 const pencil = (id, name, mm, body, accent, series = `pencil-${mm.replace('.', '')}`) => ({
@@ -183,13 +183,13 @@ export const CASE_INFO = {
   tin: {
     short: '金属の缶・かぶせぶた',
     material: '金属（塗装した缶）',
-    build: '角の丸い浅い箱とかぶせぶた。後ろに蝶番、ふたに「大学ノート」の印刷',
+    build: '角の丸い浅い箱とかぶせぶた。後ろに蝶番、ふたに「パレットノート」の印刷',
     size: '約 197 × 65 × 26 mm'
   },
   leather: {
     short: 'シボ革・真ちゅうのファスナー',
     material: '革（自然なシボ）',
-    build: 'ふっくらした箱形。真ちゅうのファスナー・両側の生成りのステッチ・革の引き手・型押しの「大学ノート」',
+    build: 'ふっくらした箱形。真ちゅうのファスナー・両側の生成りのステッチ・革の引き手・型押しの「パレットノート」',
     size: '約 195 × 60 × 50 mm'
   },
   clear: {
@@ -910,7 +910,7 @@ export function shopSeries(items = CATALOG) {
       map.set(sid, {
         id: sid,
         name: SERIES_INFO[sid]?.name ?? it.name,
-        maker: it.maker ?? '大学ノート',
+        maker: it.maker ?? 'パレットノート',
         type: kindOf(it),
         items: []
       });

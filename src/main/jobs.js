@@ -195,7 +195,7 @@ export class JobRunner {
           if (r.status === 'ok') continue;
           result.failures++;
           const message = this.ctx.secrets?.isLocked?.(`conn:${connection.id}:`)
-            ? `${connection.label}：保存したログインを読めません。キーチェーンの確認が出たら「常に許可」を選び、大学ノートを開き直してください（出ないときは 設定 → 授業と資料 → ログイン）`
+            ? `${connection.label}：保存したログインを読めません。キーチェーンの確認が出たら「常に許可」を選び、パレットノートを開き直してください（出ないときは 設定 → 授業と資料 → ログイン）`
             : r.status === 'login-required'
               ? `${connection.label} へのログインが必要です${r.error?.message ? `（${r.error.message}）` : ''}`
               : `${connection.label}：${friendlyError(r.error)}`;

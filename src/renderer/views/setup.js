@@ -167,7 +167,7 @@ function stepProfile(data, n) {
   const university = draft.university ?? data.settings.university ?? '';
   const uses = draft.uses ?? data.settings.uses ?? [];
   return `<h2>${n}. あなたと使い方</h2>
-    <p class="muted">大学ノートは α 版（試験中）です。続けると <button type="button" class="link" data-action="policy">利用規約とプライバシーポリシー</button> に同意したことになります。データはこのパソコンの中だけに保存します。</p>
+    <p class="muted">パレットノートは α 版（試験中）です。続けると <button type="button" class="link" data-action="policy">利用規約とプライバシーポリシー</button> に同意したことになります。データはこのパソコンの中だけに保存します。</p>
     <div class="role-pick" role="radiogroup" aria-label="使う人">${Object.entries(ROLES)
       .map(
         ([k, l]) =>

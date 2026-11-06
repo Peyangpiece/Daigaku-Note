@@ -1,4 +1,4 @@
-// 大学ノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
+// パレットノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
 // M0 の骨格：DB・設定・ジョブ・スケジューラ・IPC をつなぐ。LMS 操作とファイル操作はここ（メイン）だけで行う。
 import {app, BrowserWindow, Menu, Notification, Tray, dialog, nativeImage, nativeTheme, net, shell} from 'electron';
 import {existsSync, mkdirSync, readdirSync, statSync} from 'node:fs';
@@ -23,7 +23,7 @@ import {createRecipeExecutor} from './connectors/recipe-executor.js';
 import {createBrowserSession} from './browser/session.js';
 import {ensureChromium} from './browser/install.js';
 import {createQuarantine} from './sync/quarantine.js';
-import {defaultRoot} from '../shared/paths.js';
+import {LEGACY_NAME, defaultRoot} from '../shared/paths.js';
 import {createUpdater} from './updater.js';
 import {createFolders} from './folders.js';
 import {createQuizService} from './quiz/service.js';
@@ -38,7 +38,7 @@ const PRELOAD = path.join(here, '..', 'preload', 'preload.js');
 
 /**
  * 開発中（npm start）のコードの版：src の中でいちばん新しい更新時刻。配布物では使わない。
- * 大学ノートは窓を閉じても常駐するので、git pull のあとに npm start しても古いほうが動き続けていた。
+ * パレットノートは窓を閉じても常駐するので、git pull のあとに npm start しても古いほうが動き続けていた。
  * 2 つ目の起動が新しいコードなら、動いているほうを再起動する
  */
 function devBuild() {
@@ -61,6 +61,13 @@ function devBuild() {
 const BUILD = devBuild();
 
 // 配布物の動作確認（--self-test=<結果のパス>）。窓は開かず、確かめて終わる（self-check.js）
+// 名前を「パレットノート」に変えた（v0.18.0）。データのフォルダ（userData）は名前から決まるので、前の名前のフォルダが
+// あればそのまま使う（変わると、授業・ノート・設定が見えなくなる）。新しく入れた人は「パレットノート」。
+// --user-data-dir で場所を指したとき（テストなど）は触らない。1 つだけ起動する仕組み（下）が userData を使うので、その前に決める
+const LEGACY_DATA = path.join(app.getPath('appData'), LEGACY_NAME);
+const fromLegacy = !app.commandLine.hasSwitch('user-data-dir') && existsSync(LEGACY_DATA);
+if (fromLegacy) app.setPath('userData', LEGACY_DATA);
+
 const SELF_TEST = selfTestPath();
 
 // 2 つ目の起動はすぐに終わる（app.quit() は非同期で、そのまま起動の処理が進んでデータベースまで開いていた）
@@ -95,7 +102,7 @@ function openWindow(route = null) {
     height: 820,
     minWidth: 640,
     minHeight: 640,
-    title: '大学ノート',
+    title: 'パレットノート',
     autoHideMenuBar: true,
     backgroundColor: windowBackground(),
     // nodeIntegrationInSubFrames：PDF とノートを並べるとき（#/split）、左右の編集画面は窓の中の iframe（同じ index.html）。
@@ -171,7 +178,7 @@ function editContextMenu({isEditable, selectionText, editFlags}) {
 
 /**
  * アプリのメニュー。macOS では、ここに「編集」がないと ⌘C・⌘V・⌘X・⌘A が入力欄で効かない。
- * Electron の既定のメニューに頼らず、はっきり作る（名前も「Electron」ではなく「大学ノート」に）
+ * Electron の既定のメニューに頼らず、はっきり作る（名前も「Electron」ではなく「パレットノート」に）
  */
 function buildAppMenu() {
   const mac = process.platform === 'darwin';
@@ -180,17 +187,17 @@ function buildAppMenu() {
     ...(mac
       ? [
           {
-            label: '大学ノート',
+            label: 'パレットノート',
             submenu: [
-              {role: 'about', label: '大学ノートについて'},
+              {role: 'about', label: 'パレットノートについて'},
               {type: 'separator'},
               {label: '設定…', accelerator: 'Cmd+,', click: () => openWindow('/settings')},
               {type: 'separator'},
-              {role: 'hide', label: '大学ノートを隠す'},
+              {role: 'hide', label: 'パレットノートを隠す'},
               {role: 'hideOthers', label: 'ほかを隠す'},
               {role: 'unhide', label: 'すべて表示'},
               {type: 'separator'},
-              {role: 'quit', label: '大学ノートを終了'}
+              {role: 'quit', label: 'パレットノートを終了'}
             ]
           }
         ]
@@ -258,7 +265,7 @@ function buildTray() {
   const refresh = () =>
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        {label: '大学ノートを開く', click: () => openWindow()},
+        {label: 'パレットノートを開く', click: () => openWindow()},
         {label: '今すぐ同期', click: () => ctx.jobs.enqueue('sync', {})},
         {label: '資料のフォルダを開く', click: () => shell.openPath(ctx.rootDir())},
         {type: 'separator'},
@@ -271,7 +278,7 @@ function buildTray() {
       ])
     );
   refresh();
-  tray.setToolTip('大学ノート');
+  tray.setToolTip('パレットノート');
   tray.on('click', () => openWindow());
   ctx.refreshTray = refresh;
 }
@@ -290,7 +297,7 @@ app.whenReady().then(async () => {
     if (!told) {
       told = true;
       dialog.showErrorBox(
-        '大学ノート',
+        'パレットノート',
         `内部で問題が起きました。続けて使えますが、おかしければ開き直してください。\n${e?.message ?? e}`
       );
     }
@@ -309,7 +316,28 @@ app.whenReady().then(async () => {
     const redated = syncRoundDates(repo);
     if (redated) log.info(`回の日付を ${redated} 件、学年暦に合わせました`);
     ctx.secrets = createSecrets(path.join(userData, 'secrets.json'), log);
+    // 前の名前のときに既定の保存先（デスクトップ/大学ノート）を使っていた人は、そのフォルダを保存先として覚える（v0.18.0）
+    if (fromLegacy && !repo.getSetting('storage.root', null)) {
+      const old = path.join(app.getPath('desktop'), LEGACY_NAME);
+      if (existsSync(old)) {
+        repo.setSetting('storage.root', old);
+        log.info(`保存先を前の名前のフォルダのままにしました: ${old}`);
+      }
+    }
     ctx.rootDir = () => repo.getSetting('storage.root') || defaultRoot(app.getPath('desktop'));
+    // Windows：名前を変えると実行ファイルの名前も変わる。ログイン時に開く設定が前の実行ファイルを指していたら、今のものに直す
+    if (process.platform === 'win32') {
+      try {
+        const ls = app.getLoginItemSettings();
+        const exe = path.basename(process.execPath).toLowerCase();
+        const stale = (ls.launchItems ?? []).some(
+          (i) => i.enabled && i.path && path.basename(i.path).toLowerCase() !== exe
+        );
+        if (stale && !ls.executableWillLaunchAtLogin) app.setLoginItemSettings({openAtLogin: true});
+      } catch (e) {
+        log.warn(`ログイン時に開く設定を直せませんでした: ${e.message}`);
+      }
+    }
     ctx.files = new FileManager({
       repo,
       root: ctx.rootDir,
@@ -460,7 +488,7 @@ app.whenReady().then(async () => {
     log.info(`起動 ${app.getVersion()}（データ: ${userData}）`);
   } catch (e) {
     log.error(`起動に失敗: ${e.stack || e.message}`);
-    dialog.showErrorBox('大学ノート', `起動できませんでした。\n${e.message}`);
+    dialog.showErrorBox('パレットノート', `起動できませんでした。\n${e.message}`);
     app.quit();
   }
 });

@@ -51,12 +51,15 @@ test('sha512 は latest-mac.yml の files から名前で取る。形が違え�
 
 test('入れ替えられる場所か', () => {
   const yes = () => true;
-  assert.equal(appBundle('/Applications/大学ノート.app/Contents/MacOS/大学ノート'), '/Applications/大学ノート.app');
+  assert.equal(
+    appBundle('/Applications/パレットノート.app/Contents/MacOS/パレットノート'),
+    '/Applications/パレットノート.app'
+  );
   assert.equal(appBundle('/usr/bin/node'), null);
-  assert.ok(canReplace('/Applications/大学ノート.app', yes));
-  assert.ok(!canReplace('/Volumes/大学ノート/大学ノート.app', yes));
-  assert.ok(!canReplace('/private/var/folders/x/AppTranslocation/y/d/大学ノート.app', yes));
-  assert.ok(!canReplace('/Applications/大学ノート.app', (d) => d !== '/Applications'));
+  assert.ok(canReplace('/Applications/パレットノート.app', yes));
+  assert.ok(!canReplace('/Volumes/パレットノート/パレットノート.app', yes));
+  assert.ok(!canReplace('/private/var/folders/x/AppTranslocation/y/d/パレットノート.app', yes));
+  assert.ok(!canReplace('/Applications/パレットノート.app', (d) => d !== '/Applications'));
   assert.ok(!canReplace(null, yes));
 });
 
@@ -78,10 +81,10 @@ function sandbox() {
       `CFBundleIdentifier=jp.daigakunote.app\nCFBundleShortVersionString=${version}\n`
     );
   };
-  const app = path.join(dir, 'Applications', '大学ノート.app');
+  const app = path.join(dir, 'Applications', 'パレットノート.app');
   makeApp(app, '0.1.0');
   const image = path.join(dir, 'image');
-  makeApp(path.join(image, '大学ノート.app'), '0.2.0');
+  makeApp(path.join(image, 'パレットノート.app'), '0.2.0');
   const dmg = path.join(dir, 'daigaku-note-0.2.0-mac-arm64.dmg');
   writeFileSync(dmg, 'dmg のかわり');
   const opened = path.join(dir, 'opened.txt');
@@ -155,14 +158,14 @@ test('入れ替え：sha512 が合わなければ元のまま開き直す', {ski
 });
 
 test(
-  '入れ替え：新しい版が大学ノートの証明書で署名されていなければ（指紋が違う・指紋がない）入れ替えない',
+  '入れ替え：新しい版がパレットノートの証明書で署名されていなければ（指紋が違う・指紋がない）入れ替えない',
   {skip: noShell},
   () => {
     for (const leaf of ['0000000000000000000000000000000000000000', '']) {
       const s = sandbox();
       const {code, log} = s.run(s.sha, leaf);
       assert.equal(code, 1);
-      assert.match(log, leaf ? /大学ノートの証明書で署名されていません/ : /証明書の指紋がありません/);
+      assert.match(log, leaf ? /パレットノートの証明書で署名されていません/ : /証明書の指紋がありません/);
       assert.match(s.version(), /CFBundleShortVersionString=0\.1\.0/);
       assert.equal(s.opened(), s.app);
     }

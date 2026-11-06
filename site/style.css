@@ -1,4 +1,4 @@
-/* 大学ノートのホームページ。色はアプリのデザイントークン（src/renderer/styles/tokens.css）と同じ */
+/* パレットノートのホームページ。色はアプリのデザイントークン（src/renderer/styles/tokens.css）と同じ */
 :root {
   --paper: #fbf8f1;
   --paper-ink: #2b2b2b;

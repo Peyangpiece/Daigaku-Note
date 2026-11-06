@@ -24,7 +24,7 @@ test('バックアップの書き出し：選んだファイルに整合した�
   db.close();
 });
 
-test('読み込みの準備：大学ノートのバックアップだけ受け付け、userData に写す。ただのファイルは断る', async () => {
+test('読み込みの準備：パレットノートのバックアップだけ受け付け、userData に写す。ただのファイルは断る', async () => {
   const dir = tmp();
   const {db} = await openDatabase(path.join(dir, 'live.sqlite'));
   exportBackup(db, path.join(dir, 'good.sqlite'));

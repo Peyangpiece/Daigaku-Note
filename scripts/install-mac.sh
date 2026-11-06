@@ -1,13 +1,13 @@
 #!/bin/bash
-# Mac に大学ノートをアプリとして入れて Dock に置く（README「Mac に入れる」）。更新したら（git pull のあと）もう一度実行する。
+# Mac にパレットノートをアプリとして入れて Dock に置く（README「Mac に入れる」）。更新したら（git pull のあと）もう一度実行する。
 set -euo pipefail
 # 変数は ${...} で囲む（Mac の bash 3.2 は $ARCH（ のように日本語が続くと、変数名の続きと読んでしまう）
 cd "$(dirname "$0")/.."
 
-APP_NAME='大学ノート.app'
+APP_NAME='パレットノート.app'
 DEST="/Applications/${APP_NAME}"
-# Dock の登録に書く URL（「大学ノート」を UTF-8 でパーセント符号化したもの）
-DOCK_URL='file:///Applications/%E5%A4%A7%E5%AD%A6%E3%83%8E%E3%83%BC%E3%83%88.app/'
+# Dock の登録に書く URL（「パレットノート」を UTF-8 でパーセント符号化したもの）
+DOCK_URL='file:///Applications/%E3%83%91%E3%83%AC%E3%83%83%E3%83%88%E3%83%8E%E3%83%BC%E3%83%88.app/'
 
 [ "$(uname -s)" = Darwin ] || { echo 'これは Mac 用です。'; exit 1; }
 # node_modules の Electron（npm が Node と同じ CPU 向けに入れたもの）をそのまま使うので、CPU も Node に合わせる
@@ -22,7 +22,7 @@ npx electron-builder --mac dir "--${ARCH}" --publish never -c.electronDist=node_
 BUILT=$(ls -d release/mac*/"${APP_NAME}" | head -1)
 [ -d "${BUILT}" ] || { echo 'アプリを作れませんでした。'; exit 1; }
 
-echo '3/5 動いている大学ノートを終了します…'
+echo '3/5 動いているパレットノートを終了します…'
 osascript -e 'tell application id "jp.daigakunote.app" to quit' >/dev/null 2>&1 || true
 pkill -f "$(pwd)/node_modules/electron/dist/Electron.app" >/dev/null 2>&1 || true
 sleep 1
@@ -45,4 +45,4 @@ else
 fi
 
 open "${DEST}"
-echo '入れました。Dock の大学ノートから開けます（窓を閉じても裏で動き続け、同期します）。'
+echo '入れました。Dock のパレットノートから開けます（窓を閉じても裏で動き続け、同期します）。'

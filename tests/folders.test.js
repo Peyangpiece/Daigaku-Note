@@ -11,7 +11,7 @@ import {createFolders, listFiles, renameCourse, MY_FOLDER, TERM_FOLDERS} from '.
 async function setup(t) {
   const base = await mkdtemp(path.join(tmpdir(), 'dn-folders-'));
   t.after(() => rm(base, {recursive: true, force: true}));
-  const root = path.join(base, '大学ノート');
+  const root = path.join(base, 'パレットノート');
   await mkdir(root);
   const {db} = await openDatabase(':memory:');
   const repo = new Repo(db);

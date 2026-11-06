@@ -25,9 +25,9 @@ const remember = (id) => {
 // ---- つながらないとき ----
 function showProblem(e) {
   if (e instanceof NotPaired)
-    app.innerHTML = `<div class="m-empty"><h2>パソコンとつながっていません</h2><p>パソコンの大学ノートで「設定 → スマホとつなぐ → スマホを追加」を押し、出てきた QR をこのスマホのカメラで読んでください。</p></div>`;
+    app.innerHTML = `<div class="m-empty"><h2>パソコンとつながっていません</h2><p>パソコンのパレットノートで「設定 → スマホとつなぐ → スマホを追加」を押し、出てきた QR をこのスマホのカメラで読んでください。</p></div>`;
   else if (e instanceof Unreachable)
-    app.innerHTML = `<div class="m-empty"><h2>パソコンに届きません</h2><p>パソコンの大学ノートが開いていて、「スマホとつなぐ」がオンで、パソコンとスマホが同じ Wi-Fi にあるか確かめてください。大学の Wi-Fi ではつながらないことがあります。</p><button class="m-btn m-btn--primary" data-retry>もう一度</button></div>`;
+    app.innerHTML = `<div class="m-empty"><h2>パソコンに届きません</h2><p>パソコンのパレットノートが開いていて、「スマホとつなぐ」がオンで、パソコンとスマホが同じ Wi-Fi にあるか確かめてください。大学の Wi-Fi ではつながらないことがあります。</p><button class="m-btn m-btn--primary" data-retry>もう一度</button></div>`;
   else
     app.innerHTML = `<div class="m-empty"><h2>うまくいきませんでした</h2><p>${esc(e.message)}</p><button class="m-btn m-btn--primary" data-retry>もう一度</button></div>`;
   app.querySelector('[data-retry]')?.addEventListener('click', () => route());
@@ -93,7 +93,7 @@ async function renderHome() {
   const courseBtn = (c) =>
     `<li><a class="m-item" href="#/course/${esc(c.id)}"><span class="m-dot" style="--c: var(--c${c.color ?? 1})"></span>${esc(c.name)}<span class="m-sub">${c.weekday ? `${esc(c.weekday)}${c.period ? ` ${c.period}限` : ''}` : ''}</span></a></li>`;
   app.innerHTML = `
-    <header class="m-head"><h1>大学ノート</h1><a class="m-btn" href="#/photo">📷 写真</a></header>
+    <header class="m-head"><h1>パレットノート</h1><a class="m-btn" href="#/photo">📷 写真</a></header>
     <a class="m-card m-review${home.reviewDue ? ' is-due' : ''}" href="#/review"><strong>今日の復習</strong><span>${home.reviewDue ? `${home.reviewDue} 問` : 'ありません'}</span></a>
     <section class="m-card"><h2>今日の授業</h2>${today.length ? `<ul class="m-list">${today.map(courseBtn).join('')}</ul>` : `<p class="m-muted">今日の授業はありません。${esc(nextDay(home))}</p>`}</section>
     <section class="m-card"><h2>最近の資料</h2>${

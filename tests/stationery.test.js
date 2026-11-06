@@ -71,7 +71,7 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
   assert.equal(new Set(series.map((s) => s.id)).size, series.length);
   const pen05 = series.find((s) => s.id === 'pen-05');
   assert.equal(pen05.name, 'ボールペン DN-2');
-  assert.equal(pen05.maker, '大学ノート');
+  assert.equal(pen05.maker, 'パレットノート');
   assert.ok(pen05.items.length >= 9, '書き味「普通」の公式のボールペンは 9 色以上');
   assert.ok(pen05.items.every((it) => it.mm === '0.5' && !it.maker));
   // 公式のボールペンは 3 つの型番（DN-1 硬い・DN-2 普通・DN-3 滑らか）。軸の色・柄で選ぶ DN-3 は 1 枚に
@@ -81,7 +81,11 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
     art.items.map((it) => it.id),
     ['pen-sakura-05', 'pen-mint-05', 'pen-wood-07', 'pen-navy-038', 'pen-black-038', 'pen-black-07']
   );
-  assert.equal(series.filter((s) => s.type === 'pen' && s.maker === '大学ノート').length, 3, '公式のボールペンは 3 つ');
+  assert.equal(
+    series.filter((s) => s.type === 'pen' && s.maker === 'パレットノート').length,
+    3,
+    '公式のボールペンは 3 つ'
+  );
   // 名前に字幅・芯の太さは入れない（太さは 0.3・0.5・0.7 から選ぶ）
   for (const it of CATALOG.filter((x) => x.type === 'pen'))
     assert.doesNotMatch(it.name, /\d\.\d/, `${it.id} の名前に太さ`);

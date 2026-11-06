@@ -58,8 +58,8 @@ export function exportBackup(db, file) {
 export const RESTORE_FILE = 'daigaku-note.restore.sqlite';
 
 /**
- * 手動の読み込み（復元）の準備：大学ノートのバックアップか確かめて userData に写す。入れ替えは次の起動（applyStagedRestore）。
- * open：ファイルを読み取り専用で開く関数（DatabaseSync）。大学ノートの表（schema_migrations・course）がなければ Error。
+ * 手動の読み込み（復元）の準備：パレットノートのバックアップか確かめて userData に写す。入れ替えは次の起動（applyStagedRestore）。
+ * open：ファイルを読み取り専用で開く関数（DatabaseSync）。パレットノートの表（schema_migrations・course）がなければ Error。
  * maxVersion：このアプリが知っている版。それより新しい版のバックアップは Error
  */
 export function stageRestore({userData, src, open, maxVersion = Infinity}) {
@@ -67,7 +67,7 @@ export function stageRestore({userData, src, open, maxVersion = Infinity}) {
   try {
     db = open(src);
   } catch {
-    throw new Error('大学ノートのバックアップ（.sqlite）ではありません');
+    throw new Error('パレットノートのバックアップ（.sqlite）ではありません');
   }
   try {
     let names;
@@ -80,10 +80,10 @@ export function stageRestore({userData, src, open, maxVersion = Infinity}) {
           .map((r) => r.name)
       );
     } catch {
-      throw new Error('大学ノートのバックアップ（.sqlite）ではありません');
+      throw new Error('パレットノートのバックアップ（.sqlite）ではありません');
     }
     if (!names.has('schema_migrations') || !names.has('course'))
-      throw new Error('大学ノートのバックアップ（.sqlite）ではありません');
+      throw new Error('パレットノートのバックアップ（.sqlite）ではありません');
     const version = Math.max(
       0,
       ...db
@@ -93,7 +93,9 @@ export function stageRestore({userData, src, open, maxVersion = Infinity}) {
     );
     // 新しい版のアプリで作ったバックアップは、この版では表の形が分からない（読み込むと壊れる）
     if (version > maxVersion)
-      throw new Error('新しい版の大学ノートで作ったバックアップです。大学ノートを最新の版にしてから読み込んでください');
+      throw new Error(
+        '新しい版のパレットノートで作ったバックアップです。パレットノートを最新の版にしてから読み込んでください'
+      );
     const staged = path.join(userData, RESTORE_FILE);
     copyFileSync(src, staged);
     return {staged, version};

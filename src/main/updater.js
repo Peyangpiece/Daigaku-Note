@@ -2,7 +2,7 @@
 // トレイの「新しい版を確認」で確かめる。配布物の版の情報（latest.yml・latest-mac.yml）は electron-updater が HTTPS で読む。
 // - Windows：裏でダウンロードし、終わったら「再起動して更新」を聞く。「あとで」でも終了するときに入れ替わる
 // - Mac：Apple の署名がないので electron-updater では入れ替えられない。「今すぐ更新」で .dmg を落として sha512 を確かめ、
-//   大学ノートを終了してから入れ替え、開き直す（mac-update.js）。入れ替えられない場所にあれば .dmg を開いて手順を案内する
+//   パレットノートを終了してから入れ替え、開き直す（mac-update.js）。入れ替えられない場所にあれば .dmg を開いて手順を案内する
 // 入れ替える前に「どの版になるはずか」を書いておき、次の起動で版が変わっていなければ失敗を知らせる
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -110,8 +110,8 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
       cancelId: 2,
       message: `新しい版 ${e.to} に入れ替えられませんでした`,
       detail: isMac
-        ? `いまの版は ${app.getVersion()} のままです。ダウンロードのページから daigaku-note-${e.to}-mac-${process.arch === 'arm64' ? 'arm64' : 'x64'}.dmg を落として開き、大学ノートを終了してから「アプリケーション」へドラッグして入れ替えてください。資料と注釈はそのまま残ります。`
-        : `いまの版は ${app.getVersion()} のままです。トレイの大学ノートから「終了」を選んでから、ダウンロードのページの daigaku-note-${e.to}-win-x64.exe を実行してください。資料と注釈はそのまま残ります。`
+        ? `いまの版は ${app.getVersion()} のままです。ダウンロードのページから daigaku-note-${e.to}-mac-${process.arch === 'arm64' ? 'arm64' : 'x64'}.dmg を落として開き、パレットノートを終了してから「アプリケーション」へドラッグして入れ替えてください。資料と注釈はそのまま残ります。`
+        : `いまの版は ${app.getVersion()} のままです。トレイのパレットノートから「終了」を選んでから、ダウンロードのページの daigaku-note-${e.to}-win-x64.exe を実行してください。資料と注釈はそのまま残ります。`
     });
     if (r.response === 0) shell.openExternal(RELEASES_PAGE);
     else if (r.response === 1) shell.openPath(logFile);
@@ -142,8 +142,8 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
       buttons: ['今すぐ再起動して更新', 'あとで'],
       defaultId: 0,
       cancelId: 1,
-      message: `大学ノートの新しい版 ${version} の準備ができました`,
-      detail: `いまの版は ${app.getVersion()} です。更新すると大学ノートがいったん閉じて、自動で開き直します。資料と注釈はそのまま残ります。「あとで」を選んでも、次に大学ノートを終了したときに入れ替わります。`
+      message: `パレットノートの新しい版 ${version} の準備ができました`,
+      detail: `いまの版は ${app.getVersion()} です。更新するとパレットノートがいったん閉じて、自動で開き直します。資料と注釈はそのまま残ります。「あとで」を選んでも、次にパレットノートを終了したときに入れ替わります。`
     });
     if (r.response === 0) installNow();
   }
@@ -165,8 +165,8 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
       buttons: ['今すぐ更新', 'あとで'],
       defaultId: 0,
       cancelId: 1,
-      message: `大学ノートの新しい版 ${version} があります`,
-      detail: `いまの版は ${app.getVersion()} です。「今すぐ更新」を押すと、新しい版をダウンロードし、大学ノートをいったん終了して入れ替えてから、自動で開き直します（数分かかることがあります）。資料と注釈はそのまま残ります。あとで更新するときは、メニューバーの大学ノートから「新しい版 ${version} に更新」を選べます。`
+      message: `パレットノートの新しい版 ${version} があります`,
+      detail: `いまの版は ${app.getVersion()} です。「今すぐ更新」を押すと、新しい版をダウンロードし、パレットノートをいったん終了して入れ替えてから、自動で開き直します（数分かかることがあります）。資料と注釈はそのまま残ります。あとで更新するときは、メニューバーのパレットノートから「新しい版 ${version} に更新」を選べます。`
     });
     if (r.response === 0) updateMac(version);
   }
@@ -234,7 +234,7 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
         defaultId: 0,
         cancelId: 1,
         message: `新しい版 ${version} をダウンロードできませんでした`,
-        detail: `${e.message}\nインターネットへの接続を確かめて、メニューバーの大学ノートから「新しい版 ${version} に更新」をもう一度お試しください。`
+        detail: `${e.message}\nインターネットへの接続を確かめて、メニューバーのパレットノートから「新しい版 ${version} に更新」をもう一度お試しください。`
       });
       if (r.response === 0) shell.openExternal(RELEASES_PAGE);
       return;
@@ -273,12 +273,12 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     await shell.openPath(file);
     const r = await message({
       type: 'info',
-      buttons: ['大学ノートを終了する', 'あとで'],
+      buttons: ['パレットノートを終了する', 'あとで'],
       defaultId: 0,
       cancelId: 1,
       message: `新しい版 ${version} をダウンロードしました`,
       detail:
-        '大学ノートが「アプリケーション」フォルダの外にあるため、自動では入れ替えられません。開いたウインドウで、大学ノートのアイコンを「Applications」にドラッグしてください。入れ替える前に大学ノートを終了します。資料と注釈はそのまま残ります。'
+        'パレットノートが「アプリケーション」フォルダの外にあるため、自動では入れ替えられません。開いたウインドウで、パレットノートのアイコンを「Applications」にドラッグしてください。入れ替える前にパレットノートを終了します。資料と注釈はそのまま残ります。'
     });
     if (r.response === 0) {
       allowQuit();
@@ -294,12 +294,12 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
           process.windowsStore
             ? {
                 type: 'info',
-                message: 'Microsoft Store の大学ノートは、Store が更新します',
+                message: 'Microsoft Store のパレットノートは、Store が更新します',
                 detail: 'Microsoft Store の「ライブラリ」から更新を確かめられます。'
               }
             : {
                 type: 'info',
-                message: '開発中の大学ノートは更新を確かめません',
+                message: '開発中のパレットノートは更新を確かめません',
                 detail: '配布物（.dmg・.exe）から入れたときに働きます。'
               }
         );
@@ -320,7 +320,11 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
             detail: '終わったら、再起動して更新するかをお聞きします。'
           });
       } else if (manual)
-        message({type: 'info', message: '大学ノートは最新の版です', detail: `いまの版は ${app.getVersion()} です。`});
+        message({
+          type: 'info',
+          message: 'パレットノートは最新の版です',
+          detail: `いまの版は ${app.getVersion()} です。`
+        });
     } catch (e) {
       log('WARN', '新しい版を確認できません', e.message);
       if (manual)

@@ -130,7 +130,7 @@ export async function exportAnnotatedPdf(
         Name: 'Comment',
         F: 4,
         C: color,
-        T: PDFHexString.fromText('大学ノート'),
+        T: PDFHexString.fromText('パレットノート'),
         Contents: PDFHexString.fromText(a.body ?? ''),
         M: PDFString.fromDate(new Date())
       });
@@ -139,7 +139,7 @@ export async function exportAnnotatedPdf(
       if (stamp) page.node.addAnnot(doc.context.register(stamp));
     }
   }
-  doc.setProducer('大学ノート');
+  doc.setProducer('パレットノート');
   return doc.save({objectsPerTick: SAVE_OBJECTS_PER_TICK});
 }
 
@@ -194,7 +194,7 @@ export function noteInkStamp(doc, a, page) {
     Subtype: 'Stamp',
     Rect: [x0, y0, x0 + W, y0 + H],
     F: 4,
-    T: PDFHexString.fromText('大学ノート'),
+    T: PDFHexString.fromText('パレットノート'),
     Contents: PDFHexString.fromText('コメントの手書き'),
     M: PDFString.fromDate(new Date()),
     AP: {N: doc.context.register(form)}

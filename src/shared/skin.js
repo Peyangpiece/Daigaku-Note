@@ -228,9 +228,9 @@ export function normalizeStickers(raw) {
  */
 export function normalizeTemplate(raw, {id, now = new Date().toISOString()} = {}) {
   if (!raw || typeof raw !== 'object') throw new Error('テンプレートの形が不正です');
-  if (raw.format !== undefined && raw.format !== FORMAT) throw new Error('大学ノートのテンプレートではありません');
+  if (raw.format !== undefined && raw.format !== FORMAT) throw new Error('パレットノートのテンプレートではありません');
   if (Number(raw.formatVersion ?? FORMAT_VERSION) > FORMAT_VERSION)
-    throw new Error('新しい版の大学ノートで作られたテンプレートです。アプリを更新してください');
+    throw new Error('新しい版のパレットノートで作られたテンプレートです。アプリを更新してください');
   const stickers = normalizeStickers(raw.stickers);
   const parts = normalizeParts(raw.parts);
   // 取り込んだ画像だけを assets に（はじめから入っているシールはアプリの中にある）
@@ -258,7 +258,7 @@ export function normalizeTemplate(raw, {id, now = new Date().toISOString()} = {}
 // はじめからあるテンプレート。クラシックは今の見た目（テーマの色・授業ごとのテープ）のまま
 const builtin = (key, name, parts) =>
   normalizeTemplate(
-    {id: `builtin-${key}`, name, author: '大学ノート', license: 'share', createdAt: '2026-10-21T00:00:00Z', parts},
+    {id: `builtin-${key}`, name, author: 'パレットノート', license: 'share', createdAt: '2026-10-21T00:00:00Z', parts},
     {id: `builtin-${key}`}
   );
 export const BUILTIN_TEMPLATES = [

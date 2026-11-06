@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 
 const run = (cmd, args) => new Promise((resolve, reject) => execFile(cmd, args, (e) => (e ? reject(e) : resolve())));
 
-export function createQuarantine({platform = process.platform, appName = '大学ノート'} = {}) {
+export function createQuarantine({platform = process.platform, appName = 'パレットノート'} = {}) {
   return async function quarantine(file, sourceUrl = '') {
     if (platform === 'darwin') {
       // 0083：ダウンロード済み・未確認。Gatekeeper が開くときに確かめる

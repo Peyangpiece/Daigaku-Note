@@ -552,7 +552,7 @@ function mountSplit(view, left, right) {
       }
     } else if (d.type === 'split-title') {
       s.titles[i] = String(d.title ?? '');
-      document.title = `${s.titles.filter(Boolean).join(' ＋ ') || 'PDF とノート'} — 大学ノート`;
+      document.title = `${s.titles.filter(Boolean).join(' ＋ ') || 'PDF とノート'} — パレットノート`;
     } else if (d.type === 'split-left') s.acks?.(i);
     else if (d.type === 'split-swap' && d.id) {
       // ノートの「📄 資料」から：もう片方（PDF）を同じ回の別の PDF に替える。左右の書きかけを保存してから並べ直す
@@ -566,7 +566,7 @@ function mountSplit(view, left, right) {
     }
   };
   window.addEventListener('message', s.onMessage);
-  document.title = 'PDF とノート — 大学ノート';
+  document.title = 'PDF とノート — パレットノート';
   // 窓が狭いと、左右それぞれのツールバーが 1 段に収まらない（片側 560 px）。この窓のあいだに 1 回だけ知らせる
   try {
     if (window.innerWidth < 1128 && !sessionStorage.getItem('split.narrowHinted')) {
@@ -606,7 +606,7 @@ function unmountSplit() {
   s.leaving = true;
   s.el.style.visibility = 'hidden';
   s.el.style.pointerEvents = 'none';
-  document.title = '大学ノート';
+  document.title = 'パレットノート';
   flushSplit(s).then(() => {
     window.removeEventListener('message', s.onMessage);
     s.el.remove();
@@ -996,7 +996,7 @@ function openMenu(label, items, x, y, onPick) {
 async function deleteFolder(course) {
   if (
     !(await confirmDialog(
-      `「${course.name}」を削除しますか？\nパソコンのフォルダ（${course.dirName ?? ''}）を中のファイルごとゴミ箱へ移し、このフォルダのクイズの記録も消します。ゴミ箱から戻せばファイルは戻ります（大学ノートには登録し直します）`,
+      `「${course.name}」を削除しますか？\nパソコンのフォルダ（${course.dirName ?? ''}）を中のファイルごとゴミ箱へ移し、このフォルダのクイズの記録も消します。ゴミ箱から戻せばファイルは戻ります（パレットノートには登録し直します）`,
       {ok: '削除する', danger: true}
     ))
   )

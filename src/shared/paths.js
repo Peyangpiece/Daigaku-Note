@@ -30,9 +30,12 @@ export function inside(child, root, p = path) {
   return rel !== '' && !rel.startsWith('..') && !p.isAbsolute(rel);
 }
 
-/** 既定のルート：デスクトップ/大学ノート */
+/** 前の名前（v0.17 まで「大学ノート」）。データのフォルダ・保存先のフォルダを引き継ぐのに使う */
+export const LEGACY_NAME = '大学ノート';
+
+/** 既定のルート：デスクトップ/パレットノート（v0.18.0 から。前に入れた人はデスクトップ/大学ノートのまま） */
 export function defaultRoot(desktop, p = path) {
-  return p.join(desktop, '大学ノート');
+  return p.join(desktop, 'パレットノート');
 }
 
 /** 既定の取り込みフォルダ：ルート/取り込み */

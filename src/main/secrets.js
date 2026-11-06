@@ -1,5 +1,6 @@
 // 秘密の保管（DESIGN-M0 §7）。Electron の safeStorage で暗号化し、userData/secrets.json に置く。
-// Mac の safeStorage の鍵はキーチェーンの「大学ノート Safe Storage」にあり、読めるのは許可したアプリの署名だけ。
+// Mac の safeStorage の鍵はキーチェーンの「<アプリ名> Safe Storage」にあり、読めるのは許可したアプリの署名だけ。
+// v0.18.0 でアプリ名を「大学ノート」から「パレットノート」に変えたので、前の版で保存したログインは Mac では読めなくなる（もう一度ログインする）。
 // 署名が変わった版やキーチェーンの確認で「拒否」したときは復号できない。そのときも暗号文は消さない（許可すれば読める）
 import {readFileSync, writeFileSync, mkdirSync} from 'node:fs';
 import path from 'node:path';

@@ -44,7 +44,7 @@ export class FileManager {
   /**
    * @param {object} deps
    * @param {import('../db/repo.js').Repo} deps.repo
-   * @param {() => string} deps.root            保存先のルート（デスクトップ/大学ノート など）
+   * @param {() => string} deps.root            保存先のルート（デスクトップ/パレットノート など）
    * @param {(file: string) => Promise<void>} [deps.quarantine]  OS の「インターネットから来た」印
    * @param {(file: string) => Promise<void>} [deps.trash]        OS のゴミ箱へ
    * @param {(msg: string) => void} [deps.log]
