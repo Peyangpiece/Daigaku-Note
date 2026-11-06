@@ -1234,13 +1234,13 @@ def eraser():
 
 # ---- ポーチの道具（アイコンの絵に使う。机に置いた形で作り、斜め上から描く）----
 def tool_sheet():
-    """赤シート：赤い透明の PET の板（角は丸い・厚み 0.35 mm）。左下に白い印刷「大学ノート CHECK SHEET」。
+    """赤シート：赤い透明の PET の板（角は丸い・厚み 0.35 mm）。左下に白い印刷「PALETTE NOTE CHECK SHEET」。
     透明の材質は名前（ClearRed）でアプリが半透明にする。L 120 × W 80 mm"""
     red = material('ClearRed', srgb('#e60012'), roughness=0.08, transmission=1.0, ior=1.55)
     ink = material('SheetInk', (1, 1, 1), roughness=0.5)
     rbox('Sheet', 120.0, 80.0, 0.35, 0.0, 4.0, 0.12, red, seg_v=8, seg_e=2)
     sheet = bpy.data.objects['Sheet']
-    t1 = flat_text('SheetText', '大学ノート', FONT_JA, 6.0, ink, align='LEFT')
+    t1 = flat_text('SheetText', 'PALETTE NOTE', None, 4.2, ink, align='LEFT')
     place_on(t1, sheet, lambda x, y: (-52 + x, -28 + y, 50), (0, 0, -1), 0.03)
     t2 = flat_text('SheetText2', 'CHECK SHEET', None, 3.6, ink, align='LEFT')
     place_on(t2, sheet, lambda x, y: (-52 + x, -34.5 + y, 50), (0, 0, -1), 0.03)
@@ -1350,7 +1350,7 @@ def tool_memo():
 
 def tool_ruler():
     """定規：透明のアクリルの板（15 cm。片方のふちは斜めに削る）に、黒い目盛り（1 mm ごと。5 mm・1 cm は長い）と
-    数字、左の端に「大学ノート」。透明の材質は名前（ClearAcrylic）でアプリが半透明にする。L 170 × W 32 × H 2.5 mm"""
+    数字、左の端に「PALETTE NOTE」。透明の材質は名前（ClearAcrylic）でアプリが半透明にする。L 170 × W 32 × H 2.5 mm"""
     acr = material('ClearAcrylic', srgb('#a9d3ee'), roughness=0.05, transmission=1.0, ior=1.49)
     ink = material('RulerInk', srgb('#1f2a33'), roughness=0.5)
     L, W, H = 170.0, 32.0, 2.5
@@ -1370,7 +1370,7 @@ def tool_ruler():
     for c in range(16):
         t = flat_text(f'Num_{c}', str(c), None, 3.6, ink)
         place_on(t, r, lambda x, y, c=c: (x0 + c * 10 + x, -W / 2 + 14.0 + y, 50), (0, 0, -1), 0.03)
-    t = flat_text('RulerBrand', '大学ノート', FONT_JA, 3.4, ink, align='LEFT')
+    t = flat_text('RulerBrand', 'PALETTE NOTE', None, 2.6, ink, align='LEFT')
     place_on(t, r, lambda x, y: (x0 + 2 + x, W / 2 - 6.0 + y, 50), (0, 0, -1), 0.03)
     to_pen_axes()
 
