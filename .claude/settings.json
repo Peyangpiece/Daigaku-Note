@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m pip install bpy==5.2.3)",
+      "Bash(python3 scripts/pens3d/build.py)",
+      "Bash(python3 scripts/pens3d/build.py:*)"
+    ]
+  }
+}
