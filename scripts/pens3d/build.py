@@ -1081,14 +1081,14 @@ def case_pouch():
     # 正面の織りネーム（右寄り）
     lab = rounded_plate('Label', 34, 12, 1.2, M['trim'])
     place_on(lab, body, lambda x, y: (52 + x, -200, H * 0.45 + y), (0, 1, 0), 0.5)
-    txt = flat_text('LabelText', '大学ノート', FONT_JA, 5.6, M['label_text'])
+    txt = flat_text('LabelText', 'PALETTE NOTE', None, 3.6, M['label_text'])
     place_on(txt, body, lambda x, y: (52 + x, -200, H * 0.45 + y), (0, 1, 0), 0.75)
     to_pen_axes()
 
 
 def case_leather():
     """革のペンケース：ふっくらした箱形（端は丸く閉じる）。真ちゅうのファスナー、両側に生成りのステッチ、
-    革の引き手、正面に型押しの「大学ノート」。L 195 × D 60 × H 50 mm"""
+    革の引き手、正面に型押しの「PALETTE NOTE」。L 195 × D 60 × H 50 mm"""
     lv = leather_maps()
     M = case_materials(maps_kw(lv, 0.5), {'roughness': 0.7})
     L, D, H = 195.0, 60.0, 50.0
@@ -1106,10 +1106,8 @@ def case_leather():
             pts.append(surf_at(P, s, tt))
             nrs.append(surf_normal(P, s, tt))
         stitches(f'Stitch_{k}', pts, nrs, M['trim'])
-    txt = flat_text('Deboss', '大学ノート', FONT_JA, 7.5, M['deboss'])
-    place_on(txt, body, lambda x, y: (x, -200, H * 0.42 + y), (0, 1, 0), 0.05)
-    txt2 = flat_text('Deboss_en', 'DAIGAKU NOTE', None, 3.0, M['deboss'])
-    place_on(txt2, body, lambda x, y: (x, -200, H * 0.42 - 7 + y), (0, 1, 0), 0.05)
+    txt = flat_text('Deboss', 'PALETTE NOTE', None, 4.5, M['deboss'])
+    place_on(txt, body, lambda x, y: (x, -200, H * 0.42 - 2 + y), (0, 1, 0), 0.05)
     to_pen_axes()
 
 
@@ -1124,13 +1122,13 @@ def case_clear():
     body = grid_object('Body', P, M['base'], 20.0, poles=True)
     zipper(P, 0.05, 0.95, M['trim'], M['coil'], M['metal'], M['metal'], tooth=(1.2, 4.4, 1.2), pitch=1.6,
            slider_s=0.82)
-    txt = flat_text('Print', '大学ノート', FONT_JA, 6.0, M['trim'])
+    txt = flat_text('Print', 'PALETTE NOTE', None, 4.2, M['trim'])
     place_on(txt, body, lambda x, y: (60 + x, -200, H * 0.30 + y), (0, 1, 0), 0.05)
     to_pen_axes()
 
 
 def case_tin():
-    """缶ペンケース：角を丸めた浅い箱（下の箱とかぶせぶた）。後ろに蝶番、ふたに「大学ノート」の印刷。
+    """缶ペンケース：角を丸めた浅い箱（下の箱とかぶせぶた）。後ろに蝶番、ふたに「PALETTE NOTE」の印刷。
     L 196 × D 64 × H 26 mm"""
     bmaps = brushed_maps()
     M = case_materials({'metallic': 0.9, 'roughness': 0.3, 'rough_map': bmaps[1], 'normal_map': bmaps[2]},
@@ -1145,10 +1143,8 @@ def case_tin():
         ob = obj_from_bm(f'Hinge_{k}', bm, M['trim'])
         ob.data.transform(Matrix.Rotation(math.pi / 2, 4, 'Y'))
         ob.data.transform(Matrix.Translation((x, 32.6, 16.0)))
-    txt = flat_text('Print', '大学ノート', FONT_JA, 11.0, M['trim'])
-    place_on(txt, lid, lambda x, y: (x, y + 3.0, 200), (0, 0, -1), 0.05)
-    txt2 = flat_text('Print_en', 'DAIGAKU NOTE', None, 4.0, M['trim'])
-    place_on(txt2, lid, lambda x, y: (x, y - 9.0, 200), (0, 0, -1), 0.05)
+    txt = flat_text('Print', 'PALETTE NOTE', None, 7.0, M['trim'])
+    place_on(txt, lid, lambda x, y: (x, y, 200), (0, 0, -1), 0.05)
     to_pen_axes()
 
 
@@ -1178,7 +1174,7 @@ def paper_maps(tile_mm=12.0, px=512):
 
 
 def eraser():
-    """消しゴム（大学ノートのオリジナル。形と質感は角形の字消し〔トンボ鉛筆の MONO〕を参考にした。配色・字は大学ノートのもの）：
+    """消しゴム（パレットノートのオリジナル。形と質感は角形の字消し〔トンボ鉛筆の MONO〕を参考にした。配色・字はパレットノートのもの）：
     角のきりっとした白い角形の塊（角はわずかに丸めるだけ。使った側の端は角が少しすり減る）に、紙のスリーブ。
     スリーブは塊の真ん中より少し右寄りに巻き、両端からゴムが出る。スリーブの端の 4 つの角は、消すときに塊が折れないよう
     斜めに切り欠く。L 50 × W 21 × H 11.5 mm"""
@@ -1220,10 +1216,10 @@ def eraser():
     # 正面の白い札と字
     lab = rounded_plate('SleeveLabel', 24.0, 7.6, 1.0, paper)
     place_on(lab, sl, lambda x, y: (cx + x, -100, H / 2 + y), (0, 1, 0), 0.04)
-    t1 = flat_text('SleeveText', '大学ノート', FONT_JA, 4.3, ink_blue)
+    t1 = flat_text('SleeveText', 'PALETTE NOTE', None, 3.0, ink_blue)
     place_on(t1, sl, lambda x, y: (cx + x, -100, H / 2 + y), (0, 1, 0), 0.07)
-    # 上の面の字（DAIGAKU NOTE）と、白い細い線 2 本
-    t2 = flat_text('SleeveTop', 'DAIGAKU NOTE', None, 2.8, ink_white)
+    # 上の面の字（PALETTE NOTE）と、白い細い線 2 本
+    t2 = flat_text('SleeveTop', 'PALETTE NOTE', None, 2.8, ink_white)
     place_on(t2, sl, lambda x, y: (cx + x, y, 100), (0, 0, -1), 0.04)
     for k, yy in enumerate((-6.8, 6.8)):
         line = rounded_plate(f'SleeveLine_{k}', 28.0, 0.7, 0.3, ink_white)
@@ -1238,13 +1234,13 @@ def eraser():
 
 # ---- ポーチの道具（アイコンの絵に使う。机に置いた形で作り、斜め上から描く）----
 def tool_sheet():
-    """赤シート：赤い透明の PET の板（角は丸い・厚み 0.35 mm）。左下に白い印刷「大学ノート CHECK SHEET」。
+    """赤シート：赤い透明の PET の板（角は丸い・厚み 0.35 mm）。左下に白い印刷「PALETTE NOTE CHECK SHEET」。
     透明の材質は名前（ClearRed）でアプリが半透明にする。L 120 × W 80 mm"""
     red = material('ClearRed', srgb('#e60012'), roughness=0.08, transmission=1.0, ior=1.55)
     ink = material('SheetInk', (1, 1, 1), roughness=0.5)
     rbox('Sheet', 120.0, 80.0, 0.35, 0.0, 4.0, 0.12, red, seg_v=8, seg_e=2)
     sheet = bpy.data.objects['Sheet']
-    t1 = flat_text('SheetText', '大学ノート', FONT_JA, 6.0, ink, align='LEFT')
+    t1 = flat_text('SheetText', 'PALETTE NOTE', None, 4.2, ink, align='LEFT')
     place_on(t1, sheet, lambda x, y: (-52 + x, -28 + y, 50), (0, 0, -1), 0.03)
     t2 = flat_text('SheetText2', 'CHECK SHEET', None, 3.6, ink, align='LEFT')
     place_on(t2, sheet, lambda x, y: (-52 + x, -34.5 + y, 50), (0, 0, -1), 0.03)
@@ -1354,7 +1350,7 @@ def tool_memo():
 
 def tool_ruler():
     """定規：透明のアクリルの板（15 cm。片方のふちは斜めに削る）に、黒い目盛り（1 mm ごと。5 mm・1 cm は長い）と
-    数字、左の端に「大学ノート」。透明の材質は名前（ClearAcrylic）でアプリが半透明にする。L 170 × W 32 × H 2.5 mm"""
+    数字、左の端に「PALETTE NOTE」。透明の材質は名前（ClearAcrylic）でアプリが半透明にする。L 170 × W 32 × H 2.5 mm"""
     acr = material('ClearAcrylic', srgb('#a9d3ee'), roughness=0.05, transmission=1.0, ior=1.49)
     ink = material('RulerInk', srgb('#1f2a33'), roughness=0.5)
     L, W, H = 170.0, 32.0, 2.5
@@ -1374,7 +1370,7 @@ def tool_ruler():
     for c in range(16):
         t = flat_text(f'Num_{c}', str(c), None, 3.6, ink)
         place_on(t, r, lambda x, y, c=c: (x0 + c * 10 + x, -W / 2 + 14.0 + y, 50), (0, 0, -1), 0.03)
-    t = flat_text('RulerBrand', '大学ノート', FONT_JA, 3.4, ink, align='LEFT')
+    t = flat_text('RulerBrand', 'PALETTE NOTE', None, 2.6, ink, align='LEFT')
     place_on(t, r, lambda x, y: (x0 + 2 + x, W / 2 - 6.0 + y, 50), (0, 0, -1), 0.03)
     to_pen_axes()
 
@@ -1451,7 +1447,7 @@ def pouch_flat():
           lambda p: (1, 0, 0) if p[0] > L / 2 + 10.5 else (0, -1 if p[1] < 0 else 1, 0), round_r=0.5)
     lab = rounded_plate('Label', 34, 12, 1.2, M['trim'])
     place_on(lab, body, lambda x, y: (-58 + x, -200, H * 0.22 + y), (0, 1, 0), 0.5)
-    txt = flat_text('LabelText', '大学ノート', FONT_JA, 5.6, M['label_text'])
+    txt = flat_text('LabelText', 'PALETTE NOTE', None, 3.6, M['label_text'])
     place_on(txt, body, lambda x, y: (-58 + x, -200, H * 0.22 + y), (0, 1, 0), 0.75)
     to_pen_axes()
 
@@ -1475,7 +1471,7 @@ def pouch_box():
               lambda p, sgn=sgn: (sgn, 0, 0), round_r=0.6)
     lab = rounded_plate('Label', 40, 13, 1.4, M['trim'])
     place_on(lab, body, lambda x, y: (x, -200, H * 0.42 + y), (0, 1, 0), 0.5)
-    txt = flat_text('LabelText', '大学ノート', FONT_JA, 6.2, M['label_text'])
+    txt = flat_text('LabelText', 'PALETTE NOTE', None, 4.0, M['label_text'])
     place_on(txt, body, lambda x, y: (x, -200, H * 0.42 + y), (0, 1, 0), 0.75)
     to_pen_axes()
 
