@@ -32,8 +32,13 @@ mac:
       arch: [arm64, x64]
     - target: zip
       arch: [arm64, x64]
-  identity: null # Apple の証明書はない。署名は build/after-pack.cjs の ad-hoc
-  hardenedRuntime: false
+  # 公開する版は Apple の Developer ID（チーム 9G78U9XD92）で署名して公証する（v0.18.6）。release.yml が -c.mac.identity=9G78U9XD92 を渡し、
+  # 証明書（作業用のキーチェーン）と公証の鍵（APPLE_API_KEY など）を用意する。ここでは null にして、手元で作るとき（install-mac.sh）は
+  # build/after-pack.cjs の ad-hoc 署名にする
+  identity: null
+  hardenedRuntime: true # 公証に要る。Developer ID で署名するときだけ効く
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
   # 入れ物の名前（.app・実行ファイル・CFBundleName）は英字 PaletteNote（release.yml・install-mac.sh が -c.productName で指す）。
   # 「パ」のように濁点・半濁点が分かれる字（NFD）が入ると、Electron が起動の準備で止まる（0.18.0。CI の起動の確認で再現）。
   # Finder・Dock・Launchpad には表示名（CFBundleDisplayName、日本語は ja.lproj）の「パレットノート」を出す

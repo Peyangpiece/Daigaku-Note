@@ -7,9 +7,11 @@
 #   タグ v<package.json の版> は公開のときに GitHub がその時点のコミットに作る
 # - タグ v<版>（package.json の version と同じ）を push する
 # 印を付けずに手で動かしたときと、配布の設定を変えるプルリクエストでは、作るだけ（この実行の Artifacts に置く）
-# Apple・Windows の証明書はない。Mac は自分で作った「コード署名」の証明書（Secrets の MAC_SIGN_P12・MAC_SIGN_PASSWORD）で
-# 署名する（build/after-pack.cjs）。毎回同じ証明書で署名するので、更新のあとも保存した LMS のログインを読める。
-# 証明書がないときは ad-hoc 署名で作るだけはできるが、公開はしない（ad-hoc の版に更新すると接続が切れるため）。Windows は署名なし
+# Mac は Apple の Developer ID（チーム 9G78U9XD92。Secrets の MAC_DEVID_P12・MAC_DEVID_PASSWORD）で署名し、Apple の公証を受ける
+# （Secrets の APPLE_API_KEY・APPLE_API_KEY_ID・APPLE_API_ISSUER。v0.18.6）。署名と公証は electron-builder がする。
+# チームで決まる署名なので、キーチェーンの「常に許可」が版を上げても引き継がれ、Gatekeeper にも止められない。
+# Developer ID の証明書がないときは公開しない。作るだけなら、自分で作った証明書（MAC_SIGN_P12・MAC_SIGN_PASSWORD。
+# build/after-pack.cjs）か ad-hoc で署名する。Windows は署名なし
 name: Release
 
 on:
@@ -99,17 +101,55 @@ jobs:
             echo "::error::タグ $GITHUB_REF_NAME と package.json の版 $v が違います。package.json の版を上げてからタグを付けてください"
             exit 1
           fi
-      - name: Mac の署名の証明書を用意する
+      # Developer ID の証明書と公証の鍵。証明書は作業用のキーチェーンに入れ、electron-builder は mac.identity（チーム ID）で探して署名する。
+      # CSC_LINK は使わない（electron-builder 26.15.3 は自分で作るキーチェーンの鍵の設定に .p12 のパスワードを渡して失敗する）。
+      # APPLE_API_KEY（.p8 のファイルの場所）・APPLE_API_KEY_ID・APPLE_API_ISSUER があれば公証して、チケットをアプリに付ける（staple）
+      - name: Mac の Developer ID の証明書と公証の鍵を用意する
         if: runner.os == 'macOS'
+        env:
+          MAC_DEVID_P12: ${{ secrets.MAC_DEVID_P12 }}
+          MAC_DEVID_PASSWORD: ${{ secrets.MAC_DEVID_PASSWORD }}
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          PUBLISH: ${{ needs.decide.outputs.publish }}
+        run: |
+          if [ -z "$MAC_DEVID_P12" ] || [ -z "$API_KEY" ] || [ -z "$API_KEY_ID" ] || [ -z "$API_ISSUER" ]; then
+            if [ "$PUBLISH" = "true" ]; then echo "::error::Developer ID の証明書か公証の鍵（Secrets の MAC_DEVID_P12・MAC_DEVID_PASSWORD・APPLE_API_KEY・APPLE_API_KEY_ID・APPLE_API_ISSUER）がありません。公開しません（README の「Mac の署名と公証」）"; exit 1; fi
+            echo "Developer ID の証明書か公証の鍵がないため、Developer ID では署名しません"; exit 0
+          fi
+          kc="$RUNNER_TEMP/devid.keychain-db"; kp=$(openssl rand -hex 16)
+          security create-keychain -p "$kp" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kp" "$kc"
+          printf '%s' "$MAC_DEVID_P12" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+          security import "$RUNNER_TEMP/devid.p12" -k "$kc" -P "$MAC_DEVID_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/devid.p12"
+          # 中間証明書（Developer ID Certification Authority G2）。作業用の Mac になくても署名の鎖がつながるように入れておく
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$kc" || echo "中間証明書は入っていました"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kp" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$kc"
+          security find-identity -v -p codesigning "$kc" | grep -q 'Developer ID Application: .*(9G78U9XD92)' || { echo "::error::MAC_DEVID_P12 に Developer ID Application（9G78U9XD92）の証明書と秘密鍵がありません"; exit 1; }
+          printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          # electron-builder はプルリクエストの build では署名しない。Secrets はフォークからのプルリクエストには渡らない
+          # （そのときはここまで来ない）ので、Developer ID のときは署名させる
+          {
+            echo "MAC_DEVID=1"
+            echo "CSC_FOR_PULL_REQUEST=true"
+            echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8"
+            echo "APPLE_API_KEY_ID=$API_KEY_ID"
+            echo "APPLE_API_ISSUER=$API_ISSUER"
+          } >> "$GITHUB_ENV"
+          echo "Developer ID（チーム 9G78U9XD92）で署名して公証します"
+      - name: Mac の自分の証明書を用意する（Developer ID がないとき）
+        if: runner.os == 'macOS' && env.MAC_DEVID != '1'
         env:
           MAC_SIGN_P12: ${{ secrets.MAC_SIGN_P12 }}
           MAC_SIGN_PASSWORD: ${{ secrets.MAC_SIGN_PASSWORD }}
-          PUBLISH: ${{ needs.decide.outputs.publish }}
         run: |
-          if [ -z "$MAC_SIGN_P12" ]; then
-            if [ "$PUBLISH" = "true" ]; then echo "::error::署名用の証明書（Secrets の MAC_SIGN_P12・MAC_SIGN_PASSWORD）がありません。ad-hoc 署名の版を配ると、更新のあと LMS への接続が切れるため公開しません（README の「Mac の署名の証明書」）"; exit 1; fi
-            echo "署名用の証明書（MAC_SIGN_P12）がないため、ad-hoc 署名で作ります"; exit 0
-          fi
+          if [ -z "$MAC_SIGN_P12" ]; then echo "署名用の証明書（MAC_SIGN_P12）がないため、ad-hoc 署名で作ります"; exit 0; fi
           kc="$RUNNER_TEMP/daigaku-sign.keychain-db"; kp=$(openssl rand -hex 16)
           security create-keychain -p "$kp" "$kc"
           security set-keychain-settings -lut 21600 "$kc"
@@ -131,7 +171,31 @@ jobs:
       # electron-builder の公開機能は使わない（Mac と Windows のジョブがそれぞれ Release を作ろうとするため）。
       # 作るだけにして、下の publish ジョブで 1 回にまとめて載せる
       # Mac は入れ物の名前を英字にする（electron-builder.yml の mac の説明。表示名は「パレットノート」）
-      - run: npx electron-builder --publish never ${{ runner.os == 'macOS' && '-c.productName=PaletteNote' || '' }}
+      # Developer ID のときは mac.identity（electron-builder.yml では null）をチーム ID にして、electron-builder に署名と公証をさせる
+      - name: 作る
+        shell: bash
+        run: |
+          args=()
+          if [ "$RUNNER_OS" = macOS ]; then
+            args+=(-c.productName=PaletteNote)
+            if [ "${MAC_DEVID:-}" = 1 ]; then args+=(-c.mac.identity=9G78U9XD92); fi
+          fi
+          npx electron-builder --publish never "${args[@]}"
+      # Developer ID の版は、署名・公証のチケット・Gatekeeper の判定を確かめる（どれかがだめなら公開しない）
+      - name: Mac の署名と公証を確かめる
+        if: runner.os == 'macOS' && env.MAC_DEVID == '1'
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          for app in release/mac*/*.app; do
+            echo "== $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            codesign -dv --verbose=2 "$app" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Runtime|Timestamp)'
+            codesign -d -r- "$app" 2>&1 | grep designated
+            codesign -dv "$app" 2>&1 | grep -q '^TeamIdentifier=9G78U9XD92$' || { echo "::error::$app の署名のチームが 9G78U9XD92 ではありません"; exit 1; }
+            xcrun stapler validate "$app"
+            spctl --assess --type execute --verbose=4 "$app"
+          done
       # Mac で作ったアプリが起動できるかを確かめる（0.18.0 は入れ物の名前「パレットノート」のせいで起動して 1 秒たたずに止まった）。
       # 8 秒たっても動いていれば起動できたとみなす。止まったら公開しない
       - name: Mac で起動を確かめる
@@ -205,7 +269,7 @@ jobs:
             echo
             if [ -n "$notes" ]; then echo "## 変更"; echo "$notes"; echo; fi
             echo "## 入れ方"
-            echo "Mac は .dmg（Apple シリコンは arm64、Intel は x64）、Windows は .exe を入れてください。Apple・Windows の署名がないため、Mac は初回に止められたら「システム設定 → プライバシーとセキュリティ」の「このまま開く」、Windows は SmartScreen の「詳細情報 → 実行」を押してください。2 回目からはアプリが自動で更新します。"
+            echo "Mac は .dmg（Apple シリコンは arm64、Intel は x64）、Windows は .exe を入れてください。Mac の版は Apple の Developer ID で署名し、公証を受けています。Windows は署名がないため、SmartScreen に止められたら「詳細情報 → 実行」を押してください。2 回目からはアプリが自動で更新します。"
           } > release-notes.md
           gh release create "$TAG" --repo "$REPO" --target "$SHA" $latest --title "パレットノート $TAG" \
             --notes-file release-notes.md \
