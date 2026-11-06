@@ -8,6 +8,23 @@ WEEK=['#F28B82','#FFAB70','#8AB4F8','#7FD1AE','#F6C445']   # ブランドの 5 �
 def mix(c,t,a):  # c を t に a の割合で寄せる
     c=[int(c[i:i+2],16) for i in (1,3,5)]; t=[int(t[i:i+2],16) for i in (1,3,5)]
     return '#'+''.join(f'{round(x+(y-x)*a):02X}' for x,y in zip(c,t))
+KE=KFm.Kana("ZenMaruGothic-Medium.ttf"); KE.bold=0; KE.ringbold=0; KE.accent_o=True; KE.sc*=0.9
+def en_body(ink,acc=None):
+    acc=acc or ACC
+    xs=KE.layout('Palette Note',20,space=46); body='';w=0; dy=120-(120+KE.base*KE.sc)   # ベースラインを字面の下端 120 にそろえる（カタカナと同じ高さ）
+    for ch,x in zip('Palette Note',xs):
+        if ch==' ' or x is None: continue
+        g,gw=KE.glyph(ch,x,ink,acc,accent_o=True); body+=g; w=x+gw
+    return band(ink,w)+f'<g transform="translate(0 {dy:.1f})">{body}</g>',w
+def band(ink,w):
+    if ink=='#000': return ''
+    cols=[mix(c,'#FFFFFF',0.35) for c in WEEK] if ink!=WHITE else [mix(c,NAVY,0.45) for c in WEEK]
+    x0,x1=-8,w+8; n=5; seg=(x1-x0)/n; r=HL_H/2
+    pre=f'<rect x="{x0:.1f}" y="{HL_Y}" width="{seg+r:.1f}" height="{HL_H}" rx="{r}" fill="{cols[0]}"/>'
+    pre+=f'<rect x="{x1-seg-r:.1f}" y="{HL_Y}" width="{seg+r:.1f}" height="{HL_H}" rx="{r}" fill="{cols[4]}"/>'
+    for i in range(1,4):
+        pre+=f'<rect x="{x0+i*seg:.1f}" y="{HL_Y}" width="{seg:.1f}" height="{HL_H}" fill="{cols[i]}"/>'
+    return pre
 def kana_body(ink,acc=None):
     acc=acc or ACC
     body,w=KF.wordmark(target=22,ink=ink,acc=acc)
@@ -64,21 +81,25 @@ def wordmark(text,gl,track,kern,ink=NAVY,acc=ACC,accent=True):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p} {top} {w+2*p} {H+2*p-top-p}">{body}</svg>', (w,top,p)
 def lockup(text,gl,track,kern,dark=False):
     ink=WHITE if dark else NAVY
-    if gl is None:
+    if gl=='en':
+        body,w=en_body(ink)
+    elif gl is None:
         body,w=kana_body(ink)
     else:
         w,body=build(text,gl,track,kern,ink,ACC)
     # 記号：明るい背景では紙を紺に（罫線は抜き）、暗い背景では紙の色
     sym_h=176; u=sym_h/560
     sym=FI.mark(0,0,u) if dark else FI.mark(0,0,u,page=NAVY)
-    sw=(440+84)*u; gap=40 if gl is None else 56
+    sw=(440+84)*u; gap=40 if gl in (None,'en') else 56
     g=f'<g transform="translate({sw/2} {H/2})">{sym}</g><g transform="translate({sw+gap} 0)">{body}</g>'
     p=S/2+(28 if dark else 4); top=-(sym_h-H)/2-(28 if dark else 4)
     total=sw+gap+w
     bg=f'<rect x="{-p-40}" y="{top-40}" width="{total+2*p+80}" height="{sym_h+88}" fill="{NAVY}"/>' if dark else ''
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p} {top} {total+2*p} {sym_h+(56 if dark else 8)}">{bg}{g}</svg>'
 def stacked(text,gl,track,kern):
-    if gl is None:
+    if gl=='en':
+        body,w=en_body(NAVY)
+    elif gl is None:
         body,w=kana_body(NAVY)
     else:
         w,body=build(text,gl,track,kern,NAVY,ACC)
@@ -88,21 +109,24 @@ def stacked(text,gl,track,kern):
     p=24
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p} {-p} {w+2*p} {sym_h+gap+H+2*p}">{g}</svg>'
 J,E=ja(),en()
+def en_mark(ink=NAVY,acc=ACC):
+    body,w=en_body(ink,acc); p=8
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p-6} -32 {w+2*p+12} 176">{body}</svg>'
 def kana_mark(ink=NAVY,acc=ACC):
     body,w=kana_body(ink,acc); p=8
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p-6} -32 {w+2*p+12} 176">{body}</svg>'
 out={'logo-ja':kana_mark(),
-     'logo-en':wordmark('PALETTE NOTE',E,24,KERN_EN)[0],
+     'logo-en':en_mark(),
      'logo-ja-white':kana_mark(ink=WHITE),
-     'logo-en-white':wordmark('PALETTE NOTE',E,24,KERN_EN,ink=WHITE)[0],
+     'logo-en-white':en_mark(ink=WHITE),
      'logo-ja-black':kana_mark(ink='#000',acc='#000'),
-     'logo-en-black':wordmark('PALETTE NOTE',E,24,KERN_EN,ink='#000',acc='#000')[0],
+     'logo-en-black':en_mark(ink='#000',acc='#000'),
      'lockup-ja':lockup('パレットノート',None,0,None),
      'lockup-ja-stacked':stacked('パレットノート',None,0,None),
-     'lockup-en-stacked':stacked('PALETTE NOTE',E,24,KERN_EN),
-     'lockup-en':lockup('PALETTE NOTE',E,24,KERN_EN),
+     'lockup-en-stacked':stacked('Palette Note','en',0,None),
+     'lockup-en':lockup('Palette Note','en',0,None),
      'lockup-ja-dark':lockup('パレットノート',None,0,None,dark=True),
-     'lockup-en-dark':lockup('PALETTE NOTE',E,24,KERN_EN,dark=True)}
+     'lockup-en-dark':lockup('Palette Note','en',0,None,dark=True)}
 TITLE={'ja':'パレットノート','en':'PALETTE NOTE'}
 for k,v in out.items():
     t=TITLE['ja' if '-ja' in k else 'en']

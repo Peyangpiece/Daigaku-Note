@@ -34,12 +34,12 @@ v0.18.7 で作った。すべて線を塗りの形に変換した SVG（`<text>`
 ## ロゴの文字
 
 - カタカナ「パレットノート」は、Kiwi Maru（Medium。SIL Open Font License 1.1。ライセンス文は `OFL-KiwiMaru.txt`）の字の形をもとに、線をごく少し太らせ（縦画が高さ 120 に対して約 16）、字と字の空きの面積で字間を詰め、「パ」の半濁点を珊瑚色にした。ノートらしさとして、字の下の端にかかる低い位置に蛍光ペンを全体に引き、ブランドの 5 色（曜日の色）で左から月〜金の順に塗り分けた（明るい地では各色を白に 35 % 寄せた淡い色、紺の地では紺に 45 % 寄せた暗い色）。黒 1 色では蛍光ペンを外す。図形にしてあるので、フォントのファイルは含まない
-- 英字「PALETTE NOTE」は同じ太さ・丸い端の線で作り、組ごとに字間を詰めた
-- アクセントの色は、カタカナでは「パ」の半濁点、英字では「O」。どちらも珊瑚色の輪
+- 英字「Palette Note」は、Zen Maru Gothic（Medium。SIL Open Font License 1.1。ライセンス文は `src/renderer/fonts/OFL-ZenMaruGothic.txt`）の字の形を 0.9 倍にしてベースラインをカタカナの字面の下端にそろえ、字間を空きの面積で詰め、「o」を珊瑚色にした。蛍光ペンはカタカナと同じ
+- アクセントの色は、カタカナでは「パ」の半濁点、英字では「o」。どちらも珊瑚色
 
 ## 作り直すとき
 
-`source/` の Python で SVG を作り、picosvg で線を塗りの形に変換する（`pip install cairosvg picosvg pillow fonttools`）。カタカナには Kiwi Maru の `KiwiMaru-Medium.ttf`（google/fonts の `ofl/kiwimaru`）を `source/` に置く。
+`source/` の Python で SVG を作り、picosvg で線を塗りの形に変換する（`pip install cairosvg picosvg pillow fonttools`）。カタカナには Kiwi Maru の `KiwiMaru-Medium.ttf`（google/fonts の `ofl/kiwimaru`）、英字には Zen Maru Gothic の `ZenMaruGothic-Medium.ttf`（`ofl/zenmarugothic`）を `source/` に置く。
 
 ```sh
 cd brand/source

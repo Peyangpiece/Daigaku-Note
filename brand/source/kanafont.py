@@ -29,7 +29,7 @@ class Kana:
         bp=BoundsPen(s.gs); s.gs[s.cmap[ord(ch)]].draw(bp); return bp.bounds
     bold=0; ringbold=0; style=None
     WEEK=['#F28B82','#FFAB70','#8AB4F8','#7FD1AE','#F6C445']
-    def glyph(s,ch,dx,ink,acc):
+    def glyph(s,ch,dx,ink,acc,accent_o=False):
         name=s.cmap[ord(ch)]; cs=contours(s.gs,name); b=s.bounds(ch); out=[]
         # 半濁点：右上にある小さい輪（輪郭 2 つ）
         mark=[]
@@ -37,6 +37,7 @@ class Kana:
             for c in cs:
                 cb=cbounds(c)
                 if cb and cb[0]>b[0]+(b[2]-b[0])*0.6 and cb[1]>b[1]+(b[3]-b[1])*0.55: mark.append(c)
+        if accent_o and ch=='o': mark=cs
         body=[c for c in cs if c not in mark]
         ox=dx-b[0]*s.sc; oy=H+s.base*s.sc
         extra=''
@@ -68,7 +69,15 @@ class Kana:
             xs=[x for x in range(W) if px[x,y]>100]
             l.append(xs[0]/SC+L if xs else None); r.append(xs[-1]/SC+L if xs else None)
         return l,r,w
-    def layout(s,text,target,depth=0.3*H):
+    def layout(s,text,target,depth=0.3*H,space=34):
+        if ' ' in text:
+            out=[]; base=0
+            for k,part in enumerate(text.split(' ')):
+                xs=s.layout(part,target,depth); out+= [base+x for x in xs]
+                if k < len(text.split(' '))-1:
+                    out.append(None)
+                    last=part[-1]; b=s.bounds(last); base=base+xs[-1]+(b[2]-b[0])*s.sc+space
+            return out
         P={c:s.profile(c) for c in set(text)}; xs=[0]
         def side(l,r,w):
             xl=min(v for v in l if v is not None); xr=max(v for v in r if v is not None)
@@ -82,5 +91,6 @@ class Kana:
     def wordmark(s,text='パレットノート',target=24,ink=NAVY,acc=ACC):
         xs=s.layout(text,target); body=''; w=0
         for ch,x in zip(text,xs):
-            g,gw=s.glyph(ch,x,ink,acc); body+=g; w=x+gw
+            if ch==' ' or x is None: continue
+            g,gw=s.glyph(ch,x,ink,acc,accent_o=getattr(s,'accent_o',False)); body+=g; w=x+gw
         return body,w
