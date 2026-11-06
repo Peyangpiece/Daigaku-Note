@@ -1081,14 +1081,14 @@ def case_pouch():
     # 正面の織りネーム（右寄り）
     lab = rounded_plate('Label', 34, 12, 1.2, M['trim'])
     place_on(lab, body, lambda x, y: (52 + x, -200, H * 0.45 + y), (0, 1, 0), 0.5)
-    txt = flat_text('LabelText', '大学ノート', FONT_JA, 5.6, M['label_text'])
+    txt = flat_text('LabelText', 'PALETTE NOTE', None, 3.6, M['label_text'])
     place_on(txt, body, lambda x, y: (52 + x, -200, H * 0.45 + y), (0, 1, 0), 0.75)
     to_pen_axes()
 
 
 def case_leather():
     """革のペンケース：ふっくらした箱形（端は丸く閉じる）。真ちゅうのファスナー、両側に生成りのステッチ、
-    革の引き手、正面に型押しの「大学ノート」。L 195 × D 60 × H 50 mm"""
+    革の引き手、正面に型押しの「PALETTE NOTE」。L 195 × D 60 × H 50 mm"""
     lv = leather_maps()
     M = case_materials(maps_kw(lv, 0.5), {'roughness': 0.7})
     L, D, H = 195.0, 60.0, 50.0
@@ -1106,10 +1106,8 @@ def case_leather():
             pts.append(surf_at(P, s, tt))
             nrs.append(surf_normal(P, s, tt))
         stitches(f'Stitch_{k}', pts, nrs, M['trim'])
-    txt = flat_text('Deboss', '大学ノート', FONT_JA, 7.5, M['deboss'])
-    place_on(txt, body, lambda x, y: (x, -200, H * 0.42 + y), (0, 1, 0), 0.05)
-    txt2 = flat_text('Deboss_en', 'DAIGAKU NOTE', None, 3.0, M['deboss'])
-    place_on(txt2, body, lambda x, y: (x, -200, H * 0.42 - 7 + y), (0, 1, 0), 0.05)
+    txt = flat_text('Deboss', 'PALETTE NOTE', None, 4.5, M['deboss'])
+    place_on(txt, body, lambda x, y: (x, -200, H * 0.42 - 2 + y), (0, 1, 0), 0.05)
     to_pen_axes()
 
 
@@ -1124,13 +1122,13 @@ def case_clear():
     body = grid_object('Body', P, M['base'], 20.0, poles=True)
     zipper(P, 0.05, 0.95, M['trim'], M['coil'], M['metal'], M['metal'], tooth=(1.2, 4.4, 1.2), pitch=1.6,
            slider_s=0.82)
-    txt = flat_text('Print', '大学ノート', FONT_JA, 6.0, M['trim'])
+    txt = flat_text('Print', 'PALETTE NOTE', None, 4.2, M['trim'])
     place_on(txt, body, lambda x, y: (60 + x, -200, H * 0.30 + y), (0, 1, 0), 0.05)
     to_pen_axes()
 
 
 def case_tin():
-    """缶ペンケース：角を丸めた浅い箱（下の箱とかぶせぶた）。後ろに蝶番、ふたに「大学ノート」の印刷。
+    """缶ペンケース：角を丸めた浅い箱（下の箱とかぶせぶた）。後ろに蝶番、ふたに「PALETTE NOTE」の印刷。
     L 196 × D 64 × H 26 mm"""
     bmaps = brushed_maps()
     M = case_materials({'metallic': 0.9, 'roughness': 0.3, 'rough_map': bmaps[1], 'normal_map': bmaps[2]},
@@ -1145,10 +1143,8 @@ def case_tin():
         ob = obj_from_bm(f'Hinge_{k}', bm, M['trim'])
         ob.data.transform(Matrix.Rotation(math.pi / 2, 4, 'Y'))
         ob.data.transform(Matrix.Translation((x, 32.6, 16.0)))
-    txt = flat_text('Print', '大学ノート', FONT_JA, 11.0, M['trim'])
-    place_on(txt, lid, lambda x, y: (x, y + 3.0, 200), (0, 0, -1), 0.05)
-    txt2 = flat_text('Print_en', 'DAIGAKU NOTE', None, 4.0, M['trim'])
-    place_on(txt2, lid, lambda x, y: (x, y - 9.0, 200), (0, 0, -1), 0.05)
+    txt = flat_text('Print', 'PALETTE NOTE', None, 7.0, M['trim'])
+    place_on(txt, lid, lambda x, y: (x, y, 200), (0, 0, -1), 0.05)
     to_pen_axes()
 
 
