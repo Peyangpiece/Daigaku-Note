@@ -4,10 +4,10 @@ set -euo pipefail
 # 変数は ${...} で囲む（Mac の bash 3.2 は $ARCH（ のように日本語が続くと、変数名の続きと読んでしまう）
 cd "$(dirname "$0")/.."
 
-APP_NAME='パレットノート.app'
+APP_NAME='PaletteNote.app' # 入れ物の名前は英字（electron-builder.yml の mac の説明）
 DEST="/Applications/${APP_NAME}"
 # Dock の登録に書く URL（「パレットノート」を UTF-8 でパーセント符号化したもの）
-DOCK_URL='file:///Applications/%E3%83%91%E3%83%AC%E3%83%83%E3%83%88%E3%83%8E%E3%83%BC%E3%83%88.app/'
+DOCK_URL='file:///Applications/PaletteNote.app/'
 
 [ "$(uname -s)" = Darwin ] || { echo 'これは Mac 用です。'; exit 1; }
 # node_modules の Electron（npm が Node と同じ CPU 向けに入れたもの）をそのまま使うので、CPU も Node に合わせる
@@ -18,7 +18,7 @@ echo '1/5 部品をそろえます…'
 
 echo "2/5 アプリを作ります（${ARCH}）…"
 rm -rf release/mac release/mac-arm64
-npx electron-builder --mac dir "--${ARCH}" --publish never -c.electronDist=node_modules/electron/dist
+npx electron-builder --mac dir "--${ARCH}" --publish never -c.productName=PaletteNote -c.electronDist=node_modules/electron/dist
 BUILT=$(ls -d release/mac*/"${APP_NAME}" | head -1)
 [ -d "${BUILT}" ] || { echo 'アプリを作れませんでした。'; exit 1; }
 
