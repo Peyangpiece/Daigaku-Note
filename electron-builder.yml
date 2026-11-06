@@ -34,7 +34,15 @@ mac:
       arch: [arm64, x64]
   identity: null # Apple の証明書はない。署名は build/after-pack.cjs の ad-hoc
   hardenedRuntime: false
+  # 入れ物の名前（.app・実行ファイル・CFBundleName）は英字 PaletteNote（release.yml・install-mac.sh が -c.productName で指す）。
+  # 「パ」のように濁点・半濁点が分かれる字（NFD）が入ると、Electron が起動の準備で止まる（0.18.0。CI の起動の確認で再現）。
+  # Finder・Dock・Launchpad には表示名（CFBundleDisplayName、日本語は ja.lproj）の「パレットノート」を出す
+  extraResources:
+    - from: build/mac-locale/ja.lproj
+      to: ja.lproj
   extendInfo:
+    CFBundleDisplayName: パレットノート
+    LSHasLocalizedDisplayName: true
     NSDesktopFolderUsageDescription: 授業資料をデスクトップの「パレットノート」フォルダ（前の版から使っている人は「大学ノート」フォルダ）に保存するために使います。
 dmg:
   sign: false
