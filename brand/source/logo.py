@@ -9,11 +9,18 @@ def mix(c,t,a):  # c を t に a の割合で寄せる
     c=[int(c[i:i+2],16) for i in (1,3,5)]; t=[int(t[i:i+2],16) for i in (1,3,5)]
     return '#'+''.join(f'{round(x+(y-x)*a):02X}' for x,y in zip(c,t))
 KE=KFm.Kana("ZenMaruGothic-Medium.ttf"); KE.bold=0; KE.ringbold=0; KE.accent_o=True; KE.sc*=0.9
+P_SW,P_TOP,P_BASE,P_W=12.4,20.4,116.97,71.9   # Zen Maru Gothic の P の線の太さ・上端・ベースライン・幅（0.9 倍のとき）
+def round_P(dx,ink):
+    # P のふくらみを大きな円に近くした形（上の線はまっすぐ、ふくらみは字の高さの約 6 割）
+    x=dx+P_SW/2; y1=P_TOP+P_SW/2; yb=P_BASE-P_SW/2; bot=P_TOP+60-P_SW/2; r=(bot-y1)/2; cx=dx+P_W-P_SW/2-r
+    d=f"M{x:.2f} {yb:.2f}V{y1:.2f}H{cx:.2f}A{r:.2f} {r:.2f} 0 0 1 {cx:.2f} {bot:.2f}H{x:.2f}"
+    return f'<path d="{d}" fill="none" stroke="{ink}" stroke-width="{P_SW}" stroke-linecap="round" stroke-linejoin="round"/>'
 def en_body(ink,acc=None):
     acc=acc or ACC
     xs=KE.layout('Palette Note',20,space=46); body='';w=0; dy=120-(120+KE.base*KE.sc)   # ベースラインを字面の下端 120 にそろえる（カタカナと同じ高さ）
     for ch,x in zip('Palette Note',xs):
         if ch==' ' or x is None: continue
+        if ch=='P': body+=round_P(x,ink); w=x+P_W; continue
         g,gw=KE.glyph(ch,x,ink,acc,accent_o=True); body+=g; w=x+gw
     return band(ink,w)+f'<g transform="translate(0 {dy:.1f})">{body}</g>',w
 def band(ink,w):
