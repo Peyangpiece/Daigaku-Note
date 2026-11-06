@@ -98,7 +98,8 @@ export function watchTheme(getData, onChange) {
 /** フォルダのカードの style（カード・タブ・文字の色、テープの色）と、テープの柄 */
 export function folderLook(course, skin, dark = isDark()) {
   const card = tone(skin.folder.card, 'card', dark);
-  const tab = tone(setColorFor(skin.folder.tab, course), 'tab', dark);
+  const tabRaw = setColorFor(skin.folder.tab, course);
+  const tab = tone(tabRaw, 'tab', dark);
   const vars = [];
   if (card) {
     const ink = inkOn(card);
@@ -113,7 +114,13 @@ export function folderLook(course, skin, dark = isDark()) {
   const pattern = skin.tape.pattern === 'course' ? course.tape_pattern || 'plain' : skin.tape.pattern;
   // 柄が画像のテープ：シールの素をくり返して貼る（画像がまだ届いていなければ色だけ）
   const image = pattern === 'image' && skin.tape.image ? stickerUrl(skin.tape.image) : '';
-  return {style: vars.join('; '), tapeColor, pattern, tapeImage: image ? `url('${image}')` : ''};
+  return {
+    style: vars.join('; '),
+    tab: /^#[0-9a-f]{6}$/i.test(tabRaw ?? '') ? tabRaw : null,
+    tapeColor,
+    pattern,
+    tapeImage: image ? `url('${image}')` : ''
+  };
 }
 
 // ---- シールの画像（data: URL）。足りない分だけまとめてもらい、届いたら描き直す ----
