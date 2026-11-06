@@ -44,11 +44,15 @@ test('テンプレートの形：知らない項目は捨て、範囲外は既�
   assert.equal(t.version, '1.0.0');
   assert.equal('evil' in t, false);
   assert.deepEqual(t.parts.note, {type: 'ruled', paper: 'default', line: '#abcdef', gap: 'wide', margin: true});
-  assert.deepEqual(t.parts.folder, {card: '#ffffff', tab: 'default'}, 'タブに course は使えない');
+  assert.deepEqual(
+    t.parts.folder,
+    {card: '#ffffff', tab: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']}},
+    'タブに course は使えない（既定の曜日ごと）'
+  );
   assert.deepEqual(
     t.parts.tape,
     {
-      color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+      color: {mode: 'weekday', colors: ['#fbb1a9', '#fcc3a6', '#c0d6fd', '#bff2bc', '#f9e2a8']},
       pattern: 'check',
       image: null
     },
@@ -106,9 +110,13 @@ test('どのテンプレートが当たるか：アプリ全体で 1 つ。授�
 
 test('クラシック：テーマの色・曜日ごとのテープ', () => {
   const c = BUILTIN_TEMPLATES.find((t) => t.id === CLASSIC_ID);
-  assert.deepEqual(c.parts.folder, {card: 'default', tab: 'default'});
+  assert.deepEqual(
+    c.parts.folder,
+    {card: 'default', tab: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']}},
+    'クラシックのタブはテープと同じ曜日ごと（v0.17.8）'
+  );
   assert.deepEqual(c.parts.tape, {
-    color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+    color: {mode: 'weekday', colors: ['#fbb1a9', '#fcc3a6', '#c0d6fd', '#bff2bc', '#f9e2a8']},
     pattern: 'course',
     image: null
   });
@@ -166,12 +174,12 @@ test('シールの場所：フォルダ・ホームの余白・授業ページ�
 
 test('テープの柄に画像：画像がなければ無地に戻す', () => {
   assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: SHA}}}).parts.tape, {
-    color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+    color: {mode: 'weekday', colors: ['#fbb1a9', '#fcc3a6', '#c0d6fd', '#bff2bc', '#f9e2a8']},
     pattern: 'image',
     image: SHA
   });
   assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: 'x'}}}).parts.tape, {
-    color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+    color: {mode: 'weekday', colors: ['#fbb1a9', '#fcc3a6', '#c0d6fd', '#bff2bc', '#f9e2a8']},
     pattern: 'plain',
     image: null
   });
@@ -342,7 +350,11 @@ test('色の組（テープ・タブ）：曜日ごと・カスタム。前の�
     '前の版の 1 色はカスタム 1 色'
   );
   assert.equal(p({tab: 'default'}).folder.tab, 'default');
-  assert.equal(p({tab: 'course'}).folder.tab, 'default', 'タブに授業ごとの色はない');
+  assert.deepEqual(
+    p({tab: 'course'}).folder.tab,
+    {mode: 'weekday', colors: TAB_WEEKDAY},
+    'タブに授業ごとの色はない（既定の曜日ごと）'
+  );
   assert.deepEqual(
     p({tab: {mode: 'weekday', colors: ['#111111']}}).folder.tab,
     {mode: 'weekday', colors: TAB_WEEKDAY},
