@@ -55,7 +55,7 @@ const longestRun = (html) => Math.max(...html.split('<wbr>').map((s) => [...s.re
  * 着せ替えページの見本では skin（直している途中の見た目）を渡し、edit で貼ったシールを選べるようにする（ボタンにしない）。
  * edit.still は動かない見本（テンプレートの一覧）
  */
-// 新着のバッジの色：授業の色（曜日ごとの色はやめた。色の体系を授業の色に寄せ、ホームと授業画面で同じ色が同じ授業を指すように）
+// 新着のバッジの色：フォルダごとに選んだ色 → タブの色（v0.17.9）→ 授業の色（タブに色のない着せ替えのとき）
 const badgeColor = (course) => `var(--c${course.color ?? 1})`;
 
 /**
@@ -84,7 +84,7 @@ export function folderCard(course, {today = false, data = null, skin = null, edi
   const stickers = sk.stickers.filter((s) => s.place === 'folder').map((s) => [s]); // 直している見本では s.index が直しているテンプレートの何枚目か
   const badges = [
     course.unread
-      ? `<span class="badge" style="--badge-color: ${over.badge ?? badgeColor(course)}">新着 ${course.unread}</span>`
+      ? `<span class="badge" style="--badge-color: ${over.badge ?? look.tab ?? badgeColor(course)}">新着 ${course.unread}</span>`
       : '',
     course.review ? `<span class="badge">復習 ${course.review}</span>` : ''
   ].join('');
