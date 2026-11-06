@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PDFDocument} from 'pdf-lib';
+import {PDFArray, PDFDocument, decodePDFRawStream} from 'pdf-lib';
 import {
   A4,
   appendNotePage,
@@ -21,11 +21,30 @@ const PNG = Buffer.from(
 );
 
 test('ノートの紙：横罫（基本）と方眼、行の間は 6・7 mm。知らない値は横罫 6 mm', () => {
-  assert.deepEqual(cleanPaper({type: 'grid', gap: 7}), {v: 2, type: 'grid', gap: 7});
-  assert.deepEqual(cleanPaper({type: 'ruled', gap: 6}), {v: 2, type: 'ruled', gap: 6});
-  assert.deepEqual(cleanPaper({type: 'cornell', gap: 8}), {v: 2, type: 'ruled', gap: 6});
-  assert.deepEqual(cleanPaper(null), {v: 2, type: 'ruled', gap: 6});
-  assert.deepEqual(cleanPaper({type: 'grid', gap: '7'}), {v: 2, type: 'grid', gap: 6}, '数だけ');
+  assert.deepEqual(cleanPaper({type: 'grid', gap: 7}), {v: 2, type: 'grid', gap: 7, line: 'gray'});
+  assert.deepEqual(cleanPaper({type: 'ruled', gap: 6}), {v: 2, type: 'ruled', gap: 6, line: 'gray'});
+  assert.deepEqual(cleanPaper({type: 'cornell', gap: 8}), {v: 2, type: 'ruled', gap: 6, line: 'gray'});
+  assert.deepEqual(cleanPaper(null), {v: 2, type: 'ruled', gap: 6, line: 'gray'});
+  assert.deepEqual(cleanPaper({type: 'grid', gap: '7'}), {v: 2, type: 'grid', gap: 6, line: 'gray'}, '数だけ');
+  assert.equal(cleanPaper({line: 'blue'}).line, 'blue');
+  assert.equal(cleanPaper({line: 'red'}).line, 'gray', '知らない色は灰色');
+});
+
+test('ノートの線の色：新しいノートは灰色。前の版のノート（線の色を覚えていない v2）は、足すページも青のまま（v0.17.10）', async () => {
+  const strokes = async (bytes, i) => {
+    const doc = await PDFDocument.load(bytes);
+    const c = doc.getPage(i).node.Contents();
+    const list = c instanceof PDFArray ? c.asArray().map((r) => doc.context.lookup(r)) : [c];
+    return list.map((x) => Buffer.from(decodePDFRawStream(x).decode()).toString('latin1')).join('\n');
+  };
+  const gray = await createNotePdf(cleanPaper({}));
+  const g = await strokes(gray, 0);
+  assert.match(g, /0\.788\d* 0\.811\d* 0\.839\d* RG/, '灰色 #c9cfd6');
+  const old = {v: 2, type: 'ruled', gap: 6}; // 0.17.9 までに作ったノートの覚え方
+  const blueDoc = await createNotePdf(old);
+  const more = await appendNotePage(blueDoc, old);
+  const b = await strokes(more.bytes, 1);
+  assert.match(b, /0\.611\d* 0\.752\d* 0\.901\d* RG/, '足したページも青 #9cc0e6');
 });
 
 test('ノート：A4 縦の 1 ページで作り、ページを足すと最後に増える。見た目が同じでも中身（ハッシュ）は毎回ちがう', async () => {
