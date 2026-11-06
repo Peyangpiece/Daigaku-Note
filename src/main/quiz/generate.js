@@ -14,7 +14,7 @@ export const BETAS = ['server-side-fallback-2026-07-01'];
 const err = (code, message) => Object.assign(new Error(message), {code});
 
 /** system（固定。キャッシュする。SPEC §18.3） */
-export const SYSTEM = `あなたは大学生向け電子ノート「大学ノート」で、授業資料から復習クイズを作る係です。作った問題は本人が確かめて使います。
+export const SYSTEM = `あなたは大学生向け電子ノート「パレットノート」で、授業資料から復習クイズを作る係です。作った問題は本人が確かめて使います。
 
 ## 作り方
 - 渡された資料本文だけを根拠にする。資料にないことは出さない。一般知識で補わない。

@@ -138,7 +138,7 @@ export function register({handle, ctx, repo}) {
     }
     if (patch.skipSetup === true) repo.setSetting('setup.skipped', true); // 初回のセットアップを終えた（次から起動時に出さない。LMS は任意で、設定からつなぐ）
     if (typeof patch.openAtLogin === 'boolean') {
-      if (!loginItem().available) bad('ログイン時の起動は、アプリとして入れた大学ノートでだけ設定できます');
+      if (!loginItem().available) bad('ログイン時の起動は、アプリとして入れたパレットノートでだけ設定できます');
       app.setLoginItemSettings({openAtLogin: patch.openAtLogin});
     }
     return {ok: true};

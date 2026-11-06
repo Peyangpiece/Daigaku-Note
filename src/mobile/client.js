@@ -10,7 +10,7 @@ export class NotPaired extends Error {
     super('パソコンとつながっていません');
   }
 }
-/** パソコンに届かない（同じ Wi-Fi でない・大学ノートが閉じている・「スマホとつなぐ」がオフ） */
+/** パソコンに届かない（同じ Wi-Fi でない・パレットノートが閉じている・「スマホとつなぐ」がオフ） */
 export class Unreachable extends Error {
   constructor() {
     super('パソコンに届きません');

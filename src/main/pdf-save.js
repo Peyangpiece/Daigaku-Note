@@ -82,7 +82,7 @@ export async function overwritePdf({repo, material, annotations, images = new Ma
     }
     journal(repo, m.id, null);
   }
-  // 大学ノートの外（プレビューなど）で変えられていたら上書きしない（その変更を消さないため）
+  // パレットノートの外（プレビューなど）で変えられていたら上書きしない（その変更を消さないため）
   if (curHash !== m.sha256)
     throw err(
       'conflict',

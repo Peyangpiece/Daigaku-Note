@@ -190,6 +190,6 @@ jobs:
             echo "## 入れ方"
             echo "Mac は .dmg（Apple シリコンは arm64、Intel は x64）、Windows は .exe を入れてください。Apple・Windows の署名がないため、Mac は初回に止められたら「システム設定 → プライバシーとセキュリティ」の「このまま開く」、Windows は SmartScreen の「詳細情報 → 実行」を押してください。2 回目からはアプリが自動で更新します。"
           } > release-notes.md
-          gh release create "$TAG" --repo "$REPO" --target "$SHA" $latest --title "大学ノート $TAG" \
+          gh release create "$TAG" --repo "$REPO" --target "$SHA" $latest --title "パレットノート $TAG" \
             --notes-file release-notes.md \
             release/*.dmg release/*.zip release/*.exe release/*.blockmap release/latest*.yml

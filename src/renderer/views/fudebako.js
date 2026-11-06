@@ -75,9 +75,9 @@ function sample(item) {
     return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><path fill="${item.color}" d="${strokePath(wave(6, 40), item.width * 1.6, {pressure: item.even ? 'even' : true})}"/></svg>`;
   }
   if (item.type === 'marker')
-    return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><text x="8" y="14" font-size="12" fill="#333">大学ノート</text><rect x="6" y="${item.thick ? 10 : 13}" width="72" height="${item.thick ? 7 : 3.5}" rx="2" fill="${item.color}" style="mix-blend-mode:multiply"/></svg>`;
+    return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><text x="8" y="14" font-size="12" fill="#333">パレットノート</text><rect x="6" y="${item.thick ? 10 : 13}" width="72" height="${item.thick ? 7 : 3.5}" rx="2" fill="${item.color}" style="mix-blend-mode:multiply"/></svg>`;
   if (item.type === 'hider')
-    return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><text x="8" y="16" font-size="12" fill="#333">大学ノート</text><rect x="6" y="5" width="64" height="14" rx="2" fill="${item.color}" style="mix-blend-mode:multiply"/></svg>`;
+    return `<svg class="fb-sample" viewBox="0 0 120 24" aria-hidden="true"><text x="8" y="16" font-size="12" fill="#333">パレットノート</text><rect x="6" y="5" width="64" height="14" rx="2" fill="${item.color}" style="mix-blend-mode:multiply"/></svg>`;
   return '';
 }
 
@@ -309,7 +309,7 @@ function seriesCard(series, s) {
   const it = pickedOf(series);
   const owned = has.has(it.id);
   const tier = tierOf(it.price);
-  const sub = [it.maker ?? '大学ノート'];
+  const sub = [it.maker ?? 'パレットノート'];
   if (series.items.length > 1) sub.push(it.name);
   if (series.items.length > 1 && feelLabel(it))
     sub.push(`書き味：${feelLabel(it)}`); // 公式のボールペン（3 段階）
@@ -547,7 +547,7 @@ function cartItems(s) {
 }
 /** カート・注文の行の説明（メーカー・字幅など。既製品の見た目の品は spec にメーカーが入るので重ねない） */
 const rowSpec = (it) =>
-  [it.experimental ? '' : (it.maker ?? '大学ノート'), spec(it) || typeLabel(it)].filter(Boolean).join('・');
+  [it.experimental ? '' : (it.maker ?? 'パレットノート'), spec(it) || typeLabel(it)].filter(Boolean).join('・');
 const orderRow = (it, {remove = false} = {}) =>
   `<li class="shop-row">
     <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it, {flat: true}) : toolArt(it, {flat: true})}</button>
@@ -652,7 +652,7 @@ function orderPage(s, id) {
       }
       return `<li class="shop-row">
         <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it, {flat: true}) : toolArt(it, {flat: true})}</button>
-        <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${esc(it.maker ?? '大学ノート')}</div></div>
+        <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${esc(it.maker ?? 'パレットノート')}</div></div>
         <div class="shop-row__price">${cost(x)}</div>
         <div class="shop-row__act">${act}</div>
       </li>`;

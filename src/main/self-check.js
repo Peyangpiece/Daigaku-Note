@@ -1,6 +1,6 @@
 // ファイル名は self-test.js にしない（node --test が *-test.js をテストとして読み込むため）
 // 配布物の動作確認（Microsoft Store 向けの MSIX など、パッケージの中で動くかを確かめる。.github/workflows/msix-check.yml）。
-// `大学ノート.exe --self-test=<結果の JSON のパス>` で起動すると、窓を開かずに次を順に確かめ、結果を書いて終わる。
+// `パレットノート.exe --self-test=<結果の JSON のパス>` で起動すると、窓を開かずに次を順に確かめ、結果を書いて終わる。
 // ふだんのデータには触らない（userData の self-test フォルダと、保存先の下の一時ファイルだけを使う）
 import {app, safeStorage} from 'electron';
 import {mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
@@ -29,7 +29,7 @@ export async function runSelfTest(out) {
   const base = path.join(app.getPath('userData'), 'self-test');
   await check('userData に書ける', () => {
     mkdirSync(base, {recursive: true});
-    writeFileSync(path.join(base, 'probe.txt'), '大学ノート');
+    writeFileSync(path.join(base, 'probe.txt'), 'パレットノート');
     return `${base}（読み戻し：${readFileSync(path.join(base, 'probe.txt'), 'utf8')}）`;
   });
   await check('保存先（デスクトップ）に書ける', () => {
@@ -61,7 +61,7 @@ export async function runSelfTest(out) {
     const b = await chromium.launch({headless: true});
     try {
       const page = await b.newPage();
-      await page.setContent('<title>大学ノート</title><p>ok</p>');
+      await page.setContent('<title>パレットノート</title><p>ok</p>');
       return `ページの題：${await page.title()}`;
     } finally {
       await b.close();

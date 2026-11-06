@@ -166,7 +166,7 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
     if (mode !== 'link') bad('フォルダの作り方が不正です');
     const win = getWindow();
     const opts = {
-      title: each ? '授業ごとのフォルダが入っているフォルダ' : '大学ノートに登録するフォルダ',
+      title: each ? '授業ごとのフォルダが入っているフォルダ' : 'パレットノートに登録するフォルダ',
       properties: ['openDirectory']
     };
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);

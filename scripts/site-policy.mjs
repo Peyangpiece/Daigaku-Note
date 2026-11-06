@@ -23,7 +23,7 @@ function page(title, body) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${esc(title)} — 大学ノート</title>
+    <title>${esc(title)} — パレットノート</title>
     <link rel="icon" href="favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -32,7 +32,7 @@ function page(title, body) {
   </head>
   <body>
     <header class="top">
-      <a class="brand" href="./"><img src="icon.png" alt="" width="36" height="36" />大学ノート</a>
+      <a class="brand" href="./"><img src="icon.png" alt="" width="36" height="36" />パレットノート</a>
       <nav aria-label="ほかのページ"><a href="./">ホーム</a><a href="terms.html">利用規約</a><a href="privacy.html">プライバシーポリシー</a></nav>
     </header>
     <main class="doc">
@@ -40,7 +40,7 @@ ${body}
     </main>
     <footer class="foot">
       <p><a href="terms.html">利用規約</a> ・ <a href="privacy.html">プライバシーポリシー</a> ・ <a href="https://github.com/Peyangpiece/Daigaku-Note">GitHub</a></p>
-      <p>© 2026 大学ノート</p>
+      <p>© 2026 パレットノート</p>
     </footer>
   </body>
 </html>
@@ -66,7 +66,7 @@ export function privacyHtml() {
     'プライバシーポリシー',
     `<h1>プライバシーポリシー</h1>
 <p class="muted">版：${POLICY_VERSION}（アプリの「設定 → 情報 → 利用規約とプライバシーポリシー」と同じ文章です）</p>
-<h2>アプリ（大学ノート）が扱うデータ</h2>
+<h2>アプリ（パレットノート）が扱うデータ</h2>
 ${ol(PRIVACY)}
 <h2>AI でクイズを作るとき</h2>
 <p>自分の Claude API キーを登録して同意したときだけ、Anthropic の API に送ります。</p>

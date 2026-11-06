@@ -40,7 +40,7 @@ async function setup(t) {
   const trashed = [];
   const files = new FileManager({
     repo,
-    root: () => path.join(root, '大学ノート'),
+    root: () => path.join(root, 'パレットノート'),
     trash: async (f) => trashed.push(f) && unlink(f)
   });
   return {root, repo, term, course, r2, r3, r0, files, trashed};
@@ -81,7 +81,7 @@ test('取り込み：新規・同じ URL・同じ中身・同名で別の中身�
     'https://lms/file/4': {body: '<html>login</html>', type: 'text/html; charset=utf-8'}
   };
   const fetchFile = fetchOf(table);
-  const dir = path.join(root, '大学ノート', '2026_秋学期', '管理会計Ⅱ', '第02回_原価企画');
+  const dir = path.join(root, 'パレットノート', '2026_秋学期', '管理会計Ⅱ', '第02回_原価企画');
 
   const a = await files.ingest({term, course, round: r2, fileRef: {url: 'https://lms/file/1'}, fetchFile});
   assert.equal(a.result, 'saved');
@@ -151,7 +151,7 @@ test('取り込み：新規・同じ URL・同じ中身・同名で別の中身�
 
 test('保存先を変えたあとの同期：同じ中身の記録を新しい保存先へ付け替える（UNIQUE 違反で止まらない）', async (t) => {
   const {root, repo, term, course, r2, r3} = await setup(t);
-  let current = path.join(root, '大学ノート');
+  let current = path.join(root, 'パレットノート');
   const files = new FileManager({repo, root: () => current, trash: async () => {}});
   const fetchFile = fetchOf({'https://lms/file/1': {body: 'pdf one'}, 'https://lms/file/2': {body: 'pdf two'}});
   const first = await files.ingest({
@@ -211,7 +211,7 @@ test('回の移動・名前変更の追跡・複製の整理', async (t) => {
     'https://lms/file/2': {body: 'B'},
     'https://lms/file/3': {body: 'A'}
   });
-  const base = path.join(root, '大学ノート', '2026_秋学期', '管理会計Ⅱ');
+  const base = path.join(root, 'パレットノート', '2026_秋学期', '管理会計Ⅱ');
   const a = (
     await files.ingest({term, course, round: r0, fileRef: {url: 'https://lms/file/1', name: 'a.pdf'}, fetchFile})
   ).material;
@@ -312,7 +312,7 @@ test('フォルダの改名と合流', async (t) => {
 
 test('自分のファイル：自分の付箋に置く・回へ移す・戻す・同じ中身・Finder での移動・外したあとに入れ直す', async (t) => {
   const {root, repo, term, course, r2, r3, files} = await setup(t);
-  const base = path.join(root, '大学ノート', '2026_秋学期', '管理会計Ⅱ');
+  const base = path.join(root, 'パレットノート', '2026_秋学期', '管理会計Ⅱ');
 
   // 最初は自分の付箋（授業フォルダの「自分の資料」）。元のファイル名のまま・未読の印なし・回なし
   const a = await files.addOwn({term, course, name: 'ノート.pdf', data: Buffer.from('MINE')});

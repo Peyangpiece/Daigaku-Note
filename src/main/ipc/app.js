@@ -25,7 +25,7 @@ export function register({handle, ctx, log}) {
     const r = await dialog.showSaveDialog({
       title: 'バックアップを書き出す',
       defaultPath: path.join(app.getPath('documents'), `daigaku-note-${todayJst()}.sqlite`),
-      filters: [{name: '大学ノートのバックアップ', extensions: ['sqlite']}]
+      filters: [{name: 'パレットノートのバックアップ', extensions: ['sqlite']}]
     });
     if (r.canceled || !r.filePath) return {ok: false};
     const out = exportBackup(ctx.db, r.filePath);
@@ -37,7 +37,7 @@ export function register({handle, ctx, log}) {
     const r = await dialog.showOpenDialog({
       title: 'バックアップを読み込む',
       properties: ['openFile'],
-      filters: [{name: '大学ノートのバックアップ', extensions: ['sqlite']}]
+      filters: [{name: 'パレットノートのバックアップ', extensions: ['sqlite']}]
     });
     if (r.canceled || !r.filePaths?.[0]) return {ok: false};
     const {DatabaseSync} = await import('node:sqlite');

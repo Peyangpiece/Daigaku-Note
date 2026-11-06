@@ -167,8 +167,8 @@ const embed = async (doc, png) => (png?.length ? doc.embedPng(png) : null);
 export async function createNotePdf(paper, {title = 'ノート', header = null, now = new Date()} = {}) {
   const doc = await PDFDocument.create();
   doc.setTitle(title);
-  doc.setCreator('大学ノート');
-  doc.setProducer('大学ノート');
+  doc.setCreator('パレットノート');
+  doc.setProducer('パレットノート');
   doc.setCreationDate(now);
   doc.setModificationDate(now);
   doc.setKeywords([`daigaku-note:${now.toISOString()}:${Math.random().toString(36).slice(2)}`]);
@@ -193,8 +193,8 @@ export async function rebuildNotePdf(bytes, design, {header = null} = {}) {
   const n = old.getPageCount();
   const doc = await PDFDocument.create({updateMetadata: false});
   doc.setTitle(old.getTitle() ?? 'ノート');
-  doc.setCreator('大学ノート');
-  doc.setProducer('大学ノート');
+  doc.setCreator('パレットノート');
+  doc.setProducer('パレットノート');
   if (old.getCreationDate()) doc.setCreationDate(old.getCreationDate());
   doc.setModificationDate(new Date());
   doc.setKeywords([old.getKeywords() ?? `daigaku-note:${Math.random().toString(36).slice(2)}`]);

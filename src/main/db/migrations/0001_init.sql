@@ -1,4 +1,4 @@
--- 大学ノート 0001：初期スキーマ（SPEC §13）
+-- パレットノート 0001：初期スキーマ（SPEC §13）
 CREATE TABLE IF NOT EXISTS connection (
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,

@@ -61,7 +61,7 @@ export function renderFolderNew({data}, route) {
         <input class="input" id="fn-name" type="text" maxlength="80" placeholder="例：ゼミ・就活・資格の勉強" autocomplete="off">`
           : `<p class="muted">パソコンのフォルダを、コピーせずに開きます。</p>
         ${eachChoice(data)}
-        <label for="fn-name">大学ノートでの名前 <span class="muted">（空ならフォルダの名前）</span></label>
+        <label for="fn-name">パレットノートでの名前 <span class="muted">（空ならフォルダの名前）</span></label>
         <input class="input" id="fn-name" type="text" maxlength="80" autocomplete="off">`
       }
       ${scopeChoice(useTerms)}

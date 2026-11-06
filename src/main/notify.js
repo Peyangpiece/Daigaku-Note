@@ -39,7 +39,7 @@ export function createNotifier({repo, Notification, openWindow, log = () => {}, 
   function onEvent(channel, payload = {}) {
     if (channel === 'sync.finished') {
       if (payload.materials > 0)
-        return show({title: '大学ノート', body: `新しい資料 ${payload.materials} 件を保存しました`, route: null});
+        return show({title: 'パレットノート', body: `新しい資料 ${payload.materials} 件を保存しました`, route: null});
       if (payload.status === 'failed' || payload.status === 'browser-not-ready')
         return show({
           title: '同期に失敗しました',

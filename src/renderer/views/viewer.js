@@ -260,7 +260,7 @@ class Viewer extends DeskTools {
         color: /^#[0-9a-f]{6}$/i.test(r.textStyle.color ?? '') ? r.textStyle.color.toLowerCase() : this.textStyle.color,
         align: cleanAlign(r.textStyle.align) ?? 'left'
       };
-    document.title = `${shown} — 大学ノート`;
+    document.title = `${shown} — パレットノート`;
     if (this.splitSide) this.postSplit({type: 'split-title', title: shown}); // 並べたとき：窓の題は左右の名前
     try {
       // ノートの上の欄の字が古ければ、描き直した写しで開く（書いたものは注釈なのでそのまま。ファイルへは上書き保存で）
@@ -365,7 +365,7 @@ class Viewer extends DeskTools {
     this.task?.destroy();
     for (const t of this.noteTasks ?? []) t.destroy(); // ノートに足したページの PDF
     this.closeBarMenu();
-    document.title = '大学ノート';
+    document.title = 'パレットノート';
   }
 }
 

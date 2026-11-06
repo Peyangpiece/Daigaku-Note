@@ -1,4 +1,4 @@
-# 大学ノート 詳細設計 M0（土台）
+# パレットノート 詳細設計 M0（土台）
 
 | 項目         | 内容                                                                                                                                                                                              |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -79,7 +79,7 @@ Daigaku-Note/
 | ---------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
 | メイン                 | DB・ファイル・LMS・Playwright・秘密・スケジューラ・ジョブ  | 画面の状態                                      |
 | レンダラ               | 画面・入力・表示用の状態（メインから受け取ったものの写し） | ファイルパスの組み立て・秘密・LMS の URL の生成 |
-| Playwright の Chromium | LMS のページ                                               | 大学ノートのデータ                              |
+| Playwright の Chromium | LMS のページ                                               | パレットノートのデータ                          |
 
 レンダラは `sandbox: true`・`contextIsolation: true`。`nodeIntegration: false`。IPC は §4 の一覧にある種類だけを preload で公開する。
 
@@ -333,7 +333,7 @@ login(visible): §8.5
 ```json
 {
   "name": "daigaku-note",
-  "productName": "大学ノート",
+  "productName": "パレットノート",
   "version": "0.1.0",
   "type": "module",
   "main": "src/main/main.js",
@@ -429,7 +429,7 @@ Playwright を使うテスト（レシピ実行器・ログイン窓）は `npm 
 | 10  | スケジューラ・秘密・ログ・Chromium の取り込み                  | 8    | 手動（時刻を変えて）                                                                       | 骨格済                                                                 |
 | 11  | 配布物（electron-builder）・更新確認                           | 8    | Mac・Windows で入れて起動                                                                  | 設定ファイルのみ（`electron-builder.yml`）。更新確認は未               |
 
-実機での確認手順（Mac／Windows）：`npm ci` → `npm test`（e2e は `PLAYWRIGHT_BROWSERS_PATH` か `DAIGAKU_CHROMIUM` で Chromium を指す）→ `npm start` → セットアップ 6 手順 → デスクトップ `大学ノート/<学期>/<授業>/<回>/` に資料が入ることを確かめる。Moodle はデモサイト、manabo は在学中の大学のアカウントで。
+実機での確認手順（Mac／Windows）：`npm ci` → `npm test`（e2e は `PLAYWRIGHT_BROWSERS_PATH` か `DAIGAKU_CHROMIUM` で Chromium を指す）→ `npm start` → セットアップ 6 手順 → デスクトップ `パレットノート/<学期>/<授業>/<回>/` に資料が入ることを確かめる。Moodle はデモサイト、manabo は在学中の大学のアカウントで。
 
 ---
 

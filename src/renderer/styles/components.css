@@ -1,4 +1,4 @@
-/* 大学ノートの画面：ボタン・入力・focus・slip・empty・toast・危険の色。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
+/* パレットノートの画面：ボタン・入力・focus・slip・empty・toast・危険の色。元は notebook.css（v0.10.4 で関心ごとに分けた）。読む順は index.html */
 /* ボタン・入力 */
 .btn {
   display: inline-flex;

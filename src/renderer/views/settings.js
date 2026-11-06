@@ -197,7 +197,7 @@ export function renderSettings({data}, route = '/settings') {
       </section>
       <section class="card"><h3>通知と起動</h3>
         <label style="display:block"><input type="checkbox" id="st-notify" ${s.notifications === false ? '' : 'checked'}> 新しい資料・クイズの完成・同期の失敗を通知する</label>
-        ${s.openAtLogin?.available ? `<label style="display:block; margin-top: var(--space-1)"><input type="checkbox" id="st-login" ${s.openAtLogin?.on ? 'checked' : ''}> パソコンの起動時に大学ノートを開く</label>` : ''}
+        ${s.openAtLogin?.available ? `<label style="display:block; margin-top: var(--space-1)"><input type="checkbox" id="st-login" ${s.openAtLogin?.on ? 'checked' : ''}> パソコンの起動時にパレットノートを開く</label>` : ''}
       </section>
       ${
         hidden.length
@@ -291,7 +291,7 @@ export function renderSettings({data}, route = '/settings') {
       </section>`,
     about: `
       <section class="card" id="st-about"><h3>情報</h3>
-        <p>大学ノート ${esc(data.version)}<span class="about__alpha">α 版</span></p>
+        <p>パレットノート ${esc(data.version)}<span class="about__alpha">α 版</span></p>
         <p class="muted">試験中の版です。大切な資料は元の場所にも残してください。</p>
         <div class="about__row"><button type="button" class="btn btn--small" data-action="policy">利用規約とプライバシーポリシー</button><button type="button" class="btn btn--small" data-action="notices">ライセンス</button></div>
         <div class="about__row"><button type="button" class="btn btn--small btn--quiet" data-action="open-data-dir">データの場所を開く</button><button type="button" class="btn btn--small btn--quiet" data-action="open-logs">ログを開く</button></div>

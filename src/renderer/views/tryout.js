@@ -1,7 +1,7 @@
 // ショップの詳細ページの「試し書き」（SPEC §15）。お店に置いてある試し書きの紙のように、罫線のある白い正方形の付箋に書ける。
 // 付箋は木のメモトレー（縁を残して彫ったくぼみ）に載せてある。
 // ボールペン：白紙の付箋に、ペンの色・太さ・書き味（筆圧で太さが変わる。shared/ink.js）で書く。太さは 0.3・0.5・0.7 から選べる。
-// マーカー・文字隠しペン：付箋の真ん中に「大学ノート」と印字してあり、その上に引ける。
+// マーカー・文字隠しペン：付箋の真ん中に「パレットノート」と印字してあり、その上に引ける。
 // 赤シート：文字隠しペンと、赤シートで消える色（赤・橙・桃）のボールペンでは、付箋の横に置く（shared/stationery.js の needsRedSheet）。
 //   ドラッグで動かして付箋に重ねると、重なったところだけ「赤シートを通した見え方」の写し（.ts-seen）に切り替わる。
 //   写しは線ごとに描き分ける（seenSvg）：文字隠しペンの線は不透明の黒（下の字はまったく見えない）、赤シートで消える色
@@ -40,14 +40,14 @@ function inkOf(item) {
   return {kind: 'line', color: item.color, width: HIDER_WIDTH, hider: true};
 }
 
-/** 付箋の紙：地の色・罫線・（マーカー・文字隠しペンは）真ん中の「大学ノート」 */
+/** 付箋の紙：地の色・罫線・（マーカー・文字隠しペンは）真ん中の「パレットノート」 */
 function paper(item) {
   const lines = [];
   for (let y = RULE.top; y < SIZE - 6; y += RULE.gap) lines.push(`<path d="M0 ${y}H${SIZE}"/>`);
   const word =
     item.type === 'pen'
       ? ''
-      : `<text class="ts-word" x="${SIZE / 2}" y="${RULE.top + RULE.gap * 5 - 6}" text-anchor="middle">大学ノート</text>`;
+      : `<text class="ts-word" x="${SIZE / 2}" y="${RULE.top + RULE.gap * 5 - 6}" text-anchor="middle">パレットノート</text>`;
   return `<rect class="ts-ground" width="${SIZE}" height="${SIZE}"/><g class="ts-rules">${lines.join('')}</g>${word}`;
 }
 

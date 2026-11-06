@@ -351,7 +351,7 @@ test('サーバー：画面のファイルを配り、外のファイルは 404'
     let res = await fetch(`${base}/m/`);
     assert.equal(res.status, 200);
     assert.match(res.headers.get('content-type'), /text\/html/);
-    assert.match(await res.text(), /大学ノート/);
+    assert.match(await res.text(), /パレットノート/);
     res = await fetch(`${base}/m/app/app.js`);
     assert.match(res.headers.get('content-type'), /javascript/);
     res = await fetch(`${base}/m/app/..%2f..%2fpackage.json`);
