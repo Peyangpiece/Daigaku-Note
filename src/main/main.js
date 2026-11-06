@@ -503,6 +503,32 @@ app.on('second-instance', (_e, _argv, _cwd, data) => {
   openWindow();
 });
 app.on('activate', () => openWindow());
+// 画面が終了・再読み込みを止めたとき（着せ替えの「作る」画面の保存していない変更など）。前は何も出さずに止まり、
+// 自動更新の終了まで止まって入れ替えられなかった（0.18.1 → 0.18.3）。保存せずに閉じるかを聞く（v0.18.4）
+app.on('web-contents-created', (_e, wc) => {
+  wc.on('will-prevent-unload', (ev) => {
+    const updating = ctx.updater?.replacing?.() ?? false;
+    const owner = BrowserWindow.fromWebContents(wc);
+    const r = dialog.showMessageBoxSync(...(owner ? [owner] : []), {
+      type: 'question',
+      buttons: ['保存せずに閉じる', 'キャンセル'],
+      defaultId: 1,
+      cancelId: 1,
+      message: '保存していない変更があります',
+      detail: updating
+        ? '閉じると、新しい版に入れ替えます。キャンセルすると、入れ替えはあとでもう一度試します。'
+        : '保存せずに閉じますか？'
+    });
+    if (r === 0)
+      ev.preventDefault(); // 閉じる（変更は捨てる）
+    else {
+      ctx.quitConfirmed = false;
+      if (updating) ctx.updater.postpone();
+      ctx.log?.info('保存していない変更があるため、閉じるのをやめました');
+    }
+  });
+});
+
 app.on('window-all-closed', () => {
   /* 常駐するので終了しない */
 });
@@ -524,6 +550,10 @@ app.on('before-quit', (e) => {
       });
     return;
   }
+});
+// 止めるのは、窓がすべて閉じて本当に終了するとき（before-quit の時点で止めると、画面が終了を止めたときに
+// 同期・更新の確認などが止まったまま動き続けていた。v0.18.4）
+app.on('will-quit', () => {
   ctx.scheduler?.stop();
   ctx.updater?.stop();
   ctx.jobs?.stop();
