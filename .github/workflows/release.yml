@@ -131,6 +131,33 @@ jobs:
       # electron-builder の公開機能は使わない（Mac と Windows のジョブがそれぞれ Release を作ろうとするため）。
       # 作るだけにして、下の publish ジョブで 1 回にまとめて載せる
       - run: npx electron-builder --publish never
+      # Mac で作ったアプリが起動できるかを確かめる（0.18.0 は Mac で起動して 1 秒たたずに止まった）。
+      # 名前（入れ物の名前・中の名前）を変えた版も作って、どれが起動できるかを比べる（作るのは release-try/ に。配布物には入れない）
+      - name: Mac で起動を確かめる
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set +e
+          launch() { # $1：.app のパス。8 秒たっても動いていれば起動できたとみなす
+            local app="$1" exe tmp pid code
+            exe="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+            tmp=$(mktemp -d)
+            "$exe" --user-data-dir="$tmp" --enable-logging=stderr > "$tmp.log" 2>&1 &
+            pid=$!
+            sleep 8
+            if kill -0 $pid 2>/dev/null; then echo "OK    $app"; kill $pid; wait $pid 2>/dev/null
+            else wait $pid; code=$?; echo "CRASH $app（終了コード $code）"; tail -n 30 "$tmp.log"; fi
+          }
+          app=$(ls -d release/mac-arm64/*.app | head -1)
+          launch "$app"
+          # 比べる版：中の名前（package.json の productName）と入れ物の名前（CFBundleName）を英字にしたもの
+          b() { npx electron-builder --mac dir --arm64 --publish never -c.directories.output="release-try/$1" "${@:2}" > /dev/null 2>&1 && ls -d release-try/$1/mac-arm64/*.app | head -1; }
+          launch "$(b ascii-both -c.productName=PaletteNote -c.extraMetadata.productName=PaletteNote)"
+          launch "$(b ascii-runtime -c.extraMetadata.productName=PaletteNote)"
+          launch "$(b ascii-bundle -c.productName=PaletteNote)"
+          launch "$(b old-name -c.productName=大学ノート -c.extraMetadata.productName=大学ノート)"
+          ls -t ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -3
+          exit 0
       - uses: actions/upload-artifact@v4
         with:
           name: daigaku-note-${{ runner.os }}
