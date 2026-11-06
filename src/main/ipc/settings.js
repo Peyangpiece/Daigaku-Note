@@ -56,7 +56,7 @@ export function register({handle, ctx, repo}) {
       repo.setSetting('profile.universityDomain', d);
     }
     // 授業資料の自動取り込み（ダウンロードの見張り。import-watch.js）
-    let importChanged = false;
+    let importChanged = isRole(patch.role); // 社会人には取り込みを使わせないので、人を変えたら見張りを始め直す
     if (typeof patch.importEnabled === 'boolean') {
       repo.setSetting('import.enabled', patch.importEnabled);
       importChanged = true;

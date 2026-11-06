@@ -2,7 +2,7 @@
 import {AI_CONSENT_VERSION, AI_NOT_SENDS, AI_SENDS} from '../../shared/policy.js';
 import {confirmDialog, esc, toast} from '../ui-kit.js';
 import {reload} from '../store.js';
-import {ROLES, USES, features, isChukyo} from '../../shared/profile.js';
+import {ROLES, USES, features, importFor, isChukyo} from '../../shared/profile.js';
 import {sharedHost} from '../../shared/import-sites.js';
 
 const api = window.daigaku;
@@ -238,7 +238,9 @@ export function renderSettings({data}, route = '/settings') {
       </section>`
           : ''
       }
-      <section class="card" id="st-import"><h3>授業資料を自動で取り込む</h3>
+      ${
+        importFor(s.role)
+          ? `<section class="card" id="st-import"><h3>授業資料を自動で取り込む</h3>
         <p class="muted">大学のサイトからダウンロードした資料を、授業ごとに入れます。</p>
         <label style="display:block"><input type="checkbox" id="st-import-on" ${imp.enabled ? 'checked' : ''}> 取り込む</label>
         ${
@@ -262,7 +264,9 @@ export function renderSettings({data}, route = '/settings') {
         </ol>
         ${teamsSites.length ? `<ul style="padding-left: 1.2em">${teamsSites.map((h) => `<li><code>${esc(h)}</code> <button class="btn btn--small btn--quiet" data-import-site-remove="${esc(h)}">外す</button></li>`).join('')}</ul>` : '<p class="muted">まだ覚えていません。</p>'}
         <div class="about__row"><input class="input" id="st-teams-site" type="url" placeholder="https://〇〇.sharepoint.com/sites/…" style="max-width: 24em"><button class="btn btn--small" id="st-teams-site-add">覚える</button></div>
-      </details>
+      </details>`
+          : ''
+      }
       ${
         hasLms
           ? `<section class="card"><h3>同期</h3>

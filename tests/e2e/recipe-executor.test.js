@@ -625,6 +625,16 @@ test(
       '<form><input name="username" style="display:none"><input name="login_id"><input type="password" name="pw"><input type="submit" value="ログイン"></form>'
     );
     assert.equal(f.marked.user, 'login_id');
+    // 中京大学の統合認証（ユーザ名は文字で出し、パスワードだけ）：先にある言語の切り替えボタンではなく「二段階認証でログイン」を押す
+    f = await look(
+      '<form><button>日本語</button><p>ユーザ名</p><p>&lt;f124074&gt;</p><input type="password" name="password"><button class="btn-red">二段階認証でログイン</button><a href="#">ユーザ名を入力し直す</a></form>'
+    );
+    assert.equal(f.marked.submit, '二段階認証でログイン');
+    // フォームの外にあるボタンでも探す
+    f = await look(
+      '<form><input name="username"><input type="password" name="pw"></form><div role="button">ログイン</div>'
+    );
+    assert.equal(f.marked.submit, 'ログイン');
   }
 );
 

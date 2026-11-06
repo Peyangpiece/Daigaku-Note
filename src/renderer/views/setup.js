@@ -7,7 +7,7 @@ import {esc, toast} from '../ui-kit.js';
 import {navigate, reload} from '../store.js';
 import {termForm, readTermForm} from './term.js';
 import {scanDownloads} from './settings.js';
-import {ROLES, USES, features, isChukyo} from '../../shared/profile.js';
+import {MANABO_URL, ROLES, USES, features, isChukyo} from '../../shared/profile.js';
 import {LMS_FEATURE, LMS_NOTICE, LMS_TERMS, LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 
 const api = window.daigaku;
@@ -123,7 +123,7 @@ function stepLms(data, n) {
     return `<h2>${n}. manabo とつなぐ</h2>
     <p class="muted">manabo のトップページの URL を入れてください。</p>
     <label class="sr-only" for="su-url">manabo の URL</label>
-    <input class="input" id="su-url" type="url" placeholder="https://manabo.example-u.ac.jp/" value="${esc(draft.url)}">
+    <input class="input" id="su-url" type="url" placeholder="${MANABO_URL}" value="${esc(draft.url || MANABO_URL)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)}${c.kind === 'manual' ? ` <span class="muted">${esc(KIND_LABEL.manual)}</span>` : ''}</label>`).join('')}</div>
     ${draft.connectorId ? `<label class="su-label">名前（ホームや設定に出ます）<input class="input" id="su-label" maxlength="60" placeholder="例：manabo" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
     <div class="actions">${back}<button class="btn btn--primary" id="su-next1">次へ</button></div>
