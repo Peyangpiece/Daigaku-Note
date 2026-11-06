@@ -1,6 +1,11 @@
 import icon as FI
 import kana as K
 KT=26
+import kanafont as KFm
+KF=KFm.Kana("KiwiMaru-Medium.ttf"); KF.bold=0; KF.ringbold=0
+def kana_body(ink,acc=None):
+    acc=acc or ACC
+    return KF.wordmark(target=22,ink=ink,acc=acc)
 S=20; H=120
 NAVY='#22304A'; ACC='#F0675B'; WHITE='#FFFFFF'
 def en():
@@ -47,7 +52,7 @@ def wordmark(text,gl,track,kern,ink=NAVY,acc=ACC,accent=True):
 def lockup(text,gl,track,kern,dark=False):
     ink=WHITE if dark else NAVY
     if gl is None:
-        xs=K.layout(text,KT); body=''.join(K.glyph_svg(ch,ink,ACC,x) for ch,x in zip(text,xs)); w=xs[-1]+K.G[text[-1]][0]
+        body,w=kana_body(ink)
     else:
         w,body=build(text,gl,track,kern,ink,ACC)
     # 記号：明るい背景では紙を紺に（罫線は抜き）、暗い背景では紙の色
@@ -61,7 +66,7 @@ def lockup(text,gl,track,kern,dark=False):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p} {top} {total+2*p} {sym_h+(56 if dark else 8)}">{bg}{g}</svg>'
 def stacked(text,gl,track,kern):
     if gl is None:
-        xs=K.layout(text,KT); body=''.join(K.glyph_svg(ch,NAVY,ACC,x) for ch,x in zip(text,xs)); w=xs[-1]+K.G[text[-1]][0]
+        body,w=kana_body(NAVY)
     else:
         w,body=build(text,gl,track,kern,NAVY,ACC)
     sym_h=300; u=sym_h/560; sw=(440+84)*u
@@ -70,7 +75,9 @@ def stacked(text,gl,track,kern):
     p=24
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p} {-p} {w+2*p} {sym_h+gap+H+2*p}">{g}</svg>'
 J,E=ja(),en()
-def kana_mark(ink=NAVY,acc=ACC): return K.wordmark(target=KT,ink=ink,acc=acc)[0]
+def kana_mark(ink=NAVY,acc=ACC):
+    body,w=kana_body(ink,acc); p=8
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p} -32 {w+2*p} 166">{body}</svg>'
 out={'logo-ja':kana_mark(),
      'logo-en':wordmark('PALETTE NOTE',E,24,KERN_EN)[0],
      'logo-ja-white':kana_mark(ink=WHITE),

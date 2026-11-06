@@ -33,13 +33,13 @@ v0.18.7 で作った。すべて線を塗りの形に変換した SVG（`<text>`
 
 ## ロゴの文字
 
-- カタカナ「パレットノート」は `.claude/skills/katakana-logotype` に沿って線から作った（字面を大きめにして親しみやすく、横画は縦画の約 92 %、促音「ッ」は 76 % で下にそろえ、長音「ー」は中心線の高さ、字間は字と字の空きの面積でそろえた）
+- カタカナ「パレットノート」は、Kiwi Maru（Medium。SIL Open Font License 1.1。ライセンス文は `OFL-KiwiMaru.txt`）の字の形を、太さを変えずにそのまま使い（細めの線で洗練された印象にする）、字と字の空きの面積で字間を詰め、「パ」の半濁点を珊瑚色にした。図形にしてあるので、フォントのファイルは含まない
 - 英字「PALETTE NOTE」は同じ太さ・丸い端の線で作り、組ごとに字間を詰めた
 - アクセントの色は、カタカナでは「パ」の半濁点、英字では「O」。どちらも珊瑚色の輪
 
 ## 作り直すとき
 
-`source/` の Python で SVG を作り、picosvg で線を塗りの形に変換する（`pip install cairosvg picosvg pillow`）。
+`source/` の Python で SVG を作り、picosvg で線を塗りの形に変換する（`pip install cairosvg picosvg pillow fonttools`）。カタカナには Kiwi Maru の `KiwiMaru-Medium.ttf`（google/fonts の `ofl/kiwimaru`）を `source/` に置く。
 
 ```sh
 cd brand/source
