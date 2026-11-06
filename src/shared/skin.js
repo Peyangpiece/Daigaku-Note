@@ -77,7 +77,8 @@ export const SET_MODES = ['custom', 'weekday'];
 export const SET_MODE_LABEL = {default: '標準', custom: 'カスタム', weekday: '曜日ごと'};
 // 曜日ごとのテープの色（月・火・水・木・金。赤・橙・青・緑・黄。v0.17.8）
 export const TAPE_WEEKDAY = ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60'];
-export const TAB_WEEKDAY = ['#ffe7a3', '#ffd3cf', '#c6eedb', '#cfe2ff', '#e4d8ff'];
+// フォルダのタブの曜日ごとの色（テープと同じ並びの淡い色。v0.17.8）
+export const TAB_WEEKDAY = ['#fcc9c4', '#fdd6c2', '#d3e3fe', '#d3f6d1', '#fbebc3'];
 const hexList = (v, min, max) =>
   Array.isArray(v) && v.length >= min && v.length <= max && v.every(isHex) ? v.map((c) => c.toLowerCase()) : null;
 function colorSet(v, weekday, fallback, {allowDefault = false, course = false} = {}) {
@@ -126,7 +127,7 @@ const text = (v, max, fallback = '') =>
 
 export const DEFAULT_PARTS = {
   note: {type: 'ruled', paper: 'default', line: 'default', gap: 'normal', margin: true},
-  folder: {card: 'default', tab: 'default'},
+  folder: {card: 'default', tab: {mode: 'weekday', colors: TAB_WEEKDAY}},
   tape: {color: {mode: 'weekday', colors: TAPE_WEEKDAY}, pattern: 'course', image: null},
   file: Object.fromEntries(FILE_KINDS.map((k) => [k, 'default'])),
   // 資料のイラストの紙の色（default は白。テーマ・置く場所によらず同じ）

@@ -44,7 +44,11 @@ test('テンプレートの形：知らない項目は捨て、範囲外は既�
   assert.equal(t.version, '1.0.0');
   assert.equal('evil' in t, false);
   assert.deepEqual(t.parts.note, {type: 'ruled', paper: 'default', line: '#abcdef', gap: 'wide', margin: true});
-  assert.deepEqual(t.parts.folder, {card: '#ffffff', tab: 'default'}, 'タブに course は使えない');
+  assert.deepEqual(
+    t.parts.folder,
+    {card: '#ffffff', tab: {mode: 'weekday', colors: ['#fcc9c4', '#fdd6c2', '#d3e3fe', '#d3f6d1', '#fbebc3']}},
+    'タブに course は使えない（既定の曜日ごと）'
+  );
   assert.deepEqual(
     t.parts.tape,
     {
@@ -106,7 +110,11 @@ test('どのテンプレートが当たるか：アプリ全体で 1 つ。授�
 
 test('クラシック：テーマの色・曜日ごとのテープ', () => {
   const c = BUILTIN_TEMPLATES.find((t) => t.id === CLASSIC_ID);
-  assert.deepEqual(c.parts.folder, {card: 'default', tab: 'default'});
+  assert.deepEqual(
+    c.parts.folder,
+    {card: 'default', tab: {mode: 'weekday', colors: ['#fcc9c4', '#fdd6c2', '#d3e3fe', '#d3f6d1', '#fbebc3']}},
+    'クラシックのタブはテープと同じ曜日ごと（v0.17.8）'
+  );
   assert.deepEqual(c.parts.tape, {
     color: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']},
     pattern: 'course',
@@ -342,7 +350,11 @@ test('色の組（テープ・タブ）：曜日ごと・カスタム。前の�
     '前の版の 1 色はカスタム 1 色'
   );
   assert.equal(p({tab: 'default'}).folder.tab, 'default');
-  assert.equal(p({tab: 'course'}).folder.tab, 'default', 'タブに授業ごとの色はない');
+  assert.deepEqual(
+    p({tab: 'course'}).folder.tab,
+    {mode: 'weekday', colors: TAB_WEEKDAY},
+    'タブに授業ごとの色はない（既定の曜日ごと）'
+  );
   assert.deepEqual(
     p({tab: {mode: 'weekday', colors: ['#111111']}}).folder.tab,
     {mode: 'weekday', colors: TAB_WEEKDAY},
