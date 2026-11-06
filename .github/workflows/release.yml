@@ -101,7 +101,8 @@ jobs:
             echo "::error::タグ $GITHUB_REF_NAME と package.json の版 $v が違います。package.json の版を上げてからタグを付けてください"
             exit 1
           fi
-      # Developer ID の証明書と公証の鍵。electron-builder は CSC_LINK・CSC_KEY_PASSWORD の証明書で署名し、
+      # Developer ID の証明書と公証の鍵。証明書は作業用のキーチェーンに入れ、electron-builder は mac.identity（チーム ID）で探して署名する。
+      # CSC_LINK は使わない（electron-builder 26.15.3 は自分で作るキーチェーンの鍵の設定に .p12 のパスワードを渡して失敗する）。
       # APPLE_API_KEY（.p8 のファイルの場所）・APPLE_API_KEY_ID・APPLE_API_ISSUER があれば公証して、チケットをアプリに付ける（staple）
       - name: Mac の Developer ID の証明書と公証の鍵を用意する
         if: runner.os == 'macOS'
@@ -117,15 +118,26 @@ jobs:
             if [ "$PUBLISH" = "true" ]; then echo "::error::Developer ID の証明書か公証の鍵（Secrets の MAC_DEVID_P12・MAC_DEVID_PASSWORD・APPLE_API_KEY・APPLE_API_KEY_ID・APPLE_API_ISSUER）がありません。公開しません（README の「Mac の署名と公証」）"; exit 1; fi
             echo "Developer ID の証明書か公証の鍵がないため、Developer ID では署名しません"; exit 0
           fi
+          kc="$RUNNER_TEMP/devid.keychain-db"; kp=$(openssl rand -hex 16)
+          security create-keychain -p "$kp" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kp" "$kc"
           printf '%s' "$MAC_DEVID_P12" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+          security import "$RUNNER_TEMP/devid.p12" -k "$kc" -P "$MAC_DEVID_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/devid.p12"
+          # 中間証明書（Developer ID Certification Authority G2）。作業用の Mac になくても署名の鎖がつながるように入れておく
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$kc" || echo "中間証明書は入っていました"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kp" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$kc"
+          security find-identity -v -p codesigning "$kc" | grep -q 'Developer ID Application: .*(9G78U9XD92)' || { echo "::error::MAC_DEVID_P12 に Developer ID Application（9G78U9XD92）の証明書と秘密鍵がありません"; exit 1; }
           printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
           # electron-builder はプルリクエストの build では署名しない。Secrets はフォークからのプルリクエストには渡らない
           # （そのときはここまで来ない）ので、Developer ID のときは署名させる
           {
             echo "MAC_DEVID=1"
             echo "CSC_FOR_PULL_REQUEST=true"
-            echo "CSC_LINK=$RUNNER_TEMP/devid.p12"
-            echo "CSC_KEY_PASSWORD=$MAC_DEVID_PASSWORD"
             echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8"
             echo "APPLE_API_KEY_ID=$API_KEY_ID"
             echo "APPLE_API_ISSUER=$API_ISSUER"
@@ -174,7 +186,7 @@ jobs:
         if: runner.os == 'macOS' && env.MAC_DEVID == '1'
         shell: bash
         run: |
-          rm -f "$RUNNER_TEMP/devid.p12" "$RUNNER_TEMP/AuthKey.p8"
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
           for app in release/mac*/*.app; do
             echo "== $app"
             codesign --verify --deep --strict --verbose=2 "$app"
