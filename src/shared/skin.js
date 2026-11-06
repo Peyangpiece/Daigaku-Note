@@ -75,7 +75,8 @@ export const SET_MAX = 5;
 export const SET_WEEKDAYS = ['月', '火', '水', '木', '金'];
 export const SET_MODES = ['custom', 'weekday'];
 export const SET_MODE_LABEL = {default: '標準', custom: 'カスタム', weekday: '曜日ごと'};
-export const TAPE_WEEKDAY = ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9'];
+// 曜日ごとのテープの色（月・火・水・木・金。赤・橙・青・緑・黄。v0.17.8）
+export const TAPE_WEEKDAY = ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60'];
 export const TAB_WEEKDAY = ['#ffe7a3', '#ffd3cf', '#c6eedb', '#cfe2ff', '#e4d8ff'];
 const hexList = (v, min, max) =>
   Array.isArray(v) && v.length >= min && v.length <= max && v.every(isHex) ? v.map((c) => c.toLowerCase()) : null;

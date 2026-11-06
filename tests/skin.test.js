@@ -48,7 +48,7 @@ test('テンプレートの形：知らない項目は捨て、範囲外は既�
   assert.deepEqual(
     t.parts.tape,
     {
-      color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+      color: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']},
       pattern: 'check',
       image: null
     },
@@ -108,7 +108,7 @@ test('クラシック：テーマの色・曜日ごとのテープ', () => {
   const c = BUILTIN_TEMPLATES.find((t) => t.id === CLASSIC_ID);
   assert.deepEqual(c.parts.folder, {card: 'default', tab: 'default'});
   assert.deepEqual(c.parts.tape, {
-    color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+    color: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']},
     pattern: 'course',
     image: null
   });
@@ -166,12 +166,12 @@ test('シールの場所：フォルダ・ホームの余白・授業ページ�
 
 test('テープの柄に画像：画像がなければ無地に戻す', () => {
   assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: SHA}}}).parts.tape, {
-    color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+    color: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']},
     pattern: 'image',
     image: SHA
   });
   assert.deepEqual(normalizeTemplate({parts: {tape: {pattern: 'image', image: 'x'}}}).parts.tape, {
-    color: {mode: 'weekday', colors: ['#f6c445', '#f28b82', '#7fd1ae', '#8ab4f8', '#c58af9']},
+    color: {mode: 'weekday', colors: ['#f77163', '#fa925e', '#8cb5fc', '#8ae885', '#f4ca60']},
     pattern: 'plain',
     image: null
   });
