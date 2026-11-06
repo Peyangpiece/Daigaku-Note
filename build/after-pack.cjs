@@ -1,4 +1,5 @@
 // electron-builder の afterPack：Mac のアプリに署名する（electron-builder.yml の mac.identity: null で、electron-builder 自身の署名は止めている）。
+// 公開する版は v0.18.6 から Developer ID で署名する（electron-builder が署名・公証する。ここでは何もしない）。ここで署名するのは、手元で作るときと Developer ID の証明書がないときだけ。
 // MAC_SIGN_IDENTITY（release.yml が GitHub の Secrets の MAC_SIGN_P12 から用意する自分の証明書）があればそれで、なければ ad-hoc（-）で署名する。
 // - 署名がないと Apple シリコンでは「壊れているため開けません」になり、自動更新の入れ替え（mac-update.js）でも codesign --verify が通らない
 // - 毎回同じ証明書で署名すると、アプリの「指定要件」（designated requirement）が版をまたいで変わらない。キーチェーンの
@@ -9,6 +10,11 @@ const path = require('node:path');
 
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') return;
+  // Developer ID で署名するとき（release.yml が MAC_DEVID=1 にする）は、このあと electron-builder が署名して公証する（v0.18.6）
+  if (process.env.MAC_DEVID === '1') {
+    console.log('パレットノート: Developer ID で署名するので、ここでは署名しません');
+    return;
+  }
   const app = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
   const identity = process.env.MAC_SIGN_IDENTITY || '-';
   const keychain = process.env.MAC_SIGN_KEYCHAIN;

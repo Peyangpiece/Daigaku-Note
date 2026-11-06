@@ -46,23 +46,29 @@ Node 22.13 以降（SQLite は `node:sqlite` を使う）。
      手で公開し直すときは、Actions の「Release」→「Run workflow」で「Releases に公開する」に印を付けて動かす。同じ版のタグを push してもよい：`git tag v0.2.0 && git push origin v0.2.0`
   3. 数分で Releases に公開される。入れてあるパレットノートは、起動時と 1 時間ごとに新しい版を見つけて自動で更新する（Windows は裏でダウンロードして再起動を聞く。Mac は「今すぐ更新」で入れ替えて開き直す）
   - 「Releases に公開する」に印を付けずに動かすと、作るだけ（実行結果の Artifacts から取れる）
-  - Apple・Windows の証明書はない。Mac は自分で作った証明書で署名し、初回に止められたら「システム設定 → プライバシーとセキュリティ」の「このまま開く」。Windows は SmartScreen の「詳細情報 → 実行」
+  - Mac は Apple の Developer ID（チーム 9G78U9XD92）で署名し、公証を受ける（v0.18.6。下の「Mac の署名と公証」）。Windows は証明書がなく、SmartScreen に止められたら「詳細情報 → 実行」
 
-#### Mac の署名の証明書（公開の前に 1 回だけ）
+#### Mac の署名と公証
 
-保存した LMS のログインは、キーチェーンの「パレットノート Safe Storage」の鍵で暗号化している。この鍵を読めるのは「常に許可」したときのアプリの署名だけなので、版ごとに署名が変わる ad-hoc 署名では更新のたびに読めなくなり、接続が切れる。毎回同じ証明書で署名すれば許可が引き継がれる。証明書がないと公開のジョブは止まる。
+保存した LMS のログインは、キーチェーンの「パレットノート Safe Storage」の鍵で暗号化している。この鍵を読めるのは「常に許可」したときのアプリの署名だけ。
+v0.18.6 から、公開する版は Apple の Developer ID（チーム 9G78U9XD92）で署名し、Apple の公証を受ける（署名と公証は electron-builder。`.github/workflows/release.yml`）。
+チームで決まる署名なので、一度「常に許可」すれば版を上げても聞かれない。Gatekeeper にも止められない。
 
-1. Mac の「キーチェーンアクセス」→ メニューの「キーチェーンアクセス」→「証明書アシスタント」→「証明書を作成…」
-   - 名前：`Daigaku Note Signing`（なんでもよい）、固有名の種類：自己署名ルート、証明書のタイプ：**コード署名**
-   - 「デフォルトを無効化」に印を付け、有効期間を `3650`（日）にする（ほかはそのまま「続ける」）
-2. 「ログイン」キーチェーンの「自分の証明書」で作った証明書を右クリック →「書き出す」→ 形式「個人情報交換（.p12）」で保存し、パスワードを決める
-3. ターミナルで `base64 -i ~/Desktop/証明書.p12 | pbcopy`（保存した場所に合わせる）
-4. GitHub のこのリポジトリの Settings → Secrets and variables → Actions →「New repository secret」で 2 つ作る
-   - `MAC_SIGN_P12`：3 でコピーした文字列
-   - `MAC_SIGN_PASSWORD`：2 で決めたパスワード
-5. 証明書と .p12 は作り直さない（作り直すと署名が変わり、次の更新で 1 回だけ許可し直しになる）
+GitHub のこのリポジトリの Settings → Secrets and variables → Actions に 5 つ置く（どれかがないと公開のジョブは止まる）
 
-証明書で署名した最初の版に更新したときだけ、キーチェーンの確認が 1 回出る。「常に許可」を選ぶと、それからの更新では出ない。
+- `MAC_DEVID_P12`：「Developer ID Application: Hiroki Oya (9G78U9XD92)」の証明書と秘密鍵を .p12 で書き出し、`base64 -i <.p12> | pbcopy` でコピーしたもの
+  - 証明書は developer.apple.com の Certificates →「＋」→ Developer ID Application（G2 Sub-CA）で作る。作れるのは Account Holder だけ。
+    要求ファイル（.certSigningRequest）は、キーチェーンアクセスの「証明書アシスタント」→「認証局に証明書を要求」→「ディスクに保存」で作る
+  - 書き出しは、キーチェーンアクセスの「ログイン」→「自分の証明書」で、証明書の行を右クリック →「書き出す」→ 形式「個人情報交換（.p12）」
+- `MAC_DEVID_PASSWORD`：.p12 を書き出したときのパスワード
+- `APPLE_API_KEY`：App Store Connect の「ユーザとアクセス」→「統合」→「App Store Connect API」→「チームキー」で作った鍵（.p8）の中身（`pbcopy < AuthKey_<キー ID>.p8`）
+- `APPLE_API_KEY_ID`：その鍵のキー ID
+- `APPLE_API_ISSUER`：同じ画面の Issuer ID
+
+証明書の有効期限（いまのものは 2027 年 12 月 7 日）の前に作り直して、`MAC_DEVID_P12`・`MAC_DEVID_PASSWORD` を入れ替える。同じチームの証明書なので、自動更新もキーチェーンの許可もそのまま続く。
+
+v0.18.5 までは自分で作った証明書（`Daigaku Note Signing`。Secrets の `MAC_SIGN_P12`・`MAC_SIGN_PASSWORD`）で署名していた。自動更新は、この証明書の版も Developer ID の版も受け入れる（`src/main/mac-update.js`）。
+Developer ID の証明書がないときに作るだけなら、この証明書（なければ ad-hoc）で署名する（`build/after-pack.cjs`）。
 
 ## ホームページ（daigakunote.com）
 
