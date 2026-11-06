@@ -7,9 +7,11 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {
   MAC_SIGNING_LEAF,
+  MAC_TEAM_ID,
   REPLACE_SCRIPT,
   appBundle,
   canReplace,
+  developerIdRequirement,
   installerDigest,
   isNewer,
   macInstallerName,
@@ -64,8 +66,10 @@ test('入れ替えられる場所か', () => {
 });
 
 const GOOD_LEAF = MAC_SIGNING_LEAF;
+const DEVID = developerIdRequirement(MAC_TEAM_ID);
 // 入れ替えのスクリプトを、Mac のコマンドの代わりの小さなスクリプトで動かす（hdiutil は .dmg の代わりのフォルダを写す）
-function sandbox() {
+// signedBy：新しい版の署名。'self' は自分の証明書、'devid' は Developer ID（チーム 9G78U9XD92）
+function sandbox(signedBy = 'self') {
   const dir = mkdtempSync(path.join(tmpdir(), 'daigaku-update-'));
   const bin = path.join(dir, 'bin');
   mkdirSync(bin);
@@ -88,6 +92,8 @@ function sandbox() {
   const dmg = path.join(dir, 'daigaku-note-0.2.0-mac-arm64.dmg');
   writeFileSync(dmg, 'dmg のかわり');
   const opened = path.join(dir, 'opened.txt');
+  const devidFile = path.join(dir, 'devid.txt');
+  writeFileSync(devidFile, DEVID);
   const env = {
     ...process.env,
     TMPDIR: dir,
@@ -100,18 +106,22 @@ function sandbox() {
     DITTO: fake('ditto', 'cp -R "$1" "$2"'),
     OPEN: fake('open', `echo "$1" >> "${opened}"`),
     XATTR: fake('xattr', 'exit 0'),
-    // -R（要件）付きの確かめは、正しい指紋のときだけ通す
+    // -R（要件）付きの確かめは、署名の種類に合う要件（自分の証明書の正しい指紋、または Developer ID の要件）のときだけ通す
     CODESIGN: fake(
       'codesign',
-      `for a; do case "$a" in -R=*) [ "$a" = '-R=certificate leaf = H"${GOOD_LEAF}"' ] || exit 1;; esac; done; exit 0`
+      signedBy === 'devid'
+        ? `for a; do case "$a" in -R=*) [ "$a" = "-R=$(cat '${devidFile}')" ] || exit 1;; esac; done; exit 0`
+        : `for a; do case "$a" in -R=*) [ "$a" = '-R=certificate leaf = H"${GOOD_LEAF}"' ] || exit 1;; esac; done; exit 0`
     )
   };
-  const run = (sum, leaf = GOOD_LEAF) => {
+  const run = (sum, leaf = GOOD_LEAF, devid = DEVID) => {
     const log = path.join(dir, 'updater.log');
     // プロセス番号 1 の代わりに、もう終わったプロセスを渡す（待たずに進む）
     let code = 0;
     try {
-      execFileSync('/bin/sh', ['-c', REPLACE_SCRIPT, 'sh', '999999', dmg, app, '0.2.0', log, sum, leaf], {env});
+      execFileSync('/bin/sh', ['-c', REPLACE_SCRIPT, 'sh', '999999', dmg, app, '0.2.0', log, sum, leaf, devid], {
+        env
+      });
     } catch (e) {
       code = e.status;
     }
@@ -171,3 +181,22 @@ test(
     }
   }
 );
+
+test('入れ替え：Developer ID（チーム 9G78U9XD92）で署名された版も受け入れる（v0.18.5）', {skip: noShell}, () => {
+  assert.equal(MAC_TEAM_ID, '9G78U9XD92');
+  assert.match(DEVID, /anchor apple generic/);
+  assert.match(DEVID, /certificate leaf\[subject\.OU\] = "9G78U9XD92"/);
+  const s = sandbox('devid');
+  const {code, log} = s.run(s.sha);
+  assert.equal(code, 0);
+  assert.match(log, /0\.2\.0 に入れ替えました/);
+  assert.match(s.version(), /CFBundleShortVersionString=0\.2\.0/);
+});
+
+test('入れ替え：Developer ID の要件を渡さなければ、Developer ID の版は入れ替えない', {skip: noShell}, () => {
+  const s = sandbox('devid');
+  const {code, log} = s.run(s.sha, GOOD_LEAF, '');
+  assert.equal(code, 1);
+  assert.match(log, /パレットノートの証明書で署名されていません/);
+  assert.match(s.version(), /CFBundleShortVersionString=0\.1\.0/);
+});
