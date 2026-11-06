@@ -3,16 +3,16 @@ import kana as K
 KT=26
 import kanafont as KFm
 KF=KFm.Kana("KiwiMaru-Medium.ttf"); KF.bold=2; KF.ringbold=1
-HL_Y,HL_H=104,26   # 蛍光ペン：字の下の端にかかる低い位置（字面の高さ 120 に対して）
+HL_Y,HL_H=108,24   # 蛍光ペン：字の下の端にかかる低い位置（字面の高さ 120 に対して）
 WEEK=['#F28B82','#FFAB70','#8AB4F8','#7FD1AE','#F6C445']   # ブランドの 5 色（月〜金。アイコンのタブ）
 def mix(c,t,a):  # c を t に a の割合で寄せる
     c=[int(c[i:i+2],16) for i in (1,3,5)]; t=[int(t[i:i+2],16) for i in (1,3,5)]
     return '#'+''.join(f'{round(x+(y-x)*a):02X}' for x,y in zip(c,t))
-KE=KFm.Kana("ZenMaruGothic-Medium.ttf"); KE.bold=0; KE.ringbold=0; KE.accent_o=True; KE.sc*=0.9
-P_SW,P_TOP,P_BASE,P_W=12.4,20.4,116.97,71.9   # Zen Maru Gothic の P の線の太さ・上端・ベースライン・幅（0.9 倍のとき）
+KE=KFm.Kana("ZenMaruGothic-Medium.ttf"); KE.bold=2.6; KE.ringbold=2.6; KE.accent_o=True; KE.sc*=0.9   # 太らせて縦画を約 15 に（カタカナの約 16 に近づける）
+P_SW,P_TOP,P_BASE,P_W=15.0,20.4-1.3,116.97+1.3,71.9+2.6   # Zen Maru Gothic の P の線の太さ・上端・ベースライン・幅（0.9 倍のとき）
 def round_P(dx,ink):
     # P のふくらみを大きな円に近くした形（上の線はまっすぐ、ふくらみは字の高さの約 6 割）
-    x=dx+P_SW/2; y1=P_TOP+P_SW/2; yb=P_BASE-P_SW/2; bot=P_TOP+60-P_SW/2; r=(bot-y1)/2; cx=dx+P_W-P_SW/2-r
+    dx-=1.3; x=dx+P_SW/2; y1=P_TOP+P_SW/2; yb=P_BASE-P_SW/2; bot=P_TOP+60-P_SW/2; r=(bot-y1)/2; cx=dx+P_W-P_SW/2-r
     d=f"M{x:.2f} {yb:.2f}V{y1:.2f}H{cx:.2f}A{r:.2f} {r:.2f} 0 0 1 {cx:.2f} {bot:.2f}H{x:.2f}"
     return f'<path d="{d}" fill="none" stroke="{ink}" stroke-width="{P_SW}" stroke-linecap="round" stroke-linejoin="round"/>'
 def en_body(ink,acc=None):
@@ -44,7 +44,7 @@ def kana_body(ink,acc=None):
         pre+=f'<rect x="{x0+i*seg:.1f}" y="{HL_Y}" width="{seg:.1f}" height="{HL_H}" fill="{cols[i]}"/>'
     return pre+body,w
 S=20; H=120
-NAVY='#22304A'; ACC='#F0675B'; WHITE='#FFFFFF'
+NAVY='#22304A'; ACC='#E04A2F'; WHITE='#FFFFFF'   # アクセント（朱）：月曜の色と区別し、白に 4.05・紺に 3.26 のコントラスト
 def en():
     r=36; R=61
     return {'P':(72,[f"M0 {H}V0H34A{r} {r} 0 0 1 34 {2*r}H0"]),

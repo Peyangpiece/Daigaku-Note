@@ -52,6 +52,9 @@ mac:
 dmg:
   sign: false
 win:
+  # Windows のアイコン：余白と影のない形（brand/source/icon-win.svg）と、16〜48 px は小さい表示用の形（icon-small.svg）。
+  # Mac 用の build/icon.png は Mac の格子（余白と影つき）なので、Windows では小さく見える
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64]
