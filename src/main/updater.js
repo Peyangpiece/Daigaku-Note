@@ -87,6 +87,25 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     return dialog.showMessageBox(opts);
   };
 
+  let replacer = null; // 入れ替えのスクリプト（アプリの終了を待っている）
+
+  /**
+   * 入れ替えをやめる（終了しないことになったとき。v0.18.4）。待っているスクリプトを止め、入れ替えの予定を消す。
+   * 次の確認（1 時間ごと）でもう一度試す
+   */
+  function postpone() {
+    if (!replacer) return false;
+    try {
+      replacer.kill();
+    } catch {
+      /* もう終わっている */
+    }
+    replacer = null;
+    rmSync(expectFile, {force: true});
+    log('WARN', '終了しないことになったため、入れ替えはあとでもう一度試します');
+    return true;
+  }
+
   function expectUpdate(version) {
     log('INFO', `${version} に入れ替えます（いまの版 ${app.getVersion()}）`);
     writeJson(expectFile, {from: app.getVersion(), to: version, at: new Date().toISOString()});
@@ -254,16 +273,19 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     if (canReplace(bundle, writable)) {
       expectUpdate(version);
       try {
-        spawn(
+        replacer = spawn(
           '/bin/sh',
           ['-c', REPLACE_SCRIPT, 'sh', String(process.pid), file, bundle, version, logFile, sha512, MAC_SIGNING_LEAF],
           {
             detached: true,
             stdio: 'ignore'
           }
-        ).unref();
+        );
+        replacer.unref();
         allowQuit();
         app.quit();
+        // 終了が止められたとき（保存していない変更の確かめで「キャンセル」など）は記録に残す（入れ替えは postpone で取りやめる）
+        setTimeout(() => replacer && log('WARN', '終了が止められたため、まだ入れ替えていません'), 10000).unref();
         return;
       } catch (e) {
         log('ERROR', '入れ替えを始められません', e.message);
@@ -372,5 +394,5 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     return items;
   }
 
-  return {start, check, menuItems, stop: () => clearInterval(timer), logFile};
+  return {start, check, menuItems, stop: () => clearInterval(timer), logFile, postpone, replacing: () => !!replacer};
 }
