@@ -67,6 +67,11 @@ h3 {
 .brand img {
   border-radius: 8px;
 }
+.brand .wordmark {
+  width: auto;
+  height: 28px;
+  border-radius: 0;
+}
 .top nav {
   display: flex;
   gap: 18px;
