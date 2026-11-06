@@ -24,6 +24,12 @@ export function cleanUses(role, uses) {
   return [...new Set(Array.isArray(uses) ? uses : [])].filter((u) => keys.includes(u));
 }
 
+/** 中京大学の manabo のアドレス（manabo とつなぐ画面に最初から入れておく。v0.17.6） */
+export const MANABO_URL = 'https://manabo.cnc.chukyo-u.ac.jp/';
+
+/** 授業資料の自動取り込みを使える人（社会人には出さない。v0.17.6） */
+export const importFor = (role) => role !== 'worker';
+
 /**
  * manabo とつなげる大学か（v0.17.0）。大学の LMS とつなぐ機能は manabo だけにし、manabo を使う中京大学の学生にだけ出す。
  * 大学名は本人が入れたもの（「中京大学」「中京大」。前後の空白・全角半角の違いは見ない）

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cleanUses, features, isChukyo, isRole} from '../src/shared/profile.js';
+import {MANABO_URL, cleanUses, features, importFor, isChukyo, isRole} from '../src/shared/profile.js';
 
 test('使う人と使い方から、出す機能を決める', () => {
   assert.ok(isRole('student') && isRole('worker') && !isRole('') && !isRole('toString'));
@@ -43,4 +43,10 @@ test('使う人と使い方から、出す機能を決める', () => {
   // ほかの人の使い方や知らない鍵は外す
   assert.deepEqual(cleanUses('student', ['lms', 'cert', 'lms', 'x']), ['lms']);
   assert.deepEqual(cleanUses('worker', 'cert'), []);
+});
+
+test('授業資料の自動取り込みは社会人には出さない。中京大学の manabo のアドレス（v0.17.6）', () => {
+  assert.ok(importFor('student') && importFor(null));
+  assert.ok(!importFor('worker'));
+  assert.equal(new URL(MANABO_URL).hostname, 'manabo.cnc.chukyo-u.ac.jp');
 });

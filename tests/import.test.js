@@ -327,6 +327,17 @@ test('すでにダウンロードにあったファイル：今学期がなけ�
   assert.deepEqual(await none.scanExisting(), {noTerm: true});
 });
 
+test('社会人には取り込みを使わせない：前にオンにしていても見張らず、すでにあるファイルも探さない（v0.17.6）', async (t) => {
+  const s = await setup(t, {'profile.role': 'worker'});
+  s.urls['in-term.pdf'] = ['https://www.aichi-edu.ac.jp/b'];
+  await s.put('in-term.pdf', 'b', '2026-10-05T20:00:00+09:00');
+  await s.importer.refresh();
+  const r = await s.importer.scanExisting();
+  assert.equal(r.checked, 0);
+  assert.equal(s.importer.list().length, 0);
+  s.importer.close();
+});
+
 test('Teams：大学ごとの SharePoint から落としたものは聞く。覚えれば大学の資料。共通のサービスは足せない（v0.17.2）', () => {
   const o = {domain: 'aichi-edu.ac.jp'};
   const sp = 'https://aichiedu.sharepoint.com/sites/class/Shared%20Documents/a.pdf';

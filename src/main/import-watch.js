@@ -319,7 +319,8 @@ export function createImporter({
   /** 設定に合わせて見張りを始め直す（設定を変えたとき・起動したとき） */
   async function refresh() {
     close();
-    if (!setting('import.enabled', false)) return;
+    // 社会人には出さない機能なので、前にオンにしていても見張らない（v0.17.6）
+    if (!setting('import.enabled', false) || setting('profile.role', null) === 'worker') return;
     startedAt = now().getTime();
     const dirs = [];
     const dl = downloadsDir?.();
@@ -393,6 +394,8 @@ export function createImporter({
    * 戻り：{term, checked, outside, other, pending, imported}（今学期がなければ {noTerm: true}）
    */
   async function scanExisting() {
+    if (setting('profile.role', null) === 'worker')
+      return {term: '', checked: 0, outside: 0, other: 0, pending: 0, imported: 0};
     const today = todayJst(now());
     const term = currentTerm(repo.listTerms(), today);
     if (!term) return {noTerm: true};

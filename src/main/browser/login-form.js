@@ -145,15 +145,25 @@ export function markLoginForm() {
     user = texts.find(userHint) ?? null;
   }
   const form = (password ?? user)?.form ?? null;
-  const buttons = [...(form ?? document).querySelectorAll('button, input[type=submit], input[type=image]')].filter(
-    visible
-  );
-  const submit =
-    buttons.find((b) => (b.type ?? '').toLowerCase() === 'submit' || b.tagName === 'INPUT') ??
-    buttons.find((b) =>
-      /ログイン|サインイン|次へ|login|sign\s*in|next|continue|submit/i.test(b.textContent ?? b.value ?? '')
-    ) ??
-    null;
+  // 押すボタン：「ログイン」「次へ」などと書いたものを先に。言語の切り替え・戻る・入力し直すなどは押さない
+  // （type を書かない <button> は送信のボタンになるので、言語の「日本語」が先に見つかって止まっていた。v0.17.6）
+  const label = (b) => `${b.textContent ?? ''} ${b.value ?? ''} ${b.getAttribute('aria-label') ?? ''}`.trim();
+  const goWord = /ログイン|サインイン|次へ|送信|login|log\s*in|sign\s*in|next|continue|submit/i;
+  const notGo =
+    /言語|language|日本語|english|戻る|back|キャンセル|cancel|入力し直す|やり直|忘れ|forgot|設定|help|ヘルプ|表示|show|登録|sign\s*up/i;
+  const pick = (root) => {
+    const all = [
+      ...root.querySelectorAll(
+        'button, input[type=submit], input[type=image], input[type=button], [role=button], a[href^="javascript"], a[href="#"]'
+      )
+    ].filter((b) => visible(b) && !notGo.test(label(b)));
+    return (
+      all.find((b) => goWord.test(label(b))) ??
+      all.find((b) => b.tagName !== 'A' && (b.type === 'submit' || (b.tagName === 'INPUT' && b.type === 'image'))) ??
+      null
+    );
+  };
+  const submit = (form && pick(form)) ?? (password || user ? pick(document) : null);
   const extra = inputs.some(
     (el) => el !== user && el !== password && (textLike(el) || el.type === 'number') && !el.value
   );
