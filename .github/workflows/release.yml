@@ -119,8 +119,11 @@ jobs:
           fi
           printf '%s' "$MAC_DEVID_P12" | base64 --decode > "$RUNNER_TEMP/devid.p12"
           printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          # electron-builder はプルリクエストの build では署名しない。Secrets はフォークからのプルリクエストには渡らない
+          # （そのときはここまで来ない）ので、Developer ID のときは署名させる
           {
             echo "MAC_DEVID=1"
+            echo "CSC_FOR_PULL_REQUEST=true"
             echo "CSC_LINK=$RUNNER_TEMP/devid.p12"
             echo "CSC_KEY_PASSWORD=$MAC_DEVID_PASSWORD"
             echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8"
