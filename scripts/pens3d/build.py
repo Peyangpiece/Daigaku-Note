@@ -231,7 +231,7 @@ def _wrapped_text(name, text, font, size, z_start, rad, angle, mat, lift, sx, sy
 
 # ---- 形の種類 ----
 def ballpoint(wood=False):
-    """ノック式のボールペン（大学ノートのオリジナル。長さ 144 mm・軸の太さ 10.4 mm）"""
+    """ノック式のボールペン（パレットノートのオリジナル。長さ 144 mm・軸の太さ 10.4 mm）"""
     if wood:
         col, rough, nrm = wood_maps()
         body = material('Body', (1, 1, 1), roughness=0.5, texture=col, rough_map=rough, normal_map=nrm,
@@ -291,15 +291,14 @@ def ballpoint(wood=False):
     sweep('Clip', path, 4.2, 0.8, M['chrome'], lambda p: (0, -1, 0), round_r=0.35)
     lathe('ClipBall', fillet([(0, 88.8), (1.1, 89.0), (1.25, 90.0), (1.1, 91.0), (0, 91.2)], 0.35), M['chrome'],
           seg=48).location = (0, -5.85, 0)
-    # 印字：大学ノートと字幅（字幅は 4 つ。アプリが品の字幅だけを出す）
+    # 印字：PALETTE NOTE と字幅（字幅は 4 つ。アプリが品の字幅だけを出す）
     ang = 0.0  # 正面（3D の表示と横からの絵で見える側）
 
     def br(z):  # 軸の半径（先細り：60 mm で 5.2、100 mm で 5.12、126.8 mm で 5.0）
         return 5.2 if z <= 60 else 5.2 - (z - 60) / 40 * 0.08 if z <= 100 else 5.12 - (z - 100) / 26.8 * 0.12
 
     lift = 0.03  # 焼き印も印刷も、面から 0.04mm 浮かせる（同じ高さだと奥行きの精度で欠ける）
-    wrapped_text('Print_brand', '大学ノート', FONT_JA, 3.0, 62.0, br, ang, M['print'], lift=lift + 0.01)
-    wrapped_text('Print_brand_en', 'DAIGAKU NOTE', None, 2.2, 79.0, br, ang, M['print'], lift=lift + 0.01)
+    wrapped_text('Print_brand', 'PALETTE NOTE', None, 2.2, 76.0, br, ang, M['print'], lift=lift + 0.01)
     for mm in ('0.38', '0.5', '0.7', '1.0'):
         wrapped_text(f'Print_mm_{mm.replace(".", "")}', mm, None, 2.4, 106.0, br, ang, M['print'], lift=lift + 0.01)
 
@@ -359,8 +358,8 @@ def marker(wide=False, hider=False):
             off = (W + 0.6) * sy + 1.5 - (t - 0.1) * 0.5 - (0.35 * math.sin((t - 0.86) / 0.14 * math.pi) if t > 0.86 else 0)
         path.append((0, -off, z))
     sweep('CapClip', path, 4.0 if not hider else 3.2, 1.6, M['cap'], lambda p: (0, -1, 0), round_r=0.7)
-    # 印字（軸の正面）
-    wrapped_text('Print_brand', '大学ノート', FONT_JA, 3.2, 60.0 if not hider else 62.0, W, 0.0, M['print'], sx=sx, sy=sy)
+    # 印字（軸の正面）：PALETTE NOTE と種類
+    wrapped_text('Print_brand', 'PALETTE NOTE', None, 2.2, 60.0 if not hider else 62.0, W, 0.0, M['print'], sx=sx, sy=sy)
     wrapped_text('Print_kind', 'HIGHLIGHTER' if not hider else 'CHECK PEN', None, 2.2, 80.0 if not hider else 82.0, W, 0.0,
                  M['print'], sx=sx, sy=sy)
 
@@ -387,7 +386,7 @@ def lathe_fn(name, zs, rfun, mat, seg=SEG):
 
 
 def pencil():
-    """製図用のシャープペンシル（大学ノートのオリジナル。長さ 146 mm・軸の太さ 8.6 mm）。
+    """製図用のシャープペンシル（パレットノートのオリジナル。長さ 146 mm・軸の太さ 8.6 mm）。
     細い金属のガイドパイプ（芯が 0.6 mm 出る）・溝を刻んだ金属の口金・アヤ目のローレットのグリップ・樹脂の軸・
     硬度の窓（HB）・板を曲げたクリップ・金属の天冠とノック"""
     M = {
@@ -458,13 +457,12 @@ def pencil():
     sweep('ClipBlade', path, 3.6, 0.7, M['chrome'], lambda p: (0, -1, 0), round_r=0.3)
     lathe('ClipBall', fillet([(0, 90.6), (1.0, 90.8), (1.1, 91.7), (1.0, 92.6), (0, 92.8)], 0.3), M['chrome'],
           seg=48).location = (0, -4.95, 0)
-    # 印字：大学ノート・DAIGAKU NOTE・芯の太さ（3 つ。アプリが品の太さだけを出す）・硬度の窓の HB
+    # 印字：PALETTE NOTE・芯の太さ（3 つ。アプリが品の太さだけを出す）・硬度の窓の HB
 
     def br(z):
         return R if z <= 100 else R - (z - 100) / 17.0 * 0.08
 
-    wrapped_text('Print_brand', '大学ノート', FONT_JA, 2.6, 56.0, br, 0.0, M['print'], lift=0.04)
-    wrapped_text('Print_brand_en', 'DAIGAKU NOTE', None, 1.9, 71.0, br, 0.0, M['print'], lift=0.04)
+    wrapped_text('Print_brand', 'PALETTE NOTE', None, 1.9, 69.0, br, 0.0, M['print'], lift=0.04)
     for mm in ('0.3', '0.5', '0.7'):
         wrapped_text(f'Print_mm_{mm.replace(".", "")}', mm, None, 2.2, 98.0, br, 0.0, M['print'], lift=0.04)
     wrapped_text('Print_hb', 'HB', None, 2.4, 119.6, 4.2, 0.0, M['window'], lift=0.04)
