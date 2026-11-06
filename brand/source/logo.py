@@ -3,15 +3,21 @@ import kana as K
 KT=26
 import kanafont as KFm
 KF=KFm.Kana("KiwiMaru-Medium.ttf"); KF.bold=2; KF.ringbold=1
-HL_Y,HL_H,RULE_Y=88,34,132   # 蛍光ペン（字の下寄り）と罫線の位置（字面の高さ 120 に対して）
+HL_Y,HL_H=104,26   # 蛍光ペン：字の下の端にかかる低い位置（字面の高さ 120 に対して）
+WEEK=['#F28B82','#FFAB70','#8AB4F8','#7FD1AE','#F6C445']   # ブランドの 5 色（月〜金。アイコンのタブ）
+def mix(c,t,a):  # c を t に a の割合で寄せる
+    c=[int(c[i:i+2],16) for i in (1,3,5)]; t=[int(t[i:i+2],16) for i in (1,3,5)]
+    return '#'+''.join(f'{round(x+(y-x)*a):02X}' for x,y in zip(c,t))
 def kana_body(ink,acc=None):
     acc=acc or ACC
     body,w=KF.wordmark(target=22,ink=ink,acc=acc)
-    if ink==WHITE: band,rule='#6B5D2E','#3D4A66'      # 紺の地：白い字が読めるよう暗めの黄
-    elif ink=='#000': band,rule=None,'#000'            # 黒 1 色：蛍光ペンなし
-    else: band,rule='#FBE3A0','#C5CFDB'
-    pre=(f'<rect x="-8" y="{HL_Y}" width="{w+16:.1f}" height="{HL_H}" rx="12" fill="{band}"/>' if band else '')
-    pre+=f'<rect x="-12" y="{RULE_Y}" width="{w+24:.1f}" height="4" rx="2" fill="{rule}"/>'
+    if ink=='#000': return body,w                       # 黒 1 色：蛍光ペンなし
+    cols=[mix(c,'#FFFFFF',0.35) for c in WEEK] if ink!=WHITE else [mix(c,NAVY,0.45) for c in WEEK]
+    x0,x1=-8,w+8; n=5; seg=(x1-x0)/n; r=HL_H/2
+    pre=f'<rect x="{x0:.1f}" y="{HL_Y}" width="{seg+r:.1f}" height="{HL_H}" rx="{r}" fill="{cols[0]}"/>'
+    pre+=f'<rect x="{x1-seg-r:.1f}" y="{HL_Y}" width="{seg+r:.1f}" height="{HL_H}" rx="{r}" fill="{cols[4]}"/>'
+    for i in range(1,4):
+        pre+=f'<rect x="{x0+i*seg:.1f}" y="{HL_Y}" width="{seg:.1f}" height="{HL_H}" fill="{cols[i]}"/>'
     return pre+body,w
 S=20; H=120
 NAVY='#22304A'; ACC='#F0675B'; WHITE='#FFFFFF'
