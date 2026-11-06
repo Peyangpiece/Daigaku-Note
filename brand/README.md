@@ -26,7 +26,7 @@ v0.18.7 で作った。すべて線を塗りの形に変換した SVG（`<text>`
 | `lockup-ja-dark.svg` / `lockup-en-dark.svg`       | 紺の地に置いたもの                                                                            |
 | `lockup-ja-stacked.svg` / `lockup-en-stacked.svg` | 記号の下に文字（正方形に近い場所用）                                                          |
 | `source/icon-mac.svg`                             | アプリのアイコン（Mac の格子：1024 の中に 824 の角丸、影つき）。`build/icon.png` の元         |
-| `source/icon-flat.svg`                            | 角を丸めない正方形（iPhone のホーム画面。角は OS が丸める）。`src/mobile/icon.png` の元  |
+| `source/icon-flat.svg`                            | 角を丸めない正方形（iPhone のホーム画面。角は OS が丸める）。`src/mobile/icon.png` の元       |
 | `source/icon-small.svg`                           | 小さい表示用（タブ 3 つ・罫線 2 本）。`site/favicon.png`・`src/renderer/assets/tray.png` の元 |
 | `source/tray-template.svg`                        | Mac のメニューバー用（黒 1 色）。`src/renderer/assets/trayTemplate*.png` の元                 |
 | `source/symbol.svg` / `symbol-black.svg`          | 地のない記号                                                                                  |
