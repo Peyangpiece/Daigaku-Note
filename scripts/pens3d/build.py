@@ -1174,7 +1174,7 @@ def paper_maps(tile_mm=12.0, px=512):
 
 
 def eraser():
-    """消しゴム（大学ノートのオリジナル。形と質感は角形の字消し〔トンボ鉛筆の MONO〕を参考にした。配色・字は大学ノートのもの）：
+    """消しゴム（パレットノートのオリジナル。形と質感は角形の字消し〔トンボ鉛筆の MONO〕を参考にした。配色・字はパレットノートのもの）：
     角のきりっとした白い角形の塊（角はわずかに丸めるだけ。使った側の端は角が少しすり減る）に、紙のスリーブ。
     スリーブは塊の真ん中より少し右寄りに巻き、両端からゴムが出る。スリーブの端の 4 つの角は、消すときに塊が折れないよう
     斜めに切り欠く。L 50 × W 21 × H 11.5 mm"""
@@ -1216,10 +1216,10 @@ def eraser():
     # 正面の白い札と字
     lab = rounded_plate('SleeveLabel', 24.0, 7.6, 1.0, paper)
     place_on(lab, sl, lambda x, y: (cx + x, -100, H / 2 + y), (0, 1, 0), 0.04)
-    t1 = flat_text('SleeveText', '大学ノート', FONT_JA, 4.3, ink_blue)
+    t1 = flat_text('SleeveText', 'PALETTE NOTE', None, 3.0, ink_blue)
     place_on(t1, sl, lambda x, y: (cx + x, -100, H / 2 + y), (0, 1, 0), 0.07)
-    # 上の面の字（DAIGAKU NOTE）と、白い細い線 2 本
-    t2 = flat_text('SleeveTop', 'DAIGAKU NOTE', None, 2.8, ink_white)
+    # 上の面の字（PALETTE NOTE）と、白い細い線 2 本
+    t2 = flat_text('SleeveTop', 'PALETTE NOTE', None, 2.8, ink_white)
     place_on(t2, sl, lambda x, y: (cx + x, y, 100), (0, 0, -1), 0.04)
     for k, yy in enumerate((-6.8, 6.8)):
         line = rounded_plate(f'SleeveLine_{k}', 28.0, 0.7, 0.3, ink_white)
@@ -1447,7 +1447,7 @@ def pouch_flat():
           lambda p: (1, 0, 0) if p[0] > L / 2 + 10.5 else (0, -1 if p[1] < 0 else 1, 0), round_r=0.5)
     lab = rounded_plate('Label', 34, 12, 1.2, M['trim'])
     place_on(lab, body, lambda x, y: (-58 + x, -200, H * 0.22 + y), (0, 1, 0), 0.5)
-    txt = flat_text('LabelText', '大学ノート', FONT_JA, 5.6, M['label_text'])
+    txt = flat_text('LabelText', 'PALETTE NOTE', None, 3.6, M['label_text'])
     place_on(txt, body, lambda x, y: (-58 + x, -200, H * 0.22 + y), (0, 1, 0), 0.75)
     to_pen_axes()
 
@@ -1471,7 +1471,7 @@ def pouch_box():
               lambda p, sgn=sgn: (sgn, 0, 0), round_r=0.6)
     lab = rounded_plate('Label', 40, 13, 1.4, M['trim'])
     place_on(lab, body, lambda x, y: (x, -200, H * 0.42 + y), (0, 1, 0), 0.5)
-    txt = flat_text('LabelText', '大学ノート', FONT_JA, 6.2, M['label_text'])
+    txt = flat_text('LabelText', 'PALETTE NOTE', None, 4.0, M['label_text'])
     place_on(txt, body, lambda x, y: (x, -200, H * 0.42 + y), (0, 1, 0), 0.75)
     to_pen_axes()
 
