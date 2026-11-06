@@ -11,6 +11,14 @@ export const RELEASE_BASE = 'https://github.com/Peyangpiece/Daigaku-Note/release
  * 証明書を作り直したときは、ここを新しい指紋にした版を、古い証明書で署名して先に出す（そうしないと更新が止まる）
  */
 export const MAC_SIGNING_LEAF = '37e5ee427fb4249f301d4633725d5ef641d10014';
+/**
+ * Apple の Developer ID（チーム 9G78U9XD92）で署名した版も受け入れる（v0.18.5）。0.18.6 から Developer ID で署名・公証する。
+ * 先にこの版（自分の証明書で署名）を出しておかないと、前の版が Developer ID の版への入れ替えを断る
+ */
+export const MAC_TEAM_ID = '9G78U9XD92';
+/** codesign の要件：Apple が発行した Developer ID Application の証明書で、そのチームのもの */
+export const developerIdRequirement = (team) =>
+  `anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${team}"`;
 
 /** electron-builder.yml の artifactName（daigaku-note-${version}-${os}-${arch}.${ext}）に合わせた名前 */
 export const macInstallerName = (version, arch) =>
@@ -63,12 +71,12 @@ export function canReplace(bundle, writable) {
 
 /**
  * 入れ替えのスクリプト。引数：$1 終了を待つプロセス番号、$2 .dmg、$3 入れ替える .app、$4 新しい版、$5 記録のファイル、$6 .dmg の sha512（base64）、
- * $7 署名の証明書の指紋（MAC_SIGNING_LEAF）
+ * $7 署名の証明書の指紋（MAC_SIGNING_LEAF）、$8 Developer ID の要件（developerIdRequirement。空なら自分の証明書だけ）
  * 流れ：終了を待つ → .dmg を作業用フォルダへ写して sha512 を確かめる（写したものだけを使う。元の場所は書き換えられうるため）
  * → 見えない形でつなぐ → 同じ CFBundleIdentifier の .app を隣に書き出す → 版と署名を確かめる → 入れ替える → 外す → 開く。
  * どこかで失敗したら元のまま開き直す。コマンドは環境変数で差し替えられる（テスト用）
  */
-export const REPLACE_SCRIPT = `pid=$1 dmg=$2 app=$3 want=$4 log=$5 sum=$6 leaf=$7
+export const REPLACE_SCRIPT = `pid=$1 dmg=$2 app=$3 want=$4 log=$5 sum=$6 leaf=$7 devid=$8
 HDIUTIL=\${HDIUTIL:-/usr/bin/hdiutil} PLIST=\${PLIST:-/usr/libexec/PlistBuddy} DITTO=\${DITTO:-/usr/bin/ditto} OPEN=\${OPEN:-/usr/bin/open}
 XATTR=\${XATTR:-/usr/bin/xattr} CODESIGN=\${CODESIGN:-/usr/bin/codesign} OPENSSL=\${OPENSSL:-/usr/bin/openssl} WAIT=\${WAIT:-240}
 say(){ printf '%s %-5s %s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >> "$log"; }
@@ -93,7 +101,9 @@ rm -rf "$app.new"
 got=$("$PLIST" -c "Print :CFBundleShortVersionString" "$app.new/Contents/Info.plist" 2>/dev/null)
 [ "$got" = "$want" ] || fail "書き出した版が $want ではありません（$got）"
 "$CODESIGN" --verify --deep --strict "$app.new" >/dev/null 2>&1 || fail "新しい版の署名が壊れています"
-"$CODESIGN" --verify --strict -R="certificate leaf = H\\"$leaf\\"" "$app.new" >/dev/null 2>&1 || fail "新しい版がパレットノートの証明書で署名されていません"
+signed=; "$CODESIGN" --verify --strict -R="certificate leaf = H\\"$leaf\\"" "$app.new" >/dev/null 2>&1 && signed=1
+if [ -z "$signed" ] && [ -n "$devid" ]; then "$CODESIGN" --verify --strict -R="$devid" "$app.new" >/dev/null 2>&1 && signed=1; fi
+[ -n "$signed" ] || fail "新しい版がパレットノートの証明書で署名されていません"
 rm -rf "$app.old"
 mv "$app" "$app.old" || fail "いまのパレットノートを動かせません"
 if ! mv "$app.new" "$app"; then mv "$app.old" "$app"; fail "新しい版に入れ替えられません"; fi
