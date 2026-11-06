@@ -2,10 +2,17 @@ import icon as FI
 import kana as K
 KT=26
 import kanafont as KFm
-KF=KFm.Kana("KiwiMaru-Medium.ttf"); KF.bold=0; KF.ringbold=0
+KF=KFm.Kana("KiwiMaru-Medium.ttf"); KF.bold=2; KF.ringbold=1
+HL_Y,HL_H,RULE_Y=88,34,132   # 蛍光ペン（字の下寄り）と罫線の位置（字面の高さ 120 に対して）
 def kana_body(ink,acc=None):
     acc=acc or ACC
-    return KF.wordmark(target=22,ink=ink,acc=acc)
+    body,w=KF.wordmark(target=22,ink=ink,acc=acc)
+    if ink==WHITE: band,rule='#6B5D2E','#3D4A66'      # 紺の地：白い字が読めるよう暗めの黄
+    elif ink=='#000': band,rule=None,'#000'            # 黒 1 色：蛍光ペンなし
+    else: band,rule='#FBE3A0','#C5CFDB'
+    pre=(f'<rect x="-8" y="{HL_Y}" width="{w+16:.1f}" height="{HL_H}" rx="12" fill="{band}"/>' if band else '')
+    pre+=f'<rect x="-12" y="{RULE_Y}" width="{w+24:.1f}" height="4" rx="2" fill="{rule}"/>'
+    return pre+body,w
 S=20; H=120
 NAVY='#22304A'; ACC='#F0675B'; WHITE='#FFFFFF'
 def en():
@@ -77,7 +84,7 @@ def stacked(text,gl,track,kern):
 J,E=ja(),en()
 def kana_mark(ink=NAVY,acc=ACC):
     body,w=kana_body(ink,acc); p=8
-    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p} -32 {w+2*p} 166">{body}</svg>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-p-6} -32 {w+2*p+12} 176">{body}</svg>'
 out={'logo-ja':kana_mark(),
      'logo-en':wordmark('PALETTE NOTE',E,24,KERN_EN)[0],
      'logo-ja-white':kana_mark(ink=WHITE),

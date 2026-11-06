@@ -27,7 +27,8 @@ class Kana:
         b=s.bounds('ト'); s.sc=H/(b[3]-b[1]); s.base=b[1]   # トの字面の高さを 120 にそろえる
     def bounds(s,ch):
         bp=BoundsPen(s.gs); s.gs[s.cmap[ord(ch)]].draw(bp); return bp.bounds
-    bold=0; ringbold=0
+    bold=0; ringbold=0; style=None
+    WEEK=['#F28B82','#FFAB70','#8AB4F8','#7FD1AE','#F6C445']
     def glyph(s,ch,dx,ink,acc):
         name=s.cmap[ord(ch)]; cs=contours(s.gs,name); b=s.bounds(ch); out=[]
         # 半濁点：右上にある小さい輪（輪郭 2 つ）
@@ -38,9 +39,25 @@ class Kana:
                 if cb and cb[0]>b[0]+(b[2]-b[0])*0.6 and cb[1]>b[1]+(b[3]-b[1])*0.55: mark.append(c)
         body=[c for c in cs if c not in mark]
         ox=dx-b[0]*s.sc; oy=H+s.base*s.sc
+        extra=''
+        if s.style=='bar' and ch=='ー':
+            # 長音を曜日の 5 色に分ける（パレット・アイコンのタブ）
+            x0,y0,x1,y1=b; X0=ox+x0*s.sc; X1=ox+x1*s.sc; Yc=oy-(y0+y1)/2*s.sc; t=(y1-y0)*s.sc+s.bold
+            n=5; gap=3.0; seg=(X1-X0-gap*(n-1))/n
+            segs=''.join(f'<rect x="{X0+i*(seg+gap)-s.bold/2:.2f}" y="{Yc-t/2:.2f}" width="{seg+s.bold:.2f}" height="{t:.2f}" rx="{t/2:.2f}" fill="{s.WEEK[i]}"/>' for i in range(n))
+            return segs,(b[2]-b[0])*s.sc
+        if s.style=='tsu' and ch=='ッ':
+            # 促音の 2 つの点を、絵の具をのせたように色にする
+            small=sorted([c for c in body if cbounds(c)],key=lambda c:(cbounds(c)[2]-cbounds(c)[0])*(cbounds(c)[3]-cbounds(c)[1]))[:2]
+            small=sorted(small,key=lambda c:cbounds(c)[0])
+            cols=['#8AB4F8','#F6C445']
+            for c,col in zip(small,cols):
+                extra+=f'<path fill="{col}" stroke="{col}" stroke-width="{s.bold}" stroke-linejoin="round" d="{cpath(c,s.sc,ox,oy)}"/>'
+            body=[c for c in body if c not in small]
         st=lambda col,b: (f' stroke="{col}" stroke-width="{b}" stroke-linejoin="round"' if b else '')
         out.append(f'<path fill="{ink}"{st(ink,s.bold)} d="{"".join(cpath(c,s.sc,ox,oy) for c in body)}"/>')
         if mark: out.append(f'<path fill="{acc}" fill-rule="nonzero"{st(acc,s.ringbold)} d="{"".join(cpath(c,s.sc,ox,oy) for c in mark)}"/>')
+        out.append(extra)
         return ''.join(out), (b[2]-b[0])*s.sc
     def profile(s,ch):
         g,w=s.glyph(ch,0,'#000','#000'); L,R,T,B=-10,w+10,-40,H+20; SC=4
