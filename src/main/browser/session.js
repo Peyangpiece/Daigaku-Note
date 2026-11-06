@@ -113,6 +113,9 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     page.on('framenavigated', (f) => {
       if (f === page.mainFrame()) visited.add(safeHost(f.url()));
     });
+    // 新しいページ（文書）を読んだ回数。ページの中だけの移動（# やスクリプトによる書き換え）は数えない
+    let navs = 0;
+    page.on('domcontentloaded', () => navs++);
     // LMS 自身のログイン画面（大学のアカウントでは入れない ID・パスワード欄）に、統合認証へのリンク（レシピの login.sso）があれば押す。
     // 開いた直後だけでなく、ログインの途中やあとでこの画面に戻されたときも押す（同じ画面で押し続けないよう 5 秒あけ、5 回まで）
     const ssoOn = async () =>
@@ -142,10 +145,10 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     const sent = {user: false, password: 0};
     if (autofill?.user)
       page.on('load', async () => {
-        const at = page.url();
+        const at = navs; // 開き直しでは同じアドレスのことがあるので、アドレスでなく移った回数で見る
         await page.waitForLoadState('networkidle', {timeout: 4000}).catch(() => {});
         await page.waitForTimeout(600).catch(() => {});
-        if (page.isClosed() || page.url() !== at) return; // 待つ間に次のページへ進んだ
+        if (page.isClosed() || navs !== at) return; // 待つ間に次のページへ進んだ（その load で扱う）
         if (await ssoOn()) return;
         const f = await fillSaved(page, autofill).catch(() => null);
         if (!f || !autofill.password || !autofill.autoSubmit || f.code || !f.submit) return;
