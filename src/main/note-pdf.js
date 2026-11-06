@@ -1,5 +1,5 @@
 // 授業の回のノート（SPEC §8.6）：A4 縦の白紙の PDF を作る・ページを足す・最後の白紙のページを消す。
-// 紙は、よくある白い紙に青い罫線（v0.14.2。テンプレートの見た目には合わせない）。横罫（基本）と方眼、行の間は 6 mm（B 罫）と 7 mm（A 罫）。
+// 紙は、白い紙に灰色の罫線（v0.17.10。前は青。テンプレートの見た目には合わせない）。横罫（基本）と方眼、行の間は 6 mm（B 罫）と 7 mm（A 罫）。
 // 上の欄（日付・題）には、授業・回・題・日付を薄い字で印刷する（レンダラが描いた PNG。日本語のフォントを PDF に入れないため）。
 // ノートは PDF なので、PDF の編集画面でできること（ペン・マーカー・文字入れ・貼りもの・しおり・書き出し）がそのまま使える。
 // v0.14.0〜0.14.1 で作ったノート（テンプレートの見た目。v のない design）は、足すページも前の見た目で描く（drawLegacyPage）
@@ -11,18 +11,28 @@ const MM = 72 / 25.4;
 
 // ---- 紙（v0.14.2〜） ----
 export const NOTE_PAPER = '#ffffff';
-export const NOTE_LINE = '#9cc0e6'; // 罫線（よくある学習ノートの青）
-export const NOTE_HEAD = '#6f9fd6'; // 題の欄の下の線（少し濃い青）
+// 線の色（v0.17.10 から灰色。試し書きの付箋の罫線と同じ）。前の版で作ったノートは、足すページも青のまま（design.line がない）
+export const NOTE_LINES = {
+  gray: {line: '#9fb4cc', head: '#7f94ad'}, // 罫線・題の欄の下の線（少し濃い灰色）
+  blue: {line: '#9cc0e6', head: '#6f9fd6'} // よくある学習ノートの青（v0.14.2〜0.17.9）
+};
 export const NOTE_TYPES_V2 = ['ruled', 'grid'];
 export const NOTE_GAPS_MM = [6, 7];
 const HEAD_H = 20; // 上の欄（日付・題）の高さ mm
 const FOOT_H = 10; // 下の余白 mm
 
-/** 紙の選び方を整える：{v: 2, type: 'ruled'|'grid', gap: 6|7}（知らない値は横罫 6 mm） */
+/** 紙の選び方を整える：{v: 2, type: 'ruled'|'grid', gap: 6|7, line: 'gray'|'blue'}（知らない値は横罫 6 mm・灰色） */
 export function cleanPaper(raw = {}) {
   const d = raw && typeof raw === 'object' ? raw : {};
-  return {v: 2, type: NOTE_TYPES_V2.includes(d.type) ? d.type : 'ruled', gap: NOTE_GAPS_MM.includes(d.gap) ? d.gap : 6};
+  return {
+    v: 2,
+    type: NOTE_TYPES_V2.includes(d.type) ? d.type : 'ruled',
+    gap: NOTE_GAPS_MM.includes(d.gap) ? d.gap : 6,
+    line: Object.hasOwn(NOTE_LINES, d.line) ? d.line : 'gray'
+  };
 }
+/** 覚えてある紙（note.design）：線の色のない v2 は前の版（青）のノート */
+const storedPaper = (design) => ({...cleanPaper(design), ...(design?.line ? {} : {line: 'blue'})});
 
 const color = (hex) =>
   rgb(parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255);
@@ -31,7 +41,7 @@ const color = (hex) =>
 export function drawNotePage(page, design, header = null) {
   const v2 = design?.v === 2;
   if (!v2) drawLegacyPage(page, design);
-  else drawPaper(page, cleanPaper(design));
+  else drawPaper(page, storedPaper(design));
   if (header) {
     const W = page.getWidth();
     const H = page.getHeight();
@@ -55,11 +65,12 @@ function gridLeft(W, gap) {
   return (W - cols * gap) / 2;
 }
 
-/** 白い紙に青い罫線。横罫は上の欄の下の線から下へ gap ごと、方眼は横・縦とも gap ごと（左右は真ん中にそろえる） */
+/** 白い紙に灰色（前の版は青）の罫線。横罫は上の欄の下の線から下へ gap ごと、方眼は横・縦とも gap ごと（左右は真ん中にそろえる） */
 function drawPaper(page, d) {
   const [W, H] = [page.getWidth(), page.getHeight()];
   page.drawRectangle({x: 0, y: 0, width: W, height: H, color: color(NOTE_PAPER)});
-  const line = color(NOTE_LINE);
+  const ink = NOTE_LINES[d.line] ?? NOTE_LINES.gray;
+  const line = color(ink.line);
   const gap = d.gap * MM;
   const top = H - HEAD_H * MM;
   const bottom = FOOT_H * MM;
@@ -79,10 +90,10 @@ function drawPaper(page, d) {
       start: {x: left, y: top},
       end: {x: left + cols * gap, y: top},
       thickness: 0.8,
-      color: color(NOTE_HEAD)
+      color: color(ink.head)
     });
   } else {
-    page.drawLine({start: {x: 0, y: top}, end: {x: W, y: top}, thickness: 0.9, color: color(NOTE_HEAD)});
+    page.drawLine({start: {x: 0, y: top}, end: {x: W, y: top}, thickness: 0.9, color: color(ink.head)});
     for (let i = 1; i <= rows; i++) {
       const y = top - i * gap;
       page.drawLine({start: {x: 0, y}, end: {x: W, y}, thickness: 0.5, color: line});

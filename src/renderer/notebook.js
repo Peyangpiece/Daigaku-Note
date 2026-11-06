@@ -53,7 +53,7 @@ export function noteHeading(courseId, roundId) {
 }
 
 /**
- * ノートの上の欄に印刷する画像（PNG）：薄い青の字で授業・回・題・日付。PDF に日本語のフォントを入れないよう、画面のフォントで描く
+ * ノートの上の欄に印刷する画像（PNG）：薄い灰色の字（罫線の題の欄の線と同じ色。v0.17.9 までは青）で授業・回・題・日付。PDF に日本語のフォントを入れないよう、画面のフォントで描く
  */
 export async function headingPng(text) {
   if (!text) return null;
@@ -66,7 +66,7 @@ export async function headingPng(text) {
   c.width = Math.min(6000, Math.ceil(ctx.measureText(text).width) + 8);
   c.height = Math.round(px * 1.35);
   ctx.font = font;
-  ctx.fillStyle = '#6f9fd6';
+  ctx.fillStyle = '#7f94ad';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, 4, c.height / 2);
   const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/png'));
