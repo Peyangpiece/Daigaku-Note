@@ -317,7 +317,7 @@ test(
  * 模擬の統合認証：LMS（127.0.0.1）に未ログインで来ると IdP（localhost。別のホスト）へ転送。
  * IdP は ID のページ → パスワードのページ →（code: true なら）認証コードのページ → LMS の /sso?ticket=… に戻して Cookie を付ける
  */
-async function mockSso({code = false, localLogin = false, stale = 0} = {}) {
+async function mockSso({code = false, localLogin = false, stale = 0, again = 0} = {}) {
   const page = (body) => `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
   const send = (res, b, status = 200, headers = {}) => {
     res.writeHead(status, {'Content-Type': 'text/html; charset=utf-8', ...headers});
@@ -362,6 +362,12 @@ async function mockSso({code = false, localLogin = false, stale = 0} = {}) {
     if (url.pathname === '/idp/pass') {
       const p = await form(req);
       seen.passwords++;
+      // again：最初の again 回は、エラーを書かずに同じパスワードの画面を出し直す（押すのが早すぎてページの準備が終わっていなかったとき）
+      if (seen.passwords <= again)
+        return send(
+          res,
+          `<form method="post" action="/idp/pass"><input type="password" id="j_password" name="j_password"><button type="submit">二段階認証でログイン</button></form>`
+        );
       if (p.get('j_password') !== 'pw')
         return send(
           res,
@@ -532,6 +538,38 @@ test(
       assert.equal(await connector.ensureSession(ctx), 'ok');
     } finally {
       await connector.releaseContext(ctx);
+    }
+  }
+);
+
+test(
+  '自動ログイン：エラーを書かずに同じパスワードの画面に戻ったら、1 回だけ送り直す（v0.17.7）',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor(recipeBase, {session, secrets});
+    const conn = {university_host: '127.0.0.1', allowed_hosts_json: '["localhost"]'};
+    const cred = {credentials: {user: 'stu', password: 'pw'}};
+    const once = await mockSso({again: 1});
+    t.after(once.close);
+    const ctx = await connector.createContext({...conn, id: 'a1', base_url: once.base});
+    try {
+      assert.deepEqual(await connector.login(ctx, 'headless', cred), {ok: true});
+      assert.equal(once.seen.passwords, 2);
+    } finally {
+      await connector.releaseContext(ctx);
+    }
+    // 何度も戻るときは、送るのは 2 回まで
+    const always = await mockSso({again: 99});
+    t.after(always.close);
+    const ctx2 = await connector.createContext({...conn, id: 'a2', base_url: always.base});
+    try {
+      await assert.rejects(connector.login(ctx2, 'headless', cred));
+      assert.equal(always.seen.passwords, 2, 'パスワードを送るのは 2 回まで');
+    } finally {
+      await connector.releaseContext(ctx2);
     }
   }
 );

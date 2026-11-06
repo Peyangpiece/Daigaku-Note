@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {credentialUrlAllowed, siteOf, staleSsoPage} from '../src/main/browser/login-form.js';
+import {credentialUrlAllowed, loginFailedText, siteOf, staleSsoPage} from '../src/main/browser/login-form.js';
 
 test('ID・パスワードを入れてよいページ：https で、LMS と同じ組織のドメインかレシピのホストだけ', () => {
   assert.equal(siteOf('lms.example-u.ac.jp'), 'example-u.ac.jp');
@@ -60,4 +60,20 @@ test('統合認証の「過去のリクエスト」の画面を見分ける（v0
     'IdP 以外のページ'
   );
   assert.equal(staleSsoPage('not a url', ja), false);
+});
+
+test('ログインに失敗したと書いてある画面か（同じ画面に戻ったとき、送り直してよいかを決める。v0.17.7）', () => {
+  for (const t of [
+    'パスワードが違います',
+    'ユーザ名またはパスワードが正しくありません',
+    'ログインに失敗しました',
+    'アカウントがロックされています',
+    'Invalid username or password'
+  ])
+    assert.equal(loginFailedText(t), true, t);
+  for (const t of [
+    '言語 日本語 ログイン CHUKYO MaNaBo ユーザ名 <f124074> パスワード 二段階認証でログイン ユーザ名を入力し直す 二段階認証または生体認証の設定はこちら 設定マニュアルはこちら',
+    ''
+  ])
+    assert.equal(loginFailedText(t), false, t);
 });

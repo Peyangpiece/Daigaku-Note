@@ -108,6 +108,16 @@ export function staleSsoPage(url, text) {
 }
 
 /**
+ * ログインに失敗したと書いてある画面か（ID・パスワードの誤り・アカウントの制限）。text は画面の文字（v0.17.7）。
+ * 失敗と書いていないのに同じパスワードの画面に戻ったときだけ、もう 1 回送ってよい（押すのが早すぎて出し直されたとき）
+ */
+export function loginFailedText(text) {
+  return /(ID|ユーザ|パスワード|password|username|credential)[^。\n]{0,20}(違|誤|正しくない|正しくありません|間違|一致しません|incorrect|invalid|wrong)|(incorrect|invalid|wrong)\s+(user|password|id|credential|login)|ログインに失敗|認証に失敗|失敗しました|ロック|locked|failed/i.test(
+    String(text ?? '')
+  );
+}
+
+/**
  * ページの中で欄を探して印を付ける（Playwright の page.evaluate に渡すので、外の変数を使わない）。
  * 返り値：{user, password, submit, extra, code, filledUser, filledPassword}
  *   user / password / submit：見つけたか。extra：ID・パスワード以外に入力が要りそうな欄（認証コード・検索欄など）があるか。

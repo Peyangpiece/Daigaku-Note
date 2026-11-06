@@ -12,7 +12,7 @@ import {
 } from '../../shared/recipe.js';
 import {parseRound} from '../../shared/rounds.js';
 import {parseSlot} from './slot.js';
-import {credentialUrlAllowed, markLoginForm, noAutofillHost} from '../browser/login-form.js';
+import {credentialUrlAllowed, loginFailedText, markLoginForm, noAutofillHost} from '../browser/login-form.js';
 import {isStale} from '../browser/session.js';
 
 const META = new Set(['url', 'items', 'openBeforeRead', 'files', 'container']);
@@ -379,6 +379,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       let sentPassword = false;
       let ssoClicks = 0;
       let restarted = false;
+      let resent = false;
       for (let step = 0; step < 8; step++) {
         const host = safeHost(page.url());
         if (host === baseHost && (await this._isLoggedIn(page, ctx))) return;
@@ -389,7 +390,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
               'login-needs-user',
               '統合認証のページが「過去のリクエスト」になりました。設定 → 授業と資料 の「ログイン」で窓を開いてください'
             );
-          restarted = true;
+          restarted = resent = true; // 送り直しは、やり直しと合わせて 1 回まで（送るのは合わせて 2 回まで）
           ssoClicks = 0;
           // 「過去のリクエスト」はパスワードの誤りではないので、やり直しでは 1 回だけ送り直してよい（送るのは合わせて 2 回まで）
           sentUser = sentPassword = false;
@@ -432,6 +433,8 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           await this._settle(page, ctx, baseHost, before);
           continue;
         }
+        // ページの準備（スクリプトが欄を整える）が終わってから欄を探して押す（v0.17.7）
+        await page.waitForLoadState('networkidle', {timeout: 4000}).catch(() => {});
         const f = form
           ? {
               user: (await page.locator(form.user).count()) > 0,
@@ -442,6 +445,12 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         const loc = (role) =>
           form ? page.locator(form[role]).first() : page.locator(`[data-dn-login="${role}"]`).first();
         if (f.password) {
+          // 失敗と書いていないのに同じパスワードの画面に戻った（押すのが早すぎて出し直された）ときは、1 回だけ送り直す（v0.17.7）
+          if (sentPassword && !resent) {
+            const text = await page.evaluate(() => document.body?.innerText ?? '').catch(() => '');
+            if (!loginFailedText(text)) sentPassword = false;
+            resent = restarted = true;
+          }
           if (sentPassword)
             throw err(
               'login-bad-credentials',

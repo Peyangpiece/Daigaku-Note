@@ -1,7 +1,7 @@
 // Playwright のブラウザ文脈・Cookie の保存・見えるログイン窓（DESIGN-M0 §8.5）。
 // ふだんはヘッドレス。本人の操作が要るときだけ別の Chromium を画面に出す。開ける先は許可したホストだけ。
 import {hostAllowed} from '../../shared/recipe.js';
-import {credentialUrlAllowed, markLoginForm, staleSsoPage} from './login-form.js';
+import {credentialUrlAllowed, loginFailedText, markLoginForm, staleSsoPage} from './login-form.js';
 
 const BLOCK_TYPES = new Set(['image', 'font', 'media']);
 
@@ -113,6 +113,9 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     page.on('framenavigated', (f) => {
       if (f === page.mainFrame()) visited.add(safeHost(f.url()));
     });
+    // 新しいページ（文書）を読んだ回数。ページの中だけの移動（# やスクリプトによる書き換え）は数えない
+    let navs = 0;
+    page.on('domcontentloaded', () => navs++);
     // LMS 自身のログイン画面（大学のアカウントでは入れない ID・パスワード欄）に、統合認証へのリンク（レシピの login.sso）があれば押す。
     // 開いた直後だけでなく、ログインの途中やあとでこの画面に戻されたときも押す（同じ画面で押し続けないよう 5 秒あけ、5 回まで）
     const ssoOn = async () =>
@@ -136,17 +139,27 @@ export function createBrowserSession({secrets, log = () => {}, browsersPath, exe
     };
     // 保存した ID・パスワードは、統合認証のページの欄にだけ入れる（LMS 自身のログインの欄には入れない）。
     // パスワードを保存していれば、入れたあと「ログイン」「次へ」も押す（ID → パスワードの 2 段階も）。
-    // 押すのは ID・パスワードとも 1 回だけ（通らなければ本人に任せる。何度も送ってアカウントをロックさせない）。
-    // 認証コード・ワンタイムパスワードの欄がある画面では押さない（本人が入れる）
-    const sent = {user: false, password: false};
+    // ページが落ち着いてから押す（読み込んだ直後に押すと、ページの準備が終わらず同じ画面が出し直される。中京大学の統合認証。v0.17.7）。
+    // パスワードを送るのは 1 回。ただし失敗と書いていないのに同じパスワードの画面に戻ったときだけ、もう 1 回押す（合わせて 2 回まで。
+    // 何度も送ってアカウントをロックさせない）。認証コード・ワンタイムパスワードの欄がある画面では押さない（本人が入れる）
+    const sent = {user: false, password: 0};
     if (autofill?.user)
       page.on('load', async () => {
+        const at = navs; // 開き直しでは同じアドレスのことがあるので、アドレスでなく移った回数で見る
+        await page.waitForLoadState('networkidle', {timeout: 4000}).catch(() => {});
+        await page.waitForTimeout(600).catch(() => {});
+        if (page.isClosed() || navs !== at) return; // 待つ間に次のページへ進んだ（その load で扱う）
         if (await ssoOn()) return;
         const f = await fillSaved(page, autofill).catch(() => null);
         if (!f || !autofill.password || !autofill.autoSubmit || f.code || !f.submit) return;
         if (f.password) {
-          if (sent.password) return;
-          sent.password = sent.user = true;
+          if (sent.password >= 2) return;
+          if (sent.password === 1) {
+            const text = await page.evaluate(() => document.body?.innerText ?? '').catch(() => '');
+            if (loginFailedText(text)) return; // パスワードの誤りなど：本人に任せる
+          }
+          sent.password++;
+          sent.user = true;
         } else if (f.user) {
           if (sent.user || sent.password) return;
           sent.user = true;
