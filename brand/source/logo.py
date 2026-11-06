@@ -17,32 +17,22 @@ def round_P(dx,ink):
     return f'<path d="{d}" fill="none" stroke="{ink}" stroke-width="{P_SW}" stroke-linecap="round" stroke-linejoin="round"/>'
 def en_body(ink,acc=None):
     acc=acc or ACC
-    xs=KE.layout('Palette Note',20,space=46); body='';w=0; dy=120-(120+KE.base*KE.sc)   # ベースラインを字面の下端 120 にそろえる（カタカナと同じ高さ）
+    xs=KE.layout('Palette Note',23,space=50); body='';w=0; dy=120-(120+KE.base*KE.sc)   # ベースラインを字面の下端 120 にそろえる（カタカナと同じ高さ）
     for ch,x in zip('Palette Note',xs):
         if ch==' ' or x is None: continue
         if ch=='P': body+=round_P(x,ink); w=x+P_W; continue
         g,gw=KE.glyph(ch,x,ink,acc,accent_o=True); body+=g; w=x+gw
     return band(ink,w)+f'<g transform="translate(0 {dy:.1f})">{body}</g>',w
+PRINT=False   # 印刷用：蛍光ペンを濃くする（白い紙でも帯が見えるように）
 def band(ink,w):
     if ink=='#000': return ''
-    cols=[mix(c,'#FFFFFF',0.35) for c in WEEK] if ink!=WHITE else [mix(c,NAVY,0.45) for c in WEEK]
-    x0,x1=-8,w+8; n=5; seg=(x1-x0)/n; r=HL_H/2
-    pre=f'<rect x="{x0:.1f}" y="{HL_Y}" width="{seg+r:.1f}" height="{HL_H}" rx="{r}" fill="{cols[0]}"/>'
-    pre+=f'<rect x="{x1-seg-r:.1f}" y="{HL_Y}" width="{seg+r:.1f}" height="{HL_H}" rx="{r}" fill="{cols[4]}"/>'
-    for i in range(1,4):
-        pre+=f'<rect x="{x0+i*seg:.1f}" y="{HL_Y}" width="{seg:.1f}" height="{HL_H}" fill="{cols[i]}"/>'
-    return pre
+    if ink==WHITE: cols=[mix(c,NAVY,0.45) for c in WEEK]
+    else: cols=[mix(c,'#FFFFFF',0.12 if PRINT else 0.35) for c in WEEK]
+    return FI.band(-10,HL_Y,w+20,HL_H,cols)
 def kana_body(ink,acc=None):
     acc=acc or ACC
     body,w=KF.wordmark(target=22,ink=ink,acc=acc)
-    if ink=='#000': return body,w                       # 黒 1 色：蛍光ペンなし
-    cols=[mix(c,'#FFFFFF',0.35) for c in WEEK] if ink!=WHITE else [mix(c,NAVY,0.45) for c in WEEK]
-    x0,x1=-8,w+8; n=5; seg=(x1-x0)/n; r=HL_H/2
-    pre=f'<rect x="{x0:.1f}" y="{HL_Y}" width="{seg+r:.1f}" height="{HL_H}" rx="{r}" fill="{cols[0]}"/>'
-    pre+=f'<rect x="{x1-seg-r:.1f}" y="{HL_Y}" width="{seg+r:.1f}" height="{HL_H}" rx="{r}" fill="{cols[4]}"/>'
-    for i in range(1,4):
-        pre+=f'<rect x="{x0+i*seg:.1f}" y="{HL_Y}" width="{seg:.1f}" height="{HL_H}" fill="{cols[i]}"/>'
-    return pre+body,w
+    return band(ink,w)+body,w
 S=20; H=120
 NAVY='#22304A'; ACC='#E04A2F'; WHITE='#FFFFFF'   # アクセント（朱）：月曜の色と区別し、白に 4.05・紺に 3.26 のコントラスト
 def en():
@@ -134,6 +124,10 @@ out={'logo-ja':kana_mark(),
      'lockup-en':lockup('Palette Note','en',0,None),
      'lockup-ja-dark':lockup('パレットノート',None,0,None,dark=True),
      'lockup-en-dark':lockup('Palette Note','en',0,None,dark=True)}
+PRINT=True   # 印刷用（白い紙でも蛍光ペンが見えるよう、色を濃く）
+out.update({'logo-ja-print':kana_mark(),'logo-en-print':en_mark(),
+            'lockup-ja-print':lockup('パレットノート',None,0,None),'lockup-en-print':lockup('Palette Note','en',0,None)})
+PRINT=False
 TITLE={'ja':'パレットノート','en':'PALETTE NOTE'}
 for k,v in out.items():
     t=TITLE['ja' if '-ja' in k else 'en']

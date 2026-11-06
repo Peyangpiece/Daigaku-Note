@@ -14,13 +14,25 @@ def squircle(x,y,s,n=5.0,steps=180):
         px=abs(ct)**(2/n)*math.copysign(1,ct); py=abs(st)**(2/n)*math.copysign(1,st)
         pts.append(f"{x+c+c*px:.1f} {y+c+c*py:.1f}")
     return "M"+"L".join(pts)+"Z"
-def band(x,y,w,h,cols):
-    """5 色（または 3 色）の蛍光ペン。ロゴの蛍光ペンと同じ考え方（左端と右端だけ丸い）"""
-    n=len(cols); seg=w/n; r=h/2
-    s=f'<path fill="{cols[0]}" d="{rr(x,y,seg+r,h,r)}"/><path fill="{cols[-1]}" d="{rr(x+w-seg-r,y,seg+r,h,r)}"/>'
-    for i in range(1,n-1):
-        s+=f'<rect x="{x+i*seg:.1f}" y="{y:.1f}" width="{seg+0.6:.1f}" height="{h:.1f}" fill="{cols[i]}"/>'
-    return s
+def band(x,y,w,h,cols,slant=0.55):
+    """蛍光ペン：本物のマーカーで引いた線のように、両端を斜めに切った帯（右上がりの斜め。傾きは高さの slant 倍）。
+    色は左から順に並べる（月〜金）。ロゴとアイコンで同じ形を使う"""
+    n=len(cols); s=h*slant; seg=w/n; out=''
+    for i,c in enumerate(cols):
+        a=x+i*seg; b=x+(i+1)*seg+(0.6 if i<n-1 else 0)
+        if i==0 and n==1:
+            pts=[(a+s,y),(b,y),(b-s,y+h),(a,y+h)]
+        elif i==0:
+            pts=[(a+s,y),(b,y),(b,y+h),(a,y+h)]
+        elif i==n-1:
+            pts=[(a,y),(b,y),(b-s,y+h),(a,y+h)]
+        else:
+            pts=[(a,y),(b,y),(b,y+h),(a,y+h)]
+        out+=f'<path fill="{c}" d="M'+' L'.join(f'{px:.1f} {py:.1f}' for px,py in pts)+' Z"/>'
+    return out
+def band_hole(x,y,w,h,slant=0.55):  # 1 色の版で抜く形
+    s=h*slant
+    return f'M{x+s:.1f} {y:.1f}L{x+w:.1f} {y:.1f}L{x+w-s:.1f} {y+h:.1f}L{x:.1f} {y+h:.1f}Z'
 def mark(cx,cy,u,small=False,mono=None,page=None,rule=RULE):
     """ページ＋曜日のタブ。いちばん上の行は 5 色の蛍光ペン（ロゴの蛍光ペンとつなぐ）。
     u は 1024 の版での 1 の大きさ。small は小さい表示用（タブ 3 つを大きく、行は蛍光ペン 1 本だけ）。
@@ -39,15 +51,16 @@ def mark(cx,cy,u,small=False,mono=None,page=None,rule=RULE):
     if small:
         bh=96*u; by=gy+ph/2-bh/2-20*u; rules=[]
     else:
-        bh=46*u; by=gy+128*u
-        rules=[gy+262*u+i*94*u for i in range(3)]
+        # 4 行のうち 2 行目を蛍光ペンにする（文章の 1 行に線を引いた形。いちばん上の帯にすると、ほかのメモのアプリの見出しの帯に似る）
+        bh=50*u; ys=[gy+150*u+i*100*u for i in range(4)]
+        by=ys[1]-bh/2; rules=[ys[0],ys[2],ys[3]]
     holes=''
     for i,y in enumerate(rules):
-        w=lw*(0.62 if i==len(rules)-1 else 1)
+        w=lw*(0.62 if i==len(rules)-1 else (0.86 if i==0 and not small else 1))
         holes+=rr(lx,y-12*u,w,24*u,12*u)
     if mono and not page:
         # 1 色：蛍光ペンも行と同じく抜く
-        g+=f'<path fill="{mono}" fill-rule="evenodd" d="{page_d}{holes}{rr(lx,by,lw,bh,bh/2)}"/>'
+        g+=f'<path fill="{mono}" fill-rule="evenodd" d="{page_d}{holes}{band_hole(lx,by,lw,bh)}"/>'
         return g
     if page:
         g+=f'<path fill="{page}" fill-rule="evenodd" d="{page_d}{holes}"/>'

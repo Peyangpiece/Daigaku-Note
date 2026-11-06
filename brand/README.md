@@ -4,7 +4,9 @@ v0.18.7 で作った。すべて線を塗りの形に変換した SVG（`<text>`
 
 ## アイコンの考え方
 
-紙のノートの端に、月〜金の曜日の色のタブ（アプリの曜日の色 `src/shared/skin.js` の `TAB_WEEKDAY`）。ノートのいちばん上の行は、ロゴと同じ 5 色の蛍光ペン（アイコンとロゴを一目でつなぐ）。
+紙のノートの端に、月〜金の曜日の色のタブ（アプリの曜日の色 `src/shared/skin.js` の `TAB_WEEKDAY`）。ノートの 2 行目には、ロゴと同じ 5 色の蛍光ペン（文章の 1 行に線を引いた形。アイコンとロゴを一目でつなぐ。いちばん上の帯にしないのは、ほかのメモのアプリの見出しの帯と似ないようにするため）。
+
+蛍光ペンは、本物のマーカーで引いた線のように両端を斜めに切った形（右上がり。傾きは帯の高さの 0.55 倍）。アイコンとロゴで同じ形を使い、このブランドだけの目印にする。
 色を自分で選んで作るノート（パレット）を、アプリの中で実際に使っている曜日のタブで表した。
 
 | 色               | HEX                                               | 使う場所                                                 |
@@ -17,20 +19,21 @@ v0.18.7 で作った。すべて線を塗りの形に変換した SVG（`<text>`
 
 ## ファイル
 
-| ファイル                                          | 中身                                                                                                                                                        |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `logo-ja.svg` / `logo-en.svg`                     | 文字だけのロゴ（明るい地用）                                                                                                                                |
-| `logo-ja-white.svg` / `logo-en-white.svg`         | 暗い地用（白。線を 4 % 細らせてある）                                                                                                                       |
-| `logo-ja-black.svg` / `logo-en-black.svg`         | 黒 1 色                                                                                                                                                     |
-| `lockup-ja.svg` / `lockup-en.svg`                 | 記号と文字を横に並べたもの（明るい地用）                                                                                                                    |
-| `lockup-ja-dark.svg` / `lockup-en-dark.svg`       | 紺の地に置いたもの                                                                                                                                          |
-| `lockup-ja-stacked.svg` / `lockup-en-stacked.svg` | 記号の下に文字（正方形に近い場所用）                                                                                                                        |
-| `source/icon-mac.svg`                             | アプリのアイコン（Mac の格子：1024 の中に 824 の角丸、影つき）。`build/icon.png` の元                                                                       |
-| `source/icon-flat.svg`                            | 角を丸めない正方形（iPhone のホーム画面。角は OS が丸める）。`src/mobile/icon.png` の元                                                                     |
-| `source/icon-small.svg`                           | 小さい表示用（16〜48 px。タブ 3 つを大きく、行は蛍光ペン 1 本だけ）。`site/favicon.png`・`src/renderer/assets/tray.png`・`build/icon.ico` の 16〜48 px の元 |
-| `source/icon-win.svg`                             | Windows 用（余白と影なし。角丸の正方形をほぼいっぱいに）。`build/icon.ico` の 64〜256 px の元（`electron-builder.yml` の `win.icon`）                       |
-| `source/tray-template.svg`                        | Mac のメニューバー用（黒 1 色）。`src/renderer/assets/trayTemplate*.png` の元                                                                               |
-| `source/symbol.svg` / `symbol-black.svg`          | 地のない記号                                                                                                                                                |
+| ファイル                                                         | 中身                                                                                                                                                                                    |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `logo-ja.svg` / `logo-en.svg`                                    | 文字だけのロゴ（明るい地用）                                                                                                                                                            |
+| `logo-ja-white.svg` / `logo-en-white.svg`                        | 暗い地用（白。線を 4 % 細らせてある）                                                                                                                                                   |
+| `logo-ja-black.svg` / `logo-en-black.svg`                        | 黒 1 色                                                                                                                                                                                 |
+| `lockup-ja.svg` / `lockup-en.svg`                                | 記号と文字を横に並べたもの（明るい地用）                                                                                                                                                |
+| `lockup-ja-dark.svg` / `lockup-en-dark.svg`                      | 紺の地に置いたもの                                                                                                                                                                      |
+| `logo-ja-print.svg` / `logo-en-print.svg` / `lockup-*-print.svg` | 印刷用（白い紙でも見えるよう、蛍光ペンを濃くした版）                                                                                                                                    |
+| `lockup-ja-stacked.svg` / `lockup-en-stacked.svg`                | 記号の下に文字（正方形に近い場所用）                                                                                                                                                    |
+| `source/icon-mac.svg`                                            | アプリのアイコン（Mac の格子：1024 の中に 824 の角丸、影つき）。`build/icon.png` の元                                                                                                   |
+| `source/icon-flat.svg`                                           | 角を丸めない正方形（iPhone のホーム画面。角は OS が丸める）。`src/mobile/icon.png` の元                                                                                                 |
+| `source/icon-small.svg`                                          | 小さい表示用（16〜48 px。タブ 3 つを大きく、行は蛍光ペン 1 本だけ）。`site/favicon.png`・`src/renderer/assets/tray.png`・`build/icon.ico` の 16〜48 px・`build/icon.icns` の 16 pt の元 |
+| `source/icon-win.svg`                                            | Windows 用（余白と影なし。角丸の正方形をほぼいっぱいに）。`build/icon.ico` の 64〜256 px の元（`electron-builder.yml` の `win.icon`）                                                   |
+| `source/tray-template.svg`                                       | Mac のメニューバー用（黒 1 色）。`src/renderer/assets/trayTemplate*.png` の元                                                                                                           |
+| `source/symbol.svg` / `symbol-black.svg`                         | 地のない記号                                                                                                                                                                            |
 
 ## ロゴの文字
 
