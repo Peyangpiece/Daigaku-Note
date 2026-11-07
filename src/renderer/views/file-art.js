@@ -34,8 +34,8 @@ const MARK = {
   video:
     '<rect x="13" y="28" width="20" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M33 33l8-4v12l-8-4z" fill="currentColor"/>',
   audio:
-    '<path d="M22 40V30l14-3v10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="19" cy="40" r="3" fill="currentColor"/><circle cx="33" cy="37" r="3" fill="currentColor"/>',
-  zip: '<path d="M25 26h3.5 M27 28.6h3.5 M25 31.2h3.5 M27 33.8h3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><rect x="24.5" y="36.5" width="6.5" height="6.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="2"/>',
+    '<path d="M21.6 29.4L36.6 25.8V29.2L21.6 32.8Z" fill="currentColor"/><path d="M21.6 30v10 M36.6 26.5v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><ellipse cx="18.7" cy="40.2" rx="3.7" ry="2.8" transform="rotate(-22 18.7 40.2)" fill="currentColor"/><ellipse cx="33.7" cy="36.7" rx="3.7" ry="2.8" transform="rotate(-22 33.7 36.7)" fill="currentColor"/>',
+  zip: '<path d="M23 22.5h4.5v2.4H23z M27.5 25.1H32v2.4h-4.5z M23 27.7h4.5v2.4H23z M27.5 30.3H32v2.4h-4.5z" fill="currentColor"/><path d="M22.5 33.2h10l-1.2 4.6h-7.6z" fill="currentColor"/><rect x="25" y="37" width="5" height="6.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/>',
   other:
     '<circle cx="20" cy="35" r="2" fill="currentColor"/><circle cx="27" cy="35" r="2" fill="currentColor"/><circle cx="34" cy="35" r="2" fill="currentColor"/>'
 };
