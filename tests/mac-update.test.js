@@ -200,3 +200,76 @@ test('入れ替え：Developer ID の要件を渡さなければ、Developer ID 
   assert.match(log, /パレットノートの証明書で署名されていません/);
   assert.match(s.version(), /CFBundleShortVersionString=0\.1\.0/);
 });
+
+test('配布物のダウンロード：公開直後の 400 は取り直し、途中で切れたら続き（Range）から取る。取り直しても変わらない状態はすぐ止める', async () => {
+  const {downloadResumable} = await import('../src/main/mac-update.js');
+  const {Readable} = await import('node:stream');
+  const {tmpdir} = await import('node:os');
+  const path = await import('node:path');
+  const dir = mkdtempSync(path.join(tmpdir(), 'dn-dl-'));
+  const part = path.join(dir, 'a.dmg.download');
+  const body = Buffer.from('0123456789abcdefghij');
+  // 途中で切れる流れ（最初の n バイトのあとで HTTP/2 の誤り）
+  const broken = (buf) =>
+    new Readable({
+      read() {
+        if (this.sent) return;
+        this.sent = true;
+        this.push(buf);
+        setTimeout(() => this.destroy(new Error('net::ERR_HTTP2_PROTOCOL_ERROR')), 30); // 書けたあとで切れる
+      }
+    });
+  const calls = [];
+  const steps = [
+    () => ({status: 400, length: 0, stream: Readable.from([])}),
+    () => ({status: 200, length: body.length, stream: broken(body.subarray(0, 8))}),
+    ({from}) =>
+      from > 0
+        ? {status: 206, length: body.length - from, stream: Readable.from([body.subarray(from)])}
+        : {status: 200, length: body.length, stream: Readable.from([body])}
+  ];
+  const waits = [];
+  const r = await downloadResumable(async (o) => (calls.push(o), steps.shift()(o)), part, {
+    delays: [1, 1, 1],
+    sleep: async () => {},
+    onWait: (n) => waits.push(n)
+  });
+  assert.equal(r.size, body.length);
+  assert.deepEqual(readFileSync(part), body, '切れたところから続きを足して、元と同じ中身');
+  assert.deepEqual(
+    calls.map((c) => c.from),
+    [0, 0, 8],
+    '3 回目は 8 バイト目から頼む'
+  );
+  assert.deepEqual(waits, [1, 2]);
+  await assert.rejects(
+    downloadResumable(async () => ({status: 410, length: 0, stream: Readable.from([])}), path.join(dir, 'b'), {
+      delays: [1],
+      sleep: async () => {}
+    }),
+    /（410）/,
+    '取り直しても変わらない状態はすぐ止める'
+  );
+  let n = 0;
+  await assert.rejects(
+    downloadResumable(async () => (n++, {status: 503, length: 0, stream: Readable.from([])}), path.join(dir, 'c'), {
+      delays: [1, 1],
+      sleep: async () => {}
+    }),
+    /（503）/
+  );
+  assert.equal(n, 3, '最初の 1 回と取り直し 2 回');
+});
+
+test('通信の名乗りは英字だけ：日本語のアプリ名は PaletteNote に替える', async () => {
+  const {asciiUserAgent} = await import('../src/main/user-agent.js');
+  const ua =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) パレットノート/0.19.1 Chrome/152.0.7977.167 Electron/44.9.3 Safari/537.36';
+  const out = asciiUserAgent(ua);
+  assert.equal(
+    out,
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) PaletteNote/0.19.1 Chrome/152.0.7977.167 Electron/44.9.3 Safari/537.36'
+  );
+  assert.ok(/^[\x20-\x7e]+$/.test(out));
+  assert.equal(asciiUserAgent('a/1 b'), 'a/1 b', '英字だけならそのまま');
+});

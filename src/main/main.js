@@ -31,6 +31,7 @@ import {runSelfTest, selfTestPath} from './self-check.js';
 import {applyStagedRestore, runBackup} from './backup.js';
 import {createNotifier} from './notify.js';
 import {createImporter} from './import-watch.js';
+import {asciiUserAgent} from './user-agent.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const RENDERER = path.join(here, '..', 'renderer', 'index.html');
@@ -69,6 +70,9 @@ const fromLegacy = !app.commandLine.hasSwitch('user-data-dir') && existsSync(LEG
 if (fromLegacy) app.setPath('userData', LEGACY_DATA);
 
 const SELF_TEST = selfTestPath();
+
+// 通信の名乗りを英字だけにする（日本語のアプリ名が入ると、GitHub から更新の .dmg を取れなかった。user-agent.js）
+app.userAgentFallback = asciiUserAgent(app.userAgentFallback);
 
 // 2 つ目の起動はすぐに終わる（app.quit() は非同期で、そのまま起動の処理が進んでデータベースまで開いていた）
 const primary = SELF_TEST ? false : app.requestSingleInstanceLock({build: BUILD});

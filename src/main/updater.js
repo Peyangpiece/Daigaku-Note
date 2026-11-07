@@ -11,7 +11,6 @@ import {
   appendFileSync,
   constants as fsConstants,
   createReadStream,
-  createWriteStream,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -22,10 +21,12 @@ import {
   writeFileSync
 } from 'node:fs';
 import {rename} from 'node:fs/promises';
+import https from 'node:https';
+import {asciiUserAgent} from './user-agent.js';
 import path from 'node:path';
 import {Readable} from 'node:stream';
-import {pipeline} from 'node:stream/promises';
 import {
+  downloadResumable,
   MAC_SIGNING_LEAF,
   MAC_TEAM_ID,
   developerIdRequirement,
@@ -198,6 +199,36 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     return h.digest('base64');
   };
 
+  /** Electron の net（Chromium の通信。HTTP/2）で取る。from > 0 なら続き（Range） */
+  async function openNet(url, from) {
+    // 名乗りは英字だけ（日本語のアプリ名が入ると GitHub が 400 などを返していた。user-agent.js）
+    const headers = {'User-Agent': asciiUserAgent(app.userAgentFallback)};
+    if (from > 0) headers.Range = `bytes=${from}-`;
+    const res = await net.fetch(url, {headers});
+    return {
+      status: res.status,
+      length: Number(res.headers.get('content-length')) || 0,
+      stream: res.body ? Readable.fromWeb(res.body) : Readable.from([])
+    };
+  }
+  /** Node の https（HTTP/1.1）で取る。GitHub の配布物は別のホストへ転送するので、5 回までたどる */
+  function openNode(url, from, hops = 0) {
+    return new Promise((resolve, reject) => {
+      const req = https.get(
+        url,
+        {headers: {'User-Agent': 'PaletteNote-Updater', ...(from > 0 ? {Range: `bytes=${from}-`} : {})}},
+        (res) => {
+          if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 5) {
+            res.resume();
+            return resolve(openNode(new URL(res.headers.location, url).toString(), from, hops + 1));
+          }
+          resolve({status: res.statusCode, length: Number(res.headers['content-length']) || 0, stream: res});
+        }
+      );
+      req.on('error', reject);
+    });
+  }
+
   /** .dmg を落とす。同じ名前のものが sha512 も合えばそれを使う。途中のものは .download で置き、確かめてから名前を変える */
   async function download(version, sha512) {
     mkdirSync(updatesDir, {recursive: true});
@@ -207,27 +238,36 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
       if ((await sha512Of(file)) === sha512) return file;
       rmSync(file, {force: true});
     }
-    const res = await net.fetch(macInstallerUrl(version, process.arch));
-    if (!res.ok || !res.body) throw new Error(`ダウンロードできませんでした（${res.status}）`);
-    const total = Number(res.headers.get('content-length')) || 0;
-    let got = 0;
+    // 公開した直後の 400 や、途中で切れたとき（HTTP/2 の通信の誤りなど）は、間をあけて続きから取り直す。
+    // 3 回目からは Node の https（HTTP/1.1）で取る。待っているあいだはメニューに「待っています」と出す
+    const url = macInstallerUrl(version, process.arch);
     try {
-      await pipeline(
-        Readable.fromWeb(res.body),
-        async function* (src) {
-          for await (const c of src) {
-            got += c.length;
+      const {size} = await downloadResumable(
+        ({attempt, from}) => (attempt < 2 ? openNet(url, from) : openNode(url, from)),
+        part,
+        {
+          onWait: (n, ms, e) => {
+            log(
+              'INFO',
+              `新しい版の配布物を取れません（${e.message}）。${Math.round(ms / 1000)} 秒後に取り直します（${n} 回目）`
+            );
+            if (state.downloading) {
+              state.downloading.waiting = true;
+              refreshTray();
+            }
+          },
+          onProgress: (got, total) => {
+            if (!state.downloading) return;
+            state.downloading.waiting = false;
             const pct = total ? Math.floor((got / total) * 100) : null;
-            if (state.downloading && pct !== state.downloading.pct) {
+            if (pct !== state.downloading.pct) {
               state.downloading.pct = pct;
               refreshTray();
             }
-            yield c;
           }
-        },
-        createWriteStream(part)
+        }
       );
-      if (total && got !== total) throw new Error('ダウンロードが途中で切れました');
+      if (!size) throw new Error('ダウンロードが空でした');
       if ((await sha512Of(part)) !== sha512) throw new Error('ダウンロードした .dmg が配布物と一致しません');
       await rename(part, file);
     } catch (e) {
@@ -398,7 +438,9 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     const items = [];
     if (state.downloading)
       items.push({
-        label: `新しい版 ${state.downloading.version} をダウンロード中${state.downloading.pct == null ? '…' : `（${state.downloading.pct}%）`}`,
+        label: state.downloading.waiting
+          ? `新しい版 ${state.downloading.version} の準備を待っています…`
+          : `新しい版 ${state.downloading.version} をダウンロード中${state.downloading.pct == null ? '…' : `（${state.downloading.pct}%）`}`,
         enabled: false
       });
     else if (isMac && state.newer && isNewer(state.newer, app.getVersion()))

@@ -3,6 +3,8 @@
 // パレットノートを入れ替えて開き直す。仕組みは SaBoRo を参考にしたが、コードはパレットノート用に書いた。
 // ここは副作用のない部品とスクリプトの本文だけ。ダウンロードと起動は updater.js が行う。
 import path from 'node:path';
+import {createWriteStream, rmSync, statSync} from 'node:fs';
+import {pipeline} from 'node:stream/promises';
 
 export const RELEASE_BASE = 'https://github.com/Peyangpiece/Daigaku-Note/releases/download';
 /**
@@ -113,3 +115,71 @@ rm -rf "$app.old"
 say INFO "$want に入れ替えました"
 "$OPEN" "$app"
 `;
+
+/**
+ * 公開した直後は GitHub がまだ配布物を配れず 400 などを返すことがあり（時間が経つと取れる）、
+ * 大きな .dmg の途中で通信が切れることもある（net::ERR_HTTP2_PROTOCOL_ERROR など）。v0.19.1
+ */
+export const RETRY_STATUS = new Set([400, 403, 404, 408, 425, 429, 500, 502, 503, 504]);
+export const RETRY_DELAYS = [10, 20, 40, 60, 90, 120].map((s) => s * 1000); // 合わせて 5 分 40 秒ほど
+
+/**
+ * 取り直しと続きからの取り直しつきで、part（途中のファイル）に落とす。
+ * open({attempt, from}) は {status, length（この応答の長さ）, stream（Node の Readable）} を返す。from > 0 なら続き（Range）を頼む。
+ * 206 なら続きを足し、200 なら頭から書き直す。416（もう全部ある・合わない）は part を消して頭から。
+ * 取り直しても変わらない状態（RETRY_STATUS にない）はすぐ止める。戻り {size}。最後まで取れなければ最後の Error
+ */
+export async function downloadResumable(
+  open,
+  part,
+  {
+    delays = RETRY_DELAYS,
+    sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+    onWait = () => {},
+    onProgress = () => {}
+  } = {}
+) {
+  for (let i = 0; ; i++) {
+    let from = 0;
+    try {
+      from = statSync(part).size;
+    } catch {
+      from = 0;
+    }
+    let err = null;
+    try {
+      const r = await open({attempt: i, from});
+      if (r.status === 416) {
+        r.stream?.destroy?.();
+        rmSync(part, {force: true});
+        throw Object.assign(new Error('ダウンロードの続きが合いませんでした'), {status: 503});
+      }
+      if (r.status !== 200 && !(r.status === 206 && from > 0)) {
+        r.stream?.destroy?.();
+        throw Object.assign(new Error(`ダウンロードできませんでした（${r.status}）`), {status: r.status});
+      }
+      if (r.status === 200) from = 0;
+      const total = r.length ? from + r.length : 0;
+      let got = from;
+      await pipeline(
+        r.stream,
+        async function* (src) {
+          for await (const c of src) {
+            got += c.length;
+            onProgress(got, total);
+            yield c;
+          }
+        },
+        createWriteStream(part, {flags: from > 0 ? 'a' : 'w'})
+      );
+      if (total && got !== total) throw new Error('ダウンロードが途中で切れました');
+      return {size: got};
+    } catch (e) {
+      err = e;
+    }
+    if (err.status && !RETRY_STATUS.has(err.status)) throw err;
+    if (i >= delays.length) throw err;
+    onWait(i + 1, delays[i], err);
+    await sleep(delays[i]);
+  }
+}
