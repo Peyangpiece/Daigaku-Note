@@ -30,10 +30,20 @@ export const FORMATS = {
   plain: {kind: 'plain', name: '無地', short: '無地', gap: 7},
   eng13: {kind: 'english', name: '英習罫 13 段', short: '英習 13段', gap: 4, rows: 13},
   eng15: {kind: 'english', name: '英習罫 15 段', short: '英習 15段', gap: 3.5, rows: 15},
-  staff: {kind: 'staff', name: '五線譜 12 段', short: '五線譜', gap: 2, rows: 12},
+  // 五線譜：A4 縦に 12 段。線の長さ 180 mm（左右 15 mm 空ける）、五線の高さ 8 mm（線の間 2 mm）。段の端の縦線は引かない（市販の五線ノートと同じ）
+  staff: {kind: 'staff', name: '五線譜 12 段', short: '五線譜', gap: 2, rows: 12, head: 'none', line: '#a7afb9'},
   dotgrid: {kind: 'dotgrid', name: 'ドット方眼 5 mm', short: 'ドット 5mm', gap: 5},
   cornell: {kind: 'cornell', name: 'コーネル式（7 mm）', short: 'コーネル', gap: 7},
-  genkou: {kind: 'genkou', name: '原稿用紙（20 × 20）', short: '原稿用紙', gap: 9},
+  // 原稿用紙：A4 横・縦書き 20 字 × 20 行（400 字）。行と行の間にふりがなの細い行、真ん中に折り目の柱と魚尾（市販の 400 字詰めと同じ組み方）
+  genkou: {
+    kind: 'genkou',
+    name: '原稿用紙（20 × 20・縦書き）',
+    short: '原稿用紙',
+    gap: 8,
+    landscape: true,
+    head: 'none',
+    line: '#a7afb9'
+  },
   kanji: {kind: 'kanji', name: '漢字練習（十字入りのます）', short: '漢字練習', gap: 15}
 };
 /** 種類ごとの変えられる幅（mm）と刻み */
@@ -45,7 +55,7 @@ export const GAP_RANGE = {
   dotgrid: [3, 12],
   english: [2.5, 5],
   staff: [1.5, 3],
-  genkou: [6, 12],
+  genkou: [6, 9],
   kanji: [10, 25],
   plain: [7, 7]
 };
@@ -75,8 +85,19 @@ export const DEFAULT_LINE = '#c9cfd6';
 export const DEFAULT_HEAD = '#a7afb9';
 export const DEFAULT_MARGIN = '#e8a0a0';
 export const DEFAULT_PAPER = '#ffffff';
-/** 選べる色の見本（線・紙）。ほかの色も色の欄で選べる */
-export const LINE_SWATCHES = ['#c9cfd6', '#9cc0e6', '#a8d5c2', '#f2b8b5', '#e7c989', '#c8b6e2', '#9aa0a6', '#4a5568'];
+/** 選べる色の見本（線・紙）。ほかの色も色の欄で選べる。茶・緑は原稿用紙によくある罫の色 */
+export const LINE_SWATCHES = [
+  '#c9cfd6',
+  '#a7afb9',
+  '#9cc0e6',
+  '#a8d5c2',
+  '#f2b8b5',
+  '#e7c989',
+  '#c8b6e2',
+  '#b98a6e',
+  '#7fa88a',
+  '#4a5568'
+];
 export const PAPER_SWATCHES = ['#ffffff', '#fbf8f1', '#f6f7f9', '#f2f7fb', '#fdf6f6'];
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -100,9 +121,9 @@ export function cleanDesign(raw = {}) {
     v: 3,
     format,
     gap: clampGap(f.kind, d.gap, f.gap),
-    line: hex(d.line, DEFAULT_LINE),
+    line: hex(d.line, f.line ?? DEFAULT_LINE),
     weight: Object.hasOwn(WEIGHTS, d.weight) ? d.weight : 'normal',
-    head: HEADS.includes(d.head) ? d.head : 'line',
+    head: HEADS.includes(d.head) ? d.head : (f.head ?? 'line'),
     headColor: hex(d.headColor, DEFAULT_HEAD),
     // 左の余白の線（横罫・ドット入り罫線だけ）
     margin: ['ruled', 'dotruled'].includes(f.kind) && d.margin === true,
@@ -115,40 +136,48 @@ export function cleanDesign(raw = {}) {
   };
 }
 
-/** 方眼などを左右の真ん中にそろえる：左右 8 mm ずつ空けた幅に入るだけのます。戻り {left, cols} */
-function centered(gap, side = 8) {
-  const cols = Math.floor((PAGE_W - 2 * side) / gap);
-  return {left: (PAGE_W - cols * gap) / 2, cols};
+/** ページの大きさ（mm）。原稿用紙だけ A4 横 */
+export function pageSize(raw) {
+  return FORMATS[cleanDesign(raw).format].landscape ? {w: PAGE_H, h: PAGE_W} : {w: PAGE_W, h: PAGE_H};
+}
+
+/** 方眼などを左右の真ん中にそろえる：左右 side mm ずつ空けた幅に入るだけのます。戻り {left, cols} */
+function centered(gap, side = 8, W = PAGE_W) {
+  const cols = Math.floor((W - 2 * side) / gap);
+  return {left: (W - cols * gap) / 2, cols};
 }
 
 /**
- * 1 ページに描くもの（mm。y は上から）。戻り：{paper, lines: [{x1, y1, x2, y2, w, c, dash?}], dots: [{x, y, r, c}]}。
+ * 1 ページに描くもの（mm。y は上から）。戻り：{w, h, paper, lines: [{x1, y1, x2, y2, w, c, dash?}], dots: [{x, y, r, c}],
+ * polys: [{pts: [[x, y]…], c}]（塗る形。原稿用紙の魚尾）, headLeft}。w・h はページの大きさ（原稿用紙は A4 横）。
  * 上の欄の下の線（head）・左の余白の線もここで返す
  */
 export function pageGeometry(raw) {
   const d = cleanDesign(raw);
   const f = FORMATS[d.format];
   const w = WEIGHTS[d.weight];
+  const {w: W, h: H} = pageSize(d);
   const lines = [];
   const dots = [];
+  const polys = [];
   const top = HEAD_H;
-  const bottom = PAGE_H - FOOT_H;
+  const bottom = H - FOOT_H;
   const L = (x1, y1, x2, y2, width = w, c = d.line, dash = null) =>
     lines.push({x1, y1, x2, y2, w: width, c, ...(dash ? {dash} : {})});
   const g = d.gap;
   let headLeft = 0;
-  let headRight = PAGE_W;
+  let headRight = W;
   if (f.kind === 'ruled' || f.kind === 'dotruled') {
     const rows = Math.floor((bottom - top) / g);
-    for (let i = 1; i <= rows; i++) L(0, top + i * g, PAGE_W, top + i * g);
+    for (let i = 1; i <= rows; i++) L(0, top + i * g, W, top + i * g);
     if (d.dots) {
-      const {left, cols} = centered(g, 6);
+      const {left, cols} = centered(g, 6, W);
       for (let i = 1; i <= rows; i++)
         for (let j = 0; j <= cols; j++) dots.push({x: left + j * g, y: top + i * g, r: w * 1.6, c: d.line});
     }
     if (d.margin) L(20, top, 20, top + rows * g, w * 1.3, d.marginColor);
   } else if (f.kind === 'grid' || f.kind === 'dotgrid') {
-    const {left, cols} = centered(g);
+    const {left, cols} = centered(g, 8, W);
     const rows = Math.floor((bottom - top) / g);
     headLeft = left;
     headRight = left + cols * g;
@@ -169,44 +198,80 @@ export function pageGeometry(raw) {
     const space = (bottom - top - 6 - n * h) / (n - 1);
     for (let k = 0; k < n; k++) {
       const y = top + 6 + k * (h + space);
-      L(12, y, PAGE_W - 12, y);
-      L(12, y + g, PAGE_W - 12, y + g, w, d.line, [1.2, 1.2]);
-      L(12, y + 2 * g, PAGE_W - 12, y + 2 * g, w * 1.8);
-      L(12, y + 3 * g, PAGE_W - 12, y + 3 * g);
+      L(12, y, W - 12, y);
+      L(12, y + g, W - 12, y + g, w, d.line, [1.2, 1.2]);
+      L(12, y + 2 * g, W - 12, y + 2 * g, w * 1.8);
+      L(12, y + 3 * g, W - 12, y + 3 * g);
     }
     headLeft = 12;
-    headRight = PAGE_W - 12;
+    headRight = W - 12;
   } else if (f.kind === 'staff') {
+    // 12 段を上の欄の下から下の余白まで等しく並べる。線の長さ 180 mm（左右 15 mm）。段の端に縦線は引かない
     const n = f.rows;
     const h = 4 * g;
-    const space = (bottom - top - 8 - n * h) / (n - 1);
+    const side = 15;
+    const space = (bottom - top - 10 - n * h) / (n - 1);
     for (let k = 0; k < n; k++) {
-      const y = top + 8 + k * (h + space);
-      for (let m = 0; m < 5; m++) L(12, y + m * g, PAGE_W - 12, y + m * g);
-      L(12, y, 12, y + h, w * 1.4);
-      L(PAGE_W - 12, y, PAGE_W - 12, y + h, w * 1.4);
+      const y = top + 6 + k * (h + space);
+      for (let m = 0; m < 5; m++) L(side, y + m * g, W - side, y + m * g);
     }
-    headLeft = 12;
-    headRight = PAGE_W - 12;
+    headLeft = side;
+    headRight = W - side;
   } else if (f.kind === 'cornell') {
-    // 左に手がかりの欄（60 mm）・下に要約の欄（45 mm）・ほかは横罫
-    const summary = bottom - 45;
+    // コーネル式の決まりの寸法：左に手がかりの欄（2.5 インチ＝63.5 mm）・下に要約の欄（2 インチ＝50.8 mm）・ほかは横罫
+    const summary = bottom - 50.8;
     const rows = Math.floor((summary - top) / g);
-    for (let i = 1; i <= rows; i++) L(0, top + i * g, PAGE_W, top + i * g);
-    L(60, top, 60, summary, w * 1.9);
-    L(0, summary, PAGE_W, summary, w * 1.9);
+    for (let i = 1; i <= rows; i++) L(0, top + i * g, W, top + i * g);
+    L(63.5, top, 63.5, summary, w * 1.9);
+    L(0, summary, W, summary, w * 1.9);
   } else if (f.kind === 'genkou') {
-    // 20 × 20 のます（左右の真ん中・上下の真ん中）。外のわくは太く、真ん中の折り目に小さな印
+    // A4 横・縦書き 20 字 × 20 行。右半分と左半分に 10 行ずつ、そのあいだに折り目の柱（魚尾の印つき）。
+    // 行（縦に 20 ます）と行のあいだには、ふりがなを書く細い行（ますの 0.4 倍）。外のわくと柱の両がわは太い線
     const n = 20;
-    const left = (PAGE_W - n * g) / 2;
+    const ruby = Math.round(g * 0.4 * 100) / 100;
+    const pillar = Math.round(g * 1.25 * 100) / 100;
+    const half = 10 * g + 9 * ruby;
+    const total = 2 * half + pillar;
+    const x0 = (W - total) / 2;
     const y0 = top + (bottom - top - n * g) / 2;
-    for (let i = 0; i <= n; i++) L(left, y0 + i * g, left + n * g, y0 + i * g, i % n === 0 ? w * 2 : w);
-    for (let j = 0; j <= n; j++) L(left + j * g, y0, left + j * g, y0 + n * g, j % n === 0 ? w * 2 : w);
-    dots.push({x: PAGE_W / 2, y: y0 - 2, r: 0.7, c: d.line});
-    headLeft = left;
-    headRight = left + n * g;
+    const y1 = y0 + n * g;
+    const thick = w * 2.6;
+    for (const hx of [x0, x0 + half + pillar]) {
+      for (let k = 0; k < 10; k++) {
+        const cx = hx + k * (g + ruby);
+        // ますの縦の線（行の左右）。半分の外の端はわく（太い線）で描くので、ここでは引かない
+        if (k > 0) L(cx, y0, cx, y1);
+        if (k < 9) L(cx + g, y0, cx + g, y1);
+        for (let i = 1; i < n; i++) L(cx, y0 + i * g, cx + g, y0 + i * g);
+      }
+      // 半分ごとのわく
+      L(hx, y0, hx + half, y0, thick);
+      L(hx, y1, hx + half, y1, thick);
+      L(hx, y0, hx, y1, thick);
+      L(hx + half, y0, hx + half, y1, thick);
+    }
+    // 柱の上と下の線（わくと同じ太さ）
+    L(x0 + half, y0, x0 + half + pillar, y0, thick);
+    L(x0 + half, y1, x0 + half + pillar, y1, thick);
+    // 魚尾：柱の上の方に、下の辺に V の切れ込みのある帯（折り目の目印）
+    const pl = x0 + half;
+    const pr = pl + pillar;
+    const fy = y0 + g * 1.6;
+    const fh = pillar * 0.62;
+    polys.push({
+      pts: [
+        [pl, fy],
+        [pr, fy],
+        [pr, fy + fh],
+        [(pl + pr) / 2, fy + fh * 0.5],
+        [pl, fy + fh]
+      ],
+      c: d.line
+    });
+    headLeft = x0;
+    headRight = x0 + total;
   } else if (f.kind === 'kanji') {
-    const {left, cols} = centered(g, 12);
+    const {left, cols} = centered(g, 12, W);
     const rows = Math.floor((bottom - top - 4) / g);
     const y0 = top + 4;
     for (let i = 0; i <= rows; i++) L(left, y0 + i * g, left + cols * g, y0 + i * g, w * 1.4);
@@ -234,27 +299,54 @@ export function pageGeometry(raw) {
       L(a, y, b, y, hw * 0.8, d.headColor);
     dots.push({x: x0 + 15.5, y: y - 0.4, r: 0.45, c: d.headColor}, {x: x0 + 30.5, y: y - 0.4, r: 0.45, c: d.headColor});
   }
-  return {paper: d.paper, lines, dots, headLeft};
+  return {w: W, h: H, paper: d.paper, lines, dots, polys, headLeft};
 }
 
-/** ページの見本（SVG。幅 width px、高さは A4 の比）。thumb は小さな見本（線を見えるだけの太さに）。aria は呼ぶ側で付ける */
-export function pageSvg(raw, {width = 210, thumb = false} = {}) {
+/**
+ * 一覧の札に拡大して見せるところ（mm）：ページの左上（上の欄の線と罫の始まり）。
+ * 原稿用紙は真ん中の柱と魚尾、五線譜は線の左の端が入るところ。幅 w・高さ h（4:5）
+ */
+export function cropOf(raw) {
+  const d = cleanDesign(raw);
+  const g = pageGeometry(d);
+  const kind = FORMATS[d.format].kind;
+  const w = 56;
+  const h = 70;
+  if (kind === 'genkou') return {x: g.w / 2 - w / 2, y: Math.min(...g.lines.map((l) => l.y1)) - 5, w, h}; // わくの上から
+  if (kind === 'staff') return {x: 8, y: HEAD_H - 6, w, h};
+  if (kind === 'cornell') return {x: 63.5 - w / 2, y: HEAD_H - 8, w, h}; // 手がかりの欄の線が入るところ
+  return {x: 0, y: HEAD_H - 8, w, h};
+}
+
+/**
+ * ページの見本（SVG。幅 width px、高さはページの比。原稿用紙は横長）。aria は呼ぶ側で付ける。
+ * thumb：小さな見本（線が消えないよう最小の太さを付ける）。crop：{x, y, w, h}（mm）を切り出して拡大して見せる（一覧の札）。
+ * mm：true なら width・height を mm で書く（試し書きの実際の大きさ）
+ */
+export function pageSvg(raw, {width = 210, thumb = false, crop = null, mm = false} = {}) {
   const g = pageGeometry(raw);
+  const box = crop ?? {x: 0, y: 0, w: g.w, h: g.h};
+  const scale = width / box.w; // 1 mm あたりの px
   // 小さな見本（thumb）は、線が 1 画素より細くなって消えないよう、線と点に最小の太さを付ける（mm に直す）。
-  // 太くしたぶんは薄くして、実際の紙の線の濃さに近づける
-  const minW = thumb ? (0.9 * PAGE_W) / width : 0.15;
-  const minR = thumb ? (0.7 * PAGE_W) / width : 0.25;
+  // 太くしたぶんは少しだけ薄くする（はっきり見えるよう 0.7 より薄くはしない）
+  const minW = thumb ? 0.9 / scale : 0.15;
+  const minR = thumb ? 0.75 / scale : 0.25;
   const n = (v) => +v.toFixed(2);
   const lines = g.lines
     .map(
       (l) =>
-        `<line x1="${n(l.x1)}" y1="${n(l.y1)}" x2="${n(l.x2)}" y2="${n(l.y2)}" stroke="${l.c}" stroke-width="${n(Math.max(l.w, minW))}"${l.w < minW ? ` stroke-opacity="${n(Math.max(0.3, l.w / minW))}"` : ''}${l.dash ? ` stroke-dasharray="${l.dash.join(' ')}"` : ''}/>`
+        `<line x1="${n(l.x1)}" y1="${n(l.y1)}" x2="${n(l.x2)}" y2="${n(l.y2)}" stroke="${l.c}" stroke-width="${n(Math.max(l.w, minW))}"${l.w < minW ? ` stroke-opacity="${n(Math.max(0.7, l.w / minW))}"` : ''}${l.dash ? ` stroke-dasharray="${l.dash.join(' ')}"` : ''}/>`
     )
     .join('');
   const dots = g.dots
     .map((p) => `<circle cx="${n(p.x)}" cy="${n(p.y)}" r="${n(Math.max(p.r, minR))}" fill="${p.c}"/>`)
     .join('');
-  return `<svg class="nb-page" viewBox="0 0 ${PAGE_W} ${PAGE_H}" width="${width}" height="${Math.round((width * PAGE_H) / PAGE_W)}" aria-hidden="true"><rect width="${PAGE_W}" height="${PAGE_H}" fill="${g.paper}"/>${lines}${dots}</svg>`;
+  const polys = g.polys
+    .map((p) => `<polygon points="${p.pts.map(([x, y]) => `${n(x)},${n(y)}`).join(' ')}" fill="${p.c}"/>`)
+    .join('');
+  const height = (width * box.h) / box.w;
+  const size = mm ? `width="${n(box.w)}mm" height="${n(box.h)}mm"` : `width="${width}" height="${Math.round(height)}"`;
+  return `<svg class="nb-page${g.w > g.h ? ' nb-page--wide' : ''}" viewBox="${n(box.x)} ${n(box.y)} ${n(box.w)} ${n(box.h)}" ${size} aria-hidden="true"><rect width="${g.w}" height="${g.h}" fill="${g.paper}"/>${lines}${dots}${polys}</svg>`;
 }
 
 // ---- ショップのノート（Palette）----

@@ -60,8 +60,8 @@ test('ページの計算：横罫は上の欄の下から下の余白まで行�
     for (const head of ['none', 'line', 'double', 'date']) {
       const p = pageGeometry({format: f, head, margin: true, dots: true});
       for (const l of p.lines) {
-        for (const v of [l.x1, l.x2]) assert.ok(v >= 0 && v <= PAGE_W, `${f} x=${v}`);
-        for (const v of [l.y1, l.y2]) assert.ok(v >= 0 && v <= PAGE_H - FOOT_H + 0.01, `${f} y=${v}`);
+        for (const v of [l.x1, l.x2]) assert.ok(v >= 0 && v <= p.w, `${f} x=${v}`);
+        for (const v of [l.y1, l.y2]) assert.ok(v >= 0 && v <= p.h - FOOT_H + 0.01, `${f} y=${v}`);
       }
     }
   }
@@ -70,12 +70,38 @@ test('ページの計算：横罫は上の欄の下から下の余白まで行�
     false
   );
   assert.equal(pageGeometry({format: 'plain', head: 'none'}).lines.length, 0, '無地で上の線もなしなら何も描かない');
-  const staff = pageGeometry({format: 'staff', head: 'none'});
-  assert.equal(staff.lines.length, 12 * 7, '五線譜：12 段 × （5 本＋左右の縦線）');
+  const staff = pageGeometry({format: 'staff'});
+  assert.equal(staff.lines.length, 12 * 5, '五線譜：12 段 × 5 本。段の端の縦線と上の線は引かない');
+  assert.deepEqual([staff.lines[0].x1, staff.lines[0].x2], [15, 195], '線の長さ 180 mm');
+  assert.equal(staff.lines[4].y1 - staff.lines[0].y1, 8, '五線の高さ 8 mm');
+});
+
+test('原稿用紙：A4 横・縦書き 20 × 20。ふりがなの行と、真ん中の柱に魚尾', () => {
+  const g = pageGeometry({format: 'genkou', gap: 9});
+  assert.deepEqual([g.w, g.h], [PAGE_H, PAGE_W], 'A4 横');
+  assert.equal(cleanDesign({format: 'genkou'}).head, 'none', '上の線ははじめなし');
+  // ますの横の線（1 行に 19 本 × 20 行）
+  const cells = g.lines.filter((l) => l.y1 === l.y2 && Math.abs(l.x2 - l.x1 - 9) < 0.01);
+  assert.equal(cells.length, 19 * 20);
+  // 行の左の端の x：10 行ずつ 2 つに分かれ、行と行のあいだはふりがなの行（3.6 mm）、柱は 11.25 mm
+  const xs = [...new Set(cells.map((l) => +l.x1.toFixed(2)))].sort((a, b) => a - b);
+  assert.equal(xs.length, 20);
+  assert.equal(+(xs[1] - xs[0]).toFixed(2), 12.6);
+  assert.equal(+(xs[10] - xs[9]).toFixed(2), 9 + 11.25);
+  assert.equal(g.polys.length, 1, '魚尾');
+  const total = xs[19] + 9 - xs[0];
+  assert.ok(Math.abs(xs[0] - (g.w - total) / 2) < 0.01, '左右の真ん中');
+  for (const l of g.lines) assert.ok(l.x1 >= 0 && l.x2 <= g.w && l.y2 <= g.h);
+  assert.match(pageSvg({format: 'genkou'}, {width: 297}), /viewBox="0 0 297 210"/);
 });
 
 test('ページの見本の SVG と表紙の絵（字は Palette だけ）', () => {
   assert.match(pageSvg({format: 'grid5'}), /^<svg class="nb-page"/);
+  assert.match(
+    pageSvg({format: 'a7'}, {width: 120, crop: {x: 0, y: 0, w: 60, h: 60}}),
+    /viewBox="0 0 60 60" width="120" height="120"/
+  );
+  assert.match(pageSvg({format: 'a7'}, {mm: true}), /width="210mm" height="297mm"/);
   const art = coverArt(NOTEBOOKS.find((n) => n.id === 'nb-a7'));
   assert.match(art, />Palette</);
   assert.deepEqual(

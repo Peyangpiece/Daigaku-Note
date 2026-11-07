@@ -5,10 +5,16 @@
 // v0.14.0〜0.14.1 で作ったノート（テンプレートの見た目。v のない design）は、足すページも前の見た目で描く（drawLegacyPage）
 import {PDFDocument, rgb} from 'pdf-lib';
 import {NOTE_GAPS, NOTE_TYPES} from '../shared/skin.js';
-import {cleanDesign, pageGeometry} from '../shared/notebooks.js';
+import {cleanDesign, pageGeometry, pageSize} from '../shared/notebooks.js';
 
 export const A4 = [595.28, 841.89]; // pt（210 × 297 mm）
 const MM = 72 / 25.4;
+/** ページの大きさ（pt）。v3 の原稿用紙は A4 横（v0.19.3）、ほかは A4 縦 */
+export function pageSizePt(design) {
+  if (design?.v !== 3) return A4;
+  const {w, h} = pageSize(design);
+  return w > h ? [A4[1], A4[0]] : A4;
+}
 
 // ---- 紙（v0.14.2〜） ----
 export const NOTE_PAPER = '#ffffff';
@@ -71,9 +77,9 @@ export function drawNotePage(page, design, header = null) {
  */
 function drawV3(page, d, header) {
   const [W, H] = [page.getWidth(), page.getHeight()];
-  const sx = W / 210;
-  const sy = H / 297;
   const geo = pageGeometry(d);
+  const sx = W / geo.w;
+  const sy = H / geo.h;
   page.drawRectangle({x: 0, y: 0, width: W, height: H, color: color(geo.paper)});
   for (const l of geo.lines)
     page.drawLine({
@@ -84,6 +90,14 @@ function drawV3(page, d, header) {
       ...(l.dash ? {dashArray: l.dash.map((v) => v * MM)} : {})
     });
   for (const p of geo.dots) page.drawCircle({x: p.x * sx, y: H - p.y * sy, size: p.r * MM, color: color(p.c)});
+  // 塗る形（原稿用紙の魚尾）。drawSvgPath は左上を原点に y を下へ取る
+  for (const p of geo.polys)
+    page.drawSvgPath(`M${p.pts.map(([x, y]) => `${x * sx} ${y * sy}`).join('L')}Z`, {
+      x: 0,
+      y: H,
+      color: color(p.c),
+      borderWidth: 0
+    });
   if (header) {
     const h = 4.4 * MM;
     const x = Math.max(12, geo.headLeft) * MM;
@@ -205,14 +219,14 @@ export async function createNotePdf(paper, {title = 'ノート', header = null, 
   doc.setCreationDate(now);
   doc.setModificationDate(now);
   doc.setKeywords([`daigaku-note:${now.toISOString()}:${Math.random().toString(36).slice(2)}`]);
-  drawNotePage(doc.addPage(A4), paper, await embed(doc, header));
+  drawNotePage(doc.addPage(pageSizePt(paper)), paper, await embed(doc, header));
   return doc.save();
 }
 
 /** ノートの最後にページを 1 枚足す（同じ紙・同じ上の欄）。戻り：{bytes, pages} */
 export async function appendNotePage(bytes, design, {header = null} = {}) {
   const doc = await PDFDocument.load(bytes);
-  drawNotePage(doc.addPage(A4), design, await embed(doc, header));
+  drawNotePage(doc.addPage(pageSizePt(design)), design, await embed(doc, header));
   doc.setModificationDate(new Date());
   return {bytes: await doc.save(), pages: doc.getPageCount()};
 }
@@ -232,7 +246,7 @@ export async function rebuildNotePdf(bytes, design, {header = null} = {}) {
   doc.setModificationDate(new Date());
   doc.setKeywords([old.getKeywords() ?? `daigaku-note:${Math.random().toString(36).slice(2)}`]);
   const img = await embed(doc, header);
-  for (let i = 0; i < n; i++) drawNotePage(doc.addPage(A4), design, img);
+  for (let i = 0; i < n; i++) drawNotePage(doc.addPage(pageSizePt(design)), design, img);
   return {bytes: await doc.save(), pages: n};
 }
 

@@ -160,3 +160,14 @@ test('v3 の紙（持ち物のノート・マイノート）：整え方はそ�
     assert.ok(more.length > bytes.length);
   }
 });
+
+test('原稿用紙（v3）のノートは A4 横で作り、足すページも横', async () => {
+  const paper = cleanPaper({v: 3, format: 'genkou'});
+  const bytes = await createNotePdf(paper);
+  const {bytes: two} = await appendNotePage(bytes, paper);
+  const doc = await PDFDocument.load(two);
+  for (const p of doc.getPages()) {
+    const {width, height} = p.getSize();
+    assert.ok(Math.abs(width - A4[1]) < 0.01 && Math.abs(height - A4[0]) < 0.01);
+  }
+});
