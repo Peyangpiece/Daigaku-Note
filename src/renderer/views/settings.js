@@ -603,6 +603,17 @@ function bind() {
       else reload();
     })
   );
+  // ID とパスワードの欄に、前に入れた ID と「保存したパスワードを使う」を入れておく（v0.18.10）
+  document.querySelectorAll('[data-form]').forEach((f) => {
+    const cid = f.dataset.form;
+    api['connection.savedLogin']({connectionId: cid}).then((r) => {
+      const u = $(`st-user-${cid}`),
+        p = $(`st-pass-${cid}`);
+      if (!r || r.error || !u || u.value) return;
+      u.value = r.user ?? '';
+      if (r.hasPassword && p) p.placeholder = 'パスワード（保存したものを使います。変えるときだけ入れる）';
+    });
+  });
   document.querySelectorAll('[data-save-pass]').forEach((b) =>
     b.addEventListener('click', async () => {
       const cid = b.dataset.savePass;

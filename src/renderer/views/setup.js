@@ -497,6 +497,13 @@ function bind() {
       }
       next();
     };
+  // 前に入れた ID と、保存してあるパスワード（中身は渡されない。空のまま進めば保存したものを使う）を欄に入れておく（v0.18.10）
+  if ($('su-user') && draft.connectionId && !$('su-user').value)
+    api['connection.savedLogin']({connectionId: draft.connectionId}).then((r) => {
+      if (!r || r.error || !$('su-user') || $('su-user').value) return;
+      $('su-user').value = r.user ?? '';
+      if (r.hasPassword) $('su-pass').placeholder = 'パスワード（保存したものを使います。変えるときだけ入れる）';
+    });
   if ($('su-skip')) $('su-skip').onclick = next;
   if ($('su-auto')) {
     const sync = () => ($('su-auto-fields').hidden = !$('su-auto').checked);
