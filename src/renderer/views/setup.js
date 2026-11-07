@@ -121,11 +121,10 @@ function stepLms(data, n) {
       : '<button class="btn" data-action="nav" data-route="/settings?tab=lms">やめる</button>';
   if (!draft.connectionId)
     return `<h2>${n}. manabo とつなぐ</h2>
-    <p class="muted">manabo のトップページの URL を入れてください。</p>
     <label class="sr-only" for="su-url">manabo の URL</label>
     <input class="input" id="su-url" type="url" placeholder="${MANABO_URL}" value="${esc(draft.url || MANABO_URL)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)}${c.kind === 'manual' ? ` <span class="muted">${esc(KIND_LABEL.manual)}</span>` : ''}</label>`).join('')}</div>
-    ${draft.connectorId ? `<label class="su-label">名前（ホームや設定に出ます）<input class="input" id="su-label" maxlength="60" placeholder="例：manabo" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
+    ${draft.connectorId ? `<label class="su-label">名前<input class="input" id="su-label" maxlength="60" placeholder="例：manabo" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
     <div class="actions">${back}<button class="btn btn--primary" id="su-next1">次へ</button></div>
     ${draft.connectorId ? '' : draft.detected ? '<p role="status">manabo の URL ではないようです。</p>' : ''}`;
   const body =
@@ -134,8 +133,7 @@ function stepLms(data, n) {
          <label class="sr-only" for="su-user">ID</label><input class="input" id="su-user" placeholder="ID" autocomplete="username">
          <label class="sr-only" for="su-pass">パスワード</label><input class="input" id="su-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top: var(--space-1)">`
       : draft.kind === 'recipe'
-        ? `<p class="muted">開いた窓でログインしてください。</p>
-           <label style="display:block; margin: var(--space-2) 0 var(--space-1)"><input type="checkbox" id="su-auto" checked> 次回から自動でログインする</label>
+        ? `<label style="display:block; margin: var(--space-2) 0 var(--space-1)"><input type="checkbox" id="su-auto" checked> 次回から自動でログインする</label>
            <div id="su-auto-fields">
              <label class="sr-only" for="su-user">ID</label><input class="input" id="su-user" placeholder="ID（学籍番号など）" autocomplete="username">
              <label class="sr-only" for="su-pass">パスワード</label><input class="input" id="su-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top: var(--space-1)">
@@ -153,8 +151,7 @@ function stepLms(data, n) {
 // 授業の確認と最初の同期（SPEC §6.3 の手順 3・6 を 1 つに）：同期する授業を選んで、そのまま同期を始める
 function stepCoursesSync(data, n) {
   const list = draft.courses.length
-    ? `<p class="muted">同期する授業を選んでください。</p>
-       <div id="su-courses">${draft.courses.map((c, i) => `<label style="display:block"><input type="checkbox" id="su-c${i}" checked data-lms="${esc(c.lmsId)}"> ${esc(c.name)}${c.weekday ? ` <span class="muted">${esc(c.weekday)}曜${c.period ? ` ${c.period}限` : ''}</span>` : ''}</label>`).join('')}</div>`
+    ? `<div id="su-courses">${draft.courses.map((c, i) => `<label style="display:block"><input type="checkbox" id="su-c${i}" checked data-lms="${esc(c.lmsId)}"> ${esc(c.name)}${c.weekday ? ` <span class="muted">${esc(c.weekday)}曜${c.period ? ` ${c.period}限` : ''}</span>` : ''}</label>`).join('')}</div>`
     : `<p class="muted">${draft.coursesLoaded ? '授業が取れませんでした。ログインできているか、学期が始まっているかを確かめてください。' : 'まだ授業の一覧を読んでいません（ログインがまだのため）。'}最初の同期で、全部の授業を取り込みます。</p>`;
   return `<h2>${n}. 授業の確認と最初の同期</h2>
     ${list}
@@ -204,8 +201,8 @@ const MATERIALS = [
     'パソコンのフォルダを登録',
     '授業ごとのフォルダが入ったフォルダを選ぶと、中のフォルダを 1 つずつ登録して、そのまま使えます（コピーしません）'
   ],
-  ['service', 'manabo とつなぐ', 'manabo から授業の資料を自動でダウンロードします（試験中）'],
-  ['later', 'あとで設定', '設定からいつでも選べます']
+  ['service', 'manabo とつなぐ', '試験中'],
+  ['later', 'あとで設定']
 ];
 function stepMaterials(data, n) {
   const chukyo = isChukyo(universityOf(data));
@@ -221,7 +218,7 @@ function stepMaterials(data, n) {
     )
       .map(
         ([k, l, d]) =>
-          `<button type="button" class="use-pick__item" role="radio" data-materials="${k}" aria-checked="${m === k}"><strong>${esc(l)}</strong><span class="muted">${esc(d)}</span></button>`
+          `<button type="button" class="use-pick__item" role="radio" data-materials="${k}" aria-checked="${m === k}"><strong>${esc(l)}</strong>${d ? `<span class="muted">${esc(d)}</span>` : ''}</button>`
       )
       .join('')}</div>
     ${m === 'folder' ? `<div class="actions"><button class="btn" id="su-import">フォルダを選ぶ…</button></div>${done}` : ''}
@@ -269,9 +266,8 @@ function stepTermRoot(data, n) {
     <h3 class="su-sub">保存先</h3>`
         : ''
     }
-    <p>${terms ? '資料はここに「学期 → 授業 → 回」のフォルダで保存します。' : '資料はここに保存します。'}</p>
+    ${terms ? '<p>資料はここに「学期 → 授業 → 回」のフォルダで保存します。</p>' : ''}
     <p><code>${esc(data.settings.root)}</code></p>
-    ${toLms ? `<p>次は、manabo とつなぎます（あと ${steps.length - n} 手順）。</p>` : ''}
     <div class="actions"><button class="btn" data-setup-back>戻る</button><button class="btn" id="su-pick">フォルダを選択…</button>${toLms ? '<button class="btn btn--primary" id="su-root-next">次へ</button>' : '<button class="btn btn--primary" id="su-finish">始める</button>'}</div>`;
 }
 

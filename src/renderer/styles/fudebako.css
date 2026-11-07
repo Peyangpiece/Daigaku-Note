@@ -103,10 +103,6 @@
 .pts-balance small {
   font-size: 18px;
 }
-.pts-balance p {
-  margin: 6px 0 0;
-  color: inherit;
-}
 .pts-balance .muted {
   color: #7a5a14; /* 明るい札なので、ノートが暗くても濃いまま */
 }
@@ -263,10 +259,6 @@
   font-size: 13px;
   line-height: 22px;
   cursor: pointer;
-}
-.fb-case__hint {
-  margin: var(--space-2) 0 0;
-  font-size: var(--fs-small);
 }
 .fb-group h3 {
   margin: var(--space-4) 0 var(--space-2);
@@ -575,11 +567,6 @@ button.fb-card {
 .shop-hero__art .model-view {
   height: 150px;
   background: radial-gradient(ellipse at 50% 62%, rgba(255, 255, 255, 0.55), transparent 68%);
-}
-.shop-hero__hint {
-  margin: 4px 0 0;
-  font-size: var(--fs-small);
-  text-align: center;
 }
 .shop-hero__art .st-art {
   display: block;
@@ -916,7 +903,7 @@ button.fb-card {
 }
 .shop-dots--big {
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-2);
 }
 .shop-dots--big .shop-dot {
   width: 24px;
@@ -924,10 +911,6 @@ button.fb-card {
 }
 .shop-dots--big .shop-dot::after {
   inset: 6px;
-}
-.fb-detail__colorname {
-  margin: 0 0 var(--space-2);
-  font-size: var(--fs-small);
 }
 .fb-detail__price {
   display: flex;

@@ -132,14 +132,14 @@ export const BAR = `
     <span class="viewer-bar__name" data-v="name"></span>
     <span class="viewer-bar__caption" data-v="caption" hidden></span>
     <div class="seg" role="group" aria-label="ツール">
-      <button type="button" data-tool="select" title="選択・移動（Esc）：押してそのまま動かす">選択</button>
-      <button type="button" data-tool="text" title="文字入れ（${key(MOD, 'T')}）：文字の上を押すと打つ・なぞると範囲を選ぶ。箱のふち（すぐ外側）を押して動かす">文字</button>
-      <button type="button" data-tool="note" title="コメント（${key(MOD, 'M')}）：押した所にアイコンを置き、押すと開く吹き出しに書く">コメント</button>
+      <button type="button" data-tool="select" title="選択・移動（Esc）">選択</button>
+      <button type="button" data-tool="text" title="文字入れ（${key(MOD, 'T')}）。箱のふち（すぐ外側）を押して動かす">文字</button>
+      <button type="button" data-tool="note" title="コメント（${key(MOD, 'M')}）">コメント</button>
     </div>
-    <button type="button" class="viewer-bar__held" data-v="held" hidden title="持っている道具（押すと選択に戻る。Esc でも）"><span class="viewer-bar__held-dot" aria-hidden="true"></span><span data-v="held-name"></span><span aria-hidden="true">×</span></button>
+    <button type="button" class="viewer-bar__held" data-v="held" hidden title="選択に戻る（Esc）"><span class="viewer-bar__held-dot" aria-hidden="true"></span><span data-v="held-name"></span><span aria-hidden="true">×</span></button>
     <div class="viewer-bar__toggles" role="group" aria-label="出す・しまう">
     <div class="viewer-bar__bookmarks">
-      <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="付箋の一覧（押すとその場所へ。${key(SHIFT, MOD, 'D')} で今の場所に付箋を貼る）">付箋</button>
+      <button type="button" data-v="bookmarks" aria-expanded="false" aria-haspopup="true" title="付箋の一覧（${key(SHIFT, MOD, 'D')} で今の場所に貼る）">付箋</button>
       <div class="bookmark-panel" data-v="bookmark-panel" hidden>
         <div class="bookmark-panel__head">
           <strong>付箋</strong>
@@ -157,24 +157,24 @@ export const BAR = `
     <button type="button" class="btn btn--small" data-v="delete" hidden title="選んだ注釈を消す（Delete）">削除</button>
     <button type="button" class="btn btn--small" data-v="rotate" hidden title="選んだ写真を右へ 90° 回す" aria-label="写真を右へ回す">↻ 回す</button>
     <button type="button" class="viewer-bar__find" data-v="find" title="PDF の中の文字と、書き込んだ文字（文字入れ・コメント・メモ）を探す（${key(MOD, 'F')}）">検索</button>
-    <button type="button" class="viewer-bar__find" data-v="photo" title="写真を貼る（ファイルを選ぶ。${key(MOD, 'V')} で貼り付け・ページへドラッグでも貼れます）">写真</button>
+    <button type="button" class="viewer-bar__find" data-v="photo" title="写真を貼る（${key(MOD, 'V')}・ドラッグでも）">写真</button>
     <button type="button" class="viewer-bar__find" data-v="spread" aria-pressed="false" title="片開き（1 ページずつ）と見開き（2 ページずつ横に並べる）を切り替える">▯ 片開き</button>
-    <button type="button" class="btn btn--small" data-v="notebook" hidden title="この回のノートを開く（なければ作る。ノートからは「← 資料へ」で戻れます）"><span class="ico ico--notebook" aria-hidden="true"></span> ノート</button>
+    <button type="button" class="btn btn--small" data-v="notebook" hidden title="この回のノートを開く（なければ作る）"><span class="ico ico--notebook" aria-hidden="true"></span> ノート</button>
     <button type="button" class="btn btn--small" data-v="note-pdfs" hidden aria-haspopup="menu" title="この回の PDF の資料を開く・ノートの横に並べる"><span class="ico ico--document" aria-hidden="true"></span> 資料</button>
-    <button type="button" class="btn btn--small" data-v="note-side" hidden title="この回のノートを横に並べて開く（同じ窓の中で PDF は左、ノートは右。両方に同時に書けます）">◫ 横に並べる</button>
+    <button type="button" class="btn btn--small" data-v="note-side" hidden title="この回のノートを横に並べて開く">◫ 横に並べる</button>
     <span class="viewer-bar__spacer"></span>
     <div class="viewer-bar__nav">
-    <label class="viewer-bar__page" title="ページ番号を入れて Enter で移る">
+    <label class="viewer-bar__page">
       <input type="number" data-v="page" min="1" value="1" aria-label="ページ" /><span data-v="page-count">/ 1</span>
     </label>
     <div class="viewer-bar__zoom">
       <button type="button" data-v="zoom-out" aria-label="縮小">−</button>
       <span data-v="zoom-label">100%</span>
       <button type="button" data-v="zoom-in" aria-label="拡大">＋</button>
-      <button type="button" data-v="fit" title="ページの幅を画面の幅に合わせる">ページ幅</button>
+      <button type="button" data-v="fit">ページ幅</button>
     </div>
     </div>
-    <button type="button" class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（${key(MOD, 'S')} ですぐに保存）。保存できなかったときは押すともう一度保存します"></button>
+    <button type="button" class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（${key(MOD, 'S')} ですぐに保存）"></button>
     <button type="button" class="viewer-bar__export" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（${key(SHIFT, MOD, 'E')}）">書き出す…</button>
     <div class="viewer-bar__help">
       <button type="button" data-v="help" aria-expanded="false" aria-haspopup="true" title="キーボードの操作（${key(MOD, '/')}）" aria-label="キーボードの操作">? 操作</button>
@@ -206,7 +206,7 @@ export const BAR = `
   </div>
   <div class="viewer-sub" data-v="sub" role="toolbar" aria-label="道具の設定" hidden>
     <div class="viewer-bar__group viewer-sub__group" data-group="text" hidden>
-      <span class="viewer-bar__font" title="文字入れのフォントは${IS_MAC ? 'ヒラギノ角ゴ' : 'この OS の標準のゴシック体'}です（変えられません）">${FONT_LABEL}</span>
+      <span class="viewer-bar__font">${FONT_LABEL}</span>
       <label class="viewer-bar__size">サイズ<input type="number" data-v="size" min="${SIZE_MIN}" max="${SIZE_MAX}" step="0.5" />pt</label>
       <button type="button" class="viewer-bar__bold" data-v="bold" aria-pressed="false" title="太字（${key(MOD, 'B')}）">B</button>
       <span class="viewer-bar__align" role="group" aria-label="揃え">${ALIGN_BUTTONS}</span>
@@ -245,15 +245,15 @@ export const BAR = `
     </form>
   </dialog>
   <aside class="fude-side is-tucked" data-v="side" data-corner="fude" aria-label="筆箱">
-    <button type="button" class="fude-side__tab" data-corner-tab="fude" aria-expanded="false" title="筆箱を出す（マウスを画面の右上の端へ・右端から左へなでる）" aria-label="筆箱を出す"><span>筆箱</span></button>
+    <button type="button" class="fude-side__tab" data-corner-tab="fude" aria-expanded="false" title="筆箱を出す" aria-label="筆箱を出す"><span>筆箱</span></button>
     <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span><button type="button" class="fude-side__pin" data-v="pin" aria-pressed="false" title="開いたままにする（窓が広いときだけ。PDF は左に寄せて小さくします）">開いたまま</button></div>
     <div class="fude-side__case" data-v="slots" role="group" aria-label="筆箱のペン（${key(MOD, '1')}〜${key(MOD, '6')}）"></div>
-    <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム：ペンの線・マーカー・文字隠しをなぞって消す（${key(MOD, 'E')}）">
+    <button type="button" class="fude-side__eraser" data-tool="eraser" title="消しゴム（${key(MOD, 'E')}）">
       ${eraserArt()}
       <span>消しゴム</span>
     </button>
     <div class="fude-side__swap">
-      <button type="button" class="btn btn--small" data-v="case" aria-expanded="false" aria-haspopup="true" title="持っているペンを出して、入れ替える">ペンを入れ替える</button>
+      <button type="button" class="btn btn--small" data-v="case" aria-expanded="false" aria-haspopup="true">ペンを入れ替える</button>
       <div class="case-panel" data-v="case-panel" hidden></div>
     </div>
   </aside>

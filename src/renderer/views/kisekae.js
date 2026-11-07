@@ -540,7 +540,6 @@ function tray(data) {
   const tabs = bookTabs(data);
   if (!tabs.some(([v]) => v === ui.book)) ui.book = 'mark';
   const items = bookItems(data, 'sticker-add', null, ui.book);
-  const empty = ui.book === 'mine' ? '右の「＋ 画像を追加」から、パソコンの画像をシールにできます' : 'まだありません';
   return `<div class="ks-tray">
     <div class="ks-tray__bar" role="tablist" aria-label="シール帳のジャンル">
       ${tabs
@@ -552,7 +551,7 @@ function tray(data) {
         .join('')}
       <label class="ks-tray__tab ks-tray__add" title="パソコンの画像をシールにする"><span class="ks-tray__icon">＋</span><span class="ks-tray__label">画像を追加</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ks-file hidden /></label>
     </div>
-    <div class="ks-book ks-tray__grid" role="tabpanel" aria-label="${esc(tabs.find(([v]) => v === ui.book)?.[1] ?? '')}">${items || `<p class="muted ks-tray__empty">${empty}</p>`}</div>
+    <div class="ks-book ks-tray__grid" role="tabpanel" aria-label="${esc(tabs.find(([v]) => v === ui.book)?.[1] ?? '')}">${items || '<p class="muted ks-tray__empty">まだありません</p>'}</div>
   </div>`;
 }
 
@@ -764,7 +763,7 @@ async function importSticker(file) {
   });
   if (r?.error) return toast(r.error, {error: true});
   await reload();
-  toast('シール帳に入れました。見本へドラッグすると貼れます');
+  toast('シール帳に入れました');
 }
 
 // 貼る場所ごとの、はじめに置く位置（見本の真ん中を避ける）

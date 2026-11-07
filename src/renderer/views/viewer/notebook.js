@@ -110,7 +110,7 @@ export const methods = {
     }
     if (!seen)
       toast(
-        `ノートはペンを持って開きます。ページは右下の「＋ ページを追加」か ${key(SHIFT, MOD, 'N')} で足せます（最後のページの下のほうまで書くと自動でも足します。「紙を変える…」で切り替え）。写真は貼り付け（${key(MOD, 'V')}）やドラッグでも貼れます`,
+        `ページは ${key(SHIFT, MOD, 'N')} でも足せます（最後のページの下のほうまで書くと自動でも足します）。写真は貼り付け（${key(MOD, 'V')}）やドラッグでも貼れます`,
         {action: {label: 'わかった', run: () => {}}} // 読めるように少し長く出す
       );
   },
@@ -211,7 +211,7 @@ export const methods = {
         (x) =>
           `<div class="viewer-pdfmenu__row"><span class="viewer-pdfmenu__name" title="${esc(x.name)}">${esc(x.name)}</span>` +
           `<button type="button" role="menuitem" data-pdf-open="${x.id}">開く</button>` +
-          `<button type="button" role="menuitem" data-pdf-side="${x.id}" title="同じ窓の中で、PDF を左・このノートを右に並べて開く（両方に同時に書けます）">◫ 横に並べる</button></div>`
+          `<button type="button" role="menuitem" data-pdf-side="${x.id}" title="PDF を左・このノートを右に並べて開く">◫ 横に並べる</button></div>`
       )
       .join('');
     this.openBarMenu(btn, '同じ回の資料', html, async (b) => {
@@ -255,10 +255,10 @@ export const methods = {
     const box = document.createElement('div');
     box.className = 'viewer-addpage';
     box.innerHTML =
-      '<button type="button" class="btn btn--small btn--quiet viewer-addpage__paper" data-v="note-paper" aria-haspopup="menu" title="このノートの紙（横罫・方眼、行の間）を変える。書いたものはそのまま">紙を変える…</button>' +
-      '<button type="button" class="btn btn--small btn--quiet viewer-addpage__delete" data-v="delete-note" title="このノートを削除する（ファイルはパソコンのゴミ箱へ）">ノートを削除…</button>' +
-      '<button type="button" class="btn btn--small btn--quiet" data-v="remove-page" title="最後のページを消す（何も書いていない白紙のときだけ。↶ で戻せます）">− 最後のページを消す</button>' +
-      `<button type="button" class="btn btn--small" data-v="add-page" title="ノートの最後に白いページを 1 枚足す（下に増えます。${key(SHIFT, MOD, 'N')} でも。最後のページの下のほうまで書くと自動でも足します。↶ で取り消せます）">＋ ページを追加</button>`;
+      '<button type="button" class="btn btn--small btn--quiet viewer-addpage__paper" data-v="note-paper" aria-haspopup="menu" title="書いたものはそのまま残ります">紙を変える…</button>' +
+      '<button type="button" class="btn btn--small btn--quiet viewer-addpage__delete" data-v="delete-note" title="ファイルはパソコンのゴミ箱へ">ノートを削除…</button>' +
+      '<button type="button" class="btn btn--small btn--quiet" data-v="remove-page" title="何も書いていない白紙のときだけ。↶ で戻せます">− 最後のページを消す</button>' +
+      `<button type="button" class="btn btn--small" data-v="add-page" title="${key(SHIFT, MOD, 'N')}。最後のページの下のほうまで書くと自動でも足します">＋ ページを追加</button>`;
     this.pagesEl.append(box);
     this.addPageBox = box;
     this.on(box, 'click', (e) => {

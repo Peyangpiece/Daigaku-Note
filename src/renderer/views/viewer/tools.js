@@ -145,7 +145,7 @@ export const methods = {
       .map((id, i) => {
         const it = itemOf(id);
         if (!it)
-          return `<button type="button" class="fude-side__pen is-empty" data-slot="${i}" disabled title="空き（「ペンを入れ替える」で入れる）" aria-label="${i + 1} 本目：空き"><span class="fude-side__num">${i + 1}</span></button>`;
+          return `<button type="button" class="fude-side__pen is-empty" data-slot="${i}" disabled title="空き" aria-label="${i + 1} 本目：空き"><span class="fude-side__num">${i + 1}</span></button>`;
         const held = heldPen(it, this.st.refills?.[it.id]);
         const tip = held.refill
           ? `${it.name}（${held.refill.name}・キー ${i + 1}。もう一度押すと次の芯）`

@@ -124,7 +124,7 @@ export function tryout(item) {
       </div>
       ${sheet ? `<div class="ts-sheet" role="img" aria-label="赤シート（ドラッグで動かせます）" style="transform:translate(${sheetAt.x}px, ${sheetAt.y}px)"><span>赤シート</span></div>` : ''}
     </div>
-    <p class="muted fb-try__hint">付箋の上をなぞると書けます。右下のめくれた角を押すか左上へ引くと、はがして新しい紙になります。${sheet ? what : ''}</p>
+    ${sheet ? `<p class="muted fb-try__hint">${what}</p>` : ''}
   </section>`;
 }
 

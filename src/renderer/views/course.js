@@ -57,7 +57,7 @@ export function fileCard(m, course) {
       ${m.copyOf ? '<span class="file__tag">同じ中身の写し</span>' : ''}
       ${ok ? '' : '<span class="file__tag">見つかりません</span>'}
     </button>
-    ${ok && !m.copyOf ? `<button type="button" class="file__more" data-action="material-menu" data-id="${esc(m.id)}" aria-label="${esc(m.name)} のメニュー" title="メニュー（右クリックでも出ます）" aria-haspopup="menu">⋯</button>` : ''}
+    ${ok && !m.copyOf ? `<button type="button" class="file__more" data-action="material-menu" data-id="${esc(m.id)}" aria-label="${esc(m.name)} のメニュー" title="メニュー" aria-haspopup="menu">⋯</button>` : ''}
   </div>`;
 }
 /** 資料の名前：区切り（_ - 空白・拡張子の前）で折り返せるようにする（言葉の途中で切れにくく） */
@@ -83,10 +83,10 @@ export function placesOf(data, course) {
 // 空のときは、ファイルを落とせる細い帯だけ（ページの下まで探しに行かなくてよいように）
 function ownNote(course, list) {
   if (!list.length)
-    return `<div class="own-drop" data-drop="own" data-course-id="${esc(course.id)}">ここへファイルをドラッグすると「${OWN_LABEL}」に入ります（元のファイルは残ります）。あとで回の付箋へ移します</div>`;
+    return `<div class="own-drop" data-drop="own" data-course-id="${esc(course.id)}">ここにファイルをドラッグ（元のファイルは残ります）</div>`;
   return `<section class="round-note round-note--own" data-drop="own" data-course-id="${esc(course.id)}" aria-label="振り分け前のファイル（回を決めていないファイル）">
     <header class="round-note__head">
-      <span class="round-note__round" title="ここに入れたファイルは、回の付箋へドラッグか「⋯」の「移す」で振り分けます">${OWN_LABEL}</span>
+      <span class="round-note__round">${OWN_LABEL}</span>
     </header>
     <div class="round-note__files">${list.map((m) => fileCard(m, course)).join('')}</div>
   </section>`;
@@ -183,12 +183,12 @@ export function quizLine(round, list, course, quiz, gen, hasKey, _where = 'こ�
 function notebookLine(round, list, course) {
   const note = list.some((m) => m.source === 'note' && m.status === 'ok')
     ? ''
-    : `<button type="button" class="btn btn--small btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="この回のノートを作る（A4 縦。白い紙に青い罫線。横罫・方眼と行の間を選べます）" aria-haspopup="menu">＋ ノート</button>`;
+    : `<button type="button" class="btn btn--small btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="この回のノートを作る" aria-haspopup="menu">＋ ノート</button>`;
   // 付箋にファイルを入れる（パソコンのファイルを選ぶ。元のファイルは残る）。ドラッグでも入れられる
-  const file = `<button type="button" class="btn btn--small btn--quiet" data-action="upload" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="この付箋にファイルを入れます（コピーします。元のファイルは残ります）">＋ ファイル</button>`;
+  const file = `<button type="button" class="btn btn--small btn--quiet" data-action="upload" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" title="コピーして入れます（元のファイルは残ります）">＋ ファイル</button>`;
   // 自分で足した付箋だけ消せる（LMS の回は次の同期でまた出るため消さない）
   const del = round.user_made
-    ? `<button type="button" class="btn btn--small btn--quiet round-notebook__del" data-action="round-remove" data-round-id="${esc(round.id)}" data-name="${esc(round.title_user || '名前のない付箋')}" data-files="${list.length}" title="この付箋を消します（中の資料は「振り分け前」へ移します）">付箋を消す</button>`
+    ? `<button type="button" class="btn btn--small btn--quiet round-notebook__del" data-action="round-remove" data-round-id="${esc(round.id)}" data-name="${esc(round.title_user || '名前のない付箋')}" data-files="${list.length}" title="中の資料は「振り分け前」へ移します">付箋を消す</button>`
     : '';
   return `<div class="round-notebook">${note}${file}${del}</div>`;
 }
@@ -333,7 +333,7 @@ export function renderCourse({data, progress}, courseId) {
       ${order.other.map(note).join('')}
       ${mine.map(note).join('')}`
       }
-      <button type="button" class="round-note-add" data-action="round-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します。いちばん後ろに、足した順に並びます"><span aria-hidden="true">＋</span>付箋を足す</button>
+      <button type="button" class="round-note-add" data-action="round-add" data-course-id="${esc(course.id)}"><span aria-hidden="true">＋</span>付箋を足す</button>
     </div>
-    ${shown.length ? '' : `<div class="empty"><p>${syncable ? 'まだ回がありません。右上の「⋯」の「この授業を同期」で、回ごとの付箋がここに並びます。' : 'ファイルは上の「振り分け前」へドラッグするか、「＋ 付箋を足す」で付箋を作って入れます。'}</p></div>`}`;
+    ${shown.length || !syncable ? '' : '<div class="empty"><p>まだ回がありません（「⋯」の「この授業を同期」で並びます）</p></div>'}`;
 }
