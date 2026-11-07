@@ -45,7 +45,14 @@ export function register({handle, ctx, repo}) {
 
   handle('state.get', async () => {
     const terms = repo.listTerms();
-    const connections = repo.listConnections().map(({session_json: _session, ...c}) => c); // ログインの記録は渡さない
+    // 自動ログインはオンなのに、保存した ID・パスワードがない・読めなかった（設定とホームで入れ直しを促す）。復号はここではしない
+    const secretKeys = new Set(ctx.secrets?.keys?.() ?? []);
+    const passwordUnreadable = (c) =>
+      !!c.save_password &&
+      (!secretKeys.has(`conn:${c.id}:password`) || !!ctx.secrets?.isLocked?.(`conn:${c.id}:password`));
+    const connections = repo
+      .listConnections()
+      .map(({session_json: _session, ...c}) => ({...c, password_unreadable: passwordUnreadable(c)})); // ログインの記録は渡さない
     // 授業ごとに引かず、全授業ぶんをまとめて引いて配る（授業が増えても問い合わせの数が増えない）
     const unread = repo.countUnreadAll();
     const courses = repo.listCourses().map((c) => ({...c, unread: unread[c.id] ?? 0}));

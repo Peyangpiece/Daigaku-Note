@@ -21,14 +21,20 @@ function autoLogin(c) {
       return false;
     }
   })();
+  const form = (
+    label
+  ) => `<div data-form="${esc(c.id)}" style="display:grid; gap: var(--space-1); max-width: 360px; margin-top: var(--space-1)">
+      <label class="sr-only" for="st-user-${esc(c.id)}">ID</label><input class="input" id="st-user-${esc(c.id)}" placeholder="ID（学籍番号など）" autocomplete="username">
+      <label class="sr-only" for="st-pass-${esc(c.id)}">パスワード</label><input class="input" id="st-pass-${esc(c.id)}" type="password" placeholder="パスワード" autocomplete="current-password">
+      <div><button class="btn btn--small" data-save-pass="${esc(c.id)}">${label}</button></div>
+    </div>`;
+  // オンなのに保存した ID・パスワードを読めない（キーチェーンで拒否された・アプリの署名が変わったなど）：その場で入れ直せるようにする（v0.18.10）
+  if (c.save_password && c.password_unreadable)
+    return `<div style="margin-top: 6px"><div class="muted">自動ログイン：オン。<strong>保存した ID とパスワードを読めません。</strong>入れ直すと、次の同期から自動でログインします <button class="btn btn--small" data-forget-pass="${esc(c.id)}">自動ログインをやめる</button></div>${form('入れ直す')}</div>`;
   if (c.save_password)
     return `<div class="muted" style="margin-top: 6px">自動ログイン：オン${learned ? '' : '。<strong>最初に一度「ログイン」で窓からログインしてください</strong>'} <button class="btn btn--small" data-forget-pass="${esc(c.id)}">自動ログインをやめる</button></div>`;
   return `<details style="margin-top: 6px"><summary class="muted">自動ログイン：オフ</summary>
-    <div data-form="${esc(c.id)}" style="display:grid; gap: var(--space-1); max-width: 360px; margin-top: var(--space-1)">
-      <label class="sr-only" for="st-user-${esc(c.id)}">ID</label><input class="input" id="st-user-${esc(c.id)}" placeholder="ID（学籍番号など）" autocomplete="username">
-      <label class="sr-only" for="st-pass-${esc(c.id)}">パスワード</label><input class="input" id="st-pass-${esc(c.id)}" type="password" placeholder="パスワード" autocomplete="current-password">
-      <div><button class="btn btn--small" data-save-pass="${esc(c.id)}">保存してオンにする</button></div>
-    </div></details>`;
+    ${form('保存してオンにする')}</details>`;
 }
 
 /** クイズ（SPEC §11.8・§11.9）：問題を作る AI・同意・問題の数と種類・モデル・上限 */

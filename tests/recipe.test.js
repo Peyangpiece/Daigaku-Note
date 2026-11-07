@@ -123,3 +123,21 @@ test('同梱のレシピはすべて検査に通る', () => {
     assert.deepEqual(validateRecipe(r), [], f);
   }
 });
+
+test('自動ログインがオンなのに保存した ID・パスワードを読めないときは、入れ直しを促す（ブラウザ窓には進まない）', async () => {
+  const {createRecipeExecutor} = await import('../src/main/connectors/recipe-executor.js');
+  const recipe = JSON.parse(readFileSync(new URL('../recipes/manabo.json', import.meta.url), 'utf8'));
+  let opened = false;
+  const ex = createRecipeExecutor(recipe, {
+    session: {open: async () => (opened = true)},
+    secrets: {get: async () => null}
+  });
+  const ctx = {connection: {id: 'c1', save_password: 1}};
+  await assert.rejects(ex.login(ctx, 'headless'), (e) => e.code === 'login-credentials-unreadable');
+  assert.equal(opened, false);
+  // オフのときは今までどおり（ブラウザ窓でのログインを案内する）
+  await assert.rejects(
+    ex.login({connection: {id: 'c1', save_password: 0}}, 'headless'),
+    (e) => e.code === 'login-required'
+  );
+});
