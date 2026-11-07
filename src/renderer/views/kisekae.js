@@ -42,7 +42,7 @@ import {
   skinOf,
   stickerUrl
 } from '../skin.js';
-import {fileArt, kindOf} from './file-art.js';
+import {fileArt} from './file-art.js';
 import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, isBuiltinSticker} from '../../shared/stickers.js';
 
 const api = window.daigaku;
@@ -468,8 +468,9 @@ function homeScene(data, {note, skin1}) {
     <div class="folders ks-stage__folders">${folders}</div>`
   );
 }
-// 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では 5 回に 2 つずつ
+// 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では 5 回に 2 つずつ（ノート・PDF から順に 10 種類）
 const KIND_FILE = {
+  note: 'a.pdf', // 回のノート（中身は PDF。kindArt が「NOTE」の絵で描く）
   pdf: 'a.pdf',
   slide: 'a.pptx',
   doc: 'a.docx',
@@ -480,16 +481,19 @@ const KIND_FILE = {
   zip: 'a.zip',
   other: 'a.dat'
 };
-const SCENE_FILES = Object.values(KIND_FILE);
+// 見本の資料は種類で持つ（ノートと PDF は同じ拡張子なので、名前では分けられない）
+const SCENE_FILES = FILE_KINDS;
+/** 種類ごとの資料の絵（着せ替えの色・紙の色・印とラベルの位置を当てる） */
+const kindArt = (kind, sk, editable = false) =>
+  fileArt(KIND_FILE[kind], {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt, editable, kind});
 function courseScene(data, {first, note, skin1}) {
   const sk = skin1;
   const list = sk.sticky.round === 'default' ? POP : sk.sticky.round;
   const colors = POP.map((_, i) => list[i % list.length]);
   const find = (place, k) => sk.stickers.find((st) => st.place === place && (!k || st.kind === k));
-  const file = (name) => {
-    const kind = kindOf(name);
+  const file = (kind) => {
     return `<span class="ks-file" ${editAttr('file', `${FILE_KIND_LABEL[kind]}のイラスト`)} data-kind="${kind}" data-drop-place="file">
-      <span class="file__art">${fileArt(name, {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}${fixedOne(data, find('file', kind))}</span>
+      <span class="file__art">${kindArt(kind, sk)}${fixedOne(data, find('file', kind))}</span>
       <span class="muted">${FILE_KIND_LABEL[kind]}</span></span>`;
   };
   // 回の付箋：5 色が全部見えるように 5 枚。資料は 2 つずつ
@@ -511,7 +515,7 @@ function fileScene(data, {note, skin1}) {
   const sk = skin1;
   const k = ui.fileKind;
   const st = sk.stickers.find((x) => x.place === 'file' && x.kind === k);
-  let art = fileArt(KIND_FILE[k], {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt, editable: true});
+  let art = kindArt(k, sk, true);
   if (ui.art) art = art.replace(`data-art="${ui.art}"`, `data-art="${ui.art}" class="is-sel"`);
   return noteSwatch(
     note,
@@ -522,7 +526,7 @@ function fileScene(data, {note, skin1}) {
     </div>
     <div class="ks-kinds" role="group" aria-label="資料の種類">${FILE_KINDS.map(
       (x) =>
-        `<button type="button" class="ks-kind" data-ks="set" data-key="fileKind" data-value="${x}" aria-pressed="${x === k}">${fileArt(KIND_FILE[x], {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}<span>${FILE_KIND_LABEL[x]}</span></button>`
+        `<button type="button" class="ks-kind" data-ks="set" data-key="fileKind" data-value="${x}" aria-pressed="${x === k}">${kindArt(x, sk)}<span>${FILE_KIND_LABEL[x]}</span></button>`
     ).join('')}</div>`
   );
 }

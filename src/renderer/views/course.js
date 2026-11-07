@@ -37,13 +37,13 @@ export function fileCard(m, course) {
   const action = extOf(m.name) === 'pdf' && m.source !== 'export' ? 'open-pdf' : 'open-material';
   // 着せ替え（SPEC-KISEKAE）：種類ごとの色とシール、付箋（前のしおりも）のある資料には目印
   const sk = skinOf(state.data, course);
-  const kind = kindOf(m.name);
+  const kind = m.source === 'note' ? 'note' : kindOf(m.name);
   const bm = bookmarkLook(sk);
   const bmSticker = sk.stickers.find((st) => st.place === 'bookmark');
   const drag = ok && !m.copyOf;
   return `<div class="file${ok ? '' : ' file--missing'}"${drag ? ` draggable="true" data-drag-material="${esc(m.id)}"` : ''} data-material="${esc(m.id)}"${m.copyOf ? ' data-copy="1"' : ''}>
     <button class="file__open" data-action="${action}" data-id="${esc(m.id)}" ${ok ? '' : 'disabled'} title="${esc(m.name)}${ok ? '' : '（見つかりません）'}${m.bookmarks ? `（付箋 ${m.bookmarks}）` : ''}${m.copyOf ? `（「${esc(m.copyOf)}」と同じ中身。書き込みも同じものが出ます）` : ''}">
-      <span class="file__art">${m.source === 'note' ? noteArt() : fileArt(m.name, {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}${fixedSticker(
+      <span class="file__art">${m.source === 'note' ? noteArt({colors: sk.file, bodies: sk.fileBody, art: sk.fileArt}) : fileArt(m.name, {colors: sk.file, bodies: sk.fileBody, art: sk.fileArt})}${fixedSticker(
         sk.stickers.find((st) => st.place === 'file' && st.kind === kind),
         state.data,
         {x: 0.12, y: 0.16, base: 30}
