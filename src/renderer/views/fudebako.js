@@ -731,9 +731,9 @@ export function renderFudebako(_state, route) {
               : isPouch
                 ? pouchPage(s)
                 : mine(s);
-  // 持ち物（筆箱・ポーチ）は右上にショップへのボタン。ショップの中は「← 持ち物」とカート
+  // 持ち物（筆箱・ポーチ）は右上にショップへのボタン。ショップの中は左に「← 持ち物」と見出し（設定の「← ホーム 設定」と同じ並び）、右にカート
   const head = inShop
-    ? `<div class="fb-head"><h2>ショップ</h2><button type="button" class="btn btn--small fb-back" data-action="nav" data-route="/fudebako">← 持ち物</button><div class="fb-head__side">${pointsButton()}${cartButton()}</div></div>`
+    ? `<div class="fb-head fb-head--shop"><div class="fb-head__title"><button type="button" class="btn" data-action="nav" data-route="/fudebako">← 持ち物</button><h2>ショップ</h2></div><div class="fb-head__side">${pointsButton()}${cartButton()}</div></div>`
     : `<div class="fb-head"><h2>持ち物</h2>${tabs(isPouch)}<div class="fb-head__side">${pointsButton()}${shopButton()}</div></div>`;
   return `<div class="fudebako">
     ${head}
