@@ -73,7 +73,7 @@ export async function headingPng(text) {
   return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
 }
 
-/** 回のノートがもうあるか（PDF の編集画面の「📓 ノート」「◫ 横に並べる」：なければ紙を選んでから作る） */
+/** 回のノートがもうあるか（PDF の編集画面の「ノート」「◫ 横に並べる」：なければ紙を選んでから作る） */
 export function hasNote(courseId, roundId) {
   return (state.data?.materials?.[courseId] ?? []).some(
     (m) => m.source === 'note' && (m.round_id ?? null) === (roundId ?? null) && m.status === 'ok' && !m.copyOf

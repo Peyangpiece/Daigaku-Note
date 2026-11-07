@@ -323,7 +323,7 @@
   margin-right: auto;
   color: var(--danger-ink);
 }
-/* ノートの「📄 資料」：同じ回の PDF（開く・横に並べる） */
+/* ノートの「資料」：同じ回の PDF（開く・横に並べる） */
 .viewer-pdfmenu {
   position: fixed;
   z-index: 60;
@@ -1368,8 +1368,14 @@
     font-size: 0;
   }
   .viewer-bar button[data-v='photo']::after {
-    content: '📷';
-    font-size: 15px;
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: var(--ico-camera) center / contain no-repeat;
+    mask: var(--ico-camera) center / contain no-repeat;
   }
   .viewer-bar button[data-v='spread']::after {
     content: '▯';
@@ -1379,16 +1385,28 @@
     content: '▯▯';
   }
   .viewer-bar button[data-v='notebook']::after {
-    content: '📓';
-    font-size: 15px;
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: var(--ico-notebook) center / contain no-repeat;
+    mask: var(--ico-notebook) center / contain no-repeat;
   }
   .viewer-bar button[data-v='note-side']::after {
     content: '◫';
     font-size: 16px;
   }
   .viewer-bar button[data-v='note-pdfs']::after {
-    content: '📄';
-    font-size: 15px;
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: var(--ico-document) center / contain no-repeat;
+    mask: var(--ico-document) center / contain no-repeat;
   }
   .viewer-bar button[data-v='rotate']::after {
     content: '↻';
@@ -1432,15 +1450,27 @@
     font-size: 0;
   }
   .viewer-bar button[data-v='find']::after {
-    content: '🔍';
-    font-size: 14px;
+    content: '';
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: var(--ico-search) center / contain no-repeat;
+    mask: var(--ico-search) center / contain no-repeat;
   }
   .viewer-bar button[data-v='delete'] {
     font-size: 0;
   }
   .viewer-bar button[data-v='delete']::after {
-    content: '🗑';
-    font-size: 14px;
+    content: '';
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: var(--ico-trash) center / contain no-repeat;
+    mask: var(--ico-trash) center / contain no-repeat;
   }
   .viewer-bar .seg button {
     padding-inline: 8px;

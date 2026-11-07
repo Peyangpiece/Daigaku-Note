@@ -93,7 +93,7 @@ async function renderHome() {
   const courseBtn = (c) =>
     `<li><a class="m-item" href="#/course/${esc(c.id)}"><span class="m-dot" style="--c: var(--c${c.color ?? 1})"></span>${esc(c.name)}<span class="m-sub">${c.weekday ? `${esc(c.weekday)}${c.period ? ` ${c.period}限` : ''}` : ''}</span></a></li>`;
   app.innerHTML = `
-    <header class="m-head"><h1>パレットノート</h1><a class="m-btn" href="#/photo">📷 写真</a></header>
+    <header class="m-head"><h1>パレットノート</h1><a class="m-btn" href="#/photo"><span class="ico ico--camera" aria-hidden="true"></span> 写真</a></header>
     <a class="m-card m-review${home.reviewDue ? ' is-due' : ''}" href="#/review"><strong>今日の復習</strong><span>${home.reviewDue ? `${home.reviewDue} 問` : 'ありません'}</span></a>
     <section class="m-card"><h2>今日の授業</h2>${today.length ? `<ul class="m-list">${today.map(courseBtn).join('')}</ul>` : `<p class="m-muted">今日の授業はありません。${esc(nextDay(home))}</p>`}</section>
     <section class="m-card"><h2>最近の資料</h2>${
@@ -123,7 +123,7 @@ async function renderCourse(id) {
   const blocks = rounds
     .map((r) => {
       const list = mats.filter((m) => m.roundId === r.id);
-      return `<section class="m-card"><h2>${esc(roundLabel(r))}${r.date ? `<span class="m-sub">${esc(r.date.slice(5).replace('-', '/'))}</span>` : ''}</h2>${list.length ? `<ul class="m-list">${list.map(item).join('')}</ul>` : '<p class="m-muted">資料はありません。</p>'}<a class="m-btn m-btn--small" href="#/photo?course=${esc(id)}&round=${esc(r.id)}">📷 この回に写真を送る</a></section>`;
+      return `<section class="m-card"><h2>${esc(roundLabel(r))}${r.date ? `<span class="m-sub">${esc(r.date.slice(5).replace('-', '/'))}</span>` : ''}</h2>${list.length ? `<ul class="m-list">${list.map(item).join('')}</ul>` : '<p class="m-muted">資料はありません。</p>'}<a class="m-btn m-btn--small" href="#/photo?course=${esc(id)}&round=${esc(r.id)}"><span class="ico ico--camera" aria-hidden="true"></span> この回に写真を送る</a></section>`;
     })
     .join('');
   const loose = mats.filter((m) => !m.roundId || !rounds.some((r) => r.id === m.roundId));
@@ -161,7 +161,7 @@ async function renderPhoto(params) {
       <label class="m-field">授業<select data-v="course">${courses.map((c) => `<option value="${esc(c.id)}" ${c.id === pick ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       <label class="m-field">回<select data-v="round">${roundOptions(pick, params.get('round'))}</select></label>
       <div class="m-row">
-        <label class="m-btn m-btn--primary m-btn--wide">📷 撮る<input type="file" accept="image/*" capture="environment" data-v="shoot" hidden></label>
+        <label class="m-btn m-btn--primary m-btn--wide"><span class="ico ico--camera" aria-hidden="true"></span> 撮る<input type="file" accept="image/*" capture="environment" data-v="shoot" hidden></label>
         <label class="m-btn m-btn--wide">写真を選ぶ<input type="file" accept="image/*" multiple data-v="pickfile" hidden></label>
       </div>
       <p class="m-muted" data-v="status">送った写真は、パソコンの授業の回のフォルダに入ります。</p>
