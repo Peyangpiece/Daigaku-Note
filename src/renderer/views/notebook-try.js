@@ -35,7 +35,7 @@ export function openNoteTry(design, title) {
   el.setAttribute('aria-label', `${title}の試し書き`);
   el.innerHTML = `
     <div class="nbt__bar">
-      <div class="nbt__title"><b>${esc(title)}</b><span class="muted">試し書き・実際の大きさ（${w > h ? 'A4 横' : 'A4 縦'}）</span></div>
+      <div class="nbt__title"><b>${esc(title)}</b></div>
       <div class="nbt__tools" role="group" aria-label="ペン">${PENS.map(
         (p, i) =>
           `<button type="button" class="nbt__pen${i === 0 ? ' is-on' : ''}" data-nbt="pen" data-id="${p.id}" aria-pressed="${i === 0}" title="${p.name}"><span style="background:${p.color}"></span>${p.name}</button>`
@@ -57,8 +57,7 @@ export function openNoteTry(design, title) {
           .get(key)
           .join('')}</g></svg>
       </div>
-    </div>
-    <p class="nbt__hint muted">ページの上をなぞると書けます。書いたものは保存しません（アプリを閉じると消えます）。画面の設定によって、実際の紙と少しちがう大きさに見えることがあります。</p>`;
+    </div>`;
   document.body.append(el);
   document.body.classList.add('nbt-open');
   el.querySelector('[data-nbt="close"]').focus();

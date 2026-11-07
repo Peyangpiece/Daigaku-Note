@@ -16,7 +16,7 @@ import {cart} from '../cart.js';
 import {strokePath} from '../../shared/ink.js';
 import {tryout} from './tryout.js';
 import {NOTES, formatSpec, noteEditor, notesPage} from './notebook-shelf.js';
-import {FORMATS, coverArt, cropOf, pageSvg} from '../../shared/notebooks.js';
+import {FORMATS, coverArt, cropOf, gapFixed, pageSvg} from '../../shared/notebooks.js';
 import {openNoteTry} from './notebook-try.js';
 import {POUCH_ART} from '../desk-tools.js';
 import {EARN, dayOf, pt} from '../../shared/points.js';
@@ -328,7 +328,10 @@ function seriesCard(series, s) {
   else if (it.type === 'case') sub.push(CASE_INFO[it.style]?.short ?? '');
   else if (it.type === 'pouch') sub.push(POUCH_INFO[it.style]?.short ?? '');
   else if (it.type === 'notebook')
-    sub.push(formatSpec({format: it.format}), FORMATS[it.format]?.landscape ? 'A4 横' : 'A4');
+    sub.push(
+      ...(gapFixed(it.format) ? [] : [formatSpec({format: it.format})]),
+      FORMATS[it.format]?.landscape ? 'A4 横' : 'A4'
+    );
   else if (it.note) sub.push(it.note);
   else if (it.pencil) sub.push(`芯 ${it.lead}`);
   else if (feelLabel(it)) sub.push(`書き味：${feelLabel(it)}`);
@@ -477,7 +480,7 @@ function detail(s, id) {
   if (!it || !listed(it))
     return `<p class="muted">その文房具はありません。</p><p><button type="button" class="btn" data-action="nav" data-route="${SHOP}">← ショップ</button></p>`;
   const rows = [];
-  rows.push(['種類', typeLabel(it)]);
+  if (it.type !== 'notebook') rows.push(['種類', typeLabel(it)]); // ノートは名前と表紙でわかる
   if (it.refills) {
     rows.push([
       'しくみ',
@@ -512,15 +515,9 @@ function detail(s, id) {
   } else if (it.note) rows.push(['見た目', it.note]);
   if (it.type === 'notebook')
     rows.push(
-      ['罫', esc(formatSpec({format: it.format}))],
-      [
-        'ページ',
-        FORMATS[it.format]?.landscape
-          ? 'A4 横（縦書き）。回のノートは、上の余白に授業・回・題・日付を薄い字で印刷'
-          : 'A4 縦。上に日付・題の欄（回のノートは授業・回・題・日付を薄い字で印刷）'
-      ],
-      ['表紙', 'Palette（表紙の色はノートごと）'],
-      ['調節', '持ち物の「ノート」で、罫線の色・太さ・行の間・ページ上部の線などを変えてマイノートにできます']
+      // 罫の幅が名前に書いてあるノートは、名前と同じことになるので罫の行を出さない
+      ...(gapFixed(it.format) ? [] : [['罫', esc(formatSpec({format: it.format}))]]),
+      ['ページ', FORMATS[it.format]?.landscape ? 'A4 横' : 'A4 縦']
     );
   if (it.art === 'model') rows.push(['見た目', '3D モデル（実物の形と材質）']);
   const samples = it.refills
@@ -571,12 +568,11 @@ function detail(s, id) {
 function notebookPages(it) {
   const d = {format: it.format};
   const crop = cropOf(d);
-  return `<h3 class="fb-detail__sub">ページ</h3>
-    <div class="nb-detail-pages">
-      <figure class="nb-detail-page">${pageSvg(d, {width: 230, thumb: true})}<figcaption class="muted">ページ全体</figcaption></figure>
-      <figure class="nb-detail-page nb-detail-page--zoom">${pageSvg(d, {width: 170, crop})}<figcaption class="muted">拡大</figcaption></figure>
+  return `    <div class="nb-detail-pages">
+      <figure class="nb-detail-page">${pageSvg(d, {width: 230, thumb: true})}</figure>
+      <figure class="nb-detail-page nb-detail-page--zoom">${pageSvg(d, {width: 170, crop})}</figure>
     </div>
-    <p><button type="button" class="btn" data-nb-try="${esc(it.id)}">試し書き（実際の大きさ）</button></p>`;
+    <p><button type="button" class="btn" data-nb-try="${esc(it.id)}">試し書き</button></p>`;
 }
 
 document.addEventListener('click', (e) => {
