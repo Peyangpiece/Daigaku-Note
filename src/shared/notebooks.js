@@ -64,7 +64,8 @@ export const KIND_LABEL = {
 };
 
 /** 線の太さ（mm） */
-export const WEIGHTS = {thin: 0.12, normal: 0.18, bold: 0.3};
+// ふつうは v0.18 までの紙と同じ（横罫 0.5 pt。方眼はその 0.8 倍の 0.4 pt）
+export const WEIGHTS = {thin: 0.12, normal: 0.176, bold: 0.3};
 export const WEIGHT_LABEL = {thin: '細い', normal: 'ふつう', bold: '太い'};
 /** ページ上部の線（上の欄の下）：なし・1 本・2 本・日付欄つき */
 export const HEADS = ['none', 'line', 'double', 'date'];
@@ -155,9 +156,11 @@ export function pageGeometry(raw) {
       for (let i = 0; i <= rows; i++)
         for (let j = 0; j <= cols; j++) dots.push({x: left + j * g, y: top + i * g, r: w * 1.7, c: d.line});
     } else {
+      // 方眼の線は横罫より細い（v0.18 までの紙と同じ 0.8 倍）。太線はその 1.9 倍
+      const gw = w * 0.8;
       const thick = (k) => d.bold > 0 && k % d.bold === 0;
-      for (let i = 1; i <= rows; i++) L(left, top + i * g, left + cols * g, top + i * g, thick(i) ? w * 1.9 : w);
-      for (let j = 0; j <= cols; j++) L(left + j * g, top, left + j * g, top + rows * g, thick(j) ? w * 1.9 : w);
+      for (let i = 1; i <= rows; i++) L(left, top + i * g, left + cols * g, top + i * g, thick(i) ? gw * 1.9 : gw);
+      for (let j = 0; j <= cols; j++) L(left + j * g, top, left + j * g, top + rows * g, thick(j) ? gw * 1.9 : gw);
     }
   } else if (f.kind === 'english') {
     // 4 本線（上・点線・基線・下）の段を、上の欄の下から下の余白まで等しく並べる
@@ -215,7 +218,8 @@ export function pageGeometry(raw) {
     headRight = left + cols * g;
   }
   // ページ上部の線（上の欄の下）
-  const hw = Math.max(w * 2, 0.3);
+  // 上の欄の下の線：v0.18 までの紙と同じく、横罫 0.9 pt・方眼 0.8 pt（ふつうの太さのとき）
+  const hw = w * (f.kind === 'grid' || f.kind === 'dotgrid' ? 1.6 : 1.8);
   if (d.head !== 'none') L(headLeft, top, headRight, top, hw, d.headColor);
   if (d.head === 'double') L(headLeft, top - 1.2, headRight, top - 1.2, hw * 0.6, d.headColor);
   if (d.head === 'date') {
@@ -236,14 +240,15 @@ export function pageGeometry(raw) {
 /** ページの見本（SVG。幅 width px、高さは A4 の比）。thumb は小さな見本（線を見えるだけの太さに）。aria は呼ぶ側で付ける */
 export function pageSvg(raw, {width = 210, thumb = false} = {}) {
   const g = pageGeometry(raw);
-  // 小さな見本（thumb）は、線が 1 画素より細くなって消えないよう、線と点に最小の太さを付ける（mm に直す）
+  // 小さな見本（thumb）は、線が 1 画素より細くなって消えないよう、線と点に最小の太さを付ける（mm に直す）。
+  // 太くしたぶんは薄くして、実際の紙の線の濃さに近づける
   const minW = thumb ? (0.9 * PAGE_W) / width : 0.15;
   const minR = thumb ? (0.7 * PAGE_W) / width : 0.25;
   const n = (v) => +v.toFixed(2);
   const lines = g.lines
     .map(
       (l) =>
-        `<line x1="${n(l.x1)}" y1="${n(l.y1)}" x2="${n(l.x2)}" y2="${n(l.y2)}" stroke="${l.c}" stroke-width="${n(Math.max(l.w, minW))}"${l.dash ? ` stroke-dasharray="${l.dash.join(' ')}"` : ''}/>`
+        `<line x1="${n(l.x1)}" y1="${n(l.y1)}" x2="${n(l.x2)}" y2="${n(l.y2)}" stroke="${l.c}" stroke-width="${n(Math.max(l.w, minW))}"${l.w < minW ? ` stroke-opacity="${n(Math.max(0.3, l.w / minW))}"` : ''}${l.dash ? ` stroke-dasharray="${l.dash.join(' ')}"` : ''}/>`
     )
     .join('');
   const dots = g.dots
