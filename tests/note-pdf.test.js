@@ -144,3 +144,19 @@ test('順番待ち：同じ鍵は 1 つずつ（前が失敗しても次は動�
   assert.equal(await c, 3);
   assert.deepEqual(log, ['a+', 'c', 'a-', 'b+', 'b-']);
 });
+
+test('v3 の紙（持ち物のノート・マイノート）：整え方はそのまま、どの形式でも PDF を作ってページを足せる', async () => {
+  const {FORMATS} = await import('../src/shared/notebooks.js');
+  const d = cleanPaper({v: 3, format: 'grid5', gap: 4.5, line: '#9cc0e6', head: 'date'});
+  assert.equal(d.v, 3);
+  assert.equal(d.format, 'grid5');
+  assert.equal(d.gap, 4.5);
+  assert.equal(d.line, '#9cc0e6');
+  assert.equal(cleanPaper({type: 'grid', gap: 7}).v, 2, 'v のない選び方は今までどおり v2');
+  for (const format of Object.keys(FORMATS)) {
+    const bytes = await createNotePdf({v: 3, format, head: 'double', margin: true});
+    const {bytes: more, pages} = await appendNotePage(bytes, {v: 3, format});
+    assert.equal(pages, 2, format);
+    assert.ok(more.length > bytes.length);
+  }
+});
