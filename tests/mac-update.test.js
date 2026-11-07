@@ -200,3 +200,34 @@ test('入れ替え：Developer ID の要件を渡さなければ、Developer ID 
   assert.match(log, /パレットノートの証明書で署名されていません/);
   assert.match(s.version(), /CFBundleShortVersionString=0\.1\.0/);
 });
+
+test('公開した直後の 400 などは間をあけて取り直す。取れたらそれを返し、取り直しても変わらない状態はすぐ止める', async () => {
+  const {fetchInstaller} = await import('../src/main/mac-update.js');
+  const ok = {ok: true, status: 200, body: 'b'};
+  const seq = [{ok: false, status: 400}, new Error('net'), {ok: false, status: 503}, ok];
+  const waits = [];
+  const slept = [];
+  const res = await fetchInstaller(
+    async () => {
+      const x = seq.shift();
+      if (x instanceof Error) throw x;
+      return x;
+    },
+    'u',
+    {delays: [1, 2, 3, 4], sleep: async (ms) => slept.push(ms), onWait: (n) => waits.push(n)}
+  );
+  assert.equal(res, ok);
+  assert.deepEqual(slept, [1, 2, 3]);
+  assert.deepEqual(waits, [1, 2, 3]);
+  await assert.rejects(
+    fetchInstaller(async () => ({ok: false, status: 410}), 'u', {delays: [1], sleep: async () => {}}),
+    /（410）/,
+    '取り直しても変わらない状態はすぐ止める'
+  );
+  let n = 0;
+  await assert.rejects(
+    fetchInstaller(async () => (n++, {ok: false, status: 400}), 'u', {delays: [1, 1], sleep: async () => {}}),
+    /（400）/
+  );
+  assert.equal(n, 3, '最初の 1 回と取り直し 2 回');
+});

@@ -113,3 +113,33 @@ rm -rf "$app.old"
 say INFO "$want に入れ替えました"
 "$OPEN" "$app"
 `;
+
+/**
+ * 公開した直後は、GitHub がまだ配布物を配れず 400 などを返すことがある（時間が経つと取れる。v0.19.1）。
+ * そのときは間をあけて取り直す。戻り：成功した Response。最後まで取れなければ、最後の状態の Error
+ */
+export const RETRY_STATUS = new Set([400, 403, 404, 408, 425, 429, 500, 502, 503, 504]);
+export const RETRY_DELAYS = [10, 20, 40, 60, 90, 120].map((s) => s * 1000); // 合わせて 5 分 40 秒ほど
+export async function fetchInstaller(
+  fetchFn,
+  url,
+  {delays = RETRY_DELAYS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), onWait = () => {}} = {}
+) {
+  for (let i = 0; ; i++) {
+    let res = null;
+    let err = null;
+    try {
+      res = await fetchFn(url);
+    } catch (e) {
+      err = e; // つながらない：取り直す
+    }
+    if (res?.ok && res.body) return res;
+    if (res) {
+      err = new Error(`ダウンロードできませんでした（${res.status}）`);
+      if (!RETRY_STATUS.has(res.status)) throw err; // 取り直しても変わらない状態
+    }
+    if (i >= delays.length) throw err;
+    onWait(i + 1, delays[i], err);
+    await sleep(delays[i]);
+  }
+}

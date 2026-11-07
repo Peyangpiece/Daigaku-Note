@@ -26,6 +26,7 @@ import path from 'node:path';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {
+  fetchInstaller,
   MAC_SIGNING_LEAF,
   MAC_TEAM_ID,
   developerIdRequirement,
@@ -207,8 +208,20 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
       if ((await sha512Of(file)) === sha512) return file;
       rmSync(file, {force: true});
     }
-    const res = await net.fetch(macInstallerUrl(version, process.arch));
-    if (!res.ok || !res.body) throw new Error(`ダウンロードできませんでした（${res.status}）`);
+    // 公開した直後は GitHub がまだ配れないことがある（400 など）。間をあけて何度か取り直し、そのあいだはメニューに「待っています」と出す
+    const res = await fetchInstaller((u) => net.fetch(u), macInstallerUrl(version, process.arch), {
+      onWait: (n, ms, e) => {
+        log(
+          'INFO',
+          `新しい版の配布物をまだ取れません（${e.message}）。${Math.round(ms / 1000)} 秒後に取り直します（${n} 回目）`
+        );
+        if (state.downloading) {
+          state.downloading.waiting = true;
+          refreshTray();
+        }
+      }
+    });
+    if (state.downloading) state.downloading.waiting = false;
     const total = Number(res.headers.get('content-length')) || 0;
     let got = 0;
     try {
@@ -398,7 +411,9 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
     const items = [];
     if (state.downloading)
       items.push({
-        label: `新しい版 ${state.downloading.version} をダウンロード中${state.downloading.pct == null ? '…' : `（${state.downloading.pct}%）`}`,
+        label: state.downloading.waiting
+          ? `新しい版 ${state.downloading.version} の準備を待っています…`
+          : `新しい版 ${state.downloading.version} をダウンロード中${state.downloading.pct == null ? '…' : `（${state.downloading.pct}%）`}`,
         enabled: false
       });
     else if (isMac && state.newer && isNewer(state.newer, app.getVersion()))
