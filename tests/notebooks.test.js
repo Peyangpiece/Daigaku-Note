@@ -6,6 +6,7 @@ import {
   STARTER_NOTEBOOKS,
   LEGACY_PAPER_KEYS,
   cleanDesign,
+  gapFixed,
   pageGeometry,
   pageSvg,
   coverArt,
@@ -37,13 +38,37 @@ test('紙の設定を整える：知らない値は直し、幅は種類ごと�
   const d = cleanDesign({format: 'nope', gap: 99, line: 'red', weight: 'x', head: '?', paper: '#FFF'});
   assert.equal(d.v, 3);
   assert.equal(d.format, 'b6');
-  assert.equal(d.gap, 12, '横罫は 12 mm まで');
+  assert.equal(d.gap, 6, '幅が名前にある横罫 B は 6 mm のまま（変えられない）');
   assert.equal(d.line, '#c9cfd6');
   assert.equal(d.weight, 'normal');
   assert.equal(d.head, 'line');
   assert.equal(d.paper, '#ffffff');
-  assert.equal(cleanDesign({format: 'a7', gap: 6.3}).gap, 6.5);
+  // 幅が名前に書いてあるノート（横罫・ドット入り罫線・方眼・ドット方眼・コーネル式）は幅を変えられない
+  for (const f of [
+    'a7',
+    'b6',
+    'c5',
+    'u8',
+    'ul10',
+    'dot-a7',
+    'dot-b6',
+    'dot-c5',
+    'grid5',
+    'grid4',
+    'grid6',
+    'grid7',
+    'grid12',
+    'dotgrid',
+    'cornell'
+  ]) {
+    assert.ok(gapFixed(f), f);
+    assert.equal(cleanDesign({format: f, gap: 9.5}).gap, FORMATS[f].gap, f);
+  }
+  // 名前に幅のないノートは、種類ごとの範囲と 0.5 mm 刻みで変えられる
+  for (const f of ['eng13', 'eng15', 'staff', 'genkou', 'kanji']) assert.equal(gapFixed(f), false, f);
+  assert.equal(cleanDesign({format: 'eng13', gap: 3.3}).gap, 3.5);
   assert.equal(cleanDesign({format: 'staff', gap: 9}).gap, 3);
+  assert.equal(cleanDesign({format: 'kanji', gap: 99}).gap, 25);
   assert.equal(cleanDesign({format: 'grid5'}).bold, 2, '5 mm 方眼は 10 mm ごとに太線');
   assert.equal(cleanDesign({format: 'b6', bold: 3}).bold, 0, '太線は方眼だけ');
   assert.equal(cleanDesign({format: 'grid5', margin: true}).margin, false, '余白の線は横罫だけ');
@@ -127,7 +152,7 @@ test('マイノート：持っているノートのものだけ・形式はも�
   assert.equal(list.length, 1);
   assert.equal(list[0].name, '授業用');
   assert.equal(list[0].design.format, 'a7', '形式はもとのノートのもの');
-  assert.equal(list[0].design.gap, 9);
+  assert.equal(list[0].design.gap, 7, '横罫 A の幅は 7 mm のまま');
   assert.equal(list[0].design.line, '#123456');
   const many = Array.from({length: 40}, (_, i) => ({id: `my-${i}`, base: 'nb-a7'}));
   assert.equal(cleanMyNotes(many, ['nb-a7']).length, 30);

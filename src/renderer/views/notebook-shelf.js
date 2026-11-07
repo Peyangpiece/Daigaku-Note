@@ -19,6 +19,7 @@ import {
   cleanDesign,
   coverArt,
   cropOf,
+  gapFixed,
   pageSvg
 } from '../../shared/notebooks.js';
 import {openNoteTry} from './notebook-try.js';
@@ -147,13 +148,17 @@ function controls() {
     '名前',
     `<input class="input" data-nbd="name" maxlength="30" value="${esc(draft.name)}" aria-label="マイノートの名前" />`
   );
-  if (lo < hi)
+  const gapLabel =
+    f.kind === 'grid' || f.kind === 'dotgrid' || f.kind === 'kanji' || f.kind === 'genkou'
+      ? 'ますの大きさ'
+      : f.kind === 'english' || f.kind === 'staff'
+        ? '線の間'
+        : '行の間';
+  // 幅が名前に書いてあるノートは、幅を変えられない（その幅のノート。gapFixed）
+  if (gapFixed(d.format)) row(gapLabel, `<b>${d.gap} mm</b> <span class="muted">（このノートの決まりの幅）</span>`);
+  else if (lo < hi)
     row(
-      f.kind === 'grid' || f.kind === 'dotgrid' || f.kind === 'kanji' || f.kind === 'genkou'
-        ? 'ますの大きさ'
-        : f.kind === 'english' || f.kind === 'staff'
-          ? '線の間'
-          : '行の間',
+      gapLabel,
       `<input type="range" min="${lo}" max="${hi}" step="${GAP_STEP}" value="${d.gap}" data-nbd="gap" aria-label="幅（mm）" /> <b id="nb-gap">${d.gap} mm</b>`
     );
   if (f.kind !== 'plain') row('罫線の色', swatches('line', LINE_SWATCHES, d.line));

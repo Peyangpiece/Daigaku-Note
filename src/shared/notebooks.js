@@ -53,6 +53,12 @@ export const FORMATS = {
   },
   kanji: {kind: 'kanji', name: '漢字練習（十字入りのます）', short: '漢字練習', gap: 15}
 };
+/**
+ * 幅が名前に書いてあるノート（「横罫 A（7 mm）」「方眼 5 mm」など）は、幅を変えられない（名前と中身が食いちがわないように。v0.19.4）。
+ * 変えられるのは、名前に幅のない英習罫・五線譜・原稿用紙・漢字練習
+ */
+export const gapFixed = (format) => /\d\s*mm/.test(FORMATS[format]?.name ?? '');
+
 /** 種類ごとの変えられる幅（mm）と刻み */
 export const GAP_RANGE = {
   ruled: [4, 12],
@@ -127,7 +133,7 @@ export function cleanDesign(raw = {}) {
   return {
     v: 3,
     format,
-    gap: clampGap(f.kind, d.gap, f.gap),
+    gap: gapFixed(format) ? f.gap : clampGap(f.kind, d.gap, f.gap),
     line: hex(d.line, f.line ?? DEFAULT_LINE),
     weight: Object.hasOwn(WEIGHTS, d.weight) ? d.weight : 'normal',
     head: HEADS.includes(d.head) ? d.head : (f.head ?? 'line'),
