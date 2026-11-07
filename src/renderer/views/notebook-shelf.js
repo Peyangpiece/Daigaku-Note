@@ -18,12 +18,19 @@ import {
   WEIGHT_LABEL,
   cleanDesign,
   coverArt,
+  cropOf,
   pageSvg
 } from '../../shared/notebooks.js';
+import {openNoteTry} from './notebook-try.js';
 
 const api = window.daigaku;
 export const NOTES = '/fudebako?tab=notes';
 const st = () => stationeryState(state.data?.stationery);
+
+/** 札の絵：表紙と、ページの左上を拡大した見本（罫線がはっきり見える大きさ） */
+export function cardArt(item, design) {
+  return `${coverArt(item, {width: 64})}<span class="nb-card__page">${pageSvg(design, {width: 92, thumb: true, crop: cropOf(design)})}</span>`;
+}
 
 /** 罫の説明（種類・幅） */
 export function formatSpec(design) {
@@ -53,7 +60,7 @@ export function notesPage() {
       const base = itemOf(n.base);
       return `<div class="nb-card${s.noteDefault === n.id ? ' is-in' : ''}">
         <button type="button" class="nb-card__art" data-action="nav" data-route="${NOTES}&edit=${encodeURIComponent(n.id)}" aria-label="${esc(n.name)}を調節する">
-          ${coverArt(base, {width: 72})}<span class="nb-card__page">${pageSvg(n.design, {width: 54, thumb: true})}</span>
+          ${cardArt(base, n.design)}
         </button>
         <div class="nb-card__name">${esc(n.name)}</div>
         <div class="muted nb-card__spec">${esc(formatSpec(n.design))}</div>
@@ -68,7 +75,7 @@ export function notesPage() {
   const owned = books
     .map(
       (it) => `<div class="nb-card${s.noteDefault === it.id ? ' is-in' : ''}">
-        <button type="button" class="nb-card__art" data-action="nav" data-route="${NOTES}&base=${encodeURIComponent(it.id)}" aria-label="${esc(it.name)}をもとにマイノートを作る">${coverArt(it, {width: 72})}<span class="nb-card__page">${pageSvg({format: it.format}, {width: 54, thumb: true})}</span></button>
+        <button type="button" class="nb-card__art" data-action="nav" data-route="${NOTES}&base=${encodeURIComponent(it.id)}" aria-label="${esc(it.name)}をもとにマイノートを作る">${cardArt(it, {format: it.format})}</button>
         <div class="nb-card__name">${esc(it.name)}</div>
         <div class="muted nb-card__spec">${esc(formatSpec({format: it.format}))}</div>
         <div class="nb-card__act">
@@ -115,6 +122,9 @@ function startDraft(s, params) {
   });
   return true;
 }
+
+/** 見本の幅：原稿用紙（A4 横）は横に広く */
+const previewWidth = () => (FORMATS[cleanDesign(draft.design).format].landscape ? 460 : 340);
 
 const swatches = (field, list, now) =>
   `<span class="nb-swatches" role="group">${list
@@ -200,7 +210,7 @@ export function noteEditor(params) {
   return `<p><button type="button" class="btn btn--small" data-action="nav" data-route="${NOTES}">← ノート</button></p>
     <div class="nb-editor">
       <div class="nb-editor__preview">
-        <div id="nb-preview" class="nb-editor__page" role="img" aria-label="ページの見本">${pageSvg(draft.design, {width: 340})}</div>
+        <div id="nb-preview" class="nb-editor__page" role="img" aria-label="ページの見本">${pageSvg(draft.design, {width: previewWidth()})}</div>
         <p class="muted nb-editor__base">${coverArt(base, {width: 40})}<span>もとのノート：${esc(base.name)}<br />${esc(formatSpec(draft.design))}</span></p>
       </div>
       <div class="nb-editor__form">
@@ -209,6 +219,7 @@ export function noteEditor(params) {
         <div class="nb-editor__act">
           <button type="button" class="btn btn--primary" data-nb="save">${draft.id ? '上書きして保存' : 'マイノートに保存'}</button>
           ${draft.id ? '<button type="button" class="btn" data-nb="save-new">別の名前で保存</button>' : ''}
+          <button type="button" class="btn" data-nb="try">試し書き</button>
           <button type="button" class="btn btn--quiet" data-nb="reset">はじめの紙に戻す</button>
         </div>
         <p class="muted">保存したマイノートは、回のノートを作るときの紙のメニューに出ます。すでに作ったノートの紙は、PDF の編集画面の「紙を変える…」で変えられます。</p>
@@ -219,7 +230,7 @@ export function noteEditor(params) {
 /** 見本とコントロールだけ描き直す（名前の欄やつまみの操作を途切れさせない） */
 function redraw({form = true} = {}) {
   const p = document.getElementById('nb-preview');
-  if (p) p.innerHTML = pageSvg(draft.design, {width: 340});
+  if (p) p.innerHTML = pageSvg(draft.design, {width: previewWidth()});
   const c = document.getElementById('nb-controls');
   if (form && c) c.innerHTML = controls();
 }
@@ -287,6 +298,7 @@ document.addEventListener('click', (e) => {
   const what = b.dataset.nb;
   if (what === 'save') save(false);
   else if (what === 'save-new') save(true);
+  else if (what === 'try') openNoteTry(draft.design, draft.name.trim() || itemOf(draft.base).name);
   else if (what === 'reset') {
     draft.design = cleanDesign({format: itemOf(draft.base).format});
     redraw();

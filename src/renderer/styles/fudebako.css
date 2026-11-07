@@ -1226,20 +1226,37 @@ button.fb-card {
 .nb-card.is-in {
   outline: 2px solid var(--paper-ink);
 }
+/* 札の絵：机の上に、表紙と、ページの左上を拡大した紙を少し重ねて置く */
 .nb-card__art {
+  position: relative;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 6px 0;
+  padding: 14px 10px 12px;
   border: 0;
-  background: transparent;
+  border-radius: calc(var(--radius) - 2px);
+  background: color-mix(in srgb, var(--paper-ink) 5%, transparent);
   cursor: pointer;
+  transition: background var(--motion);
+}
+.nb-card__art:hover {
+  background: color-mix(in srgb, var(--paper-ink) 9%, transparent);
+}
+.nb-card__art .nb-cover {
+  position: relative;
+  z-index: 1;
+  transform: rotate(-3deg);
+}
+.nb-card__page {
+  margin-left: -10px;
+  transform: rotate(1.5deg);
 }
 .nb-card__page svg {
   display: block;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 3px 8px rgba(0, 0, 0, 0.14);
 }
 .nb-card__name {
   font-weight: 700;
@@ -1268,10 +1285,121 @@ button.fb-card {
   display: block;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18));
 }
+.nb-detail-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+.nb-detail-page {
+  margin: 0;
+}
 .nb-detail-page svg {
   display: block;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.nb-detail-page--zoom svg {
+  border-radius: 10px;
+}
+.nb-detail-page figcaption {
+  margin-top: 6px;
+  font-size: var(--fs-small);
+  text-align: center;
+}
+
+/* ---- ノートの試し書き（views/notebook-try.js）：実際の大きさのページを机の上に置いて書く ---- */
+body.nbt-open {
+  overflow: hidden;
+}
+.nbt {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: color-mix(in srgb, var(--bg, #f3f1ec) 92%, #000);
+}
+.nbt__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 10px 16px;
+  background: var(--card);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+}
+.nbt__title {
+  display: flex;
+  flex-direction: column;
+  margin-right: auto;
+  line-height: 1.3;
+}
+.nbt__title .muted {
+  font-size: var(--fs-small);
+}
+.nbt__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.nbt__pen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--paper-ink) 18%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+.nbt__pen span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.nbt__pen.is-on {
+  border-color: var(--paper-ink);
+  box-shadow: inset 0 0 0 1px var(--paper-ink);
+}
+.nbt__desk {
+  overflow: auto;
+  padding: 32px;
+  display: grid;
+  place-items: start center;
+}
+.nbt__sheet {
+  --z: 1;
+  --w: 210mm; /* ページの大きさは style の --w・--h で渡す（原稿用紙は A4 横） */
+  --h: 297mm;
+  position: relative;
+  width: calc(var(--w) * var(--z));
+  height: calc(var(--h) * var(--z));
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.nbt__sheet > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.nbt__ink {
+  touch-action: none;
+  cursor: crosshair;
+}
+.nbt__hint {
+  margin: 0;
+  padding: 8px 16px 12px;
+  font-size: var(--fs-small);
+  text-align: center;
 }
 .nb-editor {
   display: grid;

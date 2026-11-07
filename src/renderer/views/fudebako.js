@@ -16,7 +16,8 @@ import {cart} from '../cart.js';
 import {strokePath} from '../../shared/ink.js';
 import {tryout} from './tryout.js';
 import {NOTES, formatSpec, noteEditor, notesPage} from './notebook-shelf.js';
-import {coverArt, pageSvg} from '../../shared/notebooks.js';
+import {FORMATS, coverArt, cropOf, pageSvg} from '../../shared/notebooks.js';
+import {openNoteTry} from './notebook-try.js';
 import {POUCH_ART} from '../desk-tools.js';
 import {EARN, dayOf, pt} from '../../shared/points.js';
 import {
@@ -326,7 +327,8 @@ function seriesCard(series, s) {
   else if (it.refills) sub.push(`2&1・替え芯 ${it.refill} 規格`);
   else if (it.type === 'case') sub.push(CASE_INFO[it.style]?.short ?? '');
   else if (it.type === 'pouch') sub.push(POUCH_INFO[it.style]?.short ?? '');
-  else if (it.type === 'notebook') sub.push(formatSpec({format: it.format}), 'A4');
+  else if (it.type === 'notebook')
+    sub.push(formatSpec({format: it.format}), FORMATS[it.format]?.landscape ? 'A4 横' : 'A4');
   else if (it.note) sub.push(it.note);
   else if (it.pencil) sub.push(`芯 ${it.lead}`);
   else if (feelLabel(it)) sub.push(`書き味：${feelLabel(it)}`);
@@ -511,7 +513,12 @@ function detail(s, id) {
   if (it.type === 'notebook')
     rows.push(
       ['罫', esc(formatSpec({format: it.format}))],
-      ['ページ', 'A4 縦。上に日付・題の欄（回のノートは授業・回・題・日付を薄い字で印刷）'],
+      [
+        'ページ',
+        FORMATS[it.format]?.landscape
+          ? 'A4 横（縦書き）。回のノートは、上の余白に授業・回・題・日付を薄い字で印刷'
+          : 'A4 縦。上に日付・題の欄（回のノートは授業・回・題・日付を薄い字で印刷）'
+      ],
       ['表紙', 'Palette（表紙の色はノートごと）'],
       ['調節', '持ち物の「ノート」で、罫線の色・太さ・行の間・ページ上部の線などを変えてマイノートにできます']
     );
@@ -552,13 +559,31 @@ function detail(s, id) {
         }</p>
         <dl class="fb-spec">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
         ${colors}
-        ${it.type === 'notebook' ? `<h3 class="fb-detail__sub">ページ</h3><div class="nb-detail-page">${pageSvg({format: it.format}, {width: 220, thumb: true})}</div>` : ''}
+        ${it.type === 'notebook' ? notebookPages(it) : ''}
         ${samples ? `<h3 class="fb-detail__sub">書いた線</h3>${samples}` : ''}
         <div class="fb-detail__buy">${buyButtons(s, it)}</div>
       </div>
     </div>
     ${tryout(it)}`;
 }
+
+/** ノートの詳細ページ：ページ全体と、罫線の見える拡大、試し書きのボタン（実際の大きさで開いて書ける） */
+function notebookPages(it) {
+  const d = {format: it.format};
+  const crop = cropOf(d);
+  return `<h3 class="fb-detail__sub">ページ</h3>
+    <div class="nb-detail-pages">
+      <figure class="nb-detail-page">${pageSvg(d, {width: 230, thumb: true})}<figcaption class="muted">ページ全体</figcaption></figure>
+      <figure class="nb-detail-page nb-detail-page--zoom">${pageSvg(d, {width: 170, crop})}<figcaption class="muted">拡大</figcaption></figure>
+    </div>
+    <p><button type="button" class="btn" data-nb-try="${esc(it.id)}">試し書き（実際の大きさ）</button></p>`;
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-nb-try]');
+  const it = b && itemOf(b.dataset.nbTry);
+  if (it?.type === 'notebook') openNoteTry({format: it.format}, it.name);
+});
 
 // ---- カート・レジ・注文完了 ----
 
