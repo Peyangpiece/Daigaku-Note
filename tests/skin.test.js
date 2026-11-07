@@ -404,7 +404,7 @@ test('回のノートは資料の種類「ノート」として着せ替えら�
   const {noteArt} = await import('../src/renderer/views/file-art.js');
   const art = noteArt();
   assert.match(art, /#22304A/);
-  assert.match(art, />NOTE</);
-  assert.match(art, /fill="#ffffff">NOTE/, '紺の帯の字は白');
-  assert.match(noteArt({colors: {note: '#ffab70'}}), /fill="#2b2b2b">NOTE/, '明るい色にしたら字は線の色');
+  assert.match(art, />Note</);
+  assert.match(art, /fill="#ffffff">Note/, '紺の帯の字は白');
+  assert.match(noteArt({colors: {note: '#ffab70'}}), /fill="#2b2b2b">Note/, '明るい色にしたら字は線の色');
 });

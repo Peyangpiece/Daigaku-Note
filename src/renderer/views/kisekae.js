@@ -470,7 +470,7 @@ function homeScene(data, {note, skin1}) {
 }
 // 資料の種類（FILE_KINDS）ごとの見本の名前。授業ページの見本では 5 回に 2 つずつ（ノート・PDF から順に 10 種類）
 const KIND_FILE = {
-  note: 'a.pdf', // 回のノート（中身は PDF。kindArt が「NOTE」の絵で描く）
+  note: 'a.pdf', // 回のノート（中身は PDF。kindArt が「Note」の絵で描く）
   pdf: 'a.pdf',
   slide: 'a.pptx',
   doc: 'a.docx',
