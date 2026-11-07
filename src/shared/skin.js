@@ -47,8 +47,10 @@ export const FIXED_PLACES = ['round', 'file', 'bookmark'];
 export const STICKERS_PER_PLACE = 5;
 export const placeMax = (place) => (FIXED_PLACES.includes(place) ? 1 : STICKERS_PER_PLACE);
 // 資料の種類（file-art.js の印と同じ）
-export const FILE_KINDS = ['pdf', 'slide', 'doc', 'sheet', 'image', 'video', 'audio', 'zip', 'other'];
+// note：回のノート（SPEC §8.6）。拡張子は PDF だが、資料とは別の種類として色・印・シールを変えられる。並びは PDF の前（v0.18.12）
+export const FILE_KINDS = ['note', 'pdf', 'slide', 'doc', 'sheet', 'image', 'video', 'audio', 'zip', 'other'];
 export const FILE_KIND_LABEL = {
+  note: 'ノート',
   pdf: 'PDF',
   slide: 'スライド',
   doc: '文書',

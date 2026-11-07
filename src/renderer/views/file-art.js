@@ -22,6 +22,7 @@ const KIND = {
 };
 
 const MARK = {
+  note: '<path d="M10.5 38v-8l5 8v-8 M23 30a2.9 4 0 1 0 0.01 0z M29 30h6 M32 30v8 M43 30h-5v8h5 M38 34h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   pdf: '<path d="M14 38v-8h3.5a2.6 2.6 0 0 1 0 5.2H14 M24 30v8h3a4 4 0 0 0 0-8z M36 38v-8h6 M36 34h4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   slide:
     '<rect x="13" y="29" width="28" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M18 37l5-5 4 3 5-4" fill="none" stroke="currentColor" stroke-width="2"/>',
@@ -42,6 +43,15 @@ const MARK = {
 // 紙の色（着せ替えで変えていなければ）と線の色。テーマによらず同じ
 const BODY = '#ffffff';
 const INK = '#2b2b2b';
+// 回のノートのはじめの色：ブランドの紺（アイコンの地・ロゴの文字と同じ）
+const NOTE_NAVY = '#22304A';
+// ラベルの字の色：暗い色の帯（紺など）には白、明るい色（はじめの色はどれも淡い）には線の色
+function labelInk(color) {
+  const m = /^#([0-9a-f]{6})$/i.exec(color ?? '');
+  if (!m) return INK;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.45 ? '#ffffff' : INK;
+}
 
 // 印・ラベル 1 つ：消していれば描かない。ずらしていれば translate で動かす
 function item(v, key, inner, editable) {
@@ -61,14 +71,15 @@ export const kindOf = (name) => KIND[extOf(name)]?.[0] ?? 'other';
 
 /** 資料のイラスト。幅 54・高さ 66 の紙（角が折れている）＋種類の色と印＋拡張子のラベル。colors は着せ替えの種類ごとの色（default ならはじめの色）。
  * bodies は種類ごとの紙の色（default なら白）。art は着せ替えの種類ごとの印とラベルの位置（dx・dy）と出すかどうか（on）。editable なら印とラベルに data-art を付ける（着せ替えの見本で動かす） */
-export function fileArt(name, {colors = null, bodies = null, art = null, editable = false} = {}) {
+export function fileArt(name, {colors = null, bodies = null, art = null, editable = false, kind: as = null} = {}) {
   const ext = extOf(name);
-  const [kind, base] = KIND[ext] ?? ['other', 'var(--paper-ink-weak)'];
+  // as：拡張子ではなく種類で描く（回のノート。中身は PDF だが「NOTE」の紺の紙）
+  const [kind, base] = as === 'note' ? ['note', NOTE_NAVY] : (KIND[ext] ?? ['other', 'var(--paper-ink-weak)']);
   const color = colors?.[kind] && colors[kind] !== 'default' ? colors[kind] : base;
   // 紙の色：はじめは白。テーマ（暗い色）や置く場所（付箋の上・着せ替えの見本）で変わらないよう、決まった色で描く
   const body = bodies?.[kind] && bodies[kind] !== 'default' ? bodies[kind] : BODY;
   // 拡張子は英数字だけを出す（ファイル名はパソコンのフォルダから来るので、< や " を含むことがある）
-  const label = /^[a-z0-9]{1,4}$/.test(ext) ? ext.toUpperCase() : '';
+  const label = kind === 'note' ? 'NOTE' : /^[a-z0-9]{1,4}$/.test(ext) ? ext.toUpperCase() : '';
   return `<svg class="file-art" viewBox="0 0 54 66" width="54" height="66" aria-hidden="true" style="color: ${color}">
     <path d="M6 3h30l12 12v46a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="${body}" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
     <path d="M36 3v12h12" fill="color-mix(in srgb, currentColor 35%, ${body})" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
@@ -77,21 +88,13 @@ export function fileArt(name, {colors = null, bodies = null, art = null, editabl
       art?.[kind]?.label,
       'label',
       `<rect x="4" y="48" width="36" height="12" rx="2" fill="currentColor"/>
-    <text x="22" y="57.5" text-anchor="middle" font-size="8.5" font-weight="700" font-family="var(--font-body)" fill="#2b2b2b">${label}</text>`,
+    <text x="22" y="57.5" text-anchor="middle" font-size="8.5" font-weight="700" font-family="var(--font-body)" fill="${labelInk(color)}">${label}</text>`,
       editable
     )}
   </svg>`;
 }
 
-/**
- * 回のノート（SPEC §8.6）の絵：青い表紙のノート（左に背、真ん中に白い題の札と罫線）。資料の紙と同じ大きさ（54 × 66）
- */
-export function noteArt() {
-  return `<svg class="file-art file-art--note" viewBox="0 0 54 66" width="54" height="66" aria-hidden="true">
-    <rect x="7" y="3" width="40" height="60" rx="3" fill="#3f7fc4" stroke="${INK}" stroke-width="1.6"/>
-    <rect x="7" y="3" width="7" height="60" rx="2" fill="#2c5f99" stroke="${INK}" stroke-width="1.6"/>
-    <rect x="19" y="15" width="23" height="15" rx="1.5" fill="#ffffff" stroke="${INK}" stroke-width="1.2"/>
-    <path d="M22 20.5h17M22 25h17" stroke="#9cc0e6" stroke-width="1.2"/>
-    <path d="M17 40h28M17 45h28M17 50h28" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1"/>
-  </svg>`;
+/** 回のノート（SPEC §8.6）の絵：資料（PDF）と同じ角の折れた紙で「NOTE」。はじめの色はブランドの紺。着せ替えの「ノート」の色・印・シールが効く */
+export function noteArt(opts = {}) {
+  return fileArt('', {...opts, kind: 'note'}).replace('class="file-art"', 'class="file-art file-art--note"');
 }

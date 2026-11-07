@@ -392,3 +392,19 @@ test('付箋の色：色を消して 1〜5 色にできる。残りの色をく�
   assert.equal(roundColorIndex(3, 1), 0);
   assert.equal(normalizeTemplate({parts: {sticky: {round: []}}}).parts.sticky.round, 'default');
 });
+
+test('回のノートは資料の種類「ノート」として着せ替えられる（並びは PDF の前）', async () => {
+  const s = await import('../src/shared/skin.js');
+  assert.deepEqual(s.FILE_KINDS.slice(0, 2), ['note', 'pdf']);
+  assert.equal(s.FILE_KIND_LABEL.note, 'ノート');
+  const parts = s.normalizeParts({file: {note: '#ffab70'}});
+  assert.equal(parts.file.note, '#ffab70');
+  assert.equal(s.normalizeParts({}).file.note, 'default', '前の版の着せ替え（note なし）は、はじめの色');
+  assert.equal(s.normalizeStickers([{place: 'file', kind: 'note', asset: 'builtin-star'}]).length, 1);
+  const {noteArt} = await import('../src/renderer/views/file-art.js');
+  const art = noteArt();
+  assert.match(art, /#22304A/);
+  assert.match(art, />NOTE</);
+  assert.match(art, /fill="#ffffff">NOTE/, '紺の帯の字は白');
+  assert.match(noteArt({colors: {note: '#ffab70'}}), /fill="#2b2b2b">NOTE/, '明るい色にしたら字は線の色');
+});
