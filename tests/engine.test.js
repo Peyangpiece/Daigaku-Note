@@ -613,3 +613,75 @@ test('学期をまたぐ授業（通年科目）：新しい学期の LMS にも
   await engine.reconcileCourses(connection, spring, [{lmsId: '77', name: '経営学（通年）'}], {markMissing: false});
   assert.equal(repo.get('course', old.id).term_id, term.id, '春学期を同期しても戻らない');
 });
+
+test('接続を消してつなぎ直すと、前の授業を使い直す（2 つずつできない）。できてしまった重なりは起動時に 1 つにする', async (t) => {
+  const {root, repo, term, connection, files, engine} = await setup(t);
+  const trashed = [];
+  files.trash = async (f) => (trashed.push(f), rm(f, {recursive: true, force: true}));
+  repo.updateConnection(connection.id, {university_host: 'lms'});
+  await engine.run({
+    connection: repo.get('connection', connection.id),
+    connector: fakeConnector(data()),
+    term,
+    kind: 'initial'
+  });
+  for (const c of repo.listCourses()) repo.updateCourse(c.id, {lms_url: `https://lms/course/${c.lms_id}`});
+  const before = repo
+    .listCourses()
+    .map((c) => c.id)
+    .sort();
+  // 接続を消す（connection.remove と同じ：授業の結び付きを外してから接続を消す）
+  const unlink = (cid) => {
+    repo.db.prepare('UPDATE course SET connection_id = NULL WHERE connection_id = ?').run(cid);
+    repo.remove('connection', cid);
+  };
+  unlink(connection.id);
+  const again = repo.createConnection({
+    kind: 'recipe',
+    connector_id: 'fake',
+    label: 'LMS',
+    base_url: 'https://lms',
+    university_host: 'lms'
+  });
+  await engine.run({connection: again, connector: fakeConnector(data()), term, kind: 'initial'});
+  const after = repo.listCourses();
+  assert.deepEqual(after.map((c) => c.id).sort(), before, '前の授業をそのまま使う');
+  assert.ok(after.every((c) => c.connection_id === again.id));
+  assert.deepEqual((await readdir(path.join(root, '2026_秋学期'))).sort(), ['意思決定論', '管理会計Ⅱ']);
+
+  // v0.18.9 までにできてしまった重なり：前の授業（結び付きなし）と、新しい接続で作り直した授業
+  unlink(again.id);
+  const third = repo.createConnection({
+    kind: 'recipe',
+    connector_id: 'fake',
+    label: 'LMS',
+    base_url: 'https://lms',
+    university_host: 'lms'
+  });
+  for (const c of repo.listCourses())
+    repo.createCourse({
+      term_id: term.id,
+      connection_id: third.id,
+      lms_id: c.lms_id,
+      lms_url: c.lms_url,
+      name: c.name,
+      folder_name: `${c.folder_name} (2)`
+    });
+  // ホストが違う授業（別の大学）はつながない
+  const other = repo.createCourse({
+    term_id: term.id,
+    connection_id: null,
+    lms_id: '1',
+    lms_url: 'https://other/course/1',
+    name: '別の大学',
+    folder_name: '別の大学'
+  });
+  assert.equal(repo.listCourses().length, 5, '再現：同じ授業が 2 つずつ');
+  const r = await engine.adoptOrphanCourses();
+  assert.deepEqual(r, {adopted: 2, removedCourses: 2});
+  const kept = repo.listCourses({connectionId: third.id});
+  assert.deepEqual(kept.map((c) => c.id).sort(), before, '前からある授業（ノート・クイズのあるほう）を残す');
+  assert.equal(repo.get('course', other.id).connection_id, null, 'ホストが違う授業はそのまま');
+  assert.equal(trashed.length, 2, '作り直したほうのフォルダはゴミ箱へ');
+  assert.deepEqual(await engine.adoptOrphanCourses(), {adopted: 0, removedCourses: 0}, '2 回目は何もしない');
+});

@@ -386,6 +386,15 @@ app.whenReady().then(async () => {
           log.info(`同じ LMS の接続を ${r.merged} 件まとめ、重なった授業 ${r.removedCourses} 件を 1 つにしました`)
       )
       .catch((e) => log.error(`接続をまとめられませんでした: ${e.message}`));
+    // 接続を消してつなぎ直したときに 2 つずつできた授業を 1 つにし、結び付きが外れた授業をつなぎ直す（v0.18.10）
+    await ctx.engine
+      .adoptOrphanCourses()
+      .then(
+        (r) =>
+          r.adopted &&
+          log.info(`前の授業 ${r.adopted} 件をつなぎ直し、重なった授業 ${r.removedCourses} 件を 1 つにしました`)
+      )
+      .catch((e) => log.error(`前の授業をつなぎ直せませんでした: ${e.message}`));
     // レンダラへの知らせ。窓が前面になくても分かるよう、新しい資料・ログインの必要・クイズの完成・同期の失敗は OS の通知にも出す（notify.js）
     const notifier = createNotifier({repo, Notification, openWindow, log: (m) => log.warn(m)});
     ctx.notifier = notifier; // スケジューラの「今日の復習」の知らせ（§12.1）
