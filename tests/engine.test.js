@@ -269,21 +269,28 @@ test('セットアップで外した授業は非表示で作られ、同期し�
   assert.equal(repo.findCourseByLms(connection.id, '1').hidden, 0);
 });
 
-test('自動ログイン：パスワードが通らなければ自動ログインを止め、理由を残す。認証コードなら止めない', async (t) => {
+test('自動ログイン：パスワードが続けて 2 回通らなければ自動ログインを止め、理由を残す。認証コードなら止めない', async (t) => {
   const {repo, term, connection, engine} = await setup(t);
   repo.updateConnection(connection.id, {save_password: 1});
-  const bad = await engine.run({
-    connection: repo.get('connection', connection.id),
-    connector: fakeConnector(data(), {
-      session: 'login-required',
-      loginError: {code: 'login-bad-credentials', message: 'パスワード違い'}
-    }),
-    term
-  });
-  assert.equal(bad.status, 'login-required');
-  assert.equal(repo.get('connection', connection.id).save_password, 0, '次の同期でまた送らない');
+  const runBad = () =>
+    engine.run({
+      connection: repo.get('connection', connection.id),
+      connector: fakeConnector(data(), {
+        session: 'login-required',
+        loginError: {code: 'login-bad-credentials', message: 'パスワード違い'}
+      }),
+      term
+    });
+  const first = await runBad();
+  assert.equal(first.status, 'login-required');
+  assert.equal(repo.get('connection', connection.id).save_password, 1, '1 回は見誤りのことがあるので止めない');
+  assert.doesNotMatch(first.events[0].message, /止めました/);
+  const bad = await runBad();
+  assert.equal(repo.get('connection', connection.id).save_password, 0, '続けて 2 回なら、次の同期でまた送らない');
   assert.equal(bad.events[0].code, 'login-bad-credentials');
   assert.match(bad.events[0].message, /パスワード違い/);
+  assert.match(bad.events[0].message, /止めました/);
+  assert.ok(repo.getSetting(`login.stopped.${connection.id}`, null)?.at, '止めた時刻を残す（設定に出す）');
 
   repo.updateConnection(connection.id, {save_password: 1});
   const otp = await engine.run({
@@ -333,18 +340,22 @@ test('起動時の自動ログイン：同期せずにセッションを確か�
   assert.deepEqual(saved, ['login-required']);
 
   repo.updateConnection(connection.id, {save_password: 1});
-  const bad = await engine.restoreSession({
-    connection,
-    connector: connector({
-      session: 'login-required',
-      loginError: {code: 'login-bad-credentials', message: 'パスワード違い'}
-    })
-  });
+  const restoreBad = () =>
+    engine.restoreSession({
+      connection,
+      connector: connector({
+        session: 'login-required',
+        loginError: {code: 'login-bad-credentials', message: 'パスワード違い'}
+      })
+    });
+  await restoreBad();
+  assert.equal(repo.get('connection', connection.id).save_password, 1, '1 回目は止めない');
+  const bad = await restoreBad();
   assert.equal(bad.status, 'login-required');
   assert.equal(bad.error.code, 'login-bad-credentials');
   assert.equal(repo.get('connection', connection.id).status, 'login-required');
   assert.equal(repo.get('connection', connection.id).save_password, 0, '通らないパスワードは送り続けない');
-  assert.equal(released.length, 3, '毎回あと片付けをする');
+  assert.equal(released.length, 4, '毎回あと片付けをする');
 });
 
 test('同じ LMS の接続が 2 つあると授業が 2 つずつできる → 起動時に 1 つにまとめる', async (t) => {

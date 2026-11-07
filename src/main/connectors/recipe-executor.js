@@ -454,7 +454,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           if (sentPassword)
             throw err(
               'login-bad-credentials',
-              '保存した ID かパスワードでログインできませんでした。設定 → 授業と資料 で入れ直してください（自動ログインは止めました）'
+              '保存した ID かパスワードでログインできませんでした。設定 → 授業と資料 で確かめてください'
             );
           if (f.user) await loc('user').fill(cred.user);
           await loc('password').fill(cred.password);
@@ -465,7 +465,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         } else if (f.user && sentUser && !sentPassword) {
           throw err(
             'login-bad-credentials',
-            '保存した ID でログインできませんでした。設定 → 授業と資料 で入れ直してください（自動ログインは止めました）'
+            '保存した ID でログインできませんでした。設定 → 授業と資料 で確かめてください'
           );
         } else if (sentPassword || sentUser) {
           // パスワードを送ったあと、ID・パスワード以外の画面（認証コード・同意など）。転送の途中なら少し待って見直す
@@ -550,8 +550,9 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           try {
             await this._autoLogin(page, ctx, cred);
           } catch (e) {
-            // 止まった画面を debug に残す（統合認証のページに合わせるための手がかり。入力した値は HTML に含まれない）
-            if (e.code !== 'login-bad-credentials') await this._dump(page, 'login-auto');
+            // 止まった画面を debug に残す（統合認証のページに合わせるための手がかり。入力した値は HTML に含まれない）。
+            // パスワード違いと判断したときも残す（v0.19.2：違うと見誤ったときに、どの画面だったかを確かめるため）
+            await this._dump(page, e.code === 'login-bad-credentials' ? 'login-bad' : 'login-auto');
             throw e;
           }
           await session.save(ctx.connection, ctx.context);

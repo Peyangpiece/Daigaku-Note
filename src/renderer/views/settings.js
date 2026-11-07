@@ -33,6 +33,12 @@ function autoLogin(c) {
     return `<div style="margin-top: 6px"><div class="muted">自動ログイン：オン。<strong>保存した ID とパスワードを読めません。</strong>入れ直すと、次の同期から自動でログインします <button class="btn btn--small" data-forget-pass="${esc(c.id)}">自動ログインをやめる</button></div>${form('入れ直す')}</div>`;
   if (c.save_password)
     return `<div class="muted" style="margin-top: 6px">自動ログイン：オン${learned ? '' : '。<strong>最初に一度「ログイン」で窓からログインしてください</strong>'} <button class="btn btn--small" data-forget-pass="${esc(c.id)}">自動ログインをやめる</button></div>`;
+  // 保存したパスワードが続けて 2 回通らず、アプリが止めた（v0.19.2）：理由と時刻を出し、欄を開いておく
+  const stopped = c.auto_login_stopped;
+  if (stopped)
+    return `<details open style="margin-top: 6px"><summary class="muted">自動ログイン：オフ（${esc(fmtDate(stopped.at))} に止めました）</summary>
+    <div class="muted" style="margin-top: 4px">保存した ID かパスワードで、続けて 2 回ログインできなかったため止めました。パスワードを変えていなければ、パスワードの欄を空のまま押すと、保存したもので自動ログインを戻せます</div>
+    ${form('保存してオンにする')}</details>`;
   return `<details style="margin-top: 6px"><summary class="muted">自動ログイン：オフ</summary>
     ${form('保存してオンにする')}</details>`;
 }
