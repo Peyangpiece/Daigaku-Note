@@ -11,6 +11,7 @@ import {normalizeBookmark} from '../../shared/bookmark.js';
 import {cleanAlign} from '../../shared/text-runs.js';
 import {str, id, PDFJS_DIR, PDFJS_ASSET, bad} from './common.js';
 import {sendAll} from '../frames.js';
+import * as trial from '../trial-note.js';
 
 export function register({handle, ctx, repo, log, getWindow, notifyOthers = () => {}}) {
   // アプリ内の PDF ビューア（SPEC §9）。編集できるのは PDF だけ。中身はバイト列で渡し、パスはレンダラに出さない
@@ -24,7 +25,12 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
   // 上書き保存した PDF の元の写し（注釈はいつもこの写しの上に描く）
   const originalsDir = () => path.join(app.getPath('userData'), 'originals');
 
+  // 試し書き（trial-note.js）：資料の id のかわりに TRIAL_ID で開く。メモリの中だけで扱い、ファイル・DB には残さない
+  handle('note.trial', async ({design, name}) => trial.startTrial(design, str(name, 100) || '試し書き'));
+  handle('note.trialEnd', () => (trial.endTrial(), {ok: true}));
+
   handle('pdf.open', async ({materialId}) => {
+    if (trial.isTrial(materialId)) return trial.openTrial();
     let m = pdfMaterial(materialId);
     // 上書き保存で PDF を作るスレッドを、書き始める前に作っておく（作る間はメインが少し止まるため。pdf-worker.js）
     setTimeout(warmPdfWorker, 300);
@@ -60,6 +66,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
 
   // 文字入れの書式を覚える（PDF ごと。同じ授業の次の PDF の初期値にもなる）
   handle('pdf.textStyle', ({materialId, style}) => {
+    if (trial.isTrial(materialId)) return {ok: true};
     const m = pdfMaterial(materialId);
     const s = style && typeof style === 'object' ? style : bad('書式が不正です');
     const clean = {
@@ -77,12 +84,14 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
   const bookmarkToClient = ({id: bid, page, y, name}) => ({id: bid, page, y, name});
 
   handle('bookmark.save', ({materialId, bookmark}) => {
+    if (trial.isTrial(materialId)) return {bookmark: trial.saveTrialBookmark(bookmark)};
     const m = pdfMaterial(materialId);
     const bid = bookmark?.id == null ? null : (id(bookmark.id) ?? bad('しおりが不正です'));
     return {bookmark: bookmarkToClient(repo.saveBookmark(annoKey(m), bid, normalizeBookmark(bookmark)))};
   });
 
   handle('bookmark.remove', ({materialId, bookmarkId}) => {
+    if (trial.isTrial(materialId)) return (trial.removeTrialBookmark(bookmarkId), {ok: true});
     const m = pdfMaterial(materialId);
     repo.removeBookmark(annoKey(m), id(bookmarkId) ?? bad('しおりが不正です'));
     return {ok: true};
@@ -98,6 +107,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
 
   // 画面（e.senderFrame）から書いたときは、同じ資料を開いているほかの画面にも知らせる（スマホからは mobile/api.js が知らせる）
   handle('annotation.save', ({materialId, annotation}, e) => {
+    if (trial.isTrial(materialId)) return {annotation: trial.saveTrialAnnotation(annotation)};
     const m = pdfMaterial(materialId);
     const aid = annotation?.id == null ? null : (id(annotation.id) ?? bad('注釈が不正です'));
     // ノートは消したページに書かない（スマホで消す前の画面のまま書いたときなど）
@@ -110,11 +120,13 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
 
   // 注釈の一覧（スマホで書き込んだあと、開いている PDF の画面が取り直す）
   handle('annotation.list', ({materialId}) => {
+    if (trial.isTrial(materialId)) return {annotations: trial.trialAnnotations()};
     const m = pdfMaterial(materialId);
     return {annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient)};
   });
 
   handle('annotation.remove', ({materialId, annotationId}, e) => {
+    if (trial.isTrial(materialId)) return (trial.removeTrialAnnotation(annotationId), {ok: true});
     const m = pdfMaterial(materialId);
     repo.removeAnnotation(annoKey(m), id(annotationId) ?? bad('注釈が不正です'));
     if (e?.senderFrame) notifyOthers(e.senderFrame, 'annotations.changed', {materialId: m.id, all: true});
@@ -140,6 +152,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
   // 上書き保存：注釈を描き込んだ PDF でファイルを置き換える（Finder で開いても注釈が見える）。元の写しはアプリの中に取っておく
   // ノートは、ページの足し引き・描き直しと重ならないよう順番待ちの中で保存する（元の写しが入れ替わる途中に読まない）
   handle('pdf.save', async ({materialId, texts}) => {
+    if (trial.isTrial(materialId)) return {ok: true, changed: false, name: '試し書き'}; // 試し書きはファイルに残さない
     const m0 = pdfMaterial(materialId);
     if (m0.source === 'note' && ctx?.noteSerial) return ctx.noteSerial(String(m0.id), () => save(materialId, texts));
     return save(materialId, texts);
@@ -164,8 +177,27 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
     return {ok: true, changed: r.changed, name: m.name};
   };
 
+  // 試し書きの書き出し：書いたものを描き込んだ PDF を、選んだ場所に保存する（資料の一覧には入れない）
+  const exportTrial = async (options, texts) => {
+    const {base, rows, name} = trial.trialForExport();
+    const out = await exportAnnotatedPdfOffThread(base, rows, {
+      images: textImages(rows, texts),
+      markers: options?.markers === 'black' ? 'black' : 'blue',
+      notes: options?.notes !== false
+    });
+    const opts = {title: '書き出す', defaultPath: `${name}.pdf`, filters: [{name: 'PDF', extensions: ['pdf']}]};
+    const win = getWindow();
+    const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+    if (r.canceled || !r.filePath) return {canceled: true};
+    const file = /\.pdf$/i.test(r.filePath) ? r.filePath : `${r.filePath}.pdf`;
+    if (repo.findMaterialByPath(file)) bad('資料のファイルには上書きできません。別の名前にしてください');
+    await fsp.writeFile(file, out);
+    return {ok: true, name: path.basename(file)};
+  };
+
   // 注釈付きで別名で書き出す（§9.7）。注釈の位置と中身は DB のものを使い、レンダラからは文字入れの画像だけ受け取る
   handle('pdf.export', async ({materialId, options, texts}) => {
+    if (trial.isTrial(materialId)) return exportTrial(options, texts);
     const m = pdfMaterial(materialId);
     const markers = options?.markers === 'black' ? 'black' : 'blue';
     const notes = options?.notes !== false;

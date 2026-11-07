@@ -65,7 +65,9 @@ export const methods = {
       this.$('back').textContent = '閉じる';
       this.$('back').title = '並べるのをやめる（もう片方を窓いっぱいに出す）';
     }
-    const from = this.isNote && !side ? noteFrom(this.materialId) : null;
+    // ノートの試し書き（views/notebook-try.js）：戻るボタンは開いてきた画面へ
+    if (material.trial) this.$('back').textContent = '← 戻る';
+    const from = this.isNote && !side && !material.trial ? noteFrom(this.materialId) : null;
     const back = this.$('note-back');
     back.hidden = !from;
     back.dataset.id = from ?? '';
@@ -256,7 +258,9 @@ export const methods = {
     box.className = 'viewer-addpage';
     box.innerHTML =
       '<button type="button" class="btn btn--small btn--quiet viewer-addpage__paper" data-v="note-paper" aria-haspopup="menu" title="書いたものはそのまま残ります">紙を変える…</button>' +
-      '<button type="button" class="btn btn--small btn--quiet viewer-addpage__delete" data-v="delete-note" title="ファイルはパソコンのゴミ箱へ">ノートを削除…</button>' +
+      (this.material?.trial // 試し書きは保存しないので、削除はない
+        ? ''
+        : '<button type="button" class="btn btn--small btn--quiet viewer-addpage__delete" data-v="delete-note" title="ファイルはパソコンのゴミ箱へ">ノートを削除…</button>') +
       '<button type="button" class="btn btn--small btn--quiet" data-v="remove-page" title="何も書いていない白紙のときだけ。↶ で戻せます">− 最後のページを消す</button>' +
       `<button type="button" class="btn btn--small" data-v="add-page" title="${key(SHIFT, MOD, 'N')}。最後のページの下のほうまで書くと自動でも足します">＋ ページを追加</button>`;
     this.pagesEl.append(box);
