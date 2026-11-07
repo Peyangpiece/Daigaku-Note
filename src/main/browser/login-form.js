@@ -109,10 +109,12 @@ export function staleSsoPage(url, text) {
 
 /**
  * ログインに失敗したと書いてある画面か（ID・パスワードの誤り・アカウントの制限）。text は画面の文字（v0.17.7）。
+ * 「失敗しました」「ロック」「failed」だけでは決めない（「ブロック」や、ほかの知らせの「失敗しました」を読み違えて、
+ * 合っているパスワードで自動ログインを止めていた。v0.19.2）。
  * 失敗と書いていないのに同じパスワードの画面に戻ったときだけ、もう 1 回送ってよい（押すのが早すぎて出し直されたとき）
  */
 export function loginFailedText(text) {
-  return /(ID|ユーザ|パスワード|password|username|credential)[^。\n]{0,20}(違|誤|正しくない|正しくありません|間違|一致しません|incorrect|invalid|wrong)|(incorrect|invalid|wrong)\s+(user|password|id|credential|login)|ログインに失敗|認証に失敗|失敗しました|ロック|locked|failed/i.test(
+  return /(ID|ユーザ|パスワード|password|username|credential)[^。\n]{0,20}(違|誤|正しくない|正しくありません|間違|一致しません|incorrect|invalid|wrong)|(incorrect|invalid|wrong)\s+(user|password|id|credential|login)|(?:ログイン|認証|サインイン)(?:に|が)失敗|(?<!ブ)ロックされ|account\s+(?:is\s+|has\s+been\s+)?locked|(?:login|log-in|sign[- ]?in|authentication)\s+failed/i.test(
     String(text ?? '')
   );
 }

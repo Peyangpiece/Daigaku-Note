@@ -68,11 +68,18 @@ test('ログインに失敗したと書いてある画面か（同じ画面に�
     'ユーザ名またはパスワードが正しくありません',
     'ログインに失敗しました',
     'アカウントがロックされています',
-    'Invalid username or password'
+    'Invalid username or password',
+    '認証が失敗しました',
+    'Login failed',
+    'Your account has been locked'
   ])
     assert.equal(loginFailedText(t), true, t);
   for (const t of [
     '言語 日本語 ログイン CHUKYO MaNaBo ユーザ名 <f124074> パスワード 二段階認証でログイン ユーザ名を入力し直す 二段階認証または生体認証の設定はこちら 設定マニュアルはこちら',
+    'ポップアップがブロックされた場合は、ブラウザの設定を確かめてください',
+    'お知らせの読み込みに失敗しました',
+    'Request failed. Please reload.',
+    'ロック画面の設定',
     ''
   ])
     assert.equal(loginFailedText(t), false, t);

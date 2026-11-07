@@ -9,6 +9,7 @@ import {annoKey} from '../pdf-save.js';
 import {stationeryState} from '../../shared/stationery.js';
 import {claimLogin, pointsState} from '../../shared/points.js';
 import {loginItem, reviewSummary} from './common.js';
+import {autoLoginStopped} from '../login-strikes.js';
 
 /**
  * フォルダごとの色（{授業の id: {byTemplate: {テンプレートの id: 色}}}）。前の版の形は今の形に直して保存する。
@@ -50,9 +51,12 @@ export function register({handle, ctx, repo}) {
     const passwordUnreadable = (c) =>
       !!c.save_password &&
       (!secretKeys.has(`conn:${c.id}:password`) || !!ctx.secrets?.isLocked?.(`conn:${c.id}:password`));
-    const connections = repo
-      .listConnections()
-      .map(({session_json: _session, ...c}) => ({...c, password_unreadable: passwordUnreadable(c)})); // ログインの記録は渡さない
+    const connections = repo.listConnections().map(({session_json: _session, ...c}) => ({
+      ...c,
+      password_unreadable: passwordUnreadable(c),
+      // 自動ログインを止めた理由と時刻（パスワードが続けて 2 回通らなかった。設定に出す）
+      auto_login_stopped: c.save_password ? null : autoLoginStopped(repo, c.id)
+    })); // ログインの記録は渡さない
     // 授業ごとに引かず、全授業ぶんをまとめて引いて配る（授業が増えても問い合わせの数が増えない）
     const unread = repo.countUnreadAll();
     const courses = repo.listCourses().map((c) => ({...c, unread: unread[c.id] ?? 0}));

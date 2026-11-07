@@ -5,6 +5,7 @@ import {preferLayout} from '../../shared/layout.js';
 import {parseRound, resolveRound, roundTitle} from '../../shared/rounds.js';
 import {termRoundDates} from '../../shared/term.js';
 import {addDays} from '../../shared/holidays.js';
+import {noteAutoLogin} from '../login-strikes.js';
 
 /** URL のホスト（小文字）。URL でなければ空 */
 const safeHost = (u) => {
@@ -195,7 +196,7 @@ export class SyncEngine {
 
   /**
    * セッションを確かめ、切れていれば保存した ID・パスワードでログインする（SPEC §6.4）。
-   * 戻りは {loggedIn}（ログインし直したか）か、だめなら {error}。パスワードが通らなければ自動ログインを止める（何度も送ってロックさせない）
+   * 戻りは {loggedIn}（ログインし直したか）か、だめなら {error}。パスワードが続けて 2 回通らなければ自動ログインを止める（何度も送ってロックさせない）
    */
   async loginIfNeeded({connection, connector, ctx}) {
     if ((await connector.ensureSession(ctx)) !== 'login-required') return {loggedIn: false};
@@ -203,12 +204,11 @@ export class SyncEngine {
       () => null,
       (e) => e
     );
+    // 「パスワードが違う」は続けて 2 回でだけ止める（1 回は見誤りのことがある。login-strikes.js）
+    const {stopped} = noteAutoLogin(this.repo, connection.id, error);
     if (!error) return {loggedIn: true};
-    const badCredentials = error.code === 'login-bad-credentials';
-    this.repo.updateConnection(connection.id, {
-      status: 'login-required',
-      ...(badCredentials ? {save_password: 0} : {})
-    });
+    this.repo.updateConnection(connection.id, {status: 'login-required'});
+    if (stopped) error.message = `${error.message}（続けて 2 回通らなかったため、自動ログインは止めました）`;
     return {error};
   }
 

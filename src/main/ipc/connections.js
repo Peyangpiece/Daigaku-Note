@@ -1,6 +1,7 @@
 // IPC の窓口：セットアップと LMS の接続（setup.*・connection.*・courses.list）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
 import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 import {str, id, httpsUrl, bad} from './common.js';
+import {noteAutoLogin, clearAutoLoginStrikes} from '../login-strikes.js';
 
 export function register({handle, ctx, repo, registry, secrets, log}) {
   handle('setup.detect', async ({url}) => {
@@ -78,6 +79,7 @@ export function register({handle, ctx, repo, registry, secrets, log}) {
     // ID は暗号化しない設定にも残す（パスワードを読めなくなっても、次に入れるときは ID が入っている）
     repo.setSetting(`login.user.${cid}`, u);
     repo.updateConnection(cid, {save_password: 1});
+    clearAutoLoginStrikes(repo, cid); // 入れ直したら、数えた回数と止めた理由を消す
     return {ok: true};
   });
 
@@ -96,6 +98,7 @@ export function register({handle, ctx, repo, registry, secrets, log}) {
     await secrets.remove(`conn:${cid}:password`);
     repo.removeSetting(`login.user.${cid}`);
     repo.updateConnection(cid, {save_password: 0});
+    clearAutoLoginStrikes(repo, cid);
     return {ok: true};
   });
 
@@ -131,10 +134,13 @@ export function register({handle, ctx, repo, registry, secrets, log}) {
         }
       } else bad('この接続はログインを使いません');
       repo.updateConnection(cid, {status: 'ok'});
+      if (!wantVisible) noteAutoLogin(repo, cid, null);
       return {ok: true};
     } catch (e) {
       log.warn(`login ${conn.label}: ${e.code ?? ''} ${e.message}`);
-      if (e.code === 'login-bad-credentials') repo.updateConnection(cid, {save_password: 0}); // 何度も送ってロックさせない
+      // 保存したパスワードで送って通らなかった：続けて 2 回なら自動ログインを止める（何度も送ってロックさせない。login-strikes.js）
+      if (!wantVisible && noteAutoLogin(repo, cid, e).stopped)
+        e.message = `${e.message}（続けて 2 回通らなかったため、自動ログインは止めました）`;
       return {ok: false, reason: e.code ?? 'login-required', message: e.message};
     } finally {
       await connector.releaseContext?.(c);
