@@ -1147,8 +1147,17 @@ button.fb-card {
 .fb-pouch__hint {
   margin-top: var(--space-2);
 }
-.fb-back {
-  justify-self: center;
+/* ショップ：左に「← 持ち物」と見出し（設定の「← ホーム 設定」と同じ並び）、右に残高とカート（v0.18.11） */
+.fb-head--shop {
+  grid-template-columns: 1fr auto;
+}
+.fb-head__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.fb-head__title h2 {
+  margin: 0;
 }
 /* 持ち物のポーチ：上に選んでいるポーチ（3D）と、いつも入っている道具 */
 .fb-pouch-top {
