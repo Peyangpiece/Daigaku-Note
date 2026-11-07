@@ -102,7 +102,7 @@ function drawV3(page, d, header) {
     const h = 4.4 * MM;
     const x = Math.max(12, geo.headLeft) * MM;
     const w = Math.min(W - x - 12 * MM, (h * header.width) / header.height);
-    page.drawImage(header, {x, y: H - 13 * MM, width: w, height: (w * header.height) / header.width});
+    page.drawImage(header, {x, y: H - geo.headerY * sy, width: w, height: (w * header.height) / header.width});
   }
 }
 
