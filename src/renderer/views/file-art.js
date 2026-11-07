@@ -25,7 +25,7 @@ const MARK = {
   note: '<path d="M10.5 38v-8l5 8v-8 M23 30a2.9 4 0 1 0 0.01 0z M29 30h6 M32 30v8 M43 30h-5v8h5 M38 34h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   pdf: '<path d="M14 38v-8h3.5a2.6 2.6 0 0 1 0 5.2H14 M24 30v8h3a4 4 0 0 0 0-8z M36 38v-8h6 M36 34h4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   slide:
-    '<rect x="13" y="29" width="28" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M18 37l5-5 4 3 5-4" fill="none" stroke="currentColor" stroke-width="2"/>',
+    '<path d="M14.5 24.5h26" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><rect x="16" y="24.5" width="23" height="13" rx="1" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M21.5 34v-3.5 M26.5 34v-6 M31.5 34v-4.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M27.5 37.5v3 M27.5 40.5l-3.5 3 M27.5 40.5l3.5 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   doc: '<path d="M14 30h26 M14 35h26 M14 40h18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   sheet:
     '<path d="M14 29h26v12H14z M14 35h26 M23 29v12 M32 29v12" fill="none" stroke="currentColor" stroke-width="2"/>',
