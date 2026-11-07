@@ -535,3 +535,28 @@ test('一覧のペンケース・ポーチの絵（flat）：3D モデルを光�
   assert.match(caseArt(itemOf('case-canvas-navy')), /<ellipse/, 'ほかの所は前のまま');
   assert.match(caseArt(itemOf('pouch-flat-navy'), {flat: true}), /data-flat-art="all"/, 'ポーチも');
 });
+
+test('ノート（v0.19.0）：はじめから 4 冊。マイノートの保存・上書き・消す・既定の紙。紙を選ぶメニューはマイノート → ノート', async () => {
+  const {saveMyNote, removeMyNote, setNoteDefault, notePapers} = await import('../src/shared/stationery.js');
+  const st = stationeryState(null);
+  for (const id of ['nb-b6', 'nb-a7', 'nb-grid6', 'nb-grid7']) assert.ok(st.owned.includes(id), id);
+  assert.equal(st.noteDefault, 'nb-b6');
+  assert.deepEqual(st.myNotes, []);
+  assert.throws(() => saveMyNote(st, {base: 'nb-staff'}), /持っていません/);
+  const r = saveMyNote(st, {name: '授業用', base: 'nb-a7', design: {line: '#9cc0e6', gap: 8}}, {newId: 'my-a'});
+  assert.equal(r.id, 'my-a');
+  assert.equal(r.stationery.myNotes[0].design.gap, 8);
+  assert.equal(r.stationery.myNotes[0].design.format, 'a7');
+  const r2 = saveMyNote(r.stationery, {id: 'my-a', name: '直した', base: 'nb-a7', design: {gap: 9}});
+  assert.equal(r2.stationery.myNotes.length, 1, '同じ id は上書き');
+  assert.equal(r2.stationery.myNotes[0].name, '直した');
+  const d = setNoteDefault(r2.stationery, 'my-a');
+  assert.equal(d.noteDefault, 'my-a');
+  assert.throws(() => setNoteDefault(d, 'nb-staff'), /選べません/);
+  const papers = notePapers(d);
+  assert.equal(papers[0].key, 'my-a', 'マイノートが先');
+  assert.ok(papers.some((p) => p.key === 'nb-grid7' && p.design.v === 3));
+  const gone = removeMyNote(d, 'my-a');
+  assert.deepEqual(gone.myNotes, []);
+  assert.equal(gone.noteDefault, 'nb-b6', '消したマイノートが既定なら、はじめの紙に戻す');
+});

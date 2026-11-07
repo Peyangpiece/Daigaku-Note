@@ -1,7 +1,15 @@
 // IPC の窓口：文房具（stationery.*）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
-import {CATALOG, EXTRA_MODELS, arrange, purchase} from '../../shared/stationery.js';
+import {
+  CATALOG,
+  EXTRA_MODELS,
+  arrange,
+  purchase,
+  removeMyNote,
+  saveMyNote,
+  setNoteDefault
+} from '../../shared/stationery.js';
 import {spend} from '../../shared/points.js';
 import {here, bad} from './common.js';
 
@@ -39,6 +47,28 @@ export function register({handle, repo}) {
       refills,
       sizes
     });
+    repo.setSetting('stationery', st);
+    return {stationery: st};
+  });
+
+  // マイノート（docs/SPEC-NOTEBOOK.md）：持っているノートをもとに調節した紙を保存する・消す。回のノートを作るときに最初に選ぶ紙
+  handle('stationery.myNoteSave', ({id, name, base, design}) => {
+    const r = saveMyNote(repo.getSetting('stationery', null), {
+      id: typeof id === 'string' ? id : null,
+      name: String(name ?? ''),
+      base: String(base ?? ''),
+      design: design && typeof design === 'object' ? design : {}
+    });
+    repo.setSetting('stationery', r.stationery);
+    return r;
+  });
+  handle('stationery.myNoteRemove', ({id}) => {
+    const st = removeMyNote(repo.getSetting('stationery', null), String(id ?? ''));
+    repo.setSetting('stationery', st);
+    return {stationery: st};
+  });
+  handle('stationery.noteDefault', ({key}) => {
+    const st = setNoteDefault(repo.getSetting('stationery', null), String(key ?? ''));
     repo.setSetting('stationery', st);
     return {stationery: st};
   });

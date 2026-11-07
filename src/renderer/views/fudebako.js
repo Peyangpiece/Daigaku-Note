@@ -15,6 +15,8 @@ import {navigate, refresh, state} from '../store.js';
 import {cart} from '../cart.js';
 import {strokePath} from '../../shared/ink.js';
 import {tryout} from './tryout.js';
+import {NOTES, formatSpec, noteEditor, notesPage} from './notebook-shelf.js';
+import {coverArt, pageSvg} from '../../shared/notebooks.js';
 import {POUCH_ART} from '../desk-tools.js';
 import {EARN, dayOf, pt} from '../../shared/points.js';
 import {
@@ -98,10 +100,12 @@ function spec(item) {
 
 /** 札の絵。3D モデルの品は、ドラッグで回せる 3D 表示（renderer/model3d.js が中を作る）。big は詳細ページ（拡大もできる）。foot: false で下の説明を省く */
 const art = (item, {big = false, foot = true} = {}) =>
-  isGear(item) && !big
-    ? caseArt(item, {flat: true})
-    : item.art === 'model'
-      ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}" data-item="${esc(item.id)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
+  item.type === 'notebook'
+    ? coverArt(item, {width: big ? 200 : 120})
+    : isGear(item) && !big
+      ? caseArt(item, {flat: true})
+      : item.art === 'model'
+        ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}" data-item="${esc(item.id)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
         ${
           foot
             ? `<div class="${big ? 'fb-detail__foot' : 'model-view__foot'}"><span class="muted">${big ? 'ドラッグで回す・ホイールやピンチで近づける' : 'ドラッグで回せます'}</span>${
@@ -111,20 +115,26 @@ const art = (item, {big = false, foot = true} = {}) =>
               }</div>`
             : ''
         }`
-      : isGear(item)
-        ? caseArt(item, {flat: true})
-        : toolArt(item);
+        : isGear(item)
+          ? caseArt(item, {flat: true})
+          : toolArt(item);
+/** 札・一覧の小さな絵（ノートは表紙、ペンケースなどは平らな絵、道具は軸の絵） */
+const thumb = (it) =>
+  it.type === 'notebook'
+    ? coverArt(it, {width: 64})
+    : isGear(it)
+      ? caseArt(it, {flat: true})
+      : toolArt(it, {flat: true});
 const detailRoute = (item) => `/fudebako/item/${encodeURIComponent(item.id)}`;
 const SHOP = '/fudebako?tab=shop';
 
 const POUCH = '/fudebako?tab=pouch';
 
-/** 持ち物の切り替え（筆箱・ポーチ）。画面の切り替え（アドレスが変わる）なので、いまいる画面を aria-current で示す */
-function tabs(pouch) {
-  return `<nav class="fb-tabs" aria-label="持ち物">
-    <button type="button" class="fb-tab" aria-current="${pouch ? 'false' : 'page'}" data-action="nav" data-route="/fudebako">筆箱</button>
-    <button type="button" class="fb-tab" aria-current="${pouch ? 'page' : 'false'}" data-action="nav" data-route="${POUCH}">ポーチ</button>
-  </nav>`;
+/** 持ち物の切り替え（筆箱・ポーチ・ノート）。画面の切り替え（アドレスが変わる）なので、いまいる画面を aria-current で示す */
+function tabs(now) {
+  const tab = (id, route, label) =>
+    `<button type="button" class="fb-tab" aria-current="${now === id ? 'page' : 'false'}" data-action="nav" data-route="${route}">${label}</button>`;
+  return `<nav class="fb-tabs" aria-label="持ち物">${tab('case', '/fudebako', '筆箱')}${tab('pouch', POUCH, 'ポーチ')}${tab('notes', NOTES, 'ノート')}</nav>`;
 }
 /** 右上のショップへのボタン（持ち物のページ。前はカートのボタンがあった場所） */
 function shopButton() {
@@ -316,6 +326,7 @@ function seriesCard(series, s) {
   else if (it.refills) sub.push(`2&1・替え芯 ${it.refill} 規格`);
   else if (it.type === 'case') sub.push(CASE_INFO[it.style]?.short ?? '');
   else if (it.type === 'pouch') sub.push(POUCH_INFO[it.style]?.short ?? '');
+  else if (it.type === 'notebook') sub.push(formatSpec({format: it.format}), 'A4');
   else if (it.note) sub.push(it.note);
   else if (it.pencil) sub.push(`芯 ${it.lead}`);
   else if (feelLabel(it)) sub.push(`書き味：${feelLabel(it)}`);
@@ -323,7 +334,7 @@ function seriesCard(series, s) {
   else if (it.type === 'hider') sub.push('赤シートで隠れる');
   return `<article class="shop-card shop-card--${tier.id}${owned ? ' is-owned' : ''}" data-series="${esc(series.id)}">
     ${ribbons(it)}
-    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it, {flat: true}) : toolArt(it, {flat: true})}</button>
+    <button type="button" class="shop-card__stage" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${it.type === 'notebook' ? coverArt(it, {width: 62}) : thumb(it)}</button>
     <button type="button" class="shop-card__name" data-action="nav" data-route="${detailRoute(it)}">${esc(series.name)}</button>
     <div class="muted shop-card__spec">${sub.map(esc).join('・')}</div>
     <div class="shop-card__foot">${priceTag(it, owned)}${dots(series, it)}</div>
@@ -429,6 +440,9 @@ function buyButtons(s, it) {
     return cart.has(it.id)
       ? `<span class="muted">カートに入っています</span><button type="button" class="btn btn--primary" data-action="nav" data-route="/fudebako/cart">カートを見る</button>`
       : `<button type="button" class="btn btn--primary" data-shop="cart" data-id="${esc(it.id)}">${ICON.cart} カートへ入れる</button>`;
+  if (it.type === 'notebook')
+    return `<button type="button" class="btn btn--primary" data-action="nav" data-route="${NOTES}&base=${encodeURIComponent(it.id)}">調節してマイノートに</button>
+      <button type="button" class="btn" data-action="nav" data-route="${NOTES}">持ち物のノートへ</button>`;
   if (isGear(it)) return useButton(s, it);
   const where = s.slots.indexOf(it.id);
   if (where >= 0) return `<span class="muted">筆箱の ${where + 1} 本目に入っています</span>`;
@@ -494,6 +508,13 @@ function detail(s, id) {
     const c = (it.type === 'case' ? CASE_INFO : POUCH_INFO)[it.style];
     rows.push(['素材', c.material], ['つくり', c.build], ['大きさ', `${c.size}（長さ × 幅 × 高さ）`]);
   } else if (it.note) rows.push(['見た目', it.note]);
+  if (it.type === 'notebook')
+    rows.push(
+      ['罫', esc(formatSpec({format: it.format}))],
+      ['ページ', 'A4 縦。上に日付・題の欄（回のノートは授業・回・題・日付を薄い字で印刷）'],
+      ['表紙', 'Palette（表紙の色はノートごと）'],
+      ['調節', '持ち物の「ノート」で、罫線の色・太さ・行の間・ページ上部の線などを変えてマイノートにできます']
+    );
   if (it.art === 'model') rows.push(['見た目', '3D モデル（実物の形と材質）']);
   const samples = it.refills
     ? `<ul class="fb-refills">${it.refills
@@ -531,6 +552,7 @@ function detail(s, id) {
         }</p>
         <dl class="fb-spec">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
         ${colors}
+        ${it.type === 'notebook' ? `<h3 class="fb-detail__sub">ページ</h3><div class="nb-detail-page">${pageSvg({format: it.format}, {width: 220, thumb: true})}</div>` : ''}
         ${samples ? `<h3 class="fb-detail__sub">書いた線</h3>${samples}` : ''}
         <div class="fb-detail__buy">${buyButtons(s, it)}</div>
       </div>
@@ -550,7 +572,7 @@ const rowSpec = (it) =>
   [it.experimental ? '' : (it.maker ?? 'パレットノート'), spec(it) || typeLabel(it)].filter(Boolean).join('・');
 const orderRow = (it, {remove = false} = {}) =>
   `<li class="shop-row">
-    <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it, {flat: true}) : toolArt(it, {flat: true})}</button>
+    <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${thumb(it)}</button>
     <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${rowSpec(it)}</div></div>
     <div class="shop-row__price">${priceLabel(it)}</div>
     ${remove ? `<button type="button" class="btn btn--small btn--quiet" data-shop="remove" data-id="${esc(it.id)}" aria-label="${esc(it.name)}をカートから外す">外す</button>` : ''}
@@ -640,7 +662,9 @@ function orderPage(s, id) {
       if (!it)
         return `<li class="shop-row"><div class="shop-row__text">${esc(x.name)}</div><div class="shop-row__price">${cost(x)}</div></li>`;
       let act = '';
-      if (isGear(it)) act = useButton(s, it, true);
+      if (it.type === 'notebook')
+        act = `<button type="button" class="btn btn--small" data-action="nav" data-route="${NOTES}&base=${encodeURIComponent(it.id)}">調節してマイノートに</button>`;
+      else if (isGear(it)) act = useButton(s, it, true);
       else {
         const where = s.slots.indexOf(it.id);
         act =
@@ -651,7 +675,7 @@ function orderPage(s, id) {
               : swapButtons(s, it);
       }
       return `<li class="shop-row">
-        <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${isGear(it) ? caseArt(it, {flat: true}) : toolArt(it, {flat: true})}</button>
+        <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${thumb(it)}</button>
         <div class="shop-row__text"><div class="shop-row__name">${esc(it.name)}</div><div class="muted">${esc(it.maker ?? 'パレットノート')}</div></div>
         <div class="shop-row__price">${cost(x)}</div>
         <div class="shop-row__act">${act}</div>
@@ -708,6 +732,10 @@ export function renderFudebako(_state, route) {
   const tab = new URLSearchParams(route.split('?')[1] ?? '').get('tab');
   const isShop = tab === 'shop';
   const isPouch = tab === 'pouch';
+  const isNotes = tab === 'notes';
+  const params = new URLSearchParams(route.split('?')[1] ?? '');
+  // ショップの種類の絞り込み（持ち物の「ショップでほかのノートを見る」から）
+  if (tab === 'shop' && TYPES.includes(params.get('type'))) ui.shop.type = params.get('type');
   const item = route.match(/^\/fudebako\/item\/([^?]+)/);
   const order = route.match(/^\/fudebako\/order\/([^?]+)/);
   const isCart = /^\/fudebako\/cart(\?|$)/.test(route);
@@ -730,11 +758,15 @@ export function renderFudebako(_state, route) {
               ? shop(s)
               : isPouch
                 ? pouchPage(s)
-                : mine(s);
-  // 持ち物（筆箱・ポーチ）は右上にショップへのボタン。ショップの中は左に「← 持ち物」と見出し（設定の「← ホーム 設定」と同じ並び）、右にカート
+                : isNotes
+                  ? params.get('edit') || params.get('base')
+                    ? noteEditor(params)
+                    : notesPage()
+                  : mine(s);
+  // 持ち物（筆箱・ポーチ・ノート）は右上にショップへのボタン。ショップの中は左に「← 持ち物」と見出し（設定の「← ホーム 設定」と同じ並び）、右にカート
   const head = inShop
     ? `<div class="fb-head fb-head--shop"><div class="fb-head__title"><button type="button" class="btn" data-action="nav" data-route="/fudebako">← 持ち物</button><h2>ショップ</h2></div><div class="fb-head__side">${pointsButton()}${cartButton()}</div></div>`
-    : `<div class="fb-head"><h2>持ち物</h2>${tabs(isPouch)}<div class="fb-head__side">${pointsButton()}${shopButton()}</div></div>`;
+    : `<div class="fb-head"><h2>持ち物</h2>${tabs(isPouch ? 'pouch' : isNotes ? 'notes' : 'case')}<div class="fb-head__side">${pointsButton()}${shopButton()}</div></div>`;
   return `<div class="fudebako">
     ${head}
     ${body}

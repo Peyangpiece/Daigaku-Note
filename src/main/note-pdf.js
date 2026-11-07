@@ -5,6 +5,7 @@
 // v0.14.0〜0.14.1 で作ったノート（テンプレートの見た目。v のない design）は、足すページも前の見た目で描く（drawLegacyPage）
 import {PDFDocument, rgb} from 'pdf-lib';
 import {NOTE_GAPS, NOTE_TYPES} from '../shared/skin.js';
+import {cleanDesign, pageGeometry} from '../shared/notebooks.js';
 
 export const A4 = [595.28, 841.89]; // pt（210 × 297 mm）
 const MM = 72 / 25.4;
@@ -21,9 +22,13 @@ export const NOTE_GAPS_MM = [6, 7];
 const HEAD_H = 20; // 上の欄（日付・題）の高さ mm
 const FOOT_H = 10; // 下の余白 mm
 
-/** 紙の選び方を整える：{v: 2, type: 'ruled'|'grid', gap: 6|7, line: 'gray'|'blue'}（知らない値は横罫 6 mm・灰色） */
+/**
+ * 紙の選び方を整える。v: 3（v0.19.0〜。持ち物のノート・マイノート。shared/notebooks.js の cleanDesign）はそのまま整える。
+ * ほかは v2：{v: 2, type: 'ruled'|'grid', gap: 6|7, line: 'gray'|'blue'}（知らない値は横罫 6 mm・灰色）
+ */
 export function cleanPaper(raw = {}) {
   const d = raw && typeof raw === 'object' ? raw : {};
+  if (d.v === 3) return cleanDesign(d);
   return {
     v: 2,
     type: NOTE_TYPES_V2.includes(d.type) ? d.type : 'ruled',
@@ -39,6 +44,7 @@ const color = (hex) =>
 
 /** 1 ページを描く。design に v がなければ前の見た目（テンプレート）で描く。header は上の欄に置く画像（PDFImage） */
 export function drawNotePage(page, design, header = null) {
+  if (design?.v === 3) return drawV3(page, cleanDesign(design), header);
   const v2 = design?.v === 2;
   if (!v2) drawLegacyPage(page, design);
   else drawPaper(page, storedPaper(design));
@@ -54,6 +60,33 @@ export function drawNotePage(page, design, header = null) {
         : old?.margin && !['cornell', 'plain'].includes(old.type)
           ? 28 * MM
           : 12 * MM;
+    const w = Math.min(W - x - 12 * MM, (h * header.width) / header.height);
+    page.drawImage(header, {x, y: H - 13 * MM, width: w, height: (w * header.height) / header.width});
+  }
+}
+
+/**
+ * v3 の紙（持ち物のノート・マイノート）：shared/notebooks.js の pageGeometry（mm・上から）を PDF の座標（pt・下から）にして描く。
+ * 画面の見本（pageSvg）と同じ計算なので、見本どおりの紙になる。上の欄の字は、線の左の端（12 mm より左にはしない）にそろえる
+ */
+function drawV3(page, d, header) {
+  const [W, H] = [page.getWidth(), page.getHeight()];
+  const sx = W / 210;
+  const sy = H / 297;
+  const geo = pageGeometry(d);
+  page.drawRectangle({x: 0, y: 0, width: W, height: H, color: color(geo.paper)});
+  for (const l of geo.lines)
+    page.drawLine({
+      start: {x: l.x1 * sx, y: H - l.y1 * sy},
+      end: {x: l.x2 * sx, y: H - l.y2 * sy},
+      thickness: l.w * MM,
+      color: color(l.c),
+      ...(l.dash ? {dashArray: l.dash.map((v) => v * MM)} : {})
+    });
+  for (const p of geo.dots) page.drawCircle({x: p.x * sx, y: H - p.y * sy, size: p.r * MM, color: color(p.c)});
+  if (header) {
+    const h = 4.4 * MM;
+    const x = Math.max(12, geo.headLeft) * MM;
     const w = Math.min(W - x - 12 * MM, (h * header.width) / header.height);
     page.drawImage(header, {x, y: H - 13 * MM, width: w, height: (w * header.height) / header.width});
   }

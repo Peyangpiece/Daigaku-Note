@@ -38,7 +38,7 @@ import {watchModels} from './model3d.js';
 import {isReordering, startReorder} from './reorder.js';
 import './swipe.js'; // トラックパッドの 2 本指の横スワイプで戻る・進む
 import {
-  NOTE_PAPERS,
+  notePaperList,
   notePaper,
   openNotebook,
   openNotebookSide,
@@ -647,14 +647,14 @@ document.addEventListener('click', async (e) => {
       const cur = notePaper().key;
       openMenu(
         'ノートの紙',
-        NOTE_PAPERS.map((p) => [p.key, `${p.key === cur ? '✓ ' : '　 '}${p.label}`]),
+        notePaperList().map((p) => [p.key, `${p.key === cur ? '✓ ' : '　 '}${p.label}`]),
         r.left,
         r.bottom + 4,
         async (key) => {
           setNotePaper(key);
           el.disabled = true;
           await openNotebook(el.dataset.courseId, el.dataset.roundId, {
-            paper: NOTE_PAPERS.find((p) => p.key === key),
+            paper: notePaperList().find((p) => p.key === key),
             sub: el.dataset.sub || ''
           });
           el.disabled = false;
@@ -1175,12 +1175,12 @@ function openMaterialMenu(id, x, y) {
       const cur = notePaper().key;
       openMenu(
         'ノートの紙',
-        NOTE_PAPERS.map((p) => [p.key, `${p.key === cur ? '✓ ' : '　 '}${p.label}`]),
+        notePaperList().map((p) => [p.key, `${p.key === cur ? '✓ ' : '　 '}${p.label}`]),
         x,
         y,
         (key) => {
           setNotePaper(key);
-          openNotebookSide(course.id, m.round_id, {paper: NOTE_PAPERS.find((p) => p.key === key), from: id});
+          openNotebookSide(course.id, m.round_id, {paper: notePaperList().find((p) => p.key === key), from: id});
         }
       );
     }
