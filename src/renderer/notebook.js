@@ -2,33 +2,48 @@
 // 授業ページの回の付箋の「＋ ノート」（紙を選ぶ）と、PDF の編集画面の「ノート」「横に並べる」（前に選んだ紙）から使う
 import {confirmDialog, toast} from './ui-kit.js';
 import {navigate, reload, state} from './store.js';
+import {notePapers, stationeryState} from '../shared/stationery.js';
+import {LEGACY_PAPER_KEYS} from '../shared/notebooks.js';
 
 const api = window.daigaku;
 
 // ノートの紙の選び方（このパソコンに覚える。前に選んだものが次の初期値）
-export const NOTE_PAPERS = [
-  {key: 'ruled-6', type: 'ruled', gap: 6, label: '横罫 6 mm（B 罫）'},
-  {key: 'ruled-7', type: 'ruled', gap: 7, label: '横罫 7 mm（A 罫）'},
-  {key: 'grid-6', type: 'grid', gap: 6, label: '方眼 6 mm'},
-  {key: 'grid-7', type: 'grid', gap: 7, label: '方眼 7 mm'}
-];
-const PAPER_KEY = 'note.paper';
-
-/** 前に選んだ紙（なければ横罫 6 mm） */
-export function notePaper() {
-  try {
-    const k = localStorage.getItem(PAPER_KEY);
-    return NOTE_PAPERS.find((p) => p.key === k) ?? NOTE_PAPERS[0];
-  } catch {
-    return NOTE_PAPERS[0];
-  }
+/**
+ * 紙を選ぶメニューの並び（v0.19.0）：マイノート → 持っているノート（持ち物のノート。docs/SPEC-NOTEBOOK.md）。各 {key, label, design}
+ */
+export function notePaperList() {
+  return notePapers(state.data?.stationery);
 }
+const PAPER_KEY = 'note.paper'; // v0.18 までの選び方（このパソコンに覚えていた。ruled-6 など）
+
+/** 前に選んだ紙（持ち物の「最初に選ぶ紙」。v0.18 までにこのパソコンで選んでいた紙があれば、それにあたるノート） */
+export function notePaper() {
+  const list = notePaperList();
+  let key = stationeryState(state.data?.stationery).noteDefault;
+  if (key === 'nb-b6')
+    try {
+      key = LEGACY_PAPER_KEYS[localStorage.getItem(PAPER_KEY)] ?? key;
+    } catch {
+      // 読めなければ持ち物の既定のまま
+    }
+  return list.find((p) => p.key === key) ?? list[0];
+}
+/** 選んだ紙を、次に作るときの最初の紙にする（持ち物の「最初に選ぶ紙」） */
 export function setNotePaper(key) {
   try {
-    localStorage.setItem(PAPER_KEY, key);
+    localStorage.removeItem(PAPER_KEY); // 前の版の覚え方は使わない
   } catch {
-    // 覚えられなくても作れる
+    // 消せなくてもよい
   }
+  api['stationery.noteDefault']({key}).then((r) => {
+    if (r?.stationery && state.data) state.data.stationery = r.stationery;
+  });
+}
+/** 今の紙（ノートの design）が、メニューのどれにあたるか（v3 の紙だけ。なければ null） */
+export function paperKeyOf(design, list = notePaperList()) {
+  if (design?.v !== 3) return null;
+  const s = JSON.stringify(design);
+  return list.find((p) => JSON.stringify(p.design) === s)?.key ?? null;
 }
 
 /** 回の日付（M/D（曜））と、ノートの上の欄の言葉（授業・回・題・日付） */
@@ -96,7 +111,7 @@ async function ensureNote(courseId, roundId, paper = notePaper(), sub = '') {
     courseId,
     roundId,
     sub, // 自分のフォルダの付箋（下のフォルダ）のノート
-    paper: {type: paper.type, gap: paper.gap},
+    paper: paper.design ?? {type: paper.type, gap: paper.gap},
     header: await headingPng(text),
     headerText: text
   });

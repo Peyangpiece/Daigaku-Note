@@ -23,7 +23,7 @@ test('ノートの品：形式ごとに 1 冊、表紙の色はどれもちが�
   for (const id of Object.values(LEGACY_PAPER_KEYS)) assert.ok(STARTER_NOTEBOOKS.includes(id));
   for (const n of NOTEBOOKS) {
     assert.equal(n.type, 'notebook');
-    assert.ok(n.name.startsWith('Pastelle '));
+    assert.ok(n.name.startsWith('Palette '));
     assert.equal(n.points === 0, STARTER_NOTEBOOKS.includes(n.id));
   }
   // 学習ノートの代表的な罫の幅（mm）
@@ -74,14 +74,14 @@ test('ページの計算：横罫は上の欄の下から下の余白まで行�
   assert.equal(staff.lines.length, 12 * 7, '五線譜：12 段 × （5 本＋左右の縦線）');
 });
 
-test('ページの見本の SVG と表紙の絵（字は Pastelle だけ）', () => {
+test('ページの見本の SVG と表紙の絵（字は Palette だけ）', () => {
   assert.match(pageSvg({format: 'grid5'}), /^<svg class="nb-page"/);
   const art = coverArt(NOTEBOOKS.find((n) => n.id === 'nb-a7'));
-  assert.match(art, />Pastelle</);
+  assert.match(art, />Palette</);
   assert.deepEqual(
     [...art.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]),
-    ['Pastelle'],
-    '表紙の字は Pastelle だけ'
+    ['Palette'],
+    '表紙の字は Palette だけ'
   );
 });
 

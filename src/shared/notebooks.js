@@ -1,6 +1,6 @@
-// ノート（docs/SPEC-NOTEBOOK.md）：回のノートの紙の形式・ショップのノート（Pastelle）・紙の設定・ページの計算・表紙の絵。副作用なし。
+// ノート（docs/SPEC-NOTEBOOK.md）：回のノートの紙の形式・ショップのノート（Palette）・紙の設定・ページの計算・表紙の絵。副作用なし。
 // ページの計算（pageGeometry）は mm の線・点で返し、PDF（main/note-pdf.js）と画面の見本（SVG）が同じ計算を使う。
-// 罫の名前と幅は、学習ノートの代表的なもの（販売店の商品ページで確かめた）。表紙は全テンプレート共通の形で、色だけを変える
+// 罫の名前と幅は、学習ノートの代表的なもの（販売店の商品ページで確かめた。C 5 mm だけは確かめられず、一般に知られている幅。docs/SPEC-NOTEBOOK.md §3.1）。表紙は全テンプレート共通の形で、色だけを変える
 
 /** A4 縦（mm） */
 export const PAGE_W = 210;
@@ -233,23 +233,26 @@ export function pageGeometry(raw) {
   return {paper: d.paper, lines, dots, headLeft};
 }
 
-/** ページの見本（SVG。幅 width px、高さは A4 の比）。aria は呼ぶ側で付ける */
-export function pageSvg(raw, {width = 210} = {}) {
+/** ページの見本（SVG。幅 width px、高さは A4 の比）。thumb は小さな見本（線を見えるだけの太さに）。aria は呼ぶ側で付ける */
+export function pageSvg(raw, {width = 210, thumb = false} = {}) {
   const g = pageGeometry(raw);
+  // 小さな見本（thumb）は、線が 1 画素より細くなって消えないよう、線と点に最小の太さを付ける（mm に直す）
+  const minW = thumb ? (0.9 * PAGE_W) / width : 0.15;
+  const minR = thumb ? (0.7 * PAGE_W) / width : 0.25;
   const n = (v) => +v.toFixed(2);
   const lines = g.lines
     .map(
       (l) =>
-        `<line x1="${n(l.x1)}" y1="${n(l.y1)}" x2="${n(l.x2)}" y2="${n(l.y2)}" stroke="${l.c}" stroke-width="${n(Math.max(l.w, 0.15))}"${l.dash ? ` stroke-dasharray="${l.dash.join(' ')}"` : ''}/>`
+        `<line x1="${n(l.x1)}" y1="${n(l.y1)}" x2="${n(l.x2)}" y2="${n(l.y2)}" stroke="${l.c}" stroke-width="${n(Math.max(l.w, minW))}"${l.dash ? ` stroke-dasharray="${l.dash.join(' ')}"` : ''}/>`
     )
     .join('');
   const dots = g.dots
-    .map((p) => `<circle cx="${n(p.x)}" cy="${n(p.y)}" r="${n(Math.max(p.r, 0.25))}" fill="${p.c}"/>`)
+    .map((p) => `<circle cx="${n(p.x)}" cy="${n(p.y)}" r="${n(Math.max(p.r, minR))}" fill="${p.c}"/>`)
     .join('');
   return `<svg class="nb-page" viewBox="0 0 ${PAGE_W} ${PAGE_H}" width="${width}" height="${Math.round((width * PAGE_H) / PAGE_W)}" aria-hidden="true"><rect width="${PAGE_W}" height="${PAGE_H}" fill="${g.paper}"/>${lines}${dots}</svg>`;
 }
 
-// ---- ショップのノート（Pastelle）----
+// ---- ショップのノート（Palette）----
 
 /** 表紙の色を白（amt > 0）か黒（amt < 0）へ寄せる */
 export function mix(c, amt) {
@@ -299,13 +302,12 @@ const NICHE = new Set(['staff', 'dotgrid', 'cornell', 'genkou', 'kanji']);
 export const NOTEBOOKS = NB.map(([format, cover, points]) => ({
   id: `nb-${format}`,
   type: 'notebook',
-  name: `Pastelle ${FORMATS[format].name}`,
+  name: `Palette ${FORMATS[format].name}`,
   format,
   cover,
   price: 0,
   points,
-  niche: NICHE.has(format),
-  maker: 'Pastelle'
+  niche: NICHE.has(format)
 }));
 /** ノートの品の、はじめの紙の設定 */
 export const designOf = (item) => cleanDesign({format: item?.format});
@@ -321,7 +323,7 @@ function luminance(c) {
 
 /**
  * 表紙の絵（SVG。全テンプレート共通の形で、変えるのは色だけ）：一色の表紙・左の背（表紙の色を少し暗く）・
- * 下に細い線と斜体の「Pastelle」。表紙の字は「Pastelle」だけ。字と線は白で、淡い表紙（黄色など）では表紙の色を濃くした色。
+ * 下に細い線と斜体の「Palette」。表紙の字は「Palette」だけ。字と線は白で、淡い表紙（黄色など）では表紙の色を濃くした色。
  * width は表示の幅（px）
  */
 export function coverArt(item, {width = 96} = {}) {
@@ -336,7 +338,7 @@ export function coverArt(item, {width = 96} = {}) {
       <rect x="2" y="2" width="11" height="156" fill="${mix(c, -0.22)}"/>
       <path d="M13 2v156" stroke="#000000" stroke-opacity="0.12" stroke-width="0.8"/>
       <path d="M44 136h48" stroke="${ink}" stroke-opacity="0.8" stroke-width="0.6"/>
-      <text x="68" y="148" text-anchor="middle" font-size="10" font-family="Georgia, 'Times New Roman', serif" font-style="italic" letter-spacing="1.6" fill="${ink}">Pastelle</text>
+      <text x="68" y="148" text-anchor="middle" font-size="10" font-family="Georgia, 'Times New Roman', serif" font-style="italic" letter-spacing="1.6" fill="${ink}">Palette</text>
     </g>
     <rect x="2" y="2" width="116" height="156" rx="4" fill="none" stroke="#2b2b2b" stroke-opacity="0.55" stroke-width="1"/>
   </svg>`;

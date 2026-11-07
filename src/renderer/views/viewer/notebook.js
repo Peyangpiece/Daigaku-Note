@@ -6,7 +6,8 @@
 //  - 写真：ツールバーの「写真」・貼り付け（⌘V）・ページへのドラッグで貼る（貼りもの style.type 'photo'）。選ぶと「↻ 回す」
 //  - PDF を見ながら、同じ回のノートを「ノート」で開く（ノートからは「← 資料へ」で戻る）
 import {
-  NOTE_PAPERS,
+  notePaperList,
+  paperKeyOf,
   hasNote,
   headingPng,
   noteFrom,
@@ -233,14 +234,16 @@ export const methods = {
     };
     if (hasNote(courseId, roundId)) return go(undefined);
     const cur = notePaper().key;
-    const html = NOTE_PAPERS.map(
-      (p) =>
-        `<button type="button" role="menuitem" data-paper="${p.key}">${p.key === cur ? '✓ ' : '　 '}${esc(p.label)}</button>`
-    ).join('');
+    const html = notePaperList()
+      .map(
+        (p) =>
+          `<button type="button" role="menuitem" data-paper="${p.key}">${p.key === cur ? '✓ ' : '　 '}${esc(p.label)}</button>`
+      )
+      .join('');
     this.toggleBarMenu(btn, () =>
       this.openBarMenu(btn, 'ノートの紙', html, (b) => {
         setNotePaper(b.dataset.paper);
-        go(NOTE_PAPERS.find((p) => p.key === b.dataset.paper));
+        go(notePaperList().find((p) => p.key === b.dataset.paper));
       })
     );
   },
@@ -346,13 +349,17 @@ export const methods = {
 
   /** 「紙を変える…」：横罫・方眼、行の間 6・7 mm から選ぶ（今の紙に ✓）。書いたものはそのまま */
   openPaperMenu(btn) {
-    const cur = this.notePaperNow?.v === 2 ? `${this.notePaperNow.type}-${this.notePaperNow.gap}` : null;
+    const list = notePaperList();
+    const cur = paperKeyOf(this.notePaperNow, list);
+    const old = this.notePaperNow && ![2, 3].includes(this.notePaperNow.v);
     const html =
-      (cur ? '' : '<p class="viewer-pdfmenu__note">いまは前の版の紙（テンプレートの見た目）です</p>') +
-      NOTE_PAPERS.map(
-        (p) =>
-          `<button type="button" role="menuitem" data-paper="${p.key}">${p.key === cur ? '✓ ' : '　 '}${esc(p.label)}</button>`
-      ).join('') +
+      (old ? '<p class="viewer-pdfmenu__note">いまは前の版の紙（テンプレートの見た目）です</p>' : '') +
+      list
+        .map(
+          (p) =>
+            `<button type="button" role="menuitem" data-paper="${p.key}">${p.key === cur ? '✓ ' : '　 '}${esc(p.label)}</button>`
+        )
+        .join('') +
       `<button type="button" role="menuitemcheckbox" aria-checked="${autoPageOn()}" data-auto-page>${autoPageOn() ? '✓ ' : '　 '}下まで書いたら自動でページを足す</button>`;
     this.openBarMenu(btn, 'ノートの紙を変える', html, (b) => {
       if (b.hasAttribute('data-auto-page')) {
@@ -364,8 +371,7 @@ export const methods = {
         }
         return toast(on ? '下まで書いたら自動でページを足します' : '自動でページを足すのをやめました');
       }
-      if (b.dataset.paper && b.dataset.paper !== cur)
-        this.changeNotePaper(NOTE_PAPERS.find((p) => p.key === b.dataset.paper));
+      if (b.dataset.paper && b.dataset.paper !== cur) this.changeNotePaper(list.find((p) => p.key === b.dataset.paper));
     });
   },
 
@@ -376,7 +382,10 @@ export const methods = {
     this.busyAddPage(true);
     try {
       await this.settle();
-      const r = await api['note.setPaper']({materialId: this.materialId, paper: {type: paper.type, gap: paper.gap}});
+      const r = await api['note.setPaper']({
+        materialId: this.materialId,
+        paper: paper.design ?? {type: paper.type, gap: paper.gap}
+      });
       if (r?.error) return toast(r.error, {error: true});
       await this.replaceNoteDoc(r.bytes, r.pages);
       this.notePaperNow = r.paper;

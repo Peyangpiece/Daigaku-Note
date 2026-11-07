@@ -1199,3 +1199,168 @@ button.fb-card {
   height: auto;
   max-height: 72px;
 }
+
+/* ---- 持ち物の「ノート」とマイノートの調節（docs/SPEC-NOTEBOOK.md）---- */
+.nb-lead {
+  max-width: 760px;
+  margin: 0 0 var(--space-3);
+}
+.nb-count {
+  font-size: var(--fs-small);
+  font-weight: 400;
+}
+.nb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-2);
+}
+.nb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.nb-card.is-in {
+  outline: 2px solid var(--paper-ink);
+}
+.nb-card__art {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.nb-card__page svg {
+  display: block;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.nb-card__name {
+  font-weight: 700;
+  line-height: 1.4;
+}
+.nb-card__spec {
+  font-size: var(--fs-small);
+}
+.nb-card__act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+.nb-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-ink);
+  color: var(--card);
+  font-size: var(--fs-small);
+  font-weight: 700;
+}
+.nb-cover {
+  display: block;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18));
+}
+.nb-detail-page svg {
+  display: block;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.nb-editor {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+.nb-editor__page svg {
+  display: block;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+.nb-editor__base {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: var(--space-2);
+  font-size: var(--fs-small);
+}
+.nb-editor__form {
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.nb-editor__form h3 {
+  margin-top: 0;
+}
+.nb-row {
+  display: grid;
+  grid-template-columns: 8.5em minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.nb-row__label {
+  font-weight: 700;
+  font-size: var(--fs-small);
+}
+.nb-row input[type='range'] {
+  width: min(260px, 100%);
+  vertical-align: middle;
+}
+.nb-row .shop-chip {
+  margin: 2px 4px 2px 0;
+}
+.nb-swatches {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.nb-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.22);
+  border-radius: 50%;
+  --sw: #ffffff; /* 色は style の --sw で渡す */
+  background: var(--sw);
+  cursor: pointer;
+}
+.nb-swatch.is-on {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 2px;
+}
+.nb-swatch--pick {
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(#f28b82, #f6c445, #7fd1ae, #8ab4f8, #c58af9, #f28b82);
+}
+.nb-swatch--pick input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.nb-editor__act {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: var(--space-3) 0 var(--space-2);
+}
+@media (max-width: 900px) {
+  .nb-editor {
+    grid-template-columns: 1fr;
+  }
+}
+.fb-detail__stage > .nb-cover {
+  margin: var(--space-3) auto;
+}

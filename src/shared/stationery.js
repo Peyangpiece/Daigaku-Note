@@ -1,4 +1,5 @@
 import {esc} from './html.js';
+import {NOTEBOOKS, STARTER_NOTEBOOKS, MY_NOTES_MAX, cleanDesign, cleanMyNotes} from './notebooks.js';
 // 文房具（SPEC §9.8・§15）：ボールペン・シャープペンシル・マーカー（アンダーライン用）・文字隠しペン・ペンケース。副作用なし。
 // 品ぞろえはアプリに入っている（公式の品はアプリ内のポイントで買う〔POINTS。はじめから持っている品は 0〕。既製品の見た目の品は定価）。
 // 持ち物と筆箱の中身は設定（stationery）に保存する。ポイントの残高は shared/points.js。
@@ -13,7 +14,7 @@ import {esc} from './html.js';
 export const SLOTS = 6;
 // 種類（kind）：ショップの絞り込み・一覧の見出しの分け方。シャープペンシルは書く道具としてはペン（type: 'pen'）で、
 // 線が黒鉛の灰色になるだけなので、種類だけを分ける（pencil: true の品。kindOf）
-export const TYPES = ['pen', 'pencil', 'marker', 'hider', 'case', 'pouch', 'calc', 'timer'];
+export const TYPES = ['pen', 'pencil', 'marker', 'hider', 'case', 'pouch', 'calc', 'timer', 'notebook'];
 export const TOOL_TYPES = ['pen', 'marker', 'hider'];
 export const TOOL_KINDS = ['pen', 'pencil', 'marker', 'hider'];
 export const TYPE_LABEL = {
@@ -24,7 +25,8 @@ export const TYPE_LABEL = {
   case: 'ペンケース',
   pouch: 'ポーチ',
   calc: '電卓',
-  timer: 'タイマー'
+  timer: 'タイマー',
+  notebook: 'ノート'
 };
 /**
  * 1 つだけ選んで使う持ち物（ペンケース・ポーチ・ポーチの電卓とタイマー）。種類 → 選んだ品を覚える設定の名前。
@@ -504,6 +506,8 @@ const POINTS = {
   'timer-digital': 250
 };
 for (const it of CATALOG) it.points = POINTS[it.id] ?? 0;
+// ノート（docs/SPEC-NOTEBOOK.md。品と値段は shared/notebooks.js）。ポイントは notebooks.js で決めてあるので、上の POINTS のあとに足す
+CATALOG.push(...NOTEBOOKS);
 const ITEMS = new Map(CATALOG.map((it) => [it.id, it]));
 export const itemOf = (id) => ITEMS.get(id) ?? null;
 export const isTool = (id) => TOOL_TYPES.includes(itemOf(id)?.type);
@@ -683,7 +687,7 @@ export const STARTER_GEAR = {
   calc: 'calc-standard',
   timer: 'timer-stopwatch'
 };
-export const STARTER = [...STARTER_SLOTS, ...Object.values(STARTER_GEAR)];
+export const STARTER = [...STARTER_SLOTS, ...Object.values(STARTER_GEAR), ...STARTER_NOTEBOOKS];
 export const DEFAULT_HIDER = 'hider-cyan';
 
 /** 文字隠しペンに使える色か：赤の成分が 0（赤シートで黒くなる）で、下の字が読める明るさ（緑と青の合計が 300 以上） */
@@ -747,7 +751,75 @@ export function stationeryState(raw) {
   if (r.sizes && typeof r.sizes === 'object')
     for (const [id, s] of Object.entries(r.sizes))
       if (has.has(id) && itemOf(id)?.type === 'pen' && PEN_SIZES.includes(s)) sizes[id] = s;
-  return {owned, slots, ...gear, refills, sizes};
+  // ノート（v0.19.0）：マイノート（持っているノートをもとに調節して保存したもの）と、回のノートを作るときに最初に選ぶ紙
+  const myNotes = cleanMyNotes(r.myNotes, owned);
+  const noteDefault = noteKeyOk(r.noteDefault, has, myNotes) ? r.noteDefault : 'nb-b6';
+  return {owned, slots, ...gear, refills, sizes, myNotes, noteDefault};
+}
+
+/** 紙の選び方の鍵が使えるか：持っているノート（nb-…）か、あるマイノート（my-…） */
+function noteKeyOk(key, has, myNotes) {
+  if (typeof key !== 'string') return false;
+  if (key.startsWith('my-')) return myNotes.some((n) => n.id === key);
+  return has.has(key) && itemOf(key)?.type === 'notebook';
+}
+
+/**
+ * マイノートを保存する。id があれば上書き（なければ新しく作る）。base は持っているノート。戻り {stationery, id}。
+ * 30 冊を超えるときは Error
+ */
+export function saveMyNote(raw, {id = null, name = '', base, design} = {}, {newId = null} = {}) {
+  const st = stationeryState(raw);
+  const item = itemOf(base);
+  if (!item || item.type !== 'notebook') throw new Error('そのノートはありません');
+  if (!st.owned.includes(base)) throw new Error(`${item.name} を持っていません`);
+  const nm =
+    String(name ?? '')
+      .trim()
+      .slice(0, 30) || item.name;
+  const note = {name: nm, base, design: cleanDesign({...design, format: item.format})};
+  let list = [...st.myNotes];
+  let at = id ? list.findIndex((n) => n.id === id) : -1;
+  if (at >= 0) list[at] = {...list[at], ...note};
+  else {
+    if (list.length >= MY_NOTES_MAX) throw new Error(`マイノートは ${MY_NOTES_MAX} 冊までです`);
+    const nid = newId ?? `my-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    list = [...list, {id: nid, ...note}];
+    at = list.length - 1;
+  }
+  return {stationery: stationeryState({...st, myNotes: list}), id: list[at].id};
+}
+
+/** マイノートを消す。既定の紙だったら、はじめの紙（横罫 B）に戻す */
+export function removeMyNote(raw, id) {
+  const st = stationeryState(raw);
+  return stationeryState({...st, myNotes: st.myNotes.filter((n) => n.id !== id)});
+}
+
+/** 回のノートを作るときに最初に選ぶ紙（持っているノートかマイノート） */
+export function setNoteDefault(raw, key) {
+  const st = stationeryState(raw);
+  if (!noteKeyOk(key, new Set(st.owned), st.myNotes)) throw new Error('その紙は選べません');
+  return stationeryState({...st, noteDefault: key});
+}
+
+/**
+ * 紙を選ぶメニューの並び：マイノート → 持っているノート。各 {key, label, design}。
+ * design は回のノートの PDF にそのまま渡す（v3）
+ */
+export function notePapers(raw) {
+  const st = stationeryState(raw);
+  const mine = st.myNotes.map((n) => ({key: n.id, label: n.name, design: n.design, base: n.base}));
+  const books = st.owned
+    .map(itemOf)
+    .filter((it) => it?.type === 'notebook')
+    .map((it) => ({
+      key: it.id,
+      label: it.name.replace(/^Palette /, ''),
+      design: cleanDesign({format: it.format}),
+      base: it.id
+    }));
+  return [...mine, ...books];
 }
 
 /** 円もポイントも要らない品を入手する（カートを通らない近道。いまははじめから持っている品だけが当たる）。入手できなければ Error */
