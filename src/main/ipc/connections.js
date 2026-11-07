@@ -67,14 +67,26 @@ export function register({handle, ctx, repo, registry, secrets, log}) {
   handle('connection.savePassword', async ({connectionId, user, password}) => {
     const cid = id(connectionId) ?? bad('接続が不正です');
     const conn = repo.get('connection', cid) ?? bad('接続がありません');
-    const u = str(user, 200),
-      p = str(password, 500);
-    if (!u || !p) bad('ID とパスワードを入れてください');
+    const u = str(user, 200);
+    let p = str(password, 500);
     if (!['api', 'recipe'].includes(conn.kind)) bad('この接続ではパスワードを使いません');
+    // パスワードの欄が空なら、保存してあるパスワードを使う（画面には渡さず「保存したパスワードを使う」とだけ出す。v0.18.10）
+    if (u && !p) p = (await secrets.get(`conn:${cid}:password`))?.password ?? null;
+    if (!u || !p) bad('ID とパスワードを入れてください');
     if (!(await secrets.available())) bad('このパソコンでは暗号化して保存できないため、パスワードは保存しません');
     await secrets.set(`conn:${cid}:password`, {user: u, password: p});
+    // ID は暗号化しない設定にも残す（パスワードを読めなくなっても、次に入れるときは ID が入っている）
+    repo.setSetting(`login.user.${cid}`, u);
     repo.updateConnection(cid, {save_password: 1});
     return {ok: true};
+  });
+
+  // ログインの欄に入れておく値：ID と、読めるパスワードを保存してあるか。パスワードそのものは画面に渡さない
+  handle('connection.savedLogin', async ({connectionId}) => {
+    const cid = id(connectionId) ?? bad('接続が不正です');
+    repo.get('connection', cid) ?? bad('接続がありません');
+    const saved = await secrets.get(`conn:${cid}:password`);
+    return {user: saved?.user || repo.getSetting(`login.user.${cid}`, null) || '', hasPassword: !!saved?.password};
   });
 
   // 自動ログインをやめる：保存した ID・パスワードを消す（Cookie は残すので、期限まではそのまま入れる）
@@ -82,6 +94,7 @@ export function register({handle, ctx, repo, registry, secrets, log}) {
     const cid = id(connectionId) ?? bad('接続が不正です');
     repo.get('connection', cid) ?? bad('接続がありません');
     await secrets.remove(`conn:${cid}:password`);
+    repo.removeSetting(`login.user.${cid}`);
     repo.updateConnection(cid, {save_password: 0});
     return {ok: true};
   });
@@ -137,6 +150,7 @@ export function register({handle, ctx, repo, registry, secrets, log}) {
       repo.db.prepare('UPDATE course SET connection_id = NULL WHERE connection_id = ?').run(cid);
       repo.remove('connection', cid);
       repo.db.prepare('DELETE FROM settings WHERE key = ?').run(`courses.exclude.${cid}`);
+      repo.db.prepare('DELETE FROM settings WHERE key = ?').run(`login.user.${cid}`);
     });
     await secrets.removeByPrefix(`conn:${cid}:`);
     return {ok: true};

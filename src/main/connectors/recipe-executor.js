@@ -522,6 +522,13 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         ctx.connection.save_password ? await secrets?.get(`conn:${ctx.connection.id}:password`) : null;
       if (mode === 'headless') {
         const cred = credentials ?? (await saved());
+        // 自動ログインはオンなのに、保存した ID・パスワードを読めない（Mac のキーチェーンで拒否された・署名やアプリ名が変わった・消えた）。
+        // 「ブラウザ窓で」ではなく、入れ直せば直ることを伝える。自動ログインは止めない（キーチェーンで許可すれば読める）
+        if (!cred?.user && ctx.connection.save_password && !credentials)
+          throw err(
+            'login-credentials-unreadable',
+            '保存した ID とパスワードを読めません。設定 → 授業と資料 で ID とパスワードを入れ直してください'
+          );
         if (!cred?.user)
           throw err(
             'login-required',

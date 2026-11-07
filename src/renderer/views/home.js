@@ -239,9 +239,11 @@ export function renderHome({data, progress}) {
   // 要確認：すぐ手当てが要るものだけ（ログイン・規約・ブラウザ）。急がないお勧め（学年暦）は 1 行の知らせにする
   const attention = data.connections
     .filter((c) => c.status === 'login-required')
-    .map(
-      (c) =>
-        `<li>${esc(c.label)} へのログインが必要です。<button class="btn btn--small" data-action="login" data-id="${esc(c.id)}">ログイン</button></li>`
+    .map((c) =>
+      // 自動ログインがオンなのに保存した ID・パスワードを読めないときは、窓でのログインより入れ直しを先に案内する（v0.18.10）
+      c.password_unreadable
+        ? `<li>${esc(c.label)} の自動ログインに使う ID とパスワードを読めません。入れ直してください。<button class="btn btn--small" data-action="nav" data-route="/settings?tab=lms">入れ直す</button></li>`
+        : `<li>${esc(c.label)} へのログインが必要です。<button class="btn btn--small" data-action="login" data-id="${esc(c.id)}">ログイン</button></li>`
     );
   // LMS の登録は任意。つないでいなければ、同期のボタンとブラウザの準備の知らせは出さない
   const hasLms = data.connections.some((c) => c.kind !== 'manual' && c.status !== 'disabled');

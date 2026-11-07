@@ -14,6 +14,7 @@ const INVOKE = [
   'connection.update',
   'connection.savePassword',
   'connection.forgetPassword',
+  'connection.savedLogin',
   'connection.remove',
   'term.save',
   'term.remove',

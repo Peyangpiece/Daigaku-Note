@@ -6,6 +6,15 @@ import {parseRound, resolveRound, roundTitle} from '../../shared/rounds.js';
 import {termRoundDates} from '../../shared/term.js';
 import {addDays} from '../../shared/holidays.js';
 
+/** URL のホスト（小文字）。URL でなければ空 */
+const safeHost = (u) => {
+  try {
+    return new URL(u).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+};
+
 /** 全部の回を確かめるとき、ダウンロードに失敗した資料があれば次の同期でも全部を確かめ直す回数の上限 */
 export const MAX_CRAWL_RETRIES = 3;
 
@@ -233,6 +242,11 @@ export class SyncEngine {
       const lmsId = String(c.lmsId ?? c.url ?? c.name);
       seen.add(lmsId);
       let row = this.repo.findCourseByLms(connection.id, lmsId);
+      // 接続を消してつなぎ直したとき：結び付きが外れた前の授業（資料・ノート・クイズが残っている）を使い直す（v0.18.10）
+      if (!row) {
+        const orphan = this.findOrphanCourse(connection, lmsId);
+        if (orphan) row = this.repo.updateCourse(orphan.id, {connection_id: connection.id});
+      }
       if (!row) {
         const folder = this.uniqueCourseFolder(term.id, c.name);
         row = this.repo.createCourse({
@@ -344,6 +358,50 @@ export class SyncEngine {
       if (hosts.size) this.repo.updateConnection(keep.id, {allowed_hosts_json: JSON.stringify([...hosts])});
     }
     return {merged, removedCourses};
+  }
+
+  /**
+   * 接続を消すと授業の connection_id は NULL になる（授業・資料・注釈は残す）。その LMS につなぎ直したとき、
+   * 同じ LMS の ID・同じホストの授業を探す。ホストが分からない授業（lms_url なし）は取り違えないよう使わない
+   */
+  findOrphanCourse(connection, lmsId) {
+    const host = (connection.university_host ?? '').toLowerCase();
+    if (!host) return null;
+    const rows = this.repo.db
+      .prepare("SELECT * FROM course WHERE connection_id IS NULL AND kind = 'lms' AND lms_id = ? ORDER BY created_at")
+      .all(String(lmsId));
+    return rows.find((c) => safeHost(c.lms_url) === host) ?? null;
+  }
+
+  /**
+   * つなぎ直したときに 2 つずつできてしまった授業（v0.18.9 まで）を 1 つにまとめ、結び付きが外れた授業をつなぎ直す。
+   * 残すのは前からある授業（ノート・クイズ・フォルダ名が元のまま）。新しく作ったほうの記録を消し、フォルダを OS のゴミ箱へ（戻せる）。
+   * 前の授業にない資料は、次の同期で全部の回から取り直す。戻りは {adopted: つなぎ直した数, removedCourses: 消した数}
+   */
+  async adoptOrphanCourses() {
+    let adopted = 0;
+    let removedCourses = 0;
+    for (const connection of this.repo.listConnections()) {
+      if (connection.kind === 'manual') continue;
+      const orphans = this.repo.db
+        .prepare(
+          "SELECT * FROM course WHERE connection_id IS NULL AND kind = 'lms' AND lms_id IS NOT NULL ORDER BY created_at"
+        )
+        .all();
+      for (const orphan of orphans) {
+        if (this.findOrphanCourse(connection, orphan.lms_id)?.id !== orphan.id) continue;
+        const twin = this.repo.findCourseByLms(connection.id, orphan.lms_id);
+        if (twin) {
+          // 表示（非表示・同期しない）は、前から本人が選んでいた前の授業のものを使う
+          await this.removeDuplicateCourse(twin, orphan);
+          removedCourses++;
+          this.repo.updateCourse(orphan.id, {connection_id: connection.id});
+          await this.restoreCourseFolderName(orphan.id);
+        } else this.repo.updateCourse(orphan.id, {connection_id: connection.id});
+        adopted++;
+      }
+    }
+    return {adopted, removedCourses};
   }
 
   /** 重なった授業の片方を消す。記録を消し、フォルダを OS のゴミ箱へ。残すほうにない資料があれば、残すほうを全部の回から見直す印に */
