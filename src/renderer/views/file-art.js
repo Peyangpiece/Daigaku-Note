@@ -84,14 +84,16 @@ export function fileArt(name, {colors = null, bodies = null, art = null, editabl
 }
 
 /**
- * 回のノート（SPEC §8.6）の絵：青い表紙のノート（左に背、真ん中に白い題の札と罫線）。資料の紙と同じ大きさ（54 × 66）
+ * 回のノート（SPEC §8.6）の絵：資料（PDF）と同じ角の折れた紙で、「PDF」の文字のところを「NOTE」にしたもの。
+ * 色はブランドの紺（#22304A。アイコンの地・ロゴの文字と同じ）。資料と同じ大きさ（54 × 66）（v0.18.12）
  */
+const NOTE_NAVY = '#22304A';
 export function noteArt() {
-  return `<svg class="file-art file-art--note" viewBox="0 0 54 66" width="54" height="66" aria-hidden="true">
-    <rect x="7" y="3" width="40" height="60" rx="3" fill="#3f7fc4" stroke="${INK}" stroke-width="1.6"/>
-    <rect x="7" y="3" width="7" height="60" rx="2" fill="#2c5f99" stroke="${INK}" stroke-width="1.6"/>
-    <rect x="19" y="15" width="23" height="15" rx="1.5" fill="#ffffff" stroke="${INK}" stroke-width="1.2"/>
-    <path d="M22 20.5h17M22 25h17" stroke="#9cc0e6" stroke-width="1.2"/>
-    <path d="M17 40h28M17 45h28M17 50h28" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1"/>
+  return `<svg class="file-art file-art--note" viewBox="0 0 54 66" width="54" height="66" aria-hidden="true" style="color: ${NOTE_NAVY}">
+    <path d="M6 3h30l12 12v46a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="${BODY}" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M36 3v12h12" fill="color-mix(in srgb, currentColor 35%, ${BODY})" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M10.5 38v-8l5 8v-8 M23 30a2.9 4 0 1 0 0.01 0z M29 30h6 M32 30v8 M43 30h-5v8h5 M38 34h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="4" y="48" width="36" height="12" rx="2" fill="currentColor"/>
+    <text x="22" y="57.5" text-anchor="middle" font-size="8.5" font-weight="700" font-family="var(--font-body)" fill="#ffffff">NOTE</text>
   </svg>`;
 }
