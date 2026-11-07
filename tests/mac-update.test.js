@@ -260,3 +260,16 @@ test('配布物のダウンロード：公開直後の 400 は取り直し、途
   );
   assert.equal(n, 3, '最初の 1 回と取り直し 2 回');
 });
+
+test('通信の名乗りは英字だけ：日本語のアプリ名は PaletteNote に替える', async () => {
+  const {asciiUserAgent} = await import('../src/main/user-agent.js');
+  const ua =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) パレットノート/0.19.1 Chrome/152.0.7977.167 Electron/44.9.3 Safari/537.36';
+  const out = asciiUserAgent(ua);
+  assert.equal(
+    out,
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) PaletteNote/0.19.1 Chrome/152.0.7977.167 Electron/44.9.3 Safari/537.36'
+  );
+  assert.ok(/^[\x20-\x7e]+$/.test(out));
+  assert.equal(asciiUserAgent('a/1 b'), 'a/1 b', '英字だけならそのまま');
+});

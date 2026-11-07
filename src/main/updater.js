@@ -22,6 +22,7 @@ import {
 } from 'node:fs';
 import {rename} from 'node:fs/promises';
 import https from 'node:https';
+import {asciiUserAgent} from './user-agent.js';
 import path from 'node:path';
 import {Readable} from 'node:stream';
 import {
@@ -200,7 +201,10 @@ export function createUpdater({app, dialog, shell, net, refreshTray = () => {}, 
 
   /** Electron の net（Chromium の通信。HTTP/2）で取る。from > 0 なら続き（Range） */
   async function openNet(url, from) {
-    const res = await net.fetch(url, from > 0 ? {headers: {Range: `bytes=${from}-`}} : {});
+    // 名乗りは英字だけ（日本語のアプリ名が入ると GitHub が 400 などを返していた。user-agent.js）
+    const headers = {'User-Agent': asciiUserAgent(app.userAgentFallback)};
+    if (from > 0) headers.Range = `bytes=${from}-`;
+    const res = await net.fetch(url, {headers});
     return {
       status: res.status,
       length: Number(res.headers.get('content-length')) || 0,
