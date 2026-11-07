@@ -19,6 +19,7 @@ import {
   cleanDesign,
   coverArt,
   cropOf,
+  gapFixed,
   pageSvg
 } from '../../shared/notebooks.js';
 import {openNoteTry} from './notebook-try.js';
@@ -77,7 +78,7 @@ export function notesPage() {
       (it) => `<div class="nb-card${s.noteDefault === it.id ? ' is-in' : ''}">
         <button type="button" class="nb-card__art" data-action="nav" data-route="${NOTES}&base=${encodeURIComponent(it.id)}" aria-label="${esc(it.name)}をもとにマイノートを作る">${cardArt(it, {format: it.format})}</button>
         <div class="nb-card__name">${esc(it.name)}</div>
-        <div class="muted nb-card__spec">${esc(formatSpec({format: it.format}))}</div>
+        ${gapFixed(it.format) ? '' : `<div class="muted nb-card__spec">${esc(formatSpec({format: it.format}))}</div>`}
         <div class="nb-card__act">
           <button type="button" class="btn btn--small" data-action="nav" data-route="${NOTES}&base=${encodeURIComponent(it.id)}">調節してマイノートに</button>
           ${defaultButton(s, it.id)}
@@ -86,9 +87,8 @@ export function notesPage() {
     )
     .join('');
   return `
-    <p class="muted nb-lead">回のノート（授業ページの「＋ ノート」・PDF の編集画面の「ノート」）を作るときに、ここのノートとマイノートから紙を選べます。持っているノートをもとに、罫線の色や行の間を変えて「マイノート」として保存できます。</p>
     <section class="fb-group"><h3>マイノート <span class="muted nb-count">${s.myNotes.length} / ${MY_NOTES_MAX}</span></h3>
-      ${mine ? `<div class="nb-grid">${mine}</div>` : '<p class="muted">まだありません。下のノートの「調節してマイノートに」から作れます。</p>'}
+      ${mine ? `<div class="nb-grid">${mine}</div>` : '<p class="muted">まだありません</p>'}
     </section>
     <section class="fb-group"><h3>持っているノート</h3><div class="nb-grid">${owned}</div>
       <p><button type="button" class="btn" data-action="nav" data-route="/fudebako?tab=shop&type=notebook">ショップでほかのノートを見る</button></p>
@@ -147,13 +147,17 @@ function controls() {
     '名前',
     `<input class="input" data-nbd="name" maxlength="30" value="${esc(draft.name)}" aria-label="マイノートの名前" />`
   );
-  if (lo < hi)
+  const gapLabel =
+    f.kind === 'grid' || f.kind === 'dotgrid' || f.kind === 'kanji' || f.kind === 'genkou'
+      ? 'ますの大きさ'
+      : f.kind === 'english' || f.kind === 'staff'
+        ? '線の間'
+        : '行の間';
+  // 幅が名前に書いてあるノートは、幅を変えられない（その幅のノート。gapFixed）
+  if (gapFixed(d.format)) row(gapLabel, `<b>${d.gap} mm</b>`);
+  else if (lo < hi)
     row(
-      f.kind === 'grid' || f.kind === 'dotgrid' || f.kind === 'kanji' || f.kind === 'genkou'
-        ? 'ますの大きさ'
-        : f.kind === 'english' || f.kind === 'staff'
-          ? '線の間'
-          : '行の間',
+      gapLabel,
       `<input type="range" min="${lo}" max="${hi}" step="${GAP_STEP}" value="${d.gap}" data-nbd="gap" aria-label="幅（mm）" /> <b id="nb-gap">${d.gap} mm</b>`
     );
   if (f.kind !== 'plain') row('罫線の色', swatches('line', LINE_SWATCHES, d.line));
@@ -211,7 +215,7 @@ export function noteEditor(params) {
     <div class="nb-editor">
       <div class="nb-editor__preview">
         <div id="nb-preview" class="nb-editor__page" role="img" aria-label="ページの見本">${pageSvg(draft.design, {width: previewWidth()})}</div>
-        <p class="muted nb-editor__base">${coverArt(base, {width: 40})}<span>もとのノート：${esc(base.name)}<br />${esc(formatSpec(draft.design))}</span></p>
+        <p class="muted nb-editor__base">${coverArt(base, {width: 40})}<span>${esc(base.name)}</span></p>
       </div>
       <div class="nb-editor__form">
         <h3>${draft.id ? 'マイノートを調節する' : 'マイノートを作る'}</h3>
@@ -222,7 +226,6 @@ export function noteEditor(params) {
           <button type="button" class="btn" data-nb="try">試し書き</button>
           <button type="button" class="btn btn--quiet" data-nb="reset">はじめの紙に戻す</button>
         </div>
-        <p class="muted">保存したマイノートは、回のノートを作るときの紙のメニューに出ます。すでに作ったノートの紙は、PDF の編集画面の「紙を変える…」で変えられます。</p>
       </div>
     </div>`;
 }

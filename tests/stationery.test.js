@@ -545,7 +545,7 @@ test('ノート（v0.19.0）：はじめから 4 冊。マイノートの保存�
   assert.throws(() => saveMyNote(st, {base: 'nb-staff'}), /持っていません/);
   const r = saveMyNote(st, {name: '授業用', base: 'nb-a7', design: {line: '#9cc0e6', gap: 8}}, {newId: 'my-a'});
   assert.equal(r.id, 'my-a');
-  assert.equal(r.stationery.myNotes[0].design.gap, 8);
+  assert.equal(r.stationery.myNotes[0].design.gap, 7, '横罫 A の幅は 7 mm のまま（幅が名前にあるノート）');
   assert.equal(r.stationery.myNotes[0].design.format, 'a7');
   const r2 = saveMyNote(r.stationery, {id: 'my-a', name: '直した', base: 'nb-a7', design: {gap: 9}});
   assert.equal(r2.stationery.myNotes.length, 1, '同じ id は上書き');

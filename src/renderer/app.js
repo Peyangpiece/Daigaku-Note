@@ -46,6 +46,7 @@ import {
   removeNote,
   setNotePaper
 } from './notebook.js';
+import {TRIAL_ID, closeNoteTry} from './views/notebook-try.js';
 import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具（筆箱・ポーチ・シール帳・素材）
 
 const api = window.daigaku;
@@ -280,9 +281,12 @@ function render() {
       viewer = viewerMod.mountViewer(view, {
         materialId,
         course,
-        onBack: EMBED
-          ? () => window.parent.postMessage({type: 'split-close', id: materialId}, '*')
-          : () => navigate(course ? `/course/${course.id}` : '/')
+        onBack:
+          materialId === TRIAL_ID
+            ? closeNoteTry // ノートの試し書き：開いてきた画面（ショップ・マイノート）へ戻る
+            : EMBED
+              ? () => window.parent.postMessage({type: 'split-close', id: materialId}, '*')
+              : () => navigate(course ? `/course/${course.id}` : '/')
       });
     }
     // PDF のまわりの紙に貼るシール（窓に固定。PDF の下に置く）。着せ替えやシールの画像が変わったら貼り直す

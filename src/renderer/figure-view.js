@@ -86,7 +86,7 @@ export function openFigureEditor({host, el, style, onChange, onClose, onResize =
     panel.innerHTML = `<div class="float-tool__head"><strong>${esc(f.name)}</strong><button type="button" class="float-tool__close" data-fe="done" aria-label="閉じる" title="閉じる（Esc）">×</button></div>
       ${fields ? `<div class="fig-ed__fields">${fields}</div>` : ''}
       ${fx ? `<p class="fig-ed__formula">${esc(fx)}</p>` : ''}
-      <p class="fig-ed__hint">図の上の何もない所を押すと文字を足せます（辺の長さ・高さ・角度など）。文字を押すと書き換え、ドラッグで動かせます。空にすると消えます</p>
+      <p class="fig-ed__hint">図の何もない所を押すと文字を足せます。空にすると消えます</p>
       <div class="fig-ed__foot"><button type="button" class="btn btn--small" data-fe="reset" title="文字を最初の形に戻す">文字を元に戻す</button><button type="button" class="btn btn--small btn--primary" data-fe="done">完了</button></div>`;
   };
   draw();

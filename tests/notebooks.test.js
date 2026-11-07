@@ -6,6 +6,7 @@ import {
   STARTER_NOTEBOOKS,
   LEGACY_PAPER_KEYS,
   cleanDesign,
+  gapFixed,
   pageGeometry,
   pageSvg,
   coverArt,
@@ -37,13 +38,37 @@ test('紙の設定を整える：知らない値は直し、幅は種類ごと�
   const d = cleanDesign({format: 'nope', gap: 99, line: 'red', weight: 'x', head: '?', paper: '#FFF'});
   assert.equal(d.v, 3);
   assert.equal(d.format, 'b6');
-  assert.equal(d.gap, 12, '横罫は 12 mm まで');
+  assert.equal(d.gap, 6, '幅が名前にある横罫 B は 6 mm のまま（変えられない）');
   assert.equal(d.line, '#c9cfd6');
   assert.equal(d.weight, 'normal');
   assert.equal(d.head, 'line');
   assert.equal(d.paper, '#ffffff');
-  assert.equal(cleanDesign({format: 'a7', gap: 6.3}).gap, 6.5);
+  // 幅が名前に書いてあるノート（横罫・ドット入り罫線・方眼・ドット方眼・コーネル式）は幅を変えられない
+  for (const f of [
+    'a7',
+    'b6',
+    'c5',
+    'u8',
+    'ul10',
+    'dot-a7',
+    'dot-b6',
+    'dot-c5',
+    'grid5',
+    'grid4',
+    'grid6',
+    'grid7',
+    'grid12',
+    'dotgrid',
+    'cornell'
+  ]) {
+    assert.ok(gapFixed(f), f);
+    assert.equal(cleanDesign({format: f, gap: 9.5}).gap, FORMATS[f].gap, f);
+  }
+  // 名前に幅のないノートは、種類ごとの範囲と 0.5 mm 刻みで変えられる
+  for (const f of ['eng13', 'eng15', 'staff', 'genkou', 'kanji']) assert.equal(gapFixed(f), false, f);
+  assert.equal(cleanDesign({format: 'eng13', gap: 3.3}).gap, 3.5);
   assert.equal(cleanDesign({format: 'staff', gap: 9}).gap, 3);
+  assert.equal(cleanDesign({format: 'kanji', gap: 99}).gap, 25);
   assert.equal(cleanDesign({format: 'grid5'}).bold, 2, '5 mm 方眼は 10 mm ごとに太線');
   assert.equal(cleanDesign({format: 'b6', bold: 3}).bold, 0, '太線は方眼だけ');
   assert.equal(cleanDesign({format: 'grid5', margin: true}).margin, false, '余白の線は横罫だけ');
@@ -55,13 +80,16 @@ test('ページの計算：横罫は上の欄の下から下の余白まで行�
   const g = pageGeometry({format: 'a7'});
   const rows = g.lines.filter((l) => l.c === '#c9cfd6');
   assert.equal(rows.length, Math.floor((PAGE_H - FOOT_H - HEAD_H) / 7));
+  assert.equal(rows.length, 35, 'A4・A 罫 7 mm は 35 行（キャンパスノートと同じ）');
+  assert.equal(pageGeometry({format: 'b6', head: 'none'}).lines.length, 40, 'B 罫 6 mm は 40 行');
+  assert.deepEqual([FORMATS.eng13.gap, FORMATS.eng15.gap], [3.5, 3], '英習罫 13 段 3.5 mm・15 段 3 mm');
   assert.equal(rows[0].y1, HEAD_H + 7);
   for (const f of Object.keys(FORMATS)) {
     for (const head of ['none', 'line', 'double', 'date']) {
       const p = pageGeometry({format: f, head, margin: true, dots: true});
       for (const l of p.lines) {
         for (const v of [l.x1, l.x2]) assert.ok(v >= 0 && v <= p.w, `${f} x=${v}`);
-        for (const v of [l.y1, l.y2]) assert.ok(v >= 0 && v <= p.h - FOOT_H + 0.01, `${f} y=${v}`);
+        for (const v of [l.y1, l.y2]) assert.ok(v >= 0 && v <= p.bottom + 0.01, `${f} y=${v}`);
       }
     }
   }
@@ -124,8 +152,26 @@ test('マイノート：持っているノートのものだけ・形式はも�
   assert.equal(list.length, 1);
   assert.equal(list[0].name, '授業用');
   assert.equal(list[0].design.format, 'a7', '形式はもとのノートのもの');
-  assert.equal(list[0].design.gap, 9);
+  assert.equal(list[0].design.gap, 7, '横罫 A の幅は 7 mm のまま');
   assert.equal(list[0].design.line, '#123456');
   const many = Array.from({length: 40}, (_, i) => ({id: `my-${i}`, base: 'nb-a7'}));
   assert.equal(cleanMyNotes(many, ['nb-a7']).length, 30);
+});
+
+test('方眼：太線の間隔の倍数にそろえて外のわくを太線で閉じる。上の線をなしにしても上のわくは残る', () => {
+  for (const f of ['grid5', 'grid4']) {
+    const g = pageGeometry({format: f, head: 'none'});
+    const ys = g.lines.filter((l) => l.y1 === l.y2);
+    const xs = g.lines.filter((l) => l.x1 === l.x2);
+    assert.equal((ys.length - 1) % 2, 0, `${f}：行の数は 2 の倍数`);
+    assert.equal((xs.length - 1) % 2, 0, `${f}：列の数は 2 の倍数`);
+    const thickest = Math.max(...g.lines.map((l) => l.w));
+    for (const edge of [ys[0], ys.at(-1), xs[0], xs.at(-1)]) assert.equal(edge.w, thickest, `${f}：外のわくは太線`);
+    assert.equal(ys[0].y1, g.top, '上のわく');
+  }
+  const dots = pageGeometry({format: 'dotgrid'}).dots;
+  assert.ok(
+    dots.every((p) => p.y > pageGeometry({format: 'dotgrid'}).top),
+    'ドット方眼：上の線と点が重ならない'
+  );
 });

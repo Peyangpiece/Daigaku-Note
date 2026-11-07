@@ -158,14 +158,14 @@ export const cornersHtml = () => {
     <div class="corner__head"><strong>シール帳</strong></div>
     <div class="corner__tabs" data-v="seal-tabs" role="tablist" aria-label="シールの種類"></div>
     <div class="corner__grid corner__grid--seal" data-v="seal-grid"></div>
-    <p class="corner__hint">押すと見ているページの真ん中に、ドラッグするとページの好きな所に貼れます</p>
+    <p class="corner__hint"></p>
   </aside>
   <aside class="corner corner--sozai is-tucked" data-corner="sozai" aria-label="素材">
     <button type="button" class="corner__tab" data-corner-tab="sozai" aria-expanded="false" title="素材を出す（マウスを画面の左下の端へ・左端から右へなでる）" aria-label="素材を出す"><span>素材</span></button>
-    <div class="corner__head"><strong>素材</strong><span class="muted">授業でよく使う図</span></div>
+    <div class="corner__head"><strong>素材</strong></div>
     <div class="corner__tabs" data-v="sozai-tabs" role="tablist" aria-label="教科"></div>
     <div class="corner__grid corner__grid--sozai" data-v="sozai-grid"></div>
-    <p class="corner__hint">押すと見ているページの真ん中に、ドラッグするとページの好きな所に貼れます。ペンで上に書き込めます</p>
+    <p class="corner__hint"></p>
   </aside>`;
 };
 
@@ -685,7 +685,7 @@ export class DeskTools {
           <div class="memo-pad__glue" data-memo-grip title="ここを持って引っぱるとちぎれます（ページの上で離すとそこに貼れます）"></div>
           <div class="memo-pad__sheet" style="--memo: ${this.memoColor}">
             <div class="memo-pad__perf" data-memo-grip title="ここを持って引っぱるとちぎれます（ページの上で離すとそこに貼れます）"></div>
-            <textarea maxlength="2000" placeholder="書いてからちぎると、ページに貼れます（白紙のままちぎって、ペンで書き込むこともできます）"></textarea>
+            <textarea maxlength="2000" placeholder="書いてからちぎると、ページに貼れます"></textarea>
           </div>
         </div>
         <div class="memo-pad__foot"><span class="swatches">${colors}</span><button type="button" class="btn btn--small btn--primary" data-memo-tear title="いちばん上の紙をちぎって、見ているページに貼る">ちぎる</button></div>`,

@@ -230,7 +230,7 @@ export function renderHome({data, progress}) {
     order['home:folders']
   );
   const past = mine.filter((c) => !folderShown(c, data.currentTermId));
-  const addCard = `<button type="button" class="folder folder--add" data-action="folder-add" aria-haspopup="menu"><span class="folder__add-plus" aria-hidden="true">＋</span><span class="folder__name">フォルダを追加</span><span class="folder__sub">作る・パソコンのフォルダを登録</span></button>`;
+  const addCard = `<button type="button" class="folder folder--add" data-action="folder-add" aria-haspopup="menu"><span class="folder__add-plus" aria-hidden="true">＋</span><span class="folder__name">フォルダを追加</span></button>`;
   const myFolders = `<section class="my-folders" aria-labelledby="my-folders-title">
       <h2 class="home-sec" id="my-folders-title">自分のフォルダ</h2>
       <div class="folders" data-sort-scope="home:folders">${shown.map((c) => folderCard(c, {data})).join('')}${addCard}</div>
@@ -275,9 +275,9 @@ export function renderHome({data, progress}) {
       ? `<div class="home-top">${dayLine || '<span></span>'}${hasLms ? syncBox(data, progress, syncing) : ''}</div>`
       : '';
   const classes = courses.length
-    ? `<section aria-labelledby="classes-title"><h2 class="home-sec" id="classes-title">授業</h2><div class="folders" data-sort-scope="home:classes">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings?tab=basic"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__sub">設定で戻せます</span><span class="folder__badges"></span></button>` : ''}</div></section>`
+    ? `<section aria-labelledby="classes-title"><h2 class="home-sec" id="classes-title">授業</h2><div class="folders" data-sort-scope="home:classes">${courses.map((c) => folderCard(c, {today: todayIds.has(c.id), data})).join('')}${hidden.length ? `<button class="folder folder--hidden" data-action="nav" data-route="/settings?tab=basic"><span class="tape"></span><span class="folder__name">非表示 ${hidden.length}</span><span class="folder__badges"></span></button>` : ''}</div></section>`
     : hasLms
-      ? `<div class="empty"><p>まだ授業がありません。同期すると、ここにフォルダが貼られます。</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
+      ? `<div class="empty"><p>まだ授業がありません</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
       : features(data.settings).lms
         ? `<div class="empty"><p>manabo とつなぐと、授業の資料が自動で集まり、ここに授業のフォルダが貼られます。</p><button class="btn btn--primary" data-action="nav" data-route="/settings/lms">manabo とつなぐ</button></div>`
         : ''; /* manabo を使わない人には授業の段を出さない（自分のフォルダだけ。授業資料はダウンロードから取り込む） */

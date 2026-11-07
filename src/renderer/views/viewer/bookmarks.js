@@ -120,7 +120,7 @@ export const methods = {
           .map(
             (a) => `<li class="bookmark-panel__item" data-bm="${esc(a.key)}">
           <button type="button" class="bookmark-panel__color" data-bm-action="color" aria-expanded="${this.recoloring === a.key}" title="色を変える" aria-label="この付箋の色を変える"><span class="index-pad__chip" style="--index: ${esc(a.style.color)}"></span></button>
-          <button type="button" class="bookmark-panel__name" data-bm-action="jump" title="この付箋の場所へ（ダブルクリックで言葉を変える）">${esc(a.body || '（言葉なし）')}</button>
+          <button type="button" class="bookmark-panel__name" data-bm-action="jump" title="この付箋の場所へ">${esc(a.body || '（言葉なし）')}</button>
           <span class="muted bookmark-panel__page">p.${a.page}</span>
           <button type="button" class="bookmark-panel__tool" data-bm-action="rename" title="言葉を変える" aria-label="付箋の言葉を変える">✎</button>
           <button type="button" class="bookmark-panel__tool" data-bm-action="remove" title="はがす" aria-label="付箋をはがす">×</button>
@@ -135,7 +135,7 @@ export const methods = {
         </li>`
           )
           .join('')
-      : '<li class="muted bookmark-panel__empty">まだ付箋はありません。「＋ ここに付箋」か ⇧⌘D で、いま見ている場所に貼ります。</li>';
+      : '<li class="muted bookmark-panel__empty">まだ付箋はありません</li>';
   },
 
   /** 一覧の中で付箋の言葉を書き換える（Enter で決める・Esc でやめる） */

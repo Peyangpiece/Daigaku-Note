@@ -102,9 +102,6 @@
   gap: 8px;
   margin: 0 2px 8px;
 }
-.corner__head .muted {
-  font-size: var(--fs-small);
-}
 .corner__tabs {
   display: flex;
   flex-wrap: wrap;
@@ -174,6 +171,10 @@
   font-size: var(--fs-small);
   line-height: 1.5;
   opacity: 0.75;
+}
+/* ふだんは空（押す・ドラッグで貼れるのは見てわかる）。並べた画面だけ views/viewer/split.js が貼る先の説明を入れる */
+.corner__hint:empty {
+  display: none;
 }
 .pouch__items {
   display: grid;

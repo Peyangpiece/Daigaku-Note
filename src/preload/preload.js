@@ -57,6 +57,8 @@ const INVOKE = [
   'pdf.textStyle',
   'note.open',
   'note.addPage',
+  'note.trial',
+  'note.trialEnd',
   'note.removePage',
   'note.setHeader',
   'note.setPaper',

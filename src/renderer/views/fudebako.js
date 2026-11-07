@@ -1,5 +1,5 @@
 // 持ち物のページ（SPEC §15）。上の切り替えボタンの「持ち物」。ページの中は「筆箱」「ポーチ」の 2 つ。右上の「ショップ」からショップへ。
-// 「ポーチ」：ポーチの道具（赤シート・電卓・メモ帳・定規・タイマー）と使い方。
+// 「ポーチ」：ポーチの道具（赤シート・電卓・メモ帳・定規・タイマー）。
 // 「わたしの筆箱」：筆箱に入れる 6 本（編集画面の PDF の横に出る）とペンケースを選ぶ。持っている文房具の一覧。
 // 「ショップ」：上に「新しく入りました」の帯、検索と絞り込み、シリーズ（同じ品の色ちがい）ごとの札。色は札の右下の丸で選ぶ。
 //   ポイントの品（公式の品）は白い札にグレーの枠、円の品は値段帯（shared/stationery.js の TIERS）で札の紙を変える。
@@ -16,7 +16,7 @@ import {cart} from '../cart.js';
 import {strokePath} from '../../shared/ink.js';
 import {tryout} from './tryout.js';
 import {NOTES, formatSpec, noteEditor, notesPage} from './notebook-shelf.js';
-import {FORMATS, coverArt, cropOf, pageSvg} from '../../shared/notebooks.js';
+import {FORMATS, coverArt, cropOf, gapFixed, pageSvg} from '../../shared/notebooks.js';
 import {openNoteTry} from './notebook-try.js';
 import {POUCH_ART} from '../desk-tools.js';
 import {EARN, dayOf, pt} from '../../shared/points.js';
@@ -99,7 +99,7 @@ function spec(item) {
   return '';
 }
 
-/** 札の絵。3D モデルの品は、ドラッグで回せる 3D 表示（renderer/model3d.js が中を作る）。big は詳細ページ（拡大もできる）。foot: false で下の説明を省く */
+/** 札の絵。3D モデルの品は、ドラッグで回せる 3D 表示（renderer/model3d.js が中を作る）。big は詳細ページ（拡大もできる）。foot: false で下のボタンを省く */
 const art = (item, {big = false, foot = true} = {}) =>
   item.type === 'notebook'
     ? coverArt(item, {width: big ? 200 : 120})
@@ -109,7 +109,7 @@ const art = (item, {big = false, foot = true} = {}) =>
         ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}" data-item="${esc(item.id)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
         ${
           foot
-            ? `<div class="${big ? 'fb-detail__foot' : 'model-view__foot'}"><span class="muted">${big ? 'ドラッグで回す・ホイールやピンチで近づける' : 'ドラッグで回せます'}</span>${
+            ? `<div class="${big ? 'fb-detail__foot' : 'model-view__foot'}">${
                 big
                   ? '<button type="button" class="btn btn--small btn--quiet" data-model-reset>向きを戻す</button>'
                   : `<button type="button" class="btn btn--small btn--quiet" data-action="nav" data-route="/fudebako/item/${esc(item.id)}">くわしく</button>`
@@ -162,11 +162,11 @@ const ICON = {
 
 // ポーチの道具（desk-tools.js の四隅のポーチと同じもの）。PDF の編集画面の右下から出す
 const POUCH_TOOLS = [
-  ['sheet', '赤シート', '赤い字とマーカーの所を隠して、暗記の確かめに'],
-  ['calc', '電卓', '式を入れて計算できる'],
-  ['memo', 'メモ帳', '書いてちぎると、ページに貼れる'],
-  ['ruler', '定規', 'ふちに沿ってまっすぐな線が引ける'],
-  ['timer', 'タイマー', '時間になると音で知らせる']
+  ['sheet', '赤シート'],
+  ['calc', '電卓'],
+  ['memo', 'メモ帳'],
+  ['ruler', '定規'],
+  ['timer', 'タイマー']
 ];
 /** ポーチ：選んでいるポーチと中の道具。ポーチ・電卓・タイマーは持っている中から選ぶ（ショップで別の形を買える） */
 function pouchPage(s) {
@@ -180,7 +180,7 @@ function pouchPage(s) {
           it
         ) => `<button type="button" class="fb-card fb-card--case${s[GEAR[type]] === it.id ? ' is-in' : ''}" data-fb="gear" data-id="${esc(it.id)}" aria-pressed="${s[GEAR[type]] === it.id}">
           <div class="fb-card__art">${caseArt(it, {flat: true})}</div><div class="fb-card__name">${esc(it.name)}</div>
-          <span class="muted fb-card__state">${s[GEAR[type]] === it.id ? '使っています' : '押して使う'}</span></button>`
+          ${s[GEAR[type]] === it.id ? '<span class="muted fb-card__state">使っています</span>' : ''}</button>`
       )
       .join('')}</div></section>`;
   };
@@ -191,11 +191,10 @@ function pouchPage(s) {
     <div class="fb-pouch-top">
       <div class="fb-pouch-top__bag">${bag ? art(bag, {foot: false}) : ''}</div>
       <div><h3>${esc(bag?.name ?? 'ポーチ')}</h3>
-        <p class="muted">PDF を開いた画面・ホーム・クイズの右下の「ポーチ」から使えます。</p>
         <div class="fb-grid fb-pouch">${fixed
           .map(
-            ([k, name, what]) =>
-              `<div class="fb-card"><div class="fb-card__art">${POUCH_ART[k]}</div><div class="fb-card__name">${name}</div><div class="muted fb-card__spec">${what}</div></div>`
+            ([k, name]) =>
+              `<div class="fb-card"><div class="fb-card__art">${POUCH_ART[k]}</div><div class="fb-card__name">${name}</div></div>`
           )
           .join('')}</div>
       </div>
@@ -249,7 +248,6 @@ function mine(s) {
     <div class="fb-case" style="--case-base: ${kase.base}; --case-trim: ${kase.trim}">
       <div class="fb-case__art">${caseArt(kase, {flat: true})}</div>
       <div class="fb-case__slots">${slots}</div>
-      <p class="muted fb-case__hint">PDF を開いた画面の横に出ます（1〜6 キーでも持てます）。場所を選んで、下の一覧の「入れる」で入れ替えます。</p>
     </div>
     <section class="fb-group"><h3>ペンケース</h3><div class="fb-grid fb-grid--cases">
       ${cases
@@ -258,7 +256,7 @@ function mine(s) {
             it
           ) => `<button type="button" class="fb-card fb-card--case${it.id === s.caseId ? ' is-in' : ''}" data-fb="case" data-id="${it.id}" aria-pressed="${it.id === s.caseId}">
             <div class="fb-card__art">${caseArt(it, {flat: true})}</div><div class="fb-card__name">${esc(it.name)}</div>
-            <span class="muted fb-card__state">${it.id === s.caseId ? '使っています' : '押して使う'}</span></button>`
+            ${it.id === s.caseId ? '<span class="muted fb-card__state">使っています</span>' : ''}</button>`
         )
         .join('')}
     </div></section>
@@ -312,7 +310,7 @@ function ribbons(it) {
 function ownedNote(series, has) {
   if (series.items.length === 1) return '';
   const rest = series.items.filter((x) => !has.has(x.id)).length;
-  return `<span class="muted shop-card__state">${rest ? `ほかに ${rest} 色（丸で選べます）` : '全色持っています'}</span>`;
+  return `<span class="muted shop-card__state">${rest ? `ほかに ${rest} 色` : '全色持っています'}</span>`;
 }
 /** シリーズの札 */
 function seriesCard(series, s) {
@@ -328,7 +326,10 @@ function seriesCard(series, s) {
   else if (it.type === 'case') sub.push(CASE_INFO[it.style]?.short ?? '');
   else if (it.type === 'pouch') sub.push(POUCH_INFO[it.style]?.short ?? '');
   else if (it.type === 'notebook')
-    sub.push(formatSpec({format: it.format}), FORMATS[it.format]?.landscape ? 'A4 横' : 'A4');
+    sub.push(
+      ...(gapFixed(it.format) ? [] : [formatSpec({format: it.format})]),
+      FORMATS[it.format]?.landscape ? 'A4 横' : 'A4'
+    );
   else if (it.note) sub.push(it.note);
   else if (it.pencil) sub.push(`芯 ${it.lead}`);
   else if (feelLabel(it)) sub.push(`書き味：${feelLabel(it)}`);
@@ -405,10 +406,10 @@ function hero(s) {
     <div class="shop-hero__text">
       <span class="shop-hero__pill">新しく入りました</span>
       <h3>${esc(it.name)}</h3>
-      <p>${esc(it.maker)}。${it.refills ? '黒・赤のボールペンと 0.5 のシャープが 1 本に。' : ''}${it.art === 'model' ? '3D モデルで、実物の形と材質を回して確かめられます。' : ''}</p>
+      <p>${esc(it.maker)}。${it.refills ? '黒・赤のボールペンと 0.5 のシャープが 1 本に。' : ''}</p>
       <div class="shop-hero__act">${priceTag(it, owned)}${owned ? '' : cartAction(it, s)}<button type="button" class="btn btn--small" data-action="nav" data-route="${detailRoute(it)}">くわしく見る</button></div>
     </div>
-    <div class="shop-hero__art">${art(it, {foot: false})}${it.art === 'model' && !isGear(it) ? '<p class="muted shop-hero__hint">ドラッグで回せます</p>' : ''}</div>
+    <div class="shop-hero__art">${art(it, {foot: false})}</div>
   </section>`;
 }
 /** ショップ：帯・検索・絞り込み・シリーズの札 */
@@ -418,7 +419,7 @@ function shop(s) {
     ${hero(s)}
     <div class="shop-toolbar" role="search">
       <div class="shop-toolbar__row">
-        <label class="shop-search">${ICON.search}<input id="shop-q" type="search" value="${esc(f.q)}" placeholder="ペンやメーカーの名前でさがす（例：DN-2、滑らか、サラサ、ジェット）" aria-label="文房具をさがす" autocomplete="off" /></label>
+        <label class="shop-search">${ICON.search}<input id="shop-q" type="search" value="${esc(f.q)}" placeholder="ペンやメーカーの名前でさがす" aria-label="文房具をさがす" autocomplete="off" /></label>
         <label class="shop-sort"><span class="sr-only">並び替え</span><select id="shop-sort" data-shop="sort">${Object.entries(
           SORTS
         )
@@ -431,7 +432,7 @@ function shop(s) {
         <span class="shop-chips__sep"></span>${chip('unowned', f.unowned ? '0' : '1', 'まだ持っていないものだけ', f.unowned)}
       </div>
     </div>
-    <p class="muted shop-note">公式の文房具はポイントで買えます（ログインボーナスやクイズの正解でたまります）。円の支払いは α 版のあいだはデモです（実際の請求はありません）。</p>
+    <p class="muted shop-note">円の支払いは α 版のあいだはデモです（実際の請求はありません）。</p>
     <div id="shop-results">${results(s)}</div>
   </div>`;
 }
@@ -477,32 +478,23 @@ function detail(s, id) {
   if (!it || !listed(it))
     return `<p class="muted">その文房具はありません。</p><p><button type="button" class="btn" data-action="nav" data-route="${SHOP}">← ショップ</button></p>`;
   const rows = [];
-  rows.push(['種類', typeLabel(it)]);
+  if (it.type !== 'notebook') rows.push(['種類', typeLabel(it)]); // ノートは名前と表紙でわかる
   if (it.refills) {
     rows.push([
       'しくみ',
-      `${it.refills.length - it.refills.filter((r) => r.sharp).length}&${it.refills.filter((r) => r.sharp).length}（回転式の多機能ペン。持つと芯を選べ、同じ場所をもう一度押すと次の芯に回ります）`
+      `${it.refills.length - it.refills.filter((r) => r.sharp).length}&${it.refills.filter((r) => r.sharp).length}（同じ場所をもう一度押すと次の芯に回ります）`
     ]);
     rows.push(['替え芯', `${esc(it.refill)} 規格`]);
   } else if (it.pencil) {
-    rows.push(['芯', `${it.lead}（線は黒鉛の灰色）`]);
+    rows.push(['芯', it.lead]);
     rows.push(['しくみ', 'ノック式の製図用。細い金属のパイプ・アヤ目のローレットのグリップ・硬度の窓']);
   } else if (it.type === 'pen') {
     // 公式のボールペン（v0.16.23）：書き味は 3 段階（硬い＝筆圧なし・普通・滑らか）
-    if (feelLabel(it))
-      rows.push([
-        '書き味',
-        it.even
-          ? '硬い（筆圧なし）：ペンタブ・スタイラスの筆圧や書く速さで太さが変わらず、どこも同じ太さの線になります（書き始め・書き終わりも細くなりません）'
-          : `${feelLabel(it)}（3 段階：硬い・普通・滑らか）`
-      ]);
+    if (feelLabel(it)) rows.push(['書き味', it.even ? '硬い（筆圧なし）' : feelLabel(it)]);
   }
   // 書くペン（v0.16.22）：太さは 0.3・0.5・0.7 から選べる
   if (it.type === 'pen') {
-    rows.push([
-      '太さ',
-      `${PEN_SIZES.join('・')} mm から選べます（試し書きと、PDF の編集画面でペンを持ったときの上の帯で）`
-    ]);
+    rows.push(['太さ', `${PEN_SIZES.join('・')} mm から選べます`]);
   }
   if (it.type === 'marker') rows.push(['太さ', it.thick ? '太め' : 'ふつう']);
   else if (it.type === 'hider') rows.push(['色', '赤シートで隠れる色']);
@@ -512,17 +504,10 @@ function detail(s, id) {
   } else if (it.note) rows.push(['見た目', it.note]);
   if (it.type === 'notebook')
     rows.push(
-      ['罫', esc(formatSpec({format: it.format}))],
-      [
-        'ページ',
-        FORMATS[it.format]?.landscape
-          ? 'A4 横（縦書き）。回のノートは、上の余白に授業・回・題・日付を薄い字で印刷'
-          : 'A4 縦。上に日付・題の欄（回のノートは授業・回・題・日付を薄い字で印刷）'
-      ],
-      ['表紙', 'Palette（表紙の色はノートごと）'],
-      ['調節', '持ち物の「ノート」で、罫線の色・太さ・行の間・ページ上部の線などを変えてマイノートにできます']
+      // 罫の幅が名前に書いてあるノートは、名前と同じことになるので罫の行を出さない
+      ...(gapFixed(it.format) ? [] : [['罫', esc(formatSpec({format: it.format}))]]),
+      ['ページ', FORMATS[it.format]?.landscape ? 'A4 横' : 'A4 縦']
     );
-  if (it.art === 'model') rows.push(['見た目', '3D モデル（実物の形と材質）']);
   const samples = it.refills
     ? `<ul class="fb-refills">${it.refills
         .map(
@@ -539,7 +524,7 @@ function detail(s, id) {
             (x) =>
               `<button type="button" class="shop-dot${x.id === it.id ? ' is-on' : ''}" data-action="nav" data-route="${detailRoute(x)}" style="${dotStyle(x)}" title="${esc(x.name)}" aria-current="${x.id === it.id}"><span class="sr-only">${esc(x.name)}</span></button>`
           )
-          .join('')}</div><p class="muted fb-detail__colorname">${esc(it.name)}</p>`
+          .join('')}</div>`
       : '';
   return `<p><button type="button" class="btn btn--small" data-action="nav" data-route="${SHOP}">← ショップ</button></p>
     <div class="fb-detail" data-model-box>
@@ -571,12 +556,11 @@ function detail(s, id) {
 function notebookPages(it) {
   const d = {format: it.format};
   const crop = cropOf(d);
-  return `<h3 class="fb-detail__sub">ページ</h3>
-    <div class="nb-detail-pages">
-      <figure class="nb-detail-page">${pageSvg(d, {width: 230, thumb: true})}<figcaption class="muted">ページ全体</figcaption></figure>
-      <figure class="nb-detail-page nb-detail-page--zoom">${pageSvg(d, {width: 170, crop})}<figcaption class="muted">拡大</figcaption></figure>
+  return `    <div class="nb-detail-pages">
+      <figure class="nb-detail-page">${pageSvg(d, {width: 230, thumb: true})}</figure>
+      <figure class="nb-detail-page nb-detail-page--zoom">${pageSvg(d, {width: 170, crop})}</figure>
     </div>
-    <p><button type="button" class="btn" data-nb-try="${esc(it.id)}">試し書き（実際の大きさ）</button></p>`;
+    <p><button type="button" class="btn" data-nb-try="${esc(it.id)}">試し書き</button></p>`;
 }
 
 document.addEventListener('click', (e) => {
@@ -712,7 +696,6 @@ function orderPage(s, id) {
       <p class="muted">注文番号 <code>${esc(o.id)}</code>・${esc(at)}・${esc(payLabel)}</p>
       <ul class="shop-rows">${rows}</ul>
       <dl class="shop-total">${o.points ? `<dt class="shop-total__sum">合計（ポイント）</dt><dd class="shop-total__sum">${pt(o.points)}</dd>` : ''}${o.total || !o.points ? `<dt class="shop-total__sum">合計（円）</dt><dd class="shop-total__sum">${yen(o.total)}</dd>` : ''}</dl>
-      <p class="muted">買った文房具は「わたしの筆箱」に入りました。</p>
       <p class="shop-done__act"><button type="button" class="btn btn--primary" data-action="nav" data-route="/fudebako">持ち物の筆箱へ</button><button type="button" class="btn" data-action="nav" data-route="${SHOP}">ショップへ戻る</button></p>
     </div>`;
 }
@@ -742,11 +725,10 @@ function pointsPage() {
             <b class="${h.amount < 0 ? 'is-minus' : 'is-plus'}">${h.amount < 0 ? '−' : '+'}${pt(Math.abs(h.amount))}</b></li>`
         )
         .join('')}</ul>`
-    : '<p class="muted">まだありません。</p>';
+    : '<p class="muted">まだありません</p>';
   return `<p><button type="button" class="btn btn--small" data-action="nav" data-route="${SHOP}">← ショップ</button></p>
     <div class="pts">
-      <section class="pts-balance"><span class="muted">いまのポイント</span><b>${ICON.coin}${p.balance.toLocaleString('ja-JP')}<small> pt</small></b>
-        <p class="muted">公式の文房具はポイントで買えます。</p></section>
+      <section class="pts-balance"><span class="muted">いまのポイント</span><b>${ICON.coin}${p.balance.toLocaleString('ja-JP')}<small> pt</small></b></section>
       <section><h3 class="shop-h">ポイントのもらい方</h3><ul class="pts-ways">${ways}</ul></section>
       <section><h3 class="shop-h">履歴</h3>${history}</section>
     </div>`;

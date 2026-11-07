@@ -56,13 +56,12 @@ export function renderFolderNew({data}, route) {
     <section class="card folder-new" data-form="folder-new-${mode}">
       ${
         mode === 'new'
-          ? `<p class="muted">保存先の中にフォルダを作ります。</p>
-        <label for="fn-name">フォルダの名前</label>
+          ? `<label for="fn-name">フォルダの名前</label>
         <input class="input" id="fn-name" type="text" maxlength="80" placeholder="例：ゼミ・就活・資格の勉強" autocomplete="off">`
           : `<p class="muted">パソコンのフォルダを、コピーせずに開きます。</p>
         ${eachChoice(data)}
-        <label for="fn-name">パレットノートでの名前 <span class="muted">（空ならフォルダの名前）</span></label>
-        <input class="input" id="fn-name" type="text" maxlength="80" autocomplete="off">`
+        <label for="fn-name">パレットノートでの名前</label>
+        <input class="input" id="fn-name" type="text" maxlength="80" placeholder="フォルダの名前のまま" autocomplete="off">`
       }
       ${scopeChoice(useTerms)}
       ${noTerm && useTerms ? '<p class="muted">学期が未設定のため、仮の学期を作ります。</p>' : ''}
@@ -134,8 +133,8 @@ export function renderFolder({data}, course) {
       <div class="round-notebook">${
         hasNote(ms) || !round
           ? ''
-          : `<button type="button" class="btn btn--small btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" data-sub="${esc(sub)}" aria-haspopup="menu" title="この付箋のノートを作る（A4 縦。白い紙に青い罫線。横罫・方眼と行の間を選べます）">＋ ノート</button>`
-      }<button type="button" class="btn btn--small btn--quiet" data-action="upload" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" title="この付箋にファイルを入れます（コピーします。元のファイルは残ります）">＋ ファイル</button><button type="button" class="btn btn--small btn--quiet round-notebook__del" data-action="sub-remove" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" data-name="${esc(title || 'この付箋')}" title="${sub ? 'この付箋を消します（パソコンのフォルダを中のファイルごとゴミ箱へ）' : 'この付箋を消します（フォルダの直下のファイルをゴミ箱へ。下のフォルダの付箋はそのまま）'}">付箋を消す</button></div>
+          : `<button type="button" class="btn btn--small btn--quiet" data-action="round-notebook" data-course-id="${esc(course.id)}" data-round-id="${esc(round.id)}" data-sub="${esc(sub)}" aria-haspopup="menu" title="この付箋のノートを作る">＋ ノート</button>`
+      }<button type="button" class="btn btn--small btn--quiet" data-action="upload" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" title="コピーして入れます（元のファイルは残ります）">＋ ファイル</button><button type="button" class="btn btn--small btn--quiet round-notebook__del" data-action="sub-remove" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" data-name="${esc(title || 'この付箋')}" title="${sub ? 'この付箋を消します（パソコンのフォルダを中のファイルごとゴミ箱へ）' : 'この付箋を消します（フォルダの直下のファイルをゴミ箱へ。下のフォルダの付箋はそのまま）'}">付箋を消す</button></div>
     </section>`;
     })
     .join('');
@@ -153,5 +152,5 @@ export function renderFolder({data}, course) {
       <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（フォルダを開く・読み直す・置き場所・ホームから外す・削除）" title="ほかの操作">⋯</button>
     </nav>
     ${quizArea ? `<section class="test-panel test-panel--folder" aria-label="このフォルダのクイズ">${quizArea}</section>` : ''}
-    <div class="round-notes round-notes--folder" data-sort-scope="course:${esc(course.id)}">${notes}<button type="button" class="round-note-add" data-action="sub-add" data-course-id="${esc(course.id)}" title="新しい付箋を足します。いちばん後ろに、足した順に並びます（パソコンのフォルダの中にフォルダを作ります）"><span aria-hidden="true">＋</span>付箋を足す</button></div>`;
+    <div class="round-notes round-notes--folder" data-sort-scope="course:${esc(course.id)}">${notes}<button type="button" class="round-note-add" data-action="sub-add" data-course-id="${esc(course.id)}" title="パソコンのフォルダの中にフォルダを作ります"><span aria-hidden="true">＋</span>付箋を足す</button></div>`;
 }

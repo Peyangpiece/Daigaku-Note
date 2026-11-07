@@ -9,6 +9,7 @@ import {isPng} from '../pdf-export.js';
 import {createSerial} from '../serial.js';
 import {id, bad, str} from './common.js';
 import {sendAll} from '../frames.js';
+import * as trial from '../trial-note.js';
 
 /** ノートのファイル名（回ごと。同じ回フォルダの中でも、自分のフォルダの中でも名前が重ならないように回を入れる） */
 export function noteName(round) {
@@ -134,68 +135,76 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
   // ノートの最後にページを 1 枚足す（同じ紙・同じ上の欄）。戻り：{pages, bytes}（新しい元の写し。画面は開き直さずに最後のページだけ足す）。
   // 同じノートを開いているほかの窓にも知らせる（note.pages）
   handle('note.addPage', ({materialId}, e) =>
-    exclusive(String(materialId), async () => {
-      const {m, base} = await noteMaterial(materialId);
-      const design = repo.getSetting(`note.design.${m.id}`, null) ?? {};
-      const {bytes, pages} = await appendNotePage(base, design, {header: await readHeader(m.id)});
-      await rebase(m, bytes, pages);
-      changed();
-      const out = {pages, bytes: asBytes(bytes)};
-      if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, ...out});
-      return out;
-    })
+    trial.isTrial(materialId)
+      ? trial.addTrialPage()
+      : exclusive(String(materialId), async () => {
+          const {m, base} = await noteMaterial(materialId);
+          const design = repo.getSetting(`note.design.${m.id}`, null) ?? {};
+          const {bytes, pages} = await appendNotePage(base, design, {header: await readHeader(m.id)});
+          await rebase(m, bytes, pages);
+          changed();
+          const out = {pages, bytes: asBytes(bytes)};
+          if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, ...out});
+          return out;
+        })
   );
 
   // ノートの最後のページを消す（何も書いていない・付箋もない白紙のときだけ。1 ページは残す）。戻り：{pages}
   handle('note.removePage', ({materialId}, e) =>
-    exclusive(String(materialId), async () => {
-      const {m, base} = await noteMaterial(materialId);
-      const r = await removeLastNotePage(base).catch((err) => bad(err.message));
-      const last = r.pages + 1; // 消すページの番号
-      const key = annoKey(m);
-      if (
-        repo.listAnnotations(key).some((a) => a.page === last) ||
-        repo.listBookmarks(key).some((b) => b.page === last)
-      )
-        bad('最後のページに書いたもの・付箋があるため消せません');
-      await rebase(m, r.bytes, r.pages);
-      changed();
-      if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, pages: r.pages});
-      return {pages: r.pages};
-    })
+    trial.isTrial(materialId)
+      ? trial.removeTrialPage()
+      : exclusive(String(materialId), async () => {
+          const {m, base} = await noteMaterial(materialId);
+          const r = await removeLastNotePage(base).catch((err) => bad(err.message));
+          const last = r.pages + 1; // 消すページの番号
+          const key = annoKey(m);
+          if (
+            repo.listAnnotations(key).some((a) => a.page === last) ||
+            repo.listBookmarks(key).some((b) => b.page === last)
+          )
+            bad('最後のページに書いたもの・付箋があるため消せません');
+          await rebase(m, r.bytes, r.pages);
+          changed();
+          if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, pages: r.pages});
+          return {pages: r.pages};
+        })
   );
 
   // ノートの紙を変える（横罫・方眼、行の間 6・7 mm）。同じページ数・同じ上の欄のまま描き直す（書いたものは注釈なのでそのまま）。
   // 戻り：{pages, bytes, paper}。同じノートを開いているほかの画面にも知らせる（note.pages の replace）
   handle('note.setPaper', ({materialId, paper}, e) =>
-    exclusive(String(materialId), async () => {
-      const {m, base} = await noteMaterial(materialId);
-      const d = cleanPaper(paper);
-      const {bytes, pages} = await rebuildNotePdf(base, d, {header: await readHeader(m.id)});
-      repo.setSetting(`note.design.${m.id}`, d);
-      await rebase(m, bytes, pages);
-      const out = {pages, bytes: asBytes(bytes), paper: d};
-      if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, ...out, replace: true});
-      return out;
-    })
+    trial.isTrial(materialId)
+      ? trial.setTrialPaper(paper)
+      : exclusive(String(materialId), async () => {
+          const {m, base} = await noteMaterial(materialId);
+          const d = cleanPaper(paper);
+          const {bytes, pages} = await rebuildNotePdf(base, d, {header: await readHeader(m.id)});
+          repo.setSetting(`note.design.${m.id}`, d);
+          await rebase(m, bytes, pages);
+          const out = {pages, bytes: asBytes(bytes), paper: d};
+          if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, ...out, replace: true});
+          return out;
+        })
   );
 
   // 上の欄の字（授業・回・題・日付）が変わっていたら、ノートを同じページ数のまま描き直す（回の題や日付が同期で変わったときなど。
   // 書いたものは注釈なので消えない）。ノートを開くたびにレンダラが今の字で呼ぶ。戻り：{changed: false} か {changed: true, pages, bytes}
   handle('note.setHeader', ({materialId, text, header}) =>
-    exclusive(String(materialId), async () => {
-      const clean = String(text ?? '').slice(0, 300);
-      const head = okHeader(header);
-      const m0 = repo.get('material', id(materialId) ?? bad('ノートが不正です')) ?? bad('ノートがありません');
-      if (!clean || !head || m0.source !== 'note' || repo.getSetting(`note.head.${m0.id}`, null) === clean)
-        return {changed: false};
-      const {m, base} = await noteMaterial(materialId);
-      const design = repo.getSetting(`note.design.${m.id}`, null) ?? {};
-      const {bytes, pages} = await rebuildNotePdf(base, design, {header: head});
-      await saveHeader(m.id, head, clean);
-      await rebase(m, bytes, pages);
-      return {changed: true, pages, bytes: asBytes(bytes)};
-    })
+    trial.isTrial(materialId)
+      ? {changed: false}
+      : exclusive(String(materialId), async () => {
+          const clean = String(text ?? '').slice(0, 300);
+          const head = okHeader(header);
+          const m0 = repo.get('material', id(materialId) ?? bad('ノートが不正です')) ?? bad('ノートがありません');
+          if (!clean || !head || m0.source !== 'note' || repo.getSetting(`note.head.${m0.id}`, null) === clean)
+            return {changed: false};
+          const {m, base} = await noteMaterial(materialId);
+          const design = repo.getSetting(`note.design.${m.id}`, null) ?? {};
+          const {bytes, pages} = await rebuildNotePdf(base, design, {header: head});
+          await saveHeader(m.id, head, clean);
+          await rebase(m, bytes, pages);
+          return {changed: true, pages, bytes: asBytes(bytes)};
+        })
   );
 
   // ノートを消す：ファイルはパソコンのゴミ箱へ（描き込んで保存した中身はそのまま。ゴミ箱から戻せる）。記録・注釈・付箋・元の写し・

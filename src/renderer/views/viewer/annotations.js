@@ -324,9 +324,7 @@ export const methods = {
 
   noteTitle(a) {
     const head = a.body.trim().slice(0, 80);
-    a.el.querySelector('.anno-note__icon').title = head
-      ? head + (a.body.trim().length > 80 ? '…' : '')
-      : 'コメント（押すと開きます）';
+    a.el.querySelector('.anno-note__icon').title = head ? head + (a.body.trim().length > 80 ? '…' : '') : 'コメント';
   },
 
   /**

@@ -253,7 +253,6 @@ export function renderSettings({data}, route = '/settings') {
       ${
         importFor(s.role)
           ? `<section class="card" id="st-import"><h3>授業資料を自動で取り込む</h3>
-        <p class="muted">大学のサイトからダウンロードした資料を、授業ごとに入れます。</p>
         <label style="display:block"><input type="checkbox" id="st-import-on" ${imp.enabled ? 'checked' : ''}> 取り込む</label>
         ${
           imp.enabled
@@ -356,7 +355,7 @@ async function renderMobile(box, st = null, pair = null) {
       <div class="about__row"><button type="button" class="btn btn--small" data-mobile-pair ${s.hosts.length ? '' : 'disabled'}>スマホを追加</button></div>
       ${
         pair
-          ? `<div class="mobile-qr"><div class="mobile-qr__code">${pair.svg}</div><p>スマホのカメラでこの QR を読んでください。ブラウザで開いて、そのままつながります（10 分間・1 回だけ使えます）。<br><strong>QR は人に見せないでください</strong>（読んだ人がこのパソコンの資料を見られます）。</p></div>`
+          ? `<div class="mobile-qr"><div class="mobile-qr__code">${pair.svg}</div><p>スマホのカメラでこの QR を読んでください（10 分間・1 回だけ使えます）。<br><strong>QR は人に見せないでください</strong>（読んだ人がこのパソコンの資料を見られます）。</p></div>`
           : ''
       }
       ${devices}

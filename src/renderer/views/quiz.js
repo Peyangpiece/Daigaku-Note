@@ -152,7 +152,7 @@ export function renderQuiz({data}, route) {
         ? `今日の復習はありません。${s.next ? `次は ${new Date(s.next.due).toLocaleDateString('ja-JP', {month: 'numeric', day: 'numeric'})} に ${s.next.count} 問です。` : ''}`
         : s.mode === 'retry'
           ? 'まちがえた問題はありません。'
-          : '問題がまだありません。授業の画面の「問題を作る」で作れます。';
+          : '問題がまだありません。';
     // 次の一手：授業画面へ（授業が分からなければホームへ）
     const go = course
       ? `<button class="btn btn--primary" data-action="quiz-quit" data-route="/course/${esc(course.id)}">${esc(course.name)}の授業画面へ</button>`
@@ -298,7 +298,7 @@ function askHtml(q, data) {
       ${busy ? `<p class="qcard__ask-q">${esc(session.askingText ?? '')}</p><p class="qcard__ask-a muted"><span class="spinner" aria-hidden="true"></span> 考えています…</p>` : ''}
       <form class="qcard__ask-form" data-quiz-ask>
         <label class="sr-only" for="quiz-ask">この問題について質問</label>
-        <input class="input" id="quiz-ask" maxlength="500" autocomplete="off" placeholder="${thread.length ? '続けて質問' : 'この問題について質問（例：なぜ ○○ ではないの？）'}"${busy ? ' disabled' : ''}>
+        <input class="input" id="quiz-ask" maxlength="500" autocomplete="off" placeholder="${thread.length ? '続けて質問' : 'この問題について質問'}"${busy ? ' disabled' : ''}>
         <button class="btn" type="submit"${busy ? ' disabled' : ''}>質問</button>
       </form>
     </section>`;

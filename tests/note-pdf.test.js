@@ -150,7 +150,7 @@ test('v3 の紙（持ち物のノート・マイノート）：整え方はそ�
   const d = cleanPaper({v: 3, format: 'grid5', gap: 4.5, line: '#9cc0e6', head: 'date'});
   assert.equal(d.v, 3);
   assert.equal(d.format, 'grid5');
-  assert.equal(d.gap, 4.5);
+  assert.equal(d.gap, 5, '方眼 5 mm の幅は変えられない');
   assert.equal(d.line, '#9cc0e6');
   assert.equal(cleanPaper({type: 'grid', gap: 7}).v, 2, 'v のない選び方は今までどおり v2');
   for (const format of Object.keys(FORMATS)) {

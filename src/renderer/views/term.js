@@ -31,8 +31,8 @@ function calendarSection(term, focus) {
   const li = (kind, e) =>
     `<li${inTerm(e.date) ? '' : ' class="muted" title="学期の期間の外の日（数えません）"'}><span>${fmt(e.date)}</span>${kind === 'swap' ? `<span>→ ${esc(e.weekday)}曜日の授業</span>` : ''}${e.label ? `<span class="muted">${esc(e.label)}</span>` : ''}<button type="button" class="cal-remove" data-cal-remove="${kind}" data-date="${esc(e.date)}" aria-label="${fmt(e.date)} を消す" title="消す">×</button></li>`;
   return `<section class="card" style="max-width: 760px" id="tm-calendar"${focus ? ' data-scroll-into-view' : ''}>
-      <h3>学年暦（授業回・休講日・振替授業日）</h3>
-      <p class="muted">学年暦を入れると、回の日付が大学の予定どおりになります。祝日は自動で休みにします。</p>
+      <h3>学年暦</h3>
+      <p class="muted">祝日は自動で休みにします。</p>
       <div class="actions"><button type="button" class="btn btn--primary" id="tm-cal-read">学年暦のファイルから読み取る…</button><span class="muted">PDF・Word・テキスト</span></div>
       ${cal.rounds?.length ? '<div class="cal-check" id="tm-round-check" aria-live="polite"></div>' : ''}
       <div class="cal-cols">
@@ -66,7 +66,7 @@ export function termForm(data, term, {compact = false} = {}) {
   return `<div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2)">
       <label>年度<input class="input" id="tm-year" type="number" value="${esc(year)}"></label>
       <label>学期名<input class="input" id="tm-label" list="tm-labels" maxlength="20" value="${esc(label)}" placeholder="例：前期・秋学期" autocomplete="off"><datalist id="tm-labels">${TERM_LABELS.map((l) => `<option value="${esc(l)}"></option>`).join('')}</datalist></label>
-      ${compact ? '</div><details class="settings__more"><summary>くわしく設定（開始日・終了日・回数・時限の開始時刻。空のままなら学期名からの既定）</summary><div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2)">' : ''}
+      ${compact ? '</div><details class="settings__more"><summary>くわしく設定</summary><div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2)">' : ''}
       <label>開始日<input class="input" id="tm-start" type="date" value="${esc(term?.start_date ?? '')}"></label>
       <label>終了日<input class="input" id="tm-end" type="date" value="${esc(term?.end_date ?? '')}"></label>
       <label>回数<select class="input" id="tm-rounds">${[...new Set([...ROUNDS, term?.rounds ?? 15])].map((n) => `<option ${n === (term?.rounds ?? 15) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>

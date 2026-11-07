@@ -5,9 +5,15 @@
 /** A4 縦（mm） */
 export const PAGE_W = 210;
 export const PAGE_H = 297;
-/** 上の欄（日付・題。header の絵を置く）の高さと、下の余白（mm）。v2 の紙と同じ */
-export const HEAD_H = 20;
-export const FOOT_H = 10;
+/**
+ * 上の欄（日付・題。header の絵を置く）の高さと、下の余白（mm）。A4 縦。
+ * 罫を引くところの高さを 245 mm にする（コクヨのキャンパスノート A4・A 罫 7 mm は 35 行＝245 mm。v0.19.4）。上下は同じ幅
+ */
+export const HEAD_H = 26;
+export const FOOT_H = 26;
+/** A4 横（原稿用紙）の上の欄と下の余白（mm） */
+const WIDE_HEAD = 20;
+const WIDE_FOOT = 10;
 
 /**
  * 罫の形式。kind：線の引き方。gap：はじめの行の間（ます・段の線の間）mm。range：マイノートで変えられる幅 [最小, 最大]（mm）。
@@ -28,8 +34,9 @@ export const FORMATS = {
   grid7: {kind: 'grid', name: '方眼 7 mm', short: '方眼 7mm', gap: 7},
   grid12: {kind: 'grid', name: '方眼 12 mm', short: '方眼 12mm', gap: 12},
   plain: {kind: 'plain', name: '無地', short: '無地', gap: 7},
-  eng13: {kind: 'english', name: '英習罫 13 段', short: '英習 13段', gap: 4, rows: 13},
-  eng15: {kind: 'english', name: '英習罫 15 段', short: '英習 15段', gap: 3.5, rows: 15},
+  // 英習罫の線の間：13 段は 3.5 mm・15 段は 3 mm（コクヨのキャンパスノートの表記。v0.19.4）
+  eng13: {kind: 'english', name: '英習罫 13 段', short: '英習 13段', gap: 3.5, rows: 13},
+  eng15: {kind: 'english', name: '英習罫 15 段', short: '英習 15段', gap: 3, rows: 15},
   // 五線譜：A4 縦に 12 段。線の長さ 180 mm（左右 15 mm 空ける）、五線の高さ 8 mm（線の間 2 mm）。段の端の縦線は引かない（市販の五線ノートと同じ）
   staff: {kind: 'staff', name: '五線譜 12 段', short: '五線譜', gap: 2, rows: 12, head: 'none', line: '#a7afb9'},
   dotgrid: {kind: 'dotgrid', name: 'ドット方眼 5 mm', short: 'ドット 5mm', gap: 5},
@@ -46,6 +53,12 @@ export const FORMATS = {
   },
   kanji: {kind: 'kanji', name: '漢字練習（十字入りのます）', short: '漢字練習', gap: 15}
 };
+/**
+ * 幅が名前に書いてあるノート（「横罫 A（7 mm）」「方眼 5 mm」など）は、幅を変えられない（名前と中身が食いちがわないように。v0.19.4）。
+ * 変えられるのは、名前に幅のない英習罫・五線譜・原稿用紙・漢字練習
+ */
+export const gapFixed = (format) => /\d\s*mm/.test(FORMATS[format]?.name ?? '');
+
 /** 種類ごとの変えられる幅（mm）と刻み */
 export const GAP_RANGE = {
   ruled: [4, 12],
@@ -120,7 +133,7 @@ export function cleanDesign(raw = {}) {
   return {
     v: 3,
     format,
-    gap: clampGap(f.kind, d.gap, f.gap),
+    gap: gapFixed(format) ? f.gap : clampGap(f.kind, d.gap, f.gap),
     line: hex(d.line, f.line ?? DEFAULT_LINE),
     weight: Object.hasOwn(WEIGHTS, d.weight) ? d.weight : 'normal',
     head: HEADS.includes(d.head) ? d.head : (f.head ?? 'line'),
@@ -160,8 +173,8 @@ export function pageGeometry(raw) {
   const lines = [];
   const dots = [];
   const polys = [];
-  const top = HEAD_H;
-  const bottom = H - FOOT_H;
+  const top = W > H ? WIDE_HEAD : HEAD_H;
+  const bottom = H - (W > H ? WIDE_FOOT : FOOT_H);
   const L = (x1, y1, x2, y2, width = w, c = d.line, dash = null) =>
     lines.push({x1, y1, x2, y2, w: width, c, ...(dash ? {dash} : {})});
   const g = d.gap;
@@ -177,18 +190,24 @@ export function pageGeometry(raw) {
     }
     if (d.margin) L(20, top, 20, top + rows * g, w * 1.3, d.marginColor);
   } else if (f.kind === 'grid' || f.kind === 'dotgrid') {
-    const {left, cols} = centered(g, 8, W);
-    const rows = Math.floor((bottom - top) / g);
+    // 太線があるときは、ますの数を太線の間隔の倍数にそろえ、外のわくが太線で閉じるようにする（v0.19.4）
+    const fit = (n) => (f.kind === 'grid' && d.bold > 0 ? Math.floor(n / d.bold) * d.bold : n);
+    const room = centered(g, 8, W);
+    const cols = fit(room.cols);
+    const left = (W - cols * g) / 2;
+    const rows = fit(Math.floor((bottom - top) / g));
     headLeft = left;
     headRight = left + cols * g;
     if (f.kind === 'dotgrid') {
-      for (let i = 0; i <= rows; i++)
+      // 上の線があれば、いちばん上の点の列は線と重なるので打たない
+      for (let i = d.head === 'none' ? 0 : 1; i <= rows; i++)
         for (let j = 0; j <= cols; j++) dots.push({x: left + j * g, y: top + i * g, r: w * 1.7, c: d.line});
     } else {
-      // 方眼の線は横罫より細い（v0.18 までの紙と同じ 0.8 倍）。太線はその 1.9 倍
+      // 方眼の線は横罫より細い（v0.18 までの紙と同じ 0.8 倍）。太線はその 1.9 倍。
+      // いちばん上の線も引く（上の線を「なし」にしても、方眼の上のわくが残る。上の線があればその下に重なる）
       const gw = w * 0.8;
       const thick = (k) => d.bold > 0 && k % d.bold === 0;
-      for (let i = 1; i <= rows; i++) L(left, top + i * g, left + cols * g, top + i * g, thick(i) ? gw * 1.9 : gw);
+      for (let i = 0; i <= rows; i++) L(left, top + i * g, left + cols * g, top + i * g, thick(i) ? gw * 1.9 : gw);
       for (let j = 0; j <= cols; j++) L(left + j * g, top, left + j * g, top + rows * g, thick(j) ? gw * 1.9 : gw);
     }
   } else if (f.kind === 'english') {
@@ -271,11 +290,13 @@ export function pageGeometry(raw) {
     headLeft = x0;
     headRight = x0 + total;
   } else if (f.kind === 'kanji') {
+    // ますは上の線の下から（上の線がますの上のわくになる）。外のわくはますの線より太く（v0.19.4）
     const {left, cols} = centered(g, 12, W);
-    const rows = Math.floor((bottom - top - 4) / g);
-    const y0 = top + 4;
-    for (let i = 0; i <= rows; i++) L(left, y0 + i * g, left + cols * g, y0 + i * g, w * 1.4);
-    for (let j = 0; j <= cols; j++) L(left + j * g, y0, left + j * g, y0 + rows * g, w * 1.4);
+    const rows = Math.floor((bottom - top) / g);
+    const y0 = top;
+    const edge = (k, n) => (k === 0 || k === n ? w * 2.2 : w * 1.4);
+    for (let i = 0; i <= rows; i++) L(left, y0 + i * g, left + cols * g, y0 + i * g, edge(i, rows));
+    for (let j = 0; j <= cols; j++) L(left + j * g, y0, left + j * g, y0 + rows * g, edge(j, cols));
     // ますの中の十字（点線）
     for (let i = 0; i < rows; i++) L(left, y0 + (i + 0.5) * g, left + cols * g, y0 + (i + 0.5) * g, w, d.line, [1, 1]);
     for (let j = 0; j < cols; j++) L(left + (j + 0.5) * g, y0, left + (j + 0.5) * g, y0 + rows * g, w, d.line, [1, 1]);
@@ -299,7 +320,8 @@ export function pageGeometry(raw) {
       L(a, y, b, y, hw * 0.8, d.headColor);
     dots.push({x: x0 + 15.5, y: y - 0.4, r: 0.45, c: d.headColor}, {x: x0 + 30.5, y: y - 0.4, r: 0.45, c: d.headColor});
   }
-  return {w: W, h: H, paper: d.paper, lines, dots, polys, headLeft};
+  // headerY：上の欄の字（回のノートの授業・回・題・日付）の下の端（上の線の 4 mm 上）
+  return {w: W, h: H, top, bottom, paper: d.paper, lines, dots, polys, headLeft, headerY: top - 4};
 }
 
 /**
@@ -313,9 +335,9 @@ export function cropOf(raw) {
   const w = 56;
   const h = 70;
   if (kind === 'genkou') return {x: g.w / 2 - w / 2, y: Math.min(...g.lines.map((l) => l.y1)) - 5, w, h}; // わくの上から
-  if (kind === 'staff') return {x: 8, y: HEAD_H - 6, w, h};
-  if (kind === 'cornell') return {x: 63.5 - w / 2, y: HEAD_H - 8, w, h}; // 手がかりの欄の線が入るところ
-  return {x: 0, y: HEAD_H - 8, w, h};
+  if (kind === 'staff') return {x: 8, y: g.top - 6, w, h};
+  if (kind === 'cornell') return {x: 63.5 - w / 2, y: g.top - 8, w, h}; // 手がかりの欄の線が入るところ
+  return {x: 0, y: g.top - 8, w, h};
 }
 
 /**

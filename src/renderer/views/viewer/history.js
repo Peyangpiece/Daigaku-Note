@@ -170,6 +170,8 @@ export const methods = {
   setStatus(state) {
     const el = this.$('status');
     if (!el) return;
+    // ノートの試し書きは保存しない（main/trial-note.js）。保存の状態は出さない
+    if (this.material?.trial) return void (el.textContent = '');
     const pending = state === 'saving' || this.inflight > 0 || [...this.annos.values()].some((a) => a.timer);
     el.textContent = this.failed
       ? '保存できませんでした（押すともう一度）'
