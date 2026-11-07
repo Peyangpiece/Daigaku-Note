@@ -35,7 +35,7 @@ const MARK = {
     '<rect x="13" y="28" width="20" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M33 33l8-4v12l-8-4z" fill="currentColor"/>',
   audio:
     '<path d="M22 40V30l14-3v10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="19" cy="40" r="3" fill="currentColor"/><circle cx="33" cy="37" r="3" fill="currentColor"/>',
-  zip: '<path d="M27 26v16 M24 29h6 M24 33h6 M24 37h6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
+  zip: '<path d="M25 26h3.5 M27 28.6h3.5 M25 31.2h3.5 M27 33.8h3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><rect x="24.5" y="36.5" width="6.5" height="6.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="2"/>',
   other:
     '<circle cx="20" cy="35" r="2" fill="currentColor"/><circle cx="27" cy="35" r="2" fill="currentColor"/><circle cx="34" cy="35" r="2" fill="currentColor"/>'
 };
@@ -45,6 +45,8 @@ const BODY = '#ffffff';
 const INK = '#2b2b2b';
 // 回のノートのはじめの色：ブランドの紺（アイコンの地・ロゴの文字と同じ）
 const NOTE_NAVY = '#22304A';
+// その他の種類の色：テーマの文字色（暗い表示では明るい灰色）に合わせると白い紙の上で薄くなるので、決まった灰色にする（v0.18.13）
+const OTHER_GRAY = '#6b6f76';
 // ラベルの字の色：暗い色の帯（紺など）には白、明るい色（はじめの色はどれも淡い）には線の色
 function labelInk(color) {
   const m = /^#([0-9a-f]{6})$/i.exec(color ?? '');
@@ -74,7 +76,7 @@ export const kindOf = (name) => KIND[extOf(name)]?.[0] ?? 'other';
 export function fileArt(name, {colors = null, bodies = null, art = null, editable = false, kind: as = null} = {}) {
   const ext = extOf(name);
   // as：拡張子ではなく種類で描く（回のノート。中身は PDF だが「NOTE」の紺の紙）
-  const [kind, base] = as === 'note' ? ['note', NOTE_NAVY] : (KIND[ext] ?? ['other', 'var(--paper-ink-weak)']);
+  const [kind, base] = as === 'note' ? ['note', NOTE_NAVY] : (KIND[ext] ?? ['other', OTHER_GRAY]);
   const color = colors?.[kind] && colors[kind] !== 'default' ? colors[kind] : base;
   // 紙の色：はじめは白。テーマ（暗い色）や置く場所（付箋の上・着せ替えの見本）で変わらないよう、決まった色で描く
   const body = bodies?.[kind] && bodies[kind] !== 'default' ? bodies[kind] : BODY;
@@ -83,12 +85,12 @@ export function fileArt(name, {colors = null, bodies = null, art = null, editabl
   return `<svg class="file-art" viewBox="0 0 54 66" width="54" height="66" aria-hidden="true" style="color: ${color}">
     <path d="M6 3h30l12 12v46a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="${body}" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
     <path d="M36 3v12h12" fill="color-mix(in srgb, currentColor 35%, ${body})" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
-    ${item(art?.[kind]?.mark, 'mark', MARK[kind], editable)}
+    ${item(art?.[kind]?.mark, 'mark', `<g transform="translate(0 -2)">${MARK[kind]}</g>`, editable)}
     ${item(
       art?.[kind]?.label,
       'label',
-      `<rect x="4" y="48" width="36" height="12" rx="2" fill="currentColor"/>
-    <text x="22" y="57.5" text-anchor="middle" font-size="8.5" font-weight="700" font-family="var(--font-body)" fill="${labelInk(color)}">${label}</text>`,
+      `<rect x="8" y="47" width="34" height="12" rx="2.5" fill="currentColor"/>
+    <text x="25" y="56.5" text-anchor="middle" font-size="8.5" font-weight="700" font-family="var(--font-body)" fill="${labelInk(color)}">${label}</text>`,
       editable
     )}
   </svg>`;
