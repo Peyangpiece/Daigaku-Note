@@ -1,7 +1,7 @@
 // PDF の編集画面：ノート（SPEC §8.6）・見開き・写真。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 //  - ノート（source が note の資料）：最後のページの右下の外に「＋ ページを追加」「− 最後のページを消す」。
 //    足すと下に新しいページが増える（開き直さない。取り消しの履歴・持っているペンもそのまま。v0.14.2）
-//  - ノートは、筆箱の最初のペンを持って開く。ツールバーの名前は「授業 第n回 … ノート」。「📄 資料」で同じ回の PDF を開く・横に並べる
+//  - ノートは、筆箱の最初のペンを持って開く。ツールバーの名前は「授業 第n回 … ノート」。「資料」で同じ回の PDF を開く・横に並べる
 //  - 見開き（片開き／両開き）：ツールバーのボタンで 2 ページずつ横に並べる（資料ごとに覚える）
 //  - 写真：ツールバーの「写真」・貼り付け（⌘V）・ページへのドラッグで貼る（貼りもの style.type 'photo'）。選ぶと「↻ 回す」
 //  - PDF を見ながら、同じ回のノートを「ノート」で開く（ノートからは「← 資料へ」で戻る）
@@ -57,7 +57,7 @@ export const methods = {
     const nb = this.$('notebook');
     nb.hidden = side || this.isNote || !material.round_id;
     this.$('note-side').hidden = nb.hidden;
-    // 並べたときのノート（右）でも「📄 資料」を出す：左の PDF を同じ回の別の PDF に替える
+    // 並べたときのノート（右）でも「資料」を出す：左の PDF を同じ回の別の PDF に替える
     const splitNote = side && new URLSearchParams(location.search).get('side') === 'right';
     this.$('note-pdfs').hidden = (side && !splitNote) || !this.isNote || !this.roundPdfs().length;
     if (side) {
@@ -130,7 +130,7 @@ export const methods = {
   },
 
   /**
-   * ツールバーのボタンの下に小さなメニューを出す（「📄 資料」・ノートの紙を選ぶ）。html はメニューの中身、onPick(押したボタン)。
+   * ツールバーのボタンの下に小さなメニューを出す（「資料」・ノートの紙を選ぶ）。html はメニューの中身、onPick(押したボタン)。
    * 外を押す・Esc で閉じる（Esc はメニューだけ閉じ、持っている道具はそのまま）
    */
   openBarMenu(btn, label, html, onPick) {
@@ -186,7 +186,7 @@ export const methods = {
     else open();
   },
 
-  /** 「📄 資料」：同じ回の PDF を開く・横に並べる */
+  /** 「資料」：同じ回の PDF を開く・横に並べる */
   openPdfMenu(btn) {
     const list = this.roundPdfs();
     if (!list.length) return toast('この回には PDF の資料がありません');
@@ -221,7 +221,7 @@ export const methods = {
   },
 
   /**
-   * 同じ回のノートを開く・横に並べる（「📓 ノート」「◫ 横に並べる」）。まだノートがなければ、授業画面の「＋ ノート」と同じく紙を選んでから作る
+   * 同じ回のノートを開く・横に並べる（「ノート」「◫ 横に並べる」）。まだノートがなければ、授業画面の「＋ ノート」と同じく紙を選んでから作る
    * （選んだ紙は次の初期値）。あれば、すぐ開く
    */
   roundNote(btn, side) {

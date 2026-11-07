@@ -555,7 +555,7 @@ function mountSplit(view, left, right) {
       document.title = `${s.titles.filter(Boolean).join(' ＋ ') || 'PDF とノート'} — パレットノート`;
     } else if (d.type === 'split-left') s.acks?.(i);
     else if (d.type === 'split-swap' && d.id) {
-      // ノートの「📄 資料」から：もう片方（PDF）を同じ回の別の PDF に替える。左右の書きかけを保存してから並べ直す
+      // ノートの「資料」から：もう片方（PDF）を同じ回の別の PDF に替える。左右の書きかけを保存してから並べ直す
       const otherNow = i === 0 ? s.right : s.left;
       const ids = i === 0 ? [s.left, String(d.id)] : [String(d.id), s.right];
       if (String(d.id) !== otherNow) flushSplit(s).then(() => navigate(`/split/${ids[0]}/${ids[1]}`));

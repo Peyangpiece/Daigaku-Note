@@ -159,8 +159,8 @@ export const BAR = `
     <button type="button" class="viewer-bar__find" data-v="find" title="PDF の中の文字と、書き込んだ文字（文字入れ・コメント・メモ）を探す（${key(MOD, 'F')}）">検索</button>
     <button type="button" class="viewer-bar__find" data-v="photo" title="写真を貼る（ファイルを選ぶ。${key(MOD, 'V')} で貼り付け・ページへドラッグでも貼れます）">写真</button>
     <button type="button" class="viewer-bar__find" data-v="spread" aria-pressed="false" title="片開き（1 ページずつ）と見開き（2 ページずつ横に並べる）を切り替える">▯ 片開き</button>
-    <button type="button" class="btn btn--small" data-v="notebook" hidden title="この回のノートを開く（なければ作る。ノートからは「← 資料へ」で戻れます）">📓 ノート</button>
-    <button type="button" class="btn btn--small" data-v="note-pdfs" hidden aria-haspopup="menu" title="この回の PDF の資料を開く・ノートの横に並べる">📄 資料</button>
+    <button type="button" class="btn btn--small" data-v="notebook" hidden title="この回のノートを開く（なければ作る。ノートからは「← 資料へ」で戻れます）"><span class="ico ico--notebook" aria-hidden="true"></span> ノート</button>
+    <button type="button" class="btn btn--small" data-v="note-pdfs" hidden aria-haspopup="menu" title="この回の PDF の資料を開く・ノートの横に並べる"><span class="ico ico--document" aria-hidden="true"></span> 資料</button>
     <button type="button" class="btn btn--small" data-v="note-side" hidden title="この回のノートを横に並べて開く（同じ窓の中で PDF は左、ノートは右。両方に同時に書けます）">◫ 横に並べる</button>
     <span class="viewer-bar__spacer"></span>
     <div class="viewer-bar__nav">

@@ -75,8 +75,19 @@
   --fs-h2: 22px;
   --fs-h3: 18px;
   --motion: 200ms;
+  /* アプリ名のロゴの蛍光ペン（ブランドの 5 色。brand/README.md） */
+  --logo-band-1: #f7b4ae;
+  --logo-band-2: #ffc8a2;
+  --logo-band-3: #b3cefa;
+  --logo-band-4: #ace1ca;
+  --logo-band-5: #f9d986;
 }
 :root[data-theme='dark'] {
+  --logo-band-1: #935d5d;
+  --logo-band-2: #9a6e53;
+  --logo-band-3: #5a739e;
+  --logo-band-4: #548375;
+  --logo-band-5: #957c3c;
   --theme-paper: #1f2430;
   --theme-paper-ink: #eceff4;
   --theme-paper-ink-weak: #a3aab8;
@@ -94,6 +105,11 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
+    --logo-band-1: #935d5d;
+    --logo-band-2: #9a6e53;
+    --logo-band-3: #5a739e;
+    --logo-band-4: #548375;
+    --logo-band-5: #957c3c;
     --theme-paper: #1f2430;
     --theme-paper-ink: #eceff4;
     --theme-paper-ink-weak: #a3aab8;
@@ -120,4 +136,13 @@
   :root {
     --motion: 0ms;
   }
+}
+
+/* 明るい表示で暗い紙の着せ替え（data-surface=dark）でも、ロゴの蛍光ペンを暗めにする */
+[data-surface='dark'] {
+  --logo-band-1: #935d5d;
+  --logo-band-2: #9a6e53;
+  --logo-band-3: #5a739e;
+  --logo-band-4: #548375;
+  --logo-band-5: #957c3c;
 }

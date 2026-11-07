@@ -125,7 +125,7 @@ export function renderFolder({data}, course) {
         ? `data-action="rename" data-what="sub" data-id="${esc(course.id)}" data-sub="${esc(sub)}" data-value="${esc(title)}"`
         : `data-action="rename" data-what="round" data-id="${esc(round?.id ?? '')}" data-value="${esc(title)}"`;
       const head = title
-        ? `<span class="round-note__round">${sub ? '📁 ' : ''}<span data-rename-target>${esc(title)}</span></span>
+        ? `<span class="round-note__round">${sub ? '<span class="ico ico--folder" aria-hidden="true"></span> ' : ''}<span data-rename-target>${esc(title)}</span></span>
         <button type="button" class="rename-btn" ${rename} title="${sub ? '付箋の名前を変える（パソコンのフォルダの名前も変わります）' : '付箋の名前を変える'}" aria-label="名前を変える">✎</button>`
         : `<button type="button" class="round-note__placeholder" ${rename} data-rename-target title="付箋の名前を入れる">タイトルを入力</button>`;
       return `<section class="round-note round-note--folder" style="--note-color: ${colorOf(i, sub)}" data-drop="own" data-course-id="${esc(course.id)}" data-sub="${esc(sub)}" data-sort-key="${esc(sub)}" aria-label="${esc(title || 'この付箋')} のファイル">

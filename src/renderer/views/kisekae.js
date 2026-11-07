@@ -543,7 +543,7 @@ function tray(data) {
         .map(([v, label, sid]) => {
           const url = sid ? stickerUrl(sid) : '';
           return `<button type="button" class="ks-tray__tab" role="tab" data-ks="book" data-value="${esc(v)}" aria-selected="${ui.book === v}" tabindex="${ui.book === v ? 0 : -1}" title="${esc(label)}">
-            <span class="ks-tray__icon">${url ? `<img src="${url}" alt="" draggable="false" />` : v === 'fav' ? '★' : '🖼'}</span><span class="ks-tray__label">${esc(label)}</span></button>`;
+            <span class="ks-tray__icon">${url ? `<img src="${url}" alt="" draggable="false" />` : v === 'fav' ? '★' : '<span class="ico ico--image" aria-hidden="true"></span>'}</span><span class="ks-tray__label">${esc(label)}</span></button>`;
         })
         .join('')}
       <label class="ks-tray__tab ks-tray__add" title="パソコンの画像をシールにする"><span class="ks-tray__icon">＋</span><span class="ks-tray__label">画像を追加</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ks-file hidden /></label>
