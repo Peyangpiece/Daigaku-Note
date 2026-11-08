@@ -1,2 +1,9 @@
 src/renderer/fonts/
 src/renderer/vendor/
+
+# 外から取り込んだ Blender の skills（元のまま置く。.claude/skills/BLENDER_SKILLS.md）
+.claude/skills/blender-*/
+.claude/skills/text-to-blender/
+.claude/skills/render-blender-output/
+.claude/skills/script-blender-automation/
+.claude/skills/create-3d-scene/
