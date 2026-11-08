@@ -25,12 +25,21 @@ const save = () => {
   }
 };
 
-/** 鍵を読む：QR から開いたなら URL の # から（すぐ消す）、そうでなければ前に覚えたもの。戻りは 'new'・'stored'・'none' */
+/** ホーム画面に追加したアイコンから開いている（ブラウザのタブではない） */
+export const standalone = () =>
+  window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+/**
+ * 鍵を読む。戻りは 'new'（いまつなぐ）・'stored'（前につないだ）・'install'（QR からブラウザで開いた：先にホーム画面に追加）・'none'。
+ * QR の URL の # の鍵はすぐ消す。ブラウザのタブで開いたときは使わない（iPhone では、ホーム画面に追加したアイコンは
+ * ブラウザと別に覚えるので、ここでつなぐとアイコンからは使えず、QR も 1 回きりで使い切ってしまう）。
+ * アイコンから開いて、パソコンの QR を読んでつなぐ（pairFrom）
+ */
 export function initPairing() {
   const fromHash = readPairHash(location.hash);
-  if (fromHash) {
+  if (fromHash) history.replaceState(null, '', '/m/#/');
+  if (fromHash && standalone()) {
     pair = {...fromHash, fresh: true};
-    history.replaceState(null, '', '/m/#/');
     return 'new';
   }
   try {
@@ -39,7 +48,22 @@ export function initPairing() {
   } catch {
     pair = null;
   }
-  return pair ? 'stored' : 'none';
+  if (pair) return 'stored';
+  return fromHash ? 'install' : 'none';
+}
+
+/** 読んだパソコンの QR（URL）でつなぐ準備をする。戻り：つなげる形なら true（このあと hello） */
+export function pairFrom(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const p = readPairHash(u.hash);
+  if (!p) return false;
+  pair = {...p, fresh: true};
+  return true;
 }
 
 export const paired = () => !!pair && !pair.fresh;

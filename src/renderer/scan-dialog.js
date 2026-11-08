@@ -193,7 +193,11 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
       phoneBox.innerHTML = `
         <h3>スマホとつなぐ</h3>
         <div class="scan-dialog__qr">${qr.svg}</div>
-        <p>スマホのカメラでこの QR を読んでください。開いたページで、そのまま読み取りが始まります（同じ Wi-Fi のスマホ。QR は 10 分のあいだ 1 回だけ使えます）</p>
+        <ol class="scan-dialog__steps">
+          <li>スマホのカメラでこの QR を読み、開いたページをホーム画面に追加する</li>
+          <li>ホーム画面の「パレットノート」から開き、もう一度この QR を読む。つながると、そのまま読み取りが始まります</li>
+        </ol>
+        <p>同じ Wi-Fi のスマホで。QR は 10 分のあいだ 1 回だけ使えます（1 で開いただけでは使いません）</p>
         <p class="scan-dialog__note">初めて開くと「この接続ではプライバシーが保護されません」などと出ます。このパソコンが作った証明書のためです。「詳細を表示」→「このWebサイトを閲覧」（Android は「詳細設定」→「アクセスする」）で進んでください</p>
         <button type="button" class="btn btn--small btn--quiet" data-scan="qr-cancel">やめる</button>`;
       return;

@@ -29,7 +29,8 @@ export function staticRoots() {
     ['/m/app/', path.join(SRC, 'mobile')],
     ['/m/shared/', path.join(SRC, 'shared')],
     ['/m/pdfjs/', pkgDir('pdfjs-dist', 'package.json')],
-    ['/m/vendor/noble/', pkgDir('@noble/ciphers', 'chacha.js')]
+    ['/m/vendor/noble/', pkgDir('@noble/ciphers', 'chacha.js')],
+    ['/m/vendor/jsqr/', pkgDir('jsqr', 'dist/jsQR.js')] // QR を読む（ホーム画面に追加したスマホのページで、パソコンの QR を読んでつなぐ）
   ];
 }
 
@@ -39,6 +40,7 @@ const TYPES = {
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.bcmap': 'application/octet-stream',

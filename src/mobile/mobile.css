@@ -766,3 +766,40 @@ a {
   padding: 12px 0;
   font-size: 14px;
 }
+
+/* 使い始め（pair.js）：ホーム画面に追加する案内と、パソコンの QR を読む画面 */
+.m-install {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 32px 0 16px;
+  text-align: center;
+}
+.m-install h1 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.5;
+}
+.m-install__icon {
+  border-radius: 22px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+.m-install .m-card {
+  text-align: left;
+}
+.m-steps {
+  margin: 0;
+  padding-left: 1.4em;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.9;
+}
+.m-pair__frame {
+  grid-area: 1 / 1;
+  width: 62%;
+  aspect-ratio: 1;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
