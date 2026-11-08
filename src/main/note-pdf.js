@@ -9,11 +9,11 @@ import {cleanDesign, pageGeometry, pageSize} from '../shared/notebooks.js';
 
 export const A4 = [595.28, 841.89]; // pt（210 × 297 mm）
 const MM = 72 / 25.4;
-/** ページの大きさ（pt）。v3 の原稿用紙は A4 横（v0.19.3）、ほかは A4 縦 */
+/** ページの大きさ（pt）。v3 は紙の設定の大きさ（A4・B5。原稿用紙は横）、ほかは A4 縦 */
 export function pageSizePt(design) {
   if (design?.v !== 3) return A4;
   const {w, h} = pageSize(design);
-  return w > h ? [A4[1], A4[0]] : A4;
+  return [w * MM, h * MM];
 }
 
 // ---- 紙（v0.14.2〜） ----
