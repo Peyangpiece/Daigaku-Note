@@ -1,5 +1,5 @@
 // IPC の窓口：授業の回のノート（note.*）と、PDF・ノートに貼る写真（photo.*）。index.js が register を呼ぶ（SPEC §8.6・§9.3）
-import {app, systemPreferences} from 'electron';
+import {app} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {sha256} from '../sync/files.js';
@@ -190,13 +190,6 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
   handle('scan.remoteClose', ({id: sid}) => (ctx.scanRelay.close(String(sid ?? '')), {ok: true}));
   // 窓が、スマホから来た 1 枚を読み終えた（読めたか・知らせる言葉）
   handle('scan.remoteReply', ({photoId, result}) => ({ok: ctx.scanRelay.reply(String(photoId ?? ''), result)}));
-
-  // カメラを使ってよいか（アナログノートの取り込み）。Mac は初めてのとき OS が聞く。戻り {ok}
-  handle('camera.access', async () => {
-    if (process.platform !== 'darwin') return {ok: true};
-    if (systemPreferences.getMediaAccessStatus('camera') === 'granted') return {ok: true};
-    return {ok: await systemPreferences.askForMediaAccess('camera').catch(() => false)};
-  });
 
   // アナログノートの取り込み（docs/SPEC-SCAN.md）：取り込んだ紙の形式ごとに、スキャン用の紙（B5）のページを足す。
   // fresh（ノートを今作って、1 ページ目がまだ白紙）なら 1 ページ目を最初の紙にする（1 ページ目の紙はノートを作るときに選んだもの）。

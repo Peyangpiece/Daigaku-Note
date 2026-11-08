@@ -136,23 +136,6 @@ a,
   border-radius: calc(var(--radius) - 2px);
   background: #1d1f22;
 }
-.scan-dialog__view video,
-.scan-dialog__overlay {
-  grid-area: 1 / 1;
-  max-width: 100%;
-  max-height: 64vh;
-}
-.scan-dialog__overlay {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  pointer-events: none;
-}
-.scan-dialog__view video {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
 .scan-dialog__status {
   position: absolute;
   left: 12px;
@@ -166,22 +149,6 @@ a,
 }
 .scan-dialog__status.is-error {
   color: #ffd2cf;
-}
-.scan-dialog__shot {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  width: 58px;
-  height: 58px;
-  margin-left: -29px;
-  border: 4px solid #fff;
-  border-radius: 50%;
-  background: color-mix(in srgb, #fff 30%, transparent);
-  cursor: pointer;
-}
-.scan-dialog__shot:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 .scan-dialog__pages {
   display: flex;
@@ -216,9 +183,6 @@ a,
 .scan-dialog__label {
   font-size: var(--fs-small);
 }
-.scan-dialog__cam {
-  max-width: 220px;
-}
 .scan-dialog__size {
   max-width: 160px;
 }
@@ -252,6 +216,9 @@ a,
   display: block;
   width: 200px;
   height: 200px;
+}
+.scan-dialog__note {
+  color: color-mix(in srgb, var(--paper-ink) 65%, transparent);
 }
 .scan-dialog__phone-state {
   font-weight: 600;

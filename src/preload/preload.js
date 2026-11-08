@@ -59,7 +59,6 @@ const INVOKE = [
   'note.addPage',
   'note.trial',
   'note.addScanPages',
-  'camera.access',
   'scan.remoteOpen',
   'scan.remoteState',
   'scan.remoteClose',
