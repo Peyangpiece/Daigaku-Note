@@ -260,8 +260,17 @@ async function pairByQr() {
       await hello();
       toast('パソコンとつながりました');
     } catch (e) {
-      if (e instanceof NotPaired) forget();
-      return showProblem(e);
+      forget();
+      // QR が使えなかった：10 分の期限が切れた・もう使われた（パソコンは知らない端末として断る）・時計のずれなど
+      const why =
+        e instanceof NotPaired
+          ? 'この QR は使えませんでした（10 分の期限が切れたか、もう使われています）。パソコンにいま出ている QR を読んでください。QR が出ていなければ、パソコンの「アナログノート…」の窓で「QR を出す」を押してください'
+          : e instanceof Unreachable
+            ? 'パソコンに届きません。パソコンのパレットノートが開いていて、パソコンとスマホが同じ Wi-Fi にあるか確かめてください'
+            : e.message;
+      app.innerHTML = `<div class="m-empty"><h2>つなげませんでした</h2><p>${esc(why)}</p><button class="m-btn m-btn--primary" data-pair>QR を読む</button></div>`;
+      app.querySelector('[data-pair]').addEventListener('click', () => pairByQr());
+      return;
     }
     begin();
   });
