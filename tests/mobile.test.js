@@ -240,7 +240,8 @@ test('staticFile：ホーム画面に追加する manifest と、QR を読む js
 
 test('ホーム画面のアイコン：ページと manifest の中に画像を入れる（自分の証明書のページでも「パ」にならない）', async () => {
   const {readFile} = await import('node:fs/promises');
-  const dir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'src', 'mobile');
+  const {fileURLToPath} = await import('node:url');
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'mobile');
   const html = await readFile(path.join(dir, 'index.html'), 'utf8');
   const touch = html.match(/rel="apple-touch-icon"\s+href="data:image\/png;base64,([^"]+)"/);
   assert.ok(touch, 'apple-touch-icon は data URI');
