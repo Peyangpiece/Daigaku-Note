@@ -118,22 +118,6 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
     return {annotation: annotationToClient(row)};
   });
 
-  // 注釈をまとめて足す（アナログノートの取り込み：1 ページに数百本の線）。どれか 1 つでも不正なら何も足さない。戻り：{count}
-  handle('annotation.saveMany', ({materialId, annotations}, e) => {
-    const m = pdfMaterial(materialId);
-    const list = Array.isArray(annotations) ? annotations : bad('注釈が不正です');
-    if (list.length > 20000) bad('一度に足せる線が多すぎます');
-    if (m.source === 'note' && m.pages && list.some((a) => Number(a?.page) > m.pages))
-      bad('そのページはもうありません（開き直してください）');
-    const rows = list.map((a) => normalizeAnnotation(a));
-    const key = annoKey(m);
-    repo.transaction(() => {
-      for (const row of rows) repo.saveAnnotation(key, null, row);
-    });
-    if (e?.senderFrame) notifyOthers(e.senderFrame, 'annotations.changed', {materialId: m.id, all: true});
-    return {count: rows.length};
-  });
-
   // 注釈の一覧（スマホで書き込んだあと、開いている PDF の画面が取り直す）
   handle('annotation.list', ({materialId}) => {
     if (trial.isTrial(materialId)) return {annotations: trial.trialAnnotations()};

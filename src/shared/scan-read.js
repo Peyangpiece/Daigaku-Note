@@ -251,28 +251,34 @@ function rectify(img, t, scale) {
   const Hh = Math.round(t.h * scale);
   const rgb = new Float32Array(W * Hh * 3);
   // 1. まっすぐに直す（双一次で読む）
+  const {width: IW, height: IH, data} = img;
+  const [h0, h1, h2, h3, h4, h5, h6, h7, h8] = t.H;
   for (let v = 0; v < Hh; v++)
     for (let u = 0; u < W; u++) {
-      const [x, y] = project(t.H, (u + 0.5) / scale, (v + 0.5) / scale);
-      const x0 = Math.floor(x - 0.5),
-        y0 = Math.floor(y - 0.5);
-      const fx = x - 0.5 - x0,
-        fy = y - 0.5 - y0;
+      const mx = (u + 0.5) / scale,
+        my = (v + 0.5) / scale;
+      const q = h6 * mx + h7 * my + h8;
+      const x = (h0 * mx + h1 * my + h2) / q - 0.5,
+        y = (h3 * mx + h4 * my + h5) / q - 0.5;
+      const x0 = Math.floor(x),
+        y0 = Math.floor(y);
+      const fx = x - x0,
+        fy = y - y0;
+      const xa = Math.min(IW - 1, Math.max(0, x0)),
+        xb = Math.min(IW - 1, Math.max(0, x0 + 1));
+      const ya = Math.min(IH - 1, Math.max(0, y0)) * IW,
+        yb = Math.min(IH - 1, Math.max(0, y0 + 1)) * IW;
+      const i00 = (ya + xa) * 4,
+        i10 = (ya + xb) * 4,
+        i01 = (yb + xa) * 4,
+        i11 = (yb + xb) * 4;
+      const w00 = (1 - fx) * (1 - fy),
+        w10 = fx * (1 - fy),
+        w01 = (1 - fx) * fy,
+        w11 = fx * fy;
       const o = (v * W + u) * 3;
-      for (let c = 0; c < 3; c++) {
-        let s = 0;
-        for (const [dx, dy, wt] of [
-          [0, 0, (1 - fx) * (1 - fy)],
-          [1, 0, fx * (1 - fy)],
-          [0, 1, (1 - fx) * fy],
-          [1, 1, fx * fy]
-        ]) {
-          const sx = Math.min(img.width - 1, Math.max(0, x0 + dx));
-          const sy = Math.min(img.height - 1, Math.max(0, y0 + dy));
-          s += img.data[(sy * img.width + sx) * 4 + c] * wt;
-        }
-        rgb[o + c] = s;
-      }
+      for (let c = 0; c < 3; c++)
+        rgb[o + c] = data[i00 + c] * w00 + data[i10 + c] * w10 + data[i01 + c] * w01 + data[i11 + c] * w11;
     }
   // 2. 紙の白さ：区切りごとの明るいほう（上位）を、なめらかにつなぐ
   const B = Math.max(8, Math.round(scale * 4)); // 4 mm の区切り
@@ -326,19 +332,103 @@ function rectify(img, t, scale) {
 }
 
 /**
- * 書いた線だけの画像（RGBA。線のないところは透明）。線を写真のまま見たいとき・調べるときに使う
+ * 書いた線を写真のまま取り出す（形・かすれ・色は描き直さない）。戻り {width, height, scale, idx, rgb, a, d}：
+ * 線のあたりの画素だけを持つ（idx：画素の番号、rgb：インクの色、a：濃さ 0〜255、d：線の真ん中からの距離 px×16）。
+ * inkImage で、使ったボールペンの太さより外（写真のぼけ・にじみで太って見える分）を切って画像にする
  */
-export function extractInk(img, t, {scale = 6, from = 0.3, to = 0.48} = {}) {
+export function extractInk(img, t, {scale = 12, from = 0.3, low = 0.06, maxWidth = 0.8} = {}) {
   const r = rectify(img, t, scale);
-  const out = new Uint8ClampedArray(r.W * r.H * 4);
-  for (let i = 0; i < r.W * r.H; i++) {
-    if (!r.use[i] || r.dark[i] <= from) continue;
-    const a = Math.min(1, (r.dark[i] - from) / (to - from));
-    // 色は紙の白さで割った色を少し濃くする（インクの色を保つ）
-    for (let c = 0; c < 3; c++) out[i * 4 + c] = Math.round(255 * Math.pow(r.n[i * 3 + c], 1.6));
-    out[i * 4 + 3] = Math.round(255 * a);
+  const {W, H} = r;
+  const N = W * H;
+  // 線（濃いところ）を細線化して、線の真ん中を出す
+  const m = new Uint8Array(N);
+  for (let i = 0; i < N; i++) m[i] = r.use[i] && r.dark[i] > from ? 1 : 0;
+  for (let y = 1; y < H - 1; y++)
+    for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      if (
+        m[i] &&
+        !(m[i - 1] | m[i + 1] | m[i - W] | m[i + W] | m[i - W - 1] | m[i - W + 1] | m[i + W - 1] | m[i + W + 1])
+      )
+        m[i] = 0; // まわりに 1 つもない点は写真のざらつき
+    }
+  thin(m, W, H);
+  // 線の真ん中からの距離（2 回なめる近似。斜めは √2）と、いちばん近い真ん中の濃さ
+  const INF = 1e9;
+  const dist = new Float32Array(N).fill(INF);
+  const core = new Float32Array(N);
+  for (let i = 0; i < N; i++)
+    if (m[i]) {
+      dist[i] = 0;
+      core[i] = r.dark[i];
+    }
+  const S2 = Math.SQRT2;
+  const relax = (i, j, w) => {
+    if (dist[j] + w < dist[i]) {
+      dist[i] = dist[j] + w;
+      core[i] = core[j];
+    }
+  };
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      if (x > 0) relax(i, i - 1, 1);
+      if (y > 0) {
+        relax(i, i - W, 1);
+        if (x > 0) relax(i, i - W - 1, S2);
+        if (x < W - 1) relax(i, i - W + 1, S2);
+      }
+    }
+  for (let y = H - 1; y >= 0; y--)
+    for (let x = W - 1; x >= 0; x--) {
+      const i = y * W + x;
+      if (x < W - 1) relax(i, i + 1, 1);
+      if (y < H - 1) {
+        relax(i, i + W, 1);
+        if (x < W - 1) relax(i, i + W + 1, S2);
+        if (x > 0) relax(i, i + W - 1, S2);
+      }
+    }
+  // 線のあたり（いちばん太いボールペンの半分＋ 1 px まで）の、少しでも暗い画素を持つ。
+  // 濃さは真ん中の濃さに対する割合、色は白い紙に重ねたとき写真と同じ色になるよう、白との混ざりを戻した色
+  const reach = (maxWidth / 2) * scale + 1;
+  const keep = [];
+  for (let i = 0; i < N; i++) if (r.use[i] && dist[i] <= reach && r.dark[i] > low && core[i] > 0) keep.push(i);
+  const n = keep.length;
+  const idx = new Uint32Array(n);
+  const rgb = new Uint8Array(n * 3);
+  const a = new Uint8Array(n);
+  const d = new Uint8Array(n);
+  keep.forEach((i, k) => {
+    const al = Math.min(1, r.dark[i] / core[i]);
+    idx[k] = i;
+    a[k] = Math.round(255 * al);
+    d[k] = Math.min(255, Math.round(dist[i] * 16));
+    for (let c = 0; c < 3; c++) {
+      const v = 1 - (1 - r.n[i * 3 + c]) / Math.max(al, 1e-3);
+      rgb[k * 3 + c] = Math.round(255 * Math.min(1, Math.max(0, v)));
+    }
+  });
+  return {width: W, height: H, scale, idx, rgb, a, d};
+}
+
+/**
+ * 取り出した線を画像（RGBA。線のないところは透明）にする。width（mm）：使ったボールペンの線の太さ。
+ * 線の真ん中から太さの半分より外は消す（写真のぼけで太って見える分）。細い線は細いまま（太くはしない）
+ */
+export function inkImage(ink, width) {
+  const out = new Uint8ClampedArray(ink.width * ink.height * 4);
+  const R = (width / 2) * ink.scale;
+  for (let k = 0; k < ink.idx.length; k++) {
+    const cut = Math.min(1, Math.max(0, R + 0.5 - ink.d[k] / 16));
+    if (!cut) continue;
+    const o = ink.idx[k] * 4;
+    out[o] = ink.rgb[k * 3];
+    out[o + 1] = ink.rgb[k * 3 + 1];
+    out[o + 2] = ink.rgb[k * 3 + 2];
+    out[o + 3] = Math.round(ink.a[k] * cut);
   }
-  return {width: r.W, height: r.H, data: out};
+  return {width: ink.width, height: ink.height, data: out};
 }
 
 /** 細線化（Zhang–Suen）。m は 0/1 の Uint8Array（書き換える） */
@@ -378,281 +468,7 @@ function thin(m, W, H) {
   }
 }
 
-// 8 近傍（4 近傍を先に。たどるとき、斜めより縦横を選ぶ）
-const NB = [
-  [0, -1],
-  [1, 0],
-  [0, 1],
-  [-1, 0],
-  [1, -1],
-  [1, 1],
-  [-1, 1],
-  [-1, -1]
-];
-
-/** 細線をたどって線（px の点の並び）にする。端点・分かれ目で区切る。輪も拾う */
-function traceSkeleton(m, W, H) {
-  const on = (x, y) => x >= 0 && y >= 0 && x < W && y < H && m[y * W + x] === 1;
-  // まわりを一周して 0→1 に変わる数（1：端・3 以上：分かれ目）
-  const RING = [
-    [0, -1],
-    [1, -1],
-    [1, 0],
-    [1, 1],
-    [0, 1],
-    [-1, 1],
-    [-1, 0],
-    [-1, -1]
-  ];
-  const cross = (x, y) => {
-    let c = 0;
-    for (let k = 0; k < 8; k++) {
-      const [ax, ay] = RING[k];
-      const [bx, by] = RING[(k + 1) % 8];
-      if (!on(x + ax, y + ay) && on(x + bx, y + by)) c++;
-    }
-    return c;
-  };
-  const node = new Uint8Array(W * H); // 1：端・分かれ目・ひとつだけの点
-  const pts = [];
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++)
-      if (m[y * W + x]) {
-        pts.push(y * W + x);
-        if (cross(x, y) !== 2) node[y * W + x] = 1;
-      }
-  const seen = new Uint8Array(W * H);
-  const paths = [];
-  const walk = (start, first) => {
-    const path = [start, first];
-    if (!node[first]) seen[first] = 1;
-    let prev = start;
-    let cur = first;
-    while (!node[cur] || cur === first) {
-      if (node[cur] && cur !== first) break;
-      const cx = cur % W,
-        cy = (cur - cx) / W;
-      let next = -1;
-      for (const [dx, dy] of NB) {
-        const j = (cy + dy) * W + cx + dx;
-        if (!on(cx + dx, cy + dy) || j === prev || j === start) continue;
-        if (node[j] || !seen[j]) {
-          next = j;
-          break;
-        }
-      }
-      if (next < 0 || (node[cur] && cur === first && path.length > 2)) break;
-      path.push(next);
-      prev = cur;
-      cur = next;
-      if (node[cur]) break;
-      seen[cur] = 1;
-    }
-    return path;
-  };
-  for (const i of pts) {
-    if (!node[i]) continue;
-    const x = i % W,
-      y = (i - x) / W;
-    let any = false;
-    for (const [dx, dy] of NB) {
-      const j = (y + dy) * W + x + dx;
-      if (!on(x + dx, y + dy)) continue;
-      any = true;
-      if (node[j] ? j < i : seen[j]) continue; // 端どうしがとなりなら 1 回だけ
-      paths.push(walk(i, j));
-    }
-    if (!any) paths.push([i]); // ひとつだけの点（「・」など）
-  }
-  // 端も分かれ目もない輪
-  for (const i of pts) {
-    if (node[i] || seen[i]) continue;
-    seen[i] = 1;
-    const x = i % W,
-      y = (i - x) / W;
-    let first = -1;
-    for (const [dx, dy] of NB) {
-      const j = (y + dy) * W + x + dx;
-      if (on(x + dx, y + dy) && !seen[j]) {
-        first = j;
-        break;
-      }
-    }
-    if (first < 0) continue;
-    const path = walk(i, first);
-    path.push(i); // 閉じる
-    paths.push(path);
-  }
-  return paths.map((p) => p.map((j) => [j % W, Math.floor(j / W)]));
-}
-
-/**
- * 角（向きが急に変わるところ）の番号。k 点前・k 点後との向きの差が limit（度）を超え、まわりでいちばん大きいところ。
- * 角をはさんでなめらかにしないため（漢字の折れ・「口」の角を丸めない）
- */
-function corners(pts, k, limit = 50) {
-  const turn = pts.map((b, i) => {
-    if (i < k || i + k >= pts.length) return 0;
-    const a = pts[i - k],
-      c = pts[i + k];
-    const t1 = Math.atan2(b[1] - a[1], b[0] - a[0]),
-      t2 = Math.atan2(c[1] - b[1], c[0] - b[0]);
-    let d = Math.abs(t2 - t1);
-    if (d > Math.PI) d = 2 * Math.PI - d;
-    return (d * 180) / Math.PI;
-  });
-  const out = [];
-  for (let i = k; i + k < pts.length; i++) {
-    if (turn[i] <= limit) continue;
-    let top = true;
-    for (let j = Math.max(0, i - k); j <= Math.min(pts.length - 1, i + k); j++)
-      if (turn[j] > turn[i] || (turn[j] === turn[i] && j < i)) top = false;
-    if (top) out.push(i);
-  }
-  return out;
-}
-
-/** 角で区切って、区切りごとになめらかにする（角と両端は動かさない） */
-function smoothKeepCorners(pts, k, r) {
-  const cut = [0, ...corners(pts, k), pts.length - 1];
-  const out = [];
-  for (let c = 0; c + 1 < cut.length; c++) {
-    const seg = pts.slice(cut[c], cut[c + 1] + 1);
-    const sm = smooth(smooth(seg, r), r);
-    out.push(...(c ? sm.slice(1) : sm));
-  }
-  return out;
-}
-
-/** 点の並びをなめらかにする（両端は動かさない） */
-function smooth(pts, r = 2) {
-  if (pts.length < 3) return pts;
-  return pts.map((p, i) => {
-    if (i === 0 || i === pts.length - 1) return p;
-    let sx = 0,
-      sy = 0,
-      n = 0;
-    for (let k = Math.max(0, i - r); k <= Math.min(pts.length - 1, i + r); k++) {
-      sx += pts[k][0];
-      sy += pts[k][1];
-      n++;
-    }
-    return [sx / n, sy / n];
-  });
-}
-
-/** 間引き（Ramer–Douglas–Peucker） */
-function simplify(pts, eps) {
-  if (pts.length < 3) return pts;
-  const [a, b] = [pts[0], pts.at(-1)];
-  // 輪（はじめと終わりが同じところ）は、いちばん遠い点で 2 つに分けてから間引く
-  if (Math.hypot(b[0] - a[0], b[1] - a[1]) < eps * 2) {
-    let at = 0,
-      far = 0;
-    for (let i = 1; i < pts.length - 1; i++) {
-      const d = Math.hypot(pts[i][0] - a[0], pts[i][1] - a[1]);
-      if (d > far) [far, at] = [d, i];
-    }
-    if (far <= eps) return [a, b];
-    return [...simplify(pts.slice(0, at + 1), eps).slice(0, -1), ...simplify(pts.slice(at), eps)];
-  }
-  const dx = b[0] - a[0],
-    dy = b[1] - a[1];
-  const len = Math.hypot(dx, dy) || 1;
-  let far = 0,
-    at = 0;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const d = Math.abs(dy * pts[i][0] - dx * pts[i][1] + b[0] * a[1] - b[1] * a[0]) / len;
-    if (d > far) {
-      far = d;
-      at = i;
-    }
-  }
-  if (far <= eps) return [a, b];
-  return [...simplify(pts.slice(0, at + 1), eps).slice(0, -1), ...simplify(pts.slice(at), eps)];
-}
-
-/** 書いた線の色（紙の白さで割った色の平均）→ ペンの色 */
-export const SCAN_INK_COLORS = {black: '#262626', blue: '#1d4fa8', red: '#cf2e2e', pencil: '#5a5e63'};
-function inkColor([r, g, b]) {
-  if (b - r > 0.12 && b > g) return SCAN_INK_COLORS.blue;
-  if (r - g > 0.18 && r - b > 0.1) return SCAN_INK_COLORS.red;
-  return (r + g + b) / 3 > 0.42 ? SCAN_INK_COLORS.pencil : SCAN_INK_COLORS.black;
-}
-
-/**
- * 書いた線をたどって、ペンの線（mm の点の並びと色）にする。細線化して線の真ん中をたどり、なめらかにして間引く。
- * 戻り [{points: [[x, y] mm…], color}]。太さは呼ぶ側が選んだボールペンの太さで描く（どの線も同じ太さ）
- */
-export function traceInk(img, t, {scale = 8, threshold = 0.36, minSpur = 0.5} = {}) {
-  const r = rectify(img, t, scale);
-  const {W, H} = r;
-  const m = new Uint8Array(W * H);
-  for (let i = 0; i < W * H; i++) m[i] = r.use[i] && r.dark[i] > threshold ? 1 : 0;
-  // 小さなごみ（写真のざらつき）を消す：まわりに 1 つもない点
-  for (let y = 1; y < H - 1; y++)
-    for (let x = 1; x < W - 1; x++) {
-      const i = y * W + x;
-      if (!m[i]) continue;
-      let c = 0;
-      for (const [dx, dy] of NB) c += m[i + dy * W + dx];
-      if (c === 0) m[i] = 0;
-    }
-  const ink = m.slice(); // 色を測るための、細くする前の線
-  thin(m, W, H);
-  const out = [];
-  const spur = minSpur * scale;
-  // 分かれ目（細線のとなりが 3 つ以上）
-  const branch = ([x, y]) => {
-    let c = 0;
-    for (const [dx, dy] of NB) {
-      const u = x + dx,
-        v = y + dy;
-      if (u >= 0 && v >= 0 && u < W && v < H) c += m[v * W + u];
-    }
-    return c >= 3;
-  };
-  for (const path of traceSkeleton(m, W, H)) {
-    // 分かれ目から出た短いひげ（細線化の副産物）は捨てる。分かれ目につながらない短い線（濁点・「・」）は残す
-    const len = path.reduce((a, p, i) => (i ? a + Math.hypot(p[0] - path[i - 1][0], p[1] - path[i - 1][1]) : 0), 0);
-    if (path.length > 1 && len < spur && (branch(path[0]) || branch(path.at(-1)))) continue;
-    // 色：線のまわりのインクの色の平均
-    const sum = [0, 0, 0];
-    let k = 0;
-    for (const [x, y] of path)
-      for (const [dx, dy] of [[0, 0], ...NB]) {
-        const i = (y + dy) * W + x + dx;
-        if (i < 0 || i >= W * H || !ink[i]) continue;
-        for (let c = 0; c < 3; c++) sum[c] += r.n[i * 3 + c];
-        k++;
-      }
-    const mean = k ? sum.map((v) => v / k) : [0, 0, 0];
-    // 細線は 1 px ごとの階段なので、まわり（半径 2 px）の暗さの重心へ寄せて、線の本当の真ん中（px より細かい）にする
-    const centre = ([x, y]) => {
-      let sx = 0,
-        sy = 0,
-        sw = 0;
-      for (let dy = -2; dy <= 2; dy++)
-        for (let dx = -2; dx <= 2; dx++) {
-          const u = x + dx,
-            v = y + dy;
-          if (u < 0 || v < 0 || u >= W || v >= H) continue;
-          const wt = Math.max(0, r.dark[v * W + u] - threshold / 2);
-          sx += (u + 0.5) * wt;
-          sy += (v + 0.5) * wt;
-          sw += wt;
-        }
-      return sw ? [sx / sw / scale, sy / sw / scale] : [(x + 0.5) / scale, (y + 0.5) / scale];
-    };
-    // 角で区切り、間をなめらかにする（ボールペンの線は 0.1 mm の細かさではまっすぐ・なめらか）。角を見る幅 0.6 mm・ならす幅 ±0.5 mm
-    const ck = Math.max(2, Math.round(0.6 * scale));
-    const pts = simplify(smoothKeepCorners(path.map(centre), ck, Math.max(2, Math.round(0.5 * scale))), 0.05);
-    out.push({points: pts.length === 1 ? [pts[0], pts[0]] : pts, color: inkColor(mean)});
-  }
-  return out;
-}
-
-/** まとめて読む。戻り {format, w, h, strokes}（strokes は traceInk）か {error}（日本語の理由） */
+/** まとめて読む。戻り {format, w, h, ink}（ink は extractInk。inkImage で画像にする）か {error}（日本語の理由） */
 export function readScan(img, opts) {
   const marks = findMarkers(img);
   if (!marks) return {error: '四隅の目印が見つかりませんでした。紙全体が写るように撮ってください'};
@@ -660,5 +476,5 @@ export function readScan(img, opts) {
   if (!t) return {error: '紙の形を読めませんでした。もう一度撮ってください'};
   const code = readCode(img, t);
   if (!code) return {error: '紙の下のコードを読めませんでした。明るいところで、ぶれないように撮ってください'};
-  return {format: code.format, w: t.w, h: t.h, strokes: traceInk(img, t, opts)};
+  return {format: code.format, w: t.w, h: t.h, ink: extractInk(img, t, opts)};
 }

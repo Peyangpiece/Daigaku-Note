@@ -1,19 +1,20 @@
 // アナログノートの取り込み（docs/SPEC-SCAN.md）：回の付箋の「＋ ノート」のメニューのいちばん下「アナログノート」から開く。
 // カメラ（Mac の連携カメラで iPhone も使える）で Palette スキャンノートを撮るか、写真・スキャンの画像を選ぶ。
-// 1 枚ごとに四隅の目印・形式のコードを読み、書いた線の真ん中をたどって（shared/scan-read.js）、デジタルの紙の上に並べて見せる。
-// 「取り込む」で回のノートに、デジタルの Palette ノートの紙（B5。罫は刷った紙と同じ位置）のページを足し、
-// たどった線をボールペンの線（選んだ太さ 0.3・0.5・0.7）として同じ位置に書く。あとから消す・書き足すのもアプリのペンと同じ
+// 1 枚ごとに四隅の目印・形式のコードを読み、書いた線を写真のまま取り出して（shared/scan-read.js）、デジタルの紙の上に並べて見せる。
+// 線は描き直さない。使ったボールペンの太さ（0.3・0.5・0.7）より外（写真のぼけ・にじみで太って見える分）だけを切る。
+// 「取り込む」で回のノートに、デジタルの Palette ノートの紙（B5。罫は刷った紙と同じ位置）のページを足し、線を同じ位置に貼る（上から書き足せる）
 import {esc, toast} from './ui-kit.js';
 import {navigate, reload} from './store.js';
-import {readScan, findMarkers} from '../shared/scan-read.js';
+import {readScan, findMarkers, inkImage} from '../shared/scan-read.js';
 import {FORMATS, analogDesign, pageSvg} from '../shared/notebooks.js';
 import {PEN_SIZES, sizeWidth} from '../shared/stationery.js';
-import {boundsOf, encodePoints} from '../shared/ink.js';
 
 const api = window.daigaku;
 const MM = 72 / 25.4;
 const MAX_SIDE = 3200; // 読む画像の長い辺（大きい写真は縮めてから読む）
 const SIZE_KEY = 'scan.penSize'; // 選んだボールペンの太さ（この窓を次に開いたときも同じ）
+/** ボールペンの線の太さ（mm）：アプリのボールペンと同じ（0.3 → 0.26 mm・0.5 → 0.39 mm・0.7 → 0.53 mm） */
+const lineMm = (size) => sizeWidth(size) / MM;
 
 const savedSize = () => {
   try {
@@ -23,20 +24,6 @@ const savedSize = () => {
     return '0.5';
   }
 };
-
-/** 見本：デジタルの紙に、たどった線を選んだ太さで重ねる（小さい見本では細すぎないよう 0.45 mm より細くしない） */
-function pageThumb(p, size) {
-  const w = Math.max(0.45, sizeWidth(size) / MM);
-  const paths = p.strokes
-    .map(
-      (s) => `<path d="M${s.points.map(([x, y]) => `${x.toFixed(2)} ${y.toFixed(2)}`).join('L')}" stroke="${s.color}"/>`
-    )
-    .join('');
-  return pageSvg(analogDesign(p.format), {width: p.w > p.h ? 150 : 106, thumb: true}).replace(
-    '</svg>',
-    `<g fill="none" stroke-width="${w.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round">${paths}</g></svg>`
-  );
-}
 
 /** 画像（video・ImageBitmap・img）を、長い辺 max px までの ImageData にする */
 function toImageData(src, sw, sh, max = MAX_SIDE) {
@@ -49,12 +36,23 @@ function toImageData(src, sw, sh, max = MAX_SIDE) {
   return ctx.getImageData(0, 0, c.width, c.height);
 }
 
+/** 取り出した線を、ボールペンの太さで切って PNG に。戻り {bytes, url} */
+async function inkPng(ink, size) {
+  const im = inkImage(ink, lineMm(size));
+  const c = document.createElement('canvas');
+  c.width = im.width;
+  c.height = im.height;
+  c.getContext('2d').putImageData(new ImageData(im.data, im.width, im.height), 0, 0);
+  const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+  return {bytes: new Uint8Array(await blob.arrayBuffer()), url: URL.createObjectURL(blob)};
+}
+
 /**
  * 取り込みの窓を開く。materialId（ノート）を渡すとそのノートに足す（PDF の編集画面の「アナログノート…」）。
  * なければ courseId・roundId・sub の回のノートに足す（なければ作る。回の付箋の「＋ ノート」のメニュー）
  */
 export async function openScan({courseId, roundId, sub = '', materialId = null, onDone = null}) {
-  const pages = []; // {format, w, h, strokes}
+  const pages = []; // {format, w, h, ink, url, bytes}（url・bytes は今の太さで切った線の画像）
   let size = savedSize();
   const d = document.createElement('dialog');
   d.className = 'scan-dialog';
@@ -101,6 +99,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
   };
   const close = () => {
     stop();
+    for (const p of pages) URL.revokeObjectURL(p.url);
     d.close();
     d.remove();
   };
@@ -113,7 +112,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     $('.scan-dialog__pages').innerHTML = pages
       .map(
         (p, i) =>
-          `<li class="scan-dialog__page"><span class="scan-dialog__thumb${p.w > p.h ? ' is-wide' : ''}">${pageThumb(p, size)}</span><span class="scan-dialog__label">${i + 1}. ${esc(FORMATS[p.format].name)}</span><button type="button" class="btn btn--small btn--quiet" data-scan="remove" data-i="${i}" aria-label="${i + 1} ページ目を外す">外す</button></li>`
+          `<li class="scan-dialog__page"><span class="scan-dialog__thumb${p.w > p.h ? ' is-wide' : ''}">${pageSvg(analogDesign(p.format), {width: p.w > p.h ? 150 : 106, thumb: true})}<img src="${p.url}" alt="" /></span><span class="scan-dialog__label">${i + 1}. ${esc(FORMATS[p.format].name)}</span><button type="button" class="btn btn--small btn--quiet" data-scan="remove" data-i="${i}" aria-label="${i + 1} ページ目を外す">外す</button></li>`
       )
       .join('');
     const b = $('[data-scan="import"]');
@@ -125,7 +124,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
   const take = async (img) => {
     const r = readScan(img);
     if (r.error) return say(r.error, true);
-    pages.push({format: r.format, w: r.w, h: r.h, strokes: r.strokes});
+    pages.push({format: r.format, w: r.w, h: r.h, ink: r.ink, ...(await inkPng(r.ink, size))});
     renderPages();
     say(`${FORMATS[r.format].name}を読みました`);
   };
@@ -186,7 +185,8 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     if (what === 'close') return close();
     if (what === 'file') return $('input[type=file]').click();
     if (what === 'remove') {
-      pages.splice(Number(b.dataset.i), 1);
+      const [p] = pages.splice(Number(b.dataset.i), 1);
+      URL.revokeObjectURL(p?.url);
       return renderPages();
     }
     if (what === 'shot') {
@@ -205,7 +205,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
       b.disabled = true;
       say('取り込んでいます…');
       try {
-        const done = await importPages({courseId, roundId, sub, materialId}, pages, size);
+        const done = await importPages({courseId, roundId, sub, materialId}, pages);
         if (done) {
           const n = pages.length;
           close();
@@ -222,14 +222,24 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     }
   });
   camSel.addEventListener('change', () => start(camSel.value));
-  $('.scan-dialog__size').addEventListener('change', (e) => {
+  // 太さを変えたら、読んだページの線を切り直す（線そのものは読み直さない）
+  $('.scan-dialog__size').addEventListener('change', async (e) => {
     size = PEN_SIZES.includes(e.target.value) ? e.target.value : '0.5';
     try {
       localStorage.setItem(SIZE_KEY, size);
     } catch {
       // 覚えられなくても、この窓では選んだ太さを使う
     }
-    renderPages();
+    busy = true;
+    try {
+      for (const p of pages) {
+        URL.revokeObjectURL(p.url);
+        Object.assign(p, await inkPng(p.ink, size));
+      }
+      renderPages();
+    } finally {
+      busy = false;
+    }
   });
   $('input[type=file]').addEventListener('change', async (e) => {
     busy = true;
@@ -255,8 +265,8 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
   start();
 }
 
-/** 回のノートにページを足し、たどった線をボールペンの線として書く。戻り：{materialId, added}（added：{pages, first, bytes}）か null（知らせは出した） */
-async function importPages({courseId, roundId, sub, materialId}, pages, size) {
+/** 回のノートにページを足し、取り出した線を貼る。戻り：{materialId, added}（added：{pages, first, bytes}）か null（知らせは出した） */
+async function importPages({courseId, roundId, sub, materialId}, pages) {
   const fail = (r) => (toast(r?.error ?? '取り込めませんでした', {error: true}), null);
   // ノートがなければ、最初の紙と同じ形式のデジタルの紙（B5）で作る（上の欄の字は刷らない）
   const note = materialId
@@ -269,21 +279,20 @@ async function importPages({courseId, roundId, sub, materialId}, pages, size) {
     fresh: !!note.created
   });
   if (!added || added.error) return fail(added);
-  // 線の太さはどの線も同じ（ボールペンは筆圧で太さが変わらない：pressure 'even'）。点は PDF の pt（左下が原点）
-  const width = sizeWidth(size);
-  const annotations = pages.flatMap((p, i) =>
-    p.strokes.map((s) => {
-      const points = s.points.map(([x, y]) => [x * MM, (p.h - y) * MM, 0.5]);
-      return {
+  for (const [i, p] of pages.entries()) {
+    const photo = await api['photo.add']({bytes: p.bytes});
+    if (!photo || photo.error) return fail(photo);
+    const r = await api['annotation.save']({
+      materialId: note.materialId,
+      annotation: {
         page: added.first + i,
-        kind: 'ink',
-        rect: boundsOf(points, width),
-        body: encodePoints(points),
-        style: {color: s.color, width, pressure: 'even'}
-      };
-    })
-  );
-  const r = await api['annotation.saveMany']({materialId: note.materialId, annotations});
-  if (!r || r.error) return fail(r);
+        kind: 'stamp',
+        rect: {x: 0, y: 0, w: p.w * MM, h: p.h * MM},
+        body: '',
+        style: {type: 'photo', ref: photo.id, scan: true}
+      }
+    });
+    if (!r || r.error) return fail(r);
+  }
   return {materialId: note.materialId, added};
 }

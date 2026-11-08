@@ -203,8 +203,15 @@ a,
   display: block;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
 }
-.scan-dialog__thumb svg {
+.scan-dialog__thumb svg,
+.scan-dialog__thumb img {
   display: block;
+}
+.scan-dialog__thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 .scan-dialog__label {
   font-size: var(--fs-small);
