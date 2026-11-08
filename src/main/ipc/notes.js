@@ -178,6 +178,15 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
     const devices = mob ? (await mob.devices.list()).length : 0;
     return {id: sid, mobile: {enabled: !!mob?.server.running, devices}};
   });
+  // 窓が 2 秒ごとに見る：スマホが撮る画面を開いているか・スマホ連携がオンか・つないだスマホの数
+  handle('scan.remoteState', async ({id: sid}) => {
+    const mob = ctx.mobile;
+    return {
+      phoneSeen: ctx.scanRelay.phoneSeen(String(sid ?? '')),
+      enabled: !!mob?.server.running,
+      devices: mob ? (await mob.devices.list()).length : 0
+    };
+  });
   handle('scan.remoteClose', ({id: sid}) => (ctx.scanRelay.close(String(sid ?? '')), {ok: true}));
   // 窓が、スマホから来た 1 枚を読み終えた（読めたか・知らせる言葉）
   handle('scan.remoteReply', ({photoId, result}) => ({ok: ctx.scanRelay.reply(String(photoId ?? ''), result)}));

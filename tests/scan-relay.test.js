@@ -51,6 +51,20 @@ test('スマホで撮る：窓が答えなければ時間切れ。開き直す�
   assert.match((await p).message, /開き直されました/);
 });
 
+test('スマホで撮る：撮る画面から見に来ているあいだだけ「スマホとつながっています」', () => {
+  let t = 1000;
+  const relay = createScanRelay({now: () => t});
+  const id = relay.open(fakeFrame(relay), 'ノート');
+  assert.equal(relay.phoneSeen(id), false);
+  relay.current(); // ホームなどから見に来ただけ
+  assert.equal(relay.phoneSeen(id), false);
+  relay.current({watching: true});
+  assert.equal(relay.phoneSeen(id), true);
+  t += 7000; // 撮る画面を閉じた
+  assert.equal(relay.phoneSeen(id), false);
+  assert.equal(relay.phoneSeen('other'), false);
+});
+
 test('窓口：スマホからはアナログノートの写真（JPEG・PNG・WebP）だけを、開いている窓へ送れる', async () => {
   const relay = createScanRelay();
   const api = createMobileApi({handlers: new Map(), repo: {}, scan: relay});

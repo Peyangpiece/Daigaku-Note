@@ -61,6 +61,7 @@ const INVOKE = [
   'note.addScanPages',
   'camera.access',
   'scan.remoteOpen',
+  'scan.remoteState',
   'scan.remoteClose',
   'scan.remoteReply',
   'note.trialEnd',

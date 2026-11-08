@@ -1,8 +1,8 @@
 // アナログノートの取り込み（docs/SPEC-SCAN.md）：回の付箋の「＋ ノート」のメニューのいちばん下「アナログノート」から開く。
-// カメラ（Mac の連携カメラで iPhone も使える）で Palette スキャンノートを撮るか、写真・スキャンの画像を選ぶ。
+// 撮るのはスマホのカメラ（スマホ連携。つないでいなければ、この窓で QR を出してつなぐ）。このパソコンのカメラでも撮れる。
 // 1 枚ごとに四隅の目印・形式のコードを読み、書いた線を写真のまま取り出して（shared/scan-read.js）、デジタルの紙の上に並べて見せる。
 // 線は描き直さない。使ったボールペンの太さ（0.3・0.5・0.7）より外（写真のぼけ・にじみで太って見える分）だけを切る。
-// スマホ（スマホ連携）で撮った写真も、この窓が開いているあいだ受けて読む（main/scan-relay.js）。
+// スマホで撮った写真は、この窓が開いているあいだ受けて読む（main/scan-relay.js）。
 // 「かすれと色を整える」（はじめはオン）：線ごとに黒・青・赤・鉛筆の 1 色にし、線の中のかすれを埋める（形・太さはそのまま）。
 // 「取り込む」で回のノートに、デジタルの Palette ノートの紙（B5。罫は刷った紙と同じ位置）のページを足し、線を同じ位置に貼る（上から書き足せる）
 import {esc, toast} from './ui-kit.js';
@@ -72,23 +72,22 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     <div class="scan-dialog__head">
       <h2>アナログノート</h2>
       <select class="scan-dialog__cam" aria-label="カメラ" hidden></select>
+      <button type="button" class="btn btn--small" data-scan="pccam">このパソコンのカメラ</button>
       <select class="scan-dialog__size" aria-label="使ったボールペンの太さ">${PEN_SIZES.map((v) => `<option value="${v}"${v === size ? ' selected' : ''}>ボールペン ${v} mm</option>`).join('')}</select>
       <label class="scan-dialog__tidy"><input type="checkbox"${tidy ? ' checked' : ''} /> かすれと色を整える</label>
-      <button type="button" class="btn btn--small" data-scan="file">画像から…</button>
-      <input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
       <button type="button" class="btn btn--small btn--quiet" data-scan="close">やめる</button>
     </div>
     <div class="scan-dialog__body">
       <div class="scan-dialog__view">
-        <video playsinline muted></video>
-        <canvas class="scan-dialog__overlay"></canvas>
+        <div class="scan-dialog__phonebox"></div>
+        <video playsinline muted hidden></video>
+        <canvas class="scan-dialog__overlay" hidden></canvas>
         <p class="scan-dialog__status" role="status"></p>
-        <button type="button" class="scan-dialog__shot" data-scan="shot" aria-label="撮る" disabled></button>
+        <button type="button" class="scan-dialog__shot" data-scan="shot" aria-label="撮る" disabled hidden></button>
       </div>
       <ol class="scan-dialog__pages" aria-label="取り込むページ"></ol>
     </div>
     <div class="scan-dialog__foot">
-      <p class="scan-dialog__phone" role="status"></p>
       <button type="button" class="btn btn--primary" data-scan="import" disabled>取り込む</button>
     </div>`;
   document.body.append(d);
@@ -111,11 +110,13 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     for (const t of stream?.getTracks() ?? []) t.stop();
     stream = null;
   };
-  let remote = null; // スマホで撮る：{id}（scan-relay.js）
+  let remote = null; // スマホで撮る：{id, mobile}（scan-relay.js）
   let offPhoto = () => {};
+  let poll = 0;
   const close = () => {
     stop();
     offPhoto();
+    clearInterval(poll);
     if (remote) api['scan.remoteClose']({id: remote.id});
     for (const p of pages) URL.revokeObjectURL(p.url);
     d.close();
@@ -152,18 +153,76 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     return {ok: true, message};
   };
 
-  // スマホで撮る（docs/SPEC-SCAN.md §3）：この窓が開いているあいだ、スマホのパレットノートの「アナログノート」から撮った写真を受ける。
-  // 1 枚ずつ順に読み、読めたかをスマホに返す
+  // スマホで撮る（docs/SPEC-SCAN.md §3）：この窓が開いているあいだ、スマホのパレットノートは撮る画面に切り替わり、
+  // 撮った写真を 1 枚ずつ送ってくる。順に読み、読めたかをスマホに返す。スマホがつながっていなければ、ここでつなぐ（QR）
   let phoneQueue = Promise.resolve();
-  const phoneHint = $('.scan-dialog__phone');
+  const phoneBox = $('.scan-dialog__phonebox');
+  let qr = null; // 出している QR（スマホを追加）
+  const drawPhone = (st = {}) => {
+    if (!remote) return;
+    const linked = st.enabled && st.devices > 0;
+    if (qr) {
+      phoneBox.innerHTML = `
+        <h3>スマホとつなぐ</h3>
+        <div class="scan-dialog__qr">${qr.svg}</div>
+        <p>スマホのカメラでこの QR を読んでください。開いたページが、そのまま撮る画面になります（同じ Wi-Fi のスマホ。QR は 10 分のあいだ 1 回だけ使えます）</p>
+        <button type="button" class="btn btn--small btn--quiet" data-scan="qr-cancel">やめる</button>`;
+      return;
+    }
+    if (!linked) {
+      phoneBox.innerHTML = `
+        <h3>スマホがつながっていません</h3>
+        <p>スマホのカメラで撮るには、このパソコンとスマホをつなぎます（同じ Wi-Fi で。1 回つなげば次からはいりません）</p>
+        <button type="button" class="btn btn--primary" data-scan="pair">スマホとつなぐ</button>`;
+      return;
+    }
+    phoneBox.innerHTML = `
+      <h3>スマホで撮ってください</h3>
+      <p>${
+        st.phoneSeen
+          ? 'スマホが撮る画面を開いています。「撮る」を押して、四隅の黒い目印が全部写るように撮ってください'
+          : 'スマホのパレットノートを開くと、撮る画面に切り替わります（開いていれば、そのまま切り替わります）'
+      }</p>
+      <p class="scan-dialog__phone-state${st.phoneSeen ? ' is-on' : ''}">${st.phoneSeen ? '● スマホとつながっています' : '○ スマホを待っています'}</p>
+      <button type="button" class="btn btn--small btn--quiet" data-scan="pair">別のスマホをつなぐ</button>`;
+  };
+  let last = {};
+  const refreshPhone = async () => {
+    if (!remote) return;
+    const st = await api['scan.remoteState']({id: remote.id});
+    if (!st || st.error || !d.isConnected) return;
+    // QR を読んでつながったら、QR を閉じる
+    if (qr && st.devices > (last.devices ?? 0)) qr = null;
+    const changed = JSON.stringify(st) !== JSON.stringify(last);
+    last = st;
+    if (changed || !phoneBox.innerHTML) drawPhone(st);
+  };
+  const pair = async () => {
+    phoneBox.innerHTML = '<p>準備しています…</p>';
+    if (!last.enabled) {
+      const on = await api['mobile.enable']({on: true});
+      if (!on || on.error) {
+        qr = null;
+        drawPhone(last);
+        return say(on?.error ?? 'スマホとつなぐ準備ができませんでした', true);
+      }
+    }
+    const r = await api['mobile.pair']({});
+    if (!r || r.error) {
+      qr = null;
+      drawPhone(last);
+      return say(r?.error ?? 'QR を作れませんでした', true);
+    }
+    qr = r;
+    drawPhone(last);
+    await refreshPhone();
+  };
   const openRemote = async () => {
     const r = await api['scan.remoteOpen']({courseId, roundId, materialId});
     if (!r || r.error || !d.isConnected) return;
     remote = r;
-    phoneHint.textContent =
-      r.mobile.enabled && r.mobile.devices
-        ? 'スマホでも撮れます：スマホのパレットノートで「アナログノート」を開いてください'
-        : 'スマホで撮るには、設定 → スマホとつなぐ でスマホをつないでください';
+    await refreshPhone();
+    poll = setInterval(refreshPhone, 2000);
   };
   offPhoto = api.on('scan.photo', ({id, photoId, bytes}) => {
     if (!remote || id !== remote.id) return;
@@ -186,7 +245,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
   const start = async (deviceId) => {
     stop();
     const ok = await api['camera.access']?.({});
-    if (ok && ok.ok === false) return say('カメラを使えません。「画像から…」で写真を選べます', true);
+    if (ok && ok.ok === false) return say('このパソコンのカメラを使えません。スマホで撮ってください', true);
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -196,7 +255,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
         }
       });
     } catch {
-      return say('カメラを使えません。「画像から…」で写真を選べます', true);
+      return say('このパソコンのカメラを使えません。スマホで撮ってください', true);
     }
     video.srcObject = stream;
     await video.play().catch(() => {});
@@ -236,7 +295,22 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     if (!b || busy) return;
     const what = b.dataset.scan;
     if (what === 'close') return close();
-    if (what === 'file') return $('input[type=file]').click();
+    if (what === 'pair') return pair();
+    if (what === 'qr-cancel') {
+      qr = null;
+      return drawPhone(last);
+    }
+    if (what === 'pccam') {
+      // スマホの代わりに、このパソコンのカメラ（Mac の連携カメラも）で撮る。もう一度押すとスマホの案内に戻る
+      const on = video.hidden;
+      for (const el of [video, overlay, $('[data-scan="shot"]')]) el.hidden = !on;
+      phoneBox.hidden = on;
+      b.textContent = on ? 'スマホで撮る' : 'このパソコンのカメラ';
+      camSel.hidden = true;
+      if (on) return start();
+      stop();
+      return say('');
+    }
     if (what === 'remove') {
       const [p] = pages.splice(Number(b.dataset.i), 1);
       URL.revokeObjectURL(p?.url);
@@ -305,29 +379,8 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     remember(TIDY_KEY, tidy ? '1' : '0');
     recut();
   });
-  $('input[type=file]').addEventListener('change', async (e) => {
-    busy = true;
-    try {
-      for (const file of e.target.files) {
-        say(`${file.name} を読んでいます…`);
-        let bmp;
-        try {
-          bmp = await createImageBitmap(file);
-        } catch {
-          say(`${file.name} を開けませんでした`, true);
-          continue;
-        }
-        await take(toImageData(bmp, bmp.width, bmp.height));
-        bmp.close?.();
-      }
-    } finally {
-      busy = false;
-      e.target.value = '';
-    }
-  });
   renderPages();
   openRemote();
-  start();
 }
 
 /** 回のノートにページを足し、取り出した線を貼る。戻り：{materialId, added}（added：{pages, first, bytes}）か null（知らせは出した） */
