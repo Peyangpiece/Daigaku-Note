@@ -85,6 +85,8 @@ const nextDay = (data, now = new Date()) => {
 // ---- 画面 ----
 async function renderHome() {
   home = await call('home');
+  // パソコンで「アナログノート…」の窓を開いていれば、いちばん上に出す
+  const scanWaiting = (await call('scan.waiting').catch(() => null))?.session ?? null;
   const today = todayCourses(home);
   const recent = Object.entries(home.materials)
     .flatMap(([cid, list]) => list.map((m) => ({...m, courseId: cid})))
@@ -93,7 +95,8 @@ async function renderHome() {
   const courseBtn = (c) =>
     `<li><a class="m-item" href="#/course/${esc(c.id)}"><span class="m-dot" style="--c: var(--c${c.color ?? 1})"></span>${esc(c.name)}<span class="m-sub">${c.weekday ? `${esc(c.weekday)}${c.period ? ` ${c.period}限` : ''}` : ''}</span></a></li>`;
   app.innerHTML = `
-    <header class="m-head"><h1>パレットノート</h1><a class="m-btn" href="#/photo"><span class="ico ico--camera" aria-hidden="true"></span> 写真</a></header>
+    <header class="m-head"><h1>パレットノート</h1><a class="m-btn" href="#/scan">アナログノート</a><a class="m-btn" href="#/photo"><span class="ico ico--camera" aria-hidden="true"></span> 写真</a></header>
+    ${scanWaiting ? `<a class="m-card m-review is-due" href="#/scan"><strong>アナログノートを撮る</strong><span>${esc(scanWaiting.label)}</span></a>` : ''}
     <a class="m-card m-review${home.reviewDue ? ' is-due' : ''}" href="#/review"><strong>今日の復習</strong><span>${home.reviewDue ? `${home.reviewDue} 問` : 'ありません'}</span></a>
     <section class="m-card"><h2>今日の授業</h2>${today.length ? `<ul class="m-list">${today.map(courseBtn).join('')}</ul>` : `<p class="m-muted">今日の授業はありません。${esc(nextDay(home))}</p>`}</section>
     <section class="m-card"><h2>最近の資料</h2>${
@@ -198,6 +201,92 @@ async function renderPhoto(params) {
     upload(e.target.files).finally(() => (e.target.value = ''));
 }
 
+// ---- アナログノート（docs/SPEC-SCAN.md §3）：パソコンで「アナログノート…」の窓を開いているあいだ、撮った写真をその窓へ送る ----
+const SCAN_SIDE = 3200; // 送る写真の長い辺（パソコンもこの大きさで読む）
+
+/** 写真（HEIC も。スマホのブラウザで開ける形なら何でも）を JPEG にする。長い辺は SCAN_SIDE まで */
+async function toJpeg(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const k = Math.min(1, SCAN_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * k);
+    c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/jpeg', 0.92));
+    if (!blob) throw new Error('写真を開けませんでした');
+    return new Uint8Array(await blob.arrayBuffer());
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function renderScan() {
+  app.innerHTML = `
+    <header class="m-head"><a class="m-btn" href="#/">← ホーム</a><h1>アナログノート</h1></header>
+    <section class="m-card" data-v="scan"><p class="m-muted">パソコンを確かめています…</p></section>`;
+  const box = app.querySelector('[data-v="scan"]');
+  let session = null;
+  let timer = 0;
+  let sent = [];
+  const draw = () => {
+    if (!session) {
+      box.innerHTML =
+        '<p>パソコンのパレットノートで、回の「＋ ノート」→「アナログノート…」を開いてください。開くと、ここで撮れるようになります。</p>';
+      return;
+    }
+    box.innerHTML = `
+      <h2>${esc(session.label)}</h2>
+      <p class="m-muted">Palette スキャンノートの四隅の黒い目印が全部写るように、真上から撮ってください。撮ったページはパソコンの窓に並びます。</p>
+      <div class="m-row">
+        <label class="m-btn m-btn--primary m-btn--wide"><span class="ico ico--camera" aria-hidden="true"></span> 撮る<input type="file" accept="image/*" capture="environment" data-v="shoot" hidden></label>
+        <label class="m-btn m-btn--wide">写真を選ぶ<input type="file" accept="image/*" multiple data-v="pickfile" hidden></label>
+      </div>
+      <p class="m-muted" data-v="status" role="status"></p>
+      ${sent.length ? `<ol class="m-list">${sent.map((x) => `<li class="m-item${x.ok ? '' : ' m-item--off'}">${esc(x.message)}</li>`).join('')}</ol>` : ''}`;
+    const status = box.querySelector('[data-v="status"]');
+    const send = async (files) => {
+      for (const f of [...files].slice(0, 20)) {
+        status.textContent = 'パソコンへ送って読んでいます…';
+        let r;
+        try {
+          r = await call('scan.send', {id: session.id, data: await toJpeg(f)});
+        } catch (e) {
+          r = {ok: false, message: e.message};
+        }
+        sent.unshift({ok: r.ok, message: r.ok ? `${r.message}（パソコンに ${r.pages} ページ）` : r.message});
+        if (!r.ok) toast(r.message, {error: true});
+      }
+      sent = sent.slice(0, 30);
+      draw();
+    };
+    box.querySelector('[data-v="shoot"]').onchange = (e) => send(e.target.files).finally(() => (e.target.value = ''));
+    box.querySelector('[data-v="pickfile"]').onchange = (e) =>
+      send(e.target.files).finally(() => (e.target.value = ''));
+  };
+  // パソコンの窓が開いた・閉じた・開き直されたかを 2 秒ごとに見る（撮っている間は書き換えない）
+  const check = async () => {
+    let next = null;
+    try {
+      next = (await call('scan.waiting')).session;
+    } catch {
+      next = null;
+    }
+    if (next?.id === session?.id) return;
+    if (box.querySelector('[data-v="status"]')?.textContent.includes('送って')) return;
+    session = next;
+    sent = [];
+    draw();
+  };
+  await check();
+  draw();
+  timer = setInterval(check, 2000);
+  return () => clearInterval(timer);
+}
+
 // ---- 道案内 ----
 async function route() {
   leave?.();
@@ -211,6 +300,7 @@ async function route() {
     else if (path.startsWith('/pdf/')) leave = await openPdf(app, path.slice(5), {back: () => history.back()});
     else if (path === '/review') leave = await openReview(app);
     else if (path === '/photo') await renderPhoto(params);
+    else if (path === '/scan') leave = await renderScan();
     else await renderHome();
   } catch (e) {
     showProblem(e);

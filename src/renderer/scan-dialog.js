@@ -2,6 +2,7 @@
 // カメラ（Mac の連携カメラで iPhone も使える）で Palette スキャンノートを撮るか、写真・スキャンの画像を選ぶ。
 // 1 枚ごとに四隅の目印・形式のコードを読み、書いた線を写真のまま取り出して（shared/scan-read.js）、デジタルの紙の上に並べて見せる。
 // 線は描き直さない。使ったボールペンの太さ（0.3・0.5・0.7）より外（写真のぼけ・にじみで太って見える分）だけを切る。
+// スマホ（スマホ連携）で撮った写真も、この窓が開いているあいだ受けて読む（main/scan-relay.js）。
 // 「かすれと色を整える」（はじめはオン）：線ごとに黒・青・赤・鉛筆の 1 色にし、線の中のかすれを埋める（形・太さはそのまま）。
 // 「取り込む」で回のノートに、デジタルの Palette ノートの紙（B5。罫は刷った紙と同じ位置）のページを足し、線を同じ位置に貼る（上から書き足せる）
 import {esc, toast} from './ui-kit.js';
@@ -87,6 +88,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
       <ol class="scan-dialog__pages" aria-label="取り込むページ"></ol>
     </div>
     <div class="scan-dialog__foot">
+      <p class="scan-dialog__phone" role="status"></p>
       <button type="button" class="btn btn--primary" data-scan="import" disabled>取り込む</button>
     </div>`;
   document.body.append(d);
@@ -109,8 +111,12 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     for (const t of stream?.getTracks() ?? []) t.stop();
     stream = null;
   };
+  let remote = null; // スマホで撮る：{id}（scan-relay.js）
+  let offPhoto = () => {};
   const close = () => {
     stop();
+    offPhoto();
+    if (remote) api['scan.remoteClose']({id: remote.id});
     for (const p of pages) URL.revokeObjectURL(p.url);
     d.close();
     d.remove();
@@ -132,14 +138,49 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     b.textContent = pages.length ? `取り込む（${pages.length} ページ）` : '取り込む';
   };
 
-  /** 1 枚を読む（目印・形式・線） */
+  /** 1 枚を読む（目印・形式・線）。戻り {ok, message} */
   const take = async (img) => {
     const r = readScan(img);
-    if (r.error) return say(r.error, true);
+    if (r.error) {
+      say(r.error, true);
+      return {ok: false, message: r.error};
+    }
     pages.push({format: r.format, w: r.w, h: r.h, ink: r.ink, ...(await inkPng(r.ink, size, tidy))});
     renderPages();
-    say(`${FORMATS[r.format].name}を読みました`);
+    const message = `${FORMATS[r.format].name}を読みました`;
+    say(message);
+    return {ok: true, message};
   };
+
+  // スマホで撮る（docs/SPEC-SCAN.md §3）：この窓が開いているあいだ、スマホのパレットノートの「アナログノート」から撮った写真を受ける。
+  // 1 枚ずつ順に読み、読めたかをスマホに返す
+  let phoneQueue = Promise.resolve();
+  const phoneHint = $('.scan-dialog__phone');
+  const openRemote = async () => {
+    const r = await api['scan.remoteOpen']({courseId, roundId, materialId});
+    if (!r || r.error || !d.isConnected) return;
+    remote = r;
+    phoneHint.textContent =
+      r.mobile.enabled && r.mobile.devices
+        ? 'スマホでも撮れます：スマホのパレットノートで「アナログノート」を開いてください'
+        : 'スマホで撮るには、設定 → スマホとつなぐ でスマホをつないでください';
+  };
+  offPhoto = api.on('scan.photo', ({id, photoId, bytes}) => {
+    if (!remote || id !== remote.id) return;
+    phoneQueue = phoneQueue.then(async () => {
+      let result;
+      say('スマホの写真を読んでいます…');
+      try {
+        const bmp = await createImageBitmap(new Blob([bytes]));
+        result = await take(toImageData(bmp, bmp.width, bmp.height));
+        bmp.close?.();
+      } catch {
+        say('スマホの写真を開けませんでした', true);
+        result = {ok: false, message: '写真を開けませんでした'};
+      }
+      await api['scan.remoteReply']({photoId, result: {...result, pages: pages.length}});
+    });
+  });
 
   // カメラ：目印が写っているかを見て、枠を重ねて見せる
   const start = async (deviceId) => {
@@ -285,6 +326,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     }
   });
   renderPages();
+  openRemote();
   start();
 }
 

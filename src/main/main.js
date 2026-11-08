@@ -431,6 +431,7 @@ app.whenReady().then(async () => {
       const api = createMobileApi({
         handlers: ctx.handlers,
         repo,
+        scan: ctx.scanRelay,
         getWindow: () => win,
         broadcast: (ch, payload) => ctx.notifyOthers(null, ch, payload)
       });

@@ -60,6 +60,9 @@ const INVOKE = [
   'note.trial',
   'note.addScanPages',
   'camera.access',
+  'scan.remoteOpen',
+  'scan.remoteClose',
+  'scan.remoteReply',
   'note.trialEnd',
   'note.removePage',
   'note.setHeader',
@@ -119,7 +122,8 @@ const ON = [
   'zoom',
   'annotations.changed',
   'note.pages',
-  'note.removed'
+  'note.removed',
+  'scan.photo'
 ];
 
 const api = {};

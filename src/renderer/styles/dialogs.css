@@ -222,6 +222,11 @@ a,
 .scan-dialog__size {
   max-width: 160px;
 }
+.scan-dialog__phone {
+  margin: 0 auto 0 0;
+  font-size: var(--fs-small);
+  color: color-mix(in srgb, var(--paper-ink) 70%, transparent);
+}
 .scan-dialog__tidy {
   display: inline-flex;
   align-items: center;

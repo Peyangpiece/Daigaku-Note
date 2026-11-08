@@ -157,6 +157,31 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
         })
   );
 
+  // アナログノートをスマホで撮る（scan-relay.js）：取り込みの窓が開いたら、スマホから受け始める。
+  // スマホに見せる送り先（授業・回）をここで作る。戻り：{id, mobile: {enabled, devices}}（スマホ連携がオンか・つないだスマホの数）
+  handle('scan.remoteOpen', async ({courseId, roundId, materialId}, e) => {
+    let c = null;
+    let r = null;
+    if (materialId != null) {
+      const m = repo.get('material', id(materialId) ?? bad('ノートが不正です'));
+      c = m?.course_id ? repo.get('course', m.course_id) : null;
+      r = m?.round_id ? repo.get('round', m.round_id) : null;
+    } else {
+      c = courseId != null ? repo.get('course', id(courseId) ?? bad('授業が不正です')) : null;
+      r = roundId != null ? repo.get('round', id(roundId) ?? bad('回が不正です')) : null;
+    }
+    // 回の呼び方はノートの上の欄と同じ（renderer/notebook.js）：番号のない回（0）は付けた題か「その他」
+    const roundName = r ? (r.number > 0 ? `第${r.number}回` : r.title_user || 'その他') : null;
+    const label = [c?.name, roundName].filter(Boolean).join(' ') || 'ノート';
+    const sid = ctx.scanRelay.open(e?.senderFrame ?? e?.sender, label);
+    const mob = ctx.mobile;
+    const devices = mob ? (await mob.devices.list()).length : 0;
+    return {id: sid, mobile: {enabled: !!mob?.server.running, devices}};
+  });
+  handle('scan.remoteClose', ({id: sid}) => (ctx.scanRelay.close(String(sid ?? '')), {ok: true}));
+  // 窓が、スマホから来た 1 枚を読み終えた（読めたか・知らせる言葉）
+  handle('scan.remoteReply', ({photoId, result}) => ({ok: ctx.scanRelay.reply(String(photoId ?? ''), result)}));
+
   // カメラを使ってよいか（アナログノートの取り込み）。Mac は初めてのとき OS が聞く。戻り {ok}
   handle('camera.access', async () => {
     if (process.platform !== 'darwin') return {ok: true};
