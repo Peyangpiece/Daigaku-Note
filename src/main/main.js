@@ -13,7 +13,8 @@ import {registerIpc} from './ipc/index.js';
 import {createDevices} from './mobile/devices.js';
 import {createMobileApi} from './mobile/api.js';
 import {sendAll} from './frames.js';
-import {createMobileServer} from './mobile/server.js';
+import {createMobileServer, lanAddresses} from './mobile/server.js';
+import {certFor} from './mobile/tls-cert.js';
 import {JobRunner} from './jobs.js';
 import {Scheduler} from './scheduler.js';
 import {FileManager} from './sync/files.js';
@@ -438,6 +439,13 @@ app.whenReady().then(async () => {
       const server = createMobileServer({
         devices,
         api,
+        // https の証明書（スマホのブラウザでカメラを使う）。秘密の鍵は秘密の保管（secrets.js）に置く
+        tls: async () => {
+          const old = await ctx.secrets.get('mobile.tls').catch(() => null);
+          const r = certFor(lanAddresses(), old);
+          if (r.save) await ctx.secrets.set('mobile.tls', r.save).catch(() => {});
+          return {key: r.key, cert: r.cert};
+        },
         log: (m) => log.info(m),
         // 前と違う所・ブラウザからつながった：本人でなければ鍵を盗まれたおそれがあるので知らせる（段階 1 の暫定の見張り）
         onMoved: (d) =>

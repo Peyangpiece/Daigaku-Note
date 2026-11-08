@@ -133,11 +133,6 @@ a {
   background: var(--primary);
   color: var(--on-primary);
 }
-.m-shoot {
-  min-height: 64px;
-  margin-top: 12px;
-  font-size: 18px;
-}
 .m-row {
   display: flex;
   gap: 8px;
@@ -727,4 +722,47 @@ a {
 }
 .ico--trash {
   --ico: var(--ico-trash);
+}
+
+/* アナログノートをその場で読む（scan.js）：カメラの映像に、見つけた紙の枠と形式を重ねる */
+.m-scan__view {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 0 -16px;
+  background: #111;
+  min-height: 60vh;
+  overflow: hidden;
+}
+.m-scan__view video,
+.m-scan__overlay {
+  grid-area: 1 / 1;
+  width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+}
+.m-scan__overlay {
+  height: 100%;
+  pointer-events: none;
+}
+.m-scan__status {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+.m-scan__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 0;
+  font-size: 14px;
 }

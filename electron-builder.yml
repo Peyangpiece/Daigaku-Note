@@ -50,7 +50,6 @@ mac:
   extendInfo:
     CFBundleDisplayName: パレットノート
     LSHasLocalizedDisplayName: true
-    NSCameraUsageDescription: アナログのノート紙（Palette スキャンノート）を撮って、授業の回のノートに取り込むために使います。
     NSDesktopFolderUsageDescription: 授業資料をデスクトップの「パレットノート」フォルダ（前の版から使っている人は「大学ノート」フォルダ）に保存するために使います。
 dmg:
   sign: false

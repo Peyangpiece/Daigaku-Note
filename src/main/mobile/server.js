@@ -3,6 +3,7 @@
 // - 窓口の中身：端末の番号（26 文字）＋ seal した {ch, arg, t}。答えも同じ鍵で seal する
 // - 5 分より古い・先の要求と、同じ番号（nonce）の 2 回目は受け付けない（盗み見た通信の送り直しを通さない）
 import http from 'node:http';
+import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 import {promises as fsp} from 'node:fs';
@@ -11,6 +12,7 @@ import {fileURLToPath} from 'node:url';
 import {MAX_SKEW_MS, open, seal} from '../../shared/mobile-wire.js';
 
 export const DEFAULT_PORT = 47390;
+export const DEFAULT_TLS_PORT = 47391; // https（スマホのブラウザでカメラを使う。tls-cert.js）
 const BODY_MAX = 48 * 1024 * 1024; // 写真 1 枚（30MB）の base64（4/3 倍）＋余り。スマホは写真を 1 枚ずつ送る
 const HEAD = 26; // 本文の頭：端末の番号（ULID）
 const PENDING_MAX = 4096; // QR を読んだだけの端末のあいさつの大きさの上限
@@ -79,12 +81,23 @@ export function lanAddresses(ifaces = os.networkInterfaces()) {
 }
 
 /**
- * @param {{devices, api, log, now?, onMoved?}} deps devices は devices.js、api は api.js の窓口。
+ * @param {{devices, api, log, now?, onMoved?, tls?}} deps devices は devices.js、api は api.js の窓口。
  *   onMoved：つないだスマホが前と違う所・ブラウザからつながったとき（パソコンで知らせる）
+ *   tls：https の証明書を返す関数（() => {key, cert}。tls-cert.js の certFor）。なければ http だけ
  */
-export function createMobileServer({devices, api, log = () => {}, now = () => Date.now(), onMoved = () => {}}) {
+export function createMobileServer({
+  devices,
+  api,
+  log = () => {},
+  now = () => Date.now(),
+  onMoved = () => {},
+  tls = null
+}) {
   let server = null;
   let port = null;
+  let tlsServer = null;
+  let tlsPort = null;
+  let tlsCert = null; // いま使っている証明書（PEM）
   let inflight = 0;
   const seen = new Map(); // 端末 → Map(nonce → 期限)
 
@@ -236,15 +249,19 @@ export function createMobileServer({devices, api, log = () => {}, now = () => Da
     get port() {
       return port;
     },
+    /** https の番号（始めていなければ null）。スマホを追加する QR はこちらへ（カメラを使えるページ） */
+    get tlsPort() {
+      return tlsPort;
+    },
     get running() {
       return !!server;
     },
     /** 始める。決めた番号が使えなければ空いている番号で */
-    async start(want = DEFAULT_PORT) {
+    async start(want = DEFAULT_PORT, wantTls = DEFAULT_TLS_PORT) {
       if (server) return port;
-      const listen = (p) =>
+      const listen = (p, make) =>
         new Promise((resolve, reject) => {
-          const s = http.createServer((req, res) =>
+          const s = make((req, res) =>
             onRequest(req, res).catch((e) => {
               log(`mobile: ${e.message}`);
               if (!res.headersSent) send(res, 500, 'error');
@@ -256,25 +273,60 @@ export function createMobileServer({devices, api, log = () => {}, now = () => Da
           s.once('error', reject);
           s.listen(p, '0.0.0.0', () => resolve(s));
         });
-      try {
-        server = await listen(want);
-      } catch (e) {
-        if (e.code !== 'EADDRINUSE') throw e;
-        server = await listen(0);
-      }
+      const either = async (p, make) => {
+        try {
+          return await listen(p, make);
+        } catch (e) {
+          if (e.code !== 'EADDRINUSE') throw e;
+          return listen(0, make);
+        }
+      };
+      server = await either(want, (h) => http.createServer(h));
       port = server.address().port;
       log(`mobile: listening on ${port}`);
+      // https（カメラを使えるページ）。作れなくても http は続ける
+      if (tls) {
+        try {
+          const {key, cert} = await tls();
+          tlsCert = cert;
+          tlsServer = await either(wantTls, (h) => https.createServer({key, cert}, h));
+          tlsPort = tlsServer.address().port;
+          log(`mobile: https on ${tlsPort}`);
+        } catch (e) {
+          log(`mobile: https を始められませんでした：${e.message}`);
+          tlsServer = null;
+          tlsPort = null;
+        }
+      }
       return port;
+    },
+    /** https の証明書を確かめ直す（LAN の番号が変わったら作り直したものに入れ替える）。スマホを追加する QR を出す前に */
+    async refreshTls() {
+      if (!tls || !tlsServer) return;
+      const {key, cert} = await tls();
+      if (cert !== tlsCert) {
+        tlsServer.setSecureContext({key, cert});
+        tlsCert = cert;
+        log('mobile: https の証明書を作り直しました');
+      }
     },
     async stop() {
       if (!server) return;
-      const s = server;
+      const all = [server, tlsServer].filter(Boolean);
       server = null;
       port = null;
-      await new Promise((resolve) => {
-        s.close(() => resolve());
-        s.closeAllConnections?.();
-      });
+      tlsServer = null;
+      tlsPort = null;
+      tlsCert = null;
+      await Promise.all(
+        all.map(
+          (s) =>
+            new Promise((resolve) => {
+              s.close(() => resolve());
+              s.closeAllConnections?.();
+            })
+        )
+      );
     }
   };
 }

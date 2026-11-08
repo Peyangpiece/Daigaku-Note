@@ -355,7 +355,7 @@ async function renderMobile(box, st = null, pair = null) {
       <div class="about__row"><button type="button" class="btn btn--small" data-mobile-pair ${s.hosts.length ? '' : 'disabled'}>スマホを追加</button></div>
       ${
         pair
-          ? `<div class="mobile-qr"><div class="mobile-qr__code">${pair.svg}</div><p>スマホのカメラでこの QR を読んでください（10 分間・1 回だけ使えます）。<br><strong>QR は人に見せないでください</strong>（読んだ人がこのパソコンの資料を見られます）。</p></div>`
+          ? `<div class="mobile-qr"><div class="mobile-qr__code">${pair.svg}</div><p>スマホのカメラでこの QR を読んでください（10 分間・1 回だけ使えます）。<br><strong>QR は人に見せないでください</strong>（読んだ人がこのパソコンの資料を見られます）。<br>初めて開くと「この接続ではプライバシーが保護されません」などと出ます。このパソコンが作った証明書のためです。「詳細を表示」→「このWebサイトを閲覧」（Android は「詳細設定」→「アクセスする」）で進んでください。</p></div>`
           : ''
       }
       ${devices}

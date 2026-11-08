@@ -29,8 +29,11 @@ export function register({handle, ctx, repo}) {
     if (!server.running) bad('先に「スマホとつなぐ」をオンにしてください');
     const hosts = lanAddresses();
     const h = hosts.includes(host) ? host : (hosts[0] ?? bad('Wi-Fi などのネットワークにつながっていません'));
+    // https があればそちらへ（スマホのブラウザでカメラを使える）。LAN の番号が変わっていたら証明書を作り直す
+    await server.refreshTls?.().catch(() => {});
+    const secure = !!server.tlsPort;
     const {id: deviceId, key} = await devices.create();
-    const url = pairUrl({host: h, port: server.port, deviceId, key});
+    const url = pairUrl({host: h, port: secure ? server.tlsPort : server.port, deviceId, key, secure});
     const qr = qrcode(0, 'M');
     qr.addData(url);
     qr.make();

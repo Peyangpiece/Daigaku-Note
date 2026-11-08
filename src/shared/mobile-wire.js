@@ -101,8 +101,12 @@ export function open(key, bytes) {
   return {value: unpack(dec.decode(pt)), nonce: toB64(nonce)};
 }
 
-/** QR に入れるスマホの入口の URL（鍵は # の後ろ。サーバーには送られない） */
-export const pairUrl = ({host, port, deviceId, key}) => `http://${host}:${port}/m/#d=${deviceId}&k=${toB64(key)}`;
+/**
+ * QR に入れるスマホの入口の URL（鍵は # の後ろ。サーバーには送られない）。
+ * secure：https（スマホのブラウザでカメラを使える。その場で読む）
+ */
+export const pairUrl = ({host, port, deviceId, key, secure = false}) =>
+  `${secure ? 'https' : 'http'}://${host}:${port}/m/#d=${deviceId}&k=${toB64(key)}`;
 
 /** pairUrl の # の後ろを読む。形が悪ければ null */
 export function readPairHash(hash) {
