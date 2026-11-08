@@ -17,7 +17,13 @@ const len = (n) => {
 const tlv = (tag, body) => Buffer.concat([Buffer.from([tag]), len(body.length), body]);
 const seq = (...items) => tlv(0x30, Buffer.concat(items));
 const set = (...items) => tlv(0x31, Buffer.concat(items));
-const int = (buf) => tlv(0x02, buf[0] & 0x80 ? Buffer.concat([Buffer.from([0]), buf]) : buf);
+/** 整数（正）。DER はいちばん短い形：先頭の余分な 0 を落とし、最上位の位が 1 なら 0 を 1 つ足す */
+const int = (buf) => {
+  let i = 0;
+  while (i < buf.length - 1 && buf[i] === 0) i++;
+  const b = buf.subarray(i);
+  return tlv(0x02, b[0] & 0x80 ? Buffer.concat([Buffer.from([0]), b]) : b);
+};
 const oid = (s) => {
   const p = s.split('.').map(Number);
   const out = [40 * p[0] + p[1]];
@@ -57,7 +63,7 @@ const ipBytes = (ip) => Buffer.from(ip.split('.').map(Number));
  * 自己署名の証明書を作る。ips：SAN に入れる IPv4（パソコンの LAN の番号）。
  * 有効期間は 825 日（iOS がサーバーの証明書に許す長さまで）。戻り {key, cert}（PEM）
  */
-export function makeSelfSigned({ips, now = new Date(), days = 825}) {
+export function makeSelfSigned({ips, now = new Date(), days = 825, serial: fixed = null}) {
   const {privateKey, publicKey} = crypto.generateKeyPairSync('ec', {namedCurve: 'P-256'});
   const spki = publicKey.export({type: 'spki', format: 'der'});
   const name = seq(
@@ -77,8 +83,7 @@ export function makeSelfSigned({ips, now = new Date(), days = 825}) {
       ext(OID.san, false, san)
     )
   );
-  const serial = crypto.randomBytes(16);
-  serial[0] &= 0x7f;
+  const serial = fixed ?? crypto.randomBytes(16); // fixed：試験で決めた番号（先頭が 0 のときの書き方を確かめる）
   const alg = seq(oid(OID.ecdsaSha256));
   const tbs = seq(
     ctx(0, int(Buffer.from([2]))),

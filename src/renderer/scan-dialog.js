@@ -144,6 +144,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     reader.close();
     offPhoto();
     clearInterval(poll);
+    clearTimeout(qrTimer);
     if (remote) api['scan.remoteClose']({id: remote.id});
     for (const p of pages) URL.revokeObjectURL(p.url);
     d.close();
@@ -186,6 +187,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
   let phoneQueue = Promise.resolve();
   const phoneBox = $('.scan-dialog__phonebox');
   let qr = null; // 出している QR（スマホを追加）
+  let qrTimer = 0; // QR を出し直す時計
   const drawPhone = (st = {}) => {
     if (!remote) return;
     const linked = st.enabled && st.devices > 0;
@@ -197,7 +199,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
           <li>スマホのカメラでこの QR を読み、開いたページをホーム画面に追加する</li>
           <li>ホーム画面の「パレットノート」から開き、もう一度この QR を読む。つながると、そのまま読み取りが始まります</li>
         </ol>
-        <p>同じ Wi-Fi のスマホで。QR は 10 分のあいだ 1 回だけ使えます（1 で開いただけでは使いません）</p>
+        <p>同じ Wi-Fi のスマホで。QR は 1 回だけ使えます（1 で開いただけでは使いません。10 分で切れる前に、新しい QR に替わります。2 では、いま出ている QR を読んでください）</p>
         <p class="scan-dialog__note">初めて開くと「この接続ではプライバシーが保護されません」などと出ます。このパソコンが作った証明書のためです。「詳細を表示」→「このWebサイトを閲覧」（Android は「詳細設定」→「アクセスする」）で進んでください</p>
         <button type="button" class="btn btn--small btn--quiet" data-scan="qr-cancel">やめる</button>`;
       return;
@@ -225,7 +227,10 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     const st = await api['scan.remoteState']({id: remote.id});
     if (!st || st.error || !d.isConnected) return;
     // QR を読んでつながったら、QR を閉じる
-    if (qr && st.devices > (last.devices ?? 0)) qr = null;
+    if (qr && st.devices > (last.devices ?? 0)) {
+      qr = null;
+      clearTimeout(qrTimer);
+    }
     const changed = JSON.stringify(st) !== JSON.stringify(last);
     last = st;
     if (changed || !phoneBox.innerHTML) drawPhone(st);
@@ -248,6 +253,14 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     }
     qr = r;
     drawPhone(last);
+    // QR は 10 分で使えなくなる。ホーム画面に追加している間に切れないよう、切れる 1 分前に新しい QR に出し直す
+    clearTimeout(qrTimer);
+    qrTimer = setTimeout(
+      () => {
+        if (qr && d.isConnected) pair();
+      },
+      Math.max(60_000, (r.expiresIn ?? 600_000) - 60_000)
+    );
     await refreshPhone();
   };
   const openRemote = async () => {
@@ -282,6 +295,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     if (what === 'pair') return pair();
     if (what === 'qr-cancel') {
       qr = null;
+      clearTimeout(qrTimer);
       return drawPhone(last);
     }
     if (what === 'remove') {

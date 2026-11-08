@@ -18,6 +18,21 @@ test('スマホ連携の https：自分の証明書は LAN の番号を SAN に�
   assert.match(x.keyUsage?.join(',') ?? '', /1\.3\.6\.1\.5\.5\.7\.3\.1/, 'サーバーの認証に使える');
 });
 
+test('スマホ連携の https：証明書の番号の先頭が 0 でも、いちばん短い形で書く（DER の決まり。でないと読めない証明書になる）', () => {
+  for (const head of [
+    [0x00, 0x01],
+    [0x00, 0x80],
+    [0x00, 0x00, 0x05],
+    [0x80, 0x01]
+  ]) {
+    const serial = Buffer.concat([Buffer.from(head), crypto.randomBytes(13)]);
+    const {cert} = makeSelfSigned({ips: ['192.168.1.20'], serial});
+    const x = new crypto.X509Certificate(cert);
+    assert.ok(x.verify(x.publicKey));
+    assert.doesNotThrow(() => tls.createSecureContext({cert}));
+  }
+});
+
 test('スマホ連携の https：証明書で TLS を張れる。LAN の番号が変われば作り直す（前の番号も残す）', async () => {
   const first = certFor(['192.168.1.20'], null);
   assert.ok(first.save);

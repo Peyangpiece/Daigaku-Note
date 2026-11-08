@@ -108,7 +108,9 @@ export async function call(ch, arg = {}) {
   // QR を読んだ直後に開けない：その QR はもう使われた（QR は 1 回だけ）
   if (res.status === 400 && pair.fresh) {
     forget();
-    throw new Error('この QR はもう使われています。パソコンで「スマホを追加」をもう一度押してください');
+    throw new Error(
+      'この QR はもう使われています。パソコンに出ている新しい QR を読んでください（なければ、アナログノートの窓の「QR を出す」か、設定 → スマホとつなぐ の「スマホを追加」で出せます）'
+    );
   }
   if (!res.ok) throw new Error('パソコンとのやりとりに失敗しました');
   const {value} = open(pair.key, new Uint8Array(await res.arrayBuffer()));

@@ -238,6 +238,21 @@ test('staticFile：ホーム画面に追加する manifest と、QR を読む js
   assert.ok(staticFile('/m/vendor/jsqr/jsQR.js', roots)?.endsWith(path.join('dist', 'jsQR.js')));
 });
 
+test('ホーム画面のアイコン：ページと manifest の中に画像を入れる（自分の証明書のページでも「パ」にならない）', async () => {
+  const {readFile} = await import('node:fs/promises');
+  const {fileURLToPath} = await import('node:url');
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'mobile');
+  const html = await readFile(path.join(dir, 'index.html'), 'utf8');
+  const touch = html.match(/rel="apple-touch-icon"\s+href="data:image\/png;base64,([^"]+)"/);
+  assert.ok(touch, 'apple-touch-icon は data URI');
+  assert.deepEqual(Buffer.from(touch[1], 'base64'), await readFile(path.join(dir, 'icon.png')));
+  const m = JSON.parse(await readFile(path.join(dir, 'manifest.webmanifest'), 'utf8'));
+  assert.equal(m.display, 'standalone');
+  for (const icon of m.icons) assert.match(icon.src, /^data:image\/png;base64,/);
+  const big = m.icons.find((i) => i.sizes === '512x512');
+  assert.deepEqual(Buffer.from(big.src.split(',')[1], 'base64'), await readFile(path.join(dir, 'icon-512.png')));
+});
+
 test('staticFile：決めた場所の中だけ。.. や隠しファイル・知らない種類は配らない', () => {
   const roots = staticRoots();
   assert.ok(staticFile('/m/', roots).endsWith(path.join('mobile', 'index.html')));

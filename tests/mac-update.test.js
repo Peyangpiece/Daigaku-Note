@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {
@@ -209,14 +209,26 @@ test('配布物のダウンロード：公開直後の 400 は取り直し、途
   const dir = mkdtempSync(path.join(tmpdir(), 'dn-dl-'));
   const part = path.join(dir, 'a.dmg.download');
   const body = Buffer.from('0123456789abcdefghij');
-  // 途中で切れる流れ（最初の n バイトのあとで HTTP/2 の誤り）
+  // 途中で切れる流れ（最初の n バイトのあとで HTTP/2 の誤り）。ファイルに n バイト書けたのを見てから切る
+  // （時間で待つと、書くのが遅い環境（Windows の CI）で書く前に切れ、続きの位置が変わる）
   const broken = (buf) =>
     new Readable({
       read() {
         if (this.sent) return;
         this.sent = true;
         this.push(buf);
-        setTimeout(() => this.destroy(new Error('net::ERR_HTTP2_PROTOCOL_ERROR')), 30); // 書けたあとで切れる
+        const t0 = Date.now();
+        const cut = () => {
+          let size = 0;
+          try {
+            size = statSync(part).size;
+          } catch {
+            size = 0;
+          }
+          if (size >= buf.length || Date.now() - t0 > 5000) this.destroy(new Error('net::ERR_HTTP2_PROTOCOL_ERROR'));
+          else setTimeout(cut, 5);
+        };
+        setTimeout(cut, 5);
       }
     });
   const calls = [];
