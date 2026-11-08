@@ -317,7 +317,7 @@ test(
  * 模擬の統合認証：LMS（127.0.0.1）に未ログインで来ると IdP（localhost。別のホスト）へ転送。
  * IdP は ID のページ → パスワードのページ →（code: true なら）認証コードのページ → LMS の /sso?ticket=… に戻して Cookie を付ける
  */
-async function mockSso({code = false, localLogin = false, stale = 0, again = 0} = {}) {
+async function mockSso({code = false, mfa = null, localLogin = false, stale = 0, again = 0, bounce = 0} = {}) {
   const page = (body) => `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
   const send = (res, b, status = 200, headers = {}) => {
     res.writeHead(status, {'Content-Type': 'text/html; charset=utf-8', ...headers});
@@ -340,6 +340,11 @@ async function mockSso({code = false, localLogin = false, stale = 0, again = 0} 
         res,
         '<h1>ウェブログインサービス - 過去のリクエスト</h1><p>セキュアなウェブサイトやアプリケーションを閲覧中にブラウザの[戻る]ボタンを使用したため、このページが表示されている可能性があります。</p>'
       );
+    }
+    // 統合認証は、一度ログインすれば覚えている（bounce の試験で、LMS から戻ってきたらすぐ LMS へ返す）
+    if (url.pathname === '/idp/login' && req.method === 'GET' && /idp=ok/.test(req.headers.cookie ?? '')) {
+      res.writeHead(302, {Location: `${lmsBase}/sso?ticket=t1`});
+      return res.end();
     }
     if (url.pathname === '/idp/login' && req.method === 'GET')
       return send(
@@ -373,15 +378,23 @@ async function mockSso({code = false, localLogin = false, stale = 0, again = 0} 
           res,
           `<p>パスワードが違います</p><form method="post" action="/idp/pass"><input type="password" id="j_password" name="j_password"><button type="submit">ログイン</button></form>`
         );
+      // mfa：2 段階認証の画面に伏せ字の欄（'otp'：ワンタイムパスワードと分かる名前・'other'：名前では分からない欄）
+      if (mfa)
+        return send(
+          res,
+          `<form method="post" action="/idp/code"><p>二段階認証</p><input type="password" ${mfa === 'otp' ? 'name="otp" autocomplete="one-time-code"' : 'name="j_password_mfa"'}><button type="submit">二段階認証でログイン</button></form>`
+        );
       if (code)
         return send(
           res,
           `<form method="post" action="/idp/code"><p>メールに届いた認証コードを入れてください</p><input type="text" name="otp_code" autocomplete="one-time-code"><button type="submit">送信</button></form>`
         );
-      // SAML のように、自動で送信されるフォームで LMS へ戻る
+      // SAML のように、自動で送信されるフォームで LMS へ戻る（統合認証はログインを覚える）
       return send(
         res,
-        `<form id="f" method="get" action="${lmsBase}/sso"><input type="hidden" name="ticket" value="t1"></form><script>document.getElementById('f').submit()</script>`
+        `<form id="f" method="get" action="${lmsBase}/sso"><input type="hidden" name="ticket" value="t1"></form><script>document.getElementById('f').submit()</script>`,
+        200,
+        {'Set-Cookie': 'idp=ok; Path=/'}
       );
     }
     if (url.pathname === '/idp/code') {
@@ -406,7 +419,10 @@ async function mockSso({code = false, localLogin = false, stale = 0, again = 0} 
       res.writeHead(302, {Location: `${idpBase}/idp/login`});
       return res.end();
     }
-    if (!/sid=ok/.test(req.headers.cookie ?? '')) {
+    // bounce：統合認証でログインしたあとも、最初の bounce 回は LMS 自身のログイン画面を出す（manabo で起きる）
+    const bounced = localLogin && bounce > 0 && /sid=ok/.test(req.headers.cookie ?? '') && url.pathname === '/';
+    if (bounced) bounce--;
+    if (bounced || !/sid=ok/.test(req.headers.cookie ?? '')) {
       if (localLogin)
         return send(
           res,
@@ -817,6 +833,86 @@ test(
       assert.equal(sso.seen.passwords, 1);
     } finally {
       await connector.releaseContext(ctx);
+    }
+  }
+);
+
+test(
+  '自動ログイン：2 段階認証の画面の伏せ字の欄をパスワードの画面とまちがえない（login-needs-user。自動ログインは止めない）',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor(recipeBase, {session, secrets});
+    for (const mfa of ['otp', 'other']) {
+      const sso = await mockSso({mfa});
+      t.after(sso.close);
+      const ctx = await connector.createContext({
+        id: `m-${mfa}`,
+        base_url: sso.base,
+        university_host: '127.0.0.1',
+        allowed_hosts_json: '["localhost"]'
+      });
+      try {
+        await assert.rejects(
+          connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}}),
+          (e) => e.code === 'login-needs-user',
+          mfa
+        );
+        assert.equal(sso.seen.passwords, 1, `${mfa}：パスワードは 1 回だけ送る`);
+        assert.deepEqual(sso.seen.codes, [], `${mfa}：2 段階認証の欄には何も送らない`);
+      } finally {
+        await connector.releaseContext(ctx);
+      }
+    }
+  }
+);
+
+test(
+  '自動ログイン：ログインのあとに LMS 自身のログイン画面へ戻されても、欄には入れず統合認証のリンクを押す（v0.19.7）',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const connector = createRecipeExecutor(
+      {...recipeBase, login: {...recipeBase.login, sso: "a[href*='/auth/shibboleth']"}},
+      {session, secrets}
+    );
+    const sso = await mockSso({localLogin: true, bounce: 2});
+    t.after(sso.close);
+    const ctx = await connector.createContext({
+      id: 'bounce',
+      base_url: sso.base,
+      university_host: '127.0.0.1',
+      allowed_hosts_json: '["localhost"]'
+    });
+    try {
+      await connector.login(ctx, 'headless', {credentials: {user: 'stu', password: 'pw'}});
+      assert.equal(sso.seen.local, 0, 'LMS 自身の欄には ID・パスワードを送らない');
+      assert.equal(sso.seen.passwords, 1, '大学のパスワードは 1 回だけ');
+    } finally {
+      await connector.releaseContext(ctx);
+    }
+
+    // 戻され続けるときは、欄に入れずに本人に任せる（パスワード違いにしない）
+    const loop = await mockSso({localLogin: true, bounce: 99});
+    t.after(loop.close);
+    const ctx2 = await connector.createContext({
+      id: 'bounce2',
+      base_url: loop.base,
+      university_host: '127.0.0.1',
+      allowed_hosts_json: '["localhost"]'
+    });
+    try {
+      await assert.rejects(
+        connector.login(ctx2, 'headless', {credentials: {user: 'stu', password: 'pw'}}),
+        (e) => e.code === 'login-needs-user'
+      );
+      assert.equal(loop.seen.local, 0, '戻され続けても LMS 自身の欄には送らない');
+    } finally {
+      await connector.releaseContext(ctx2);
     }
   }
 );

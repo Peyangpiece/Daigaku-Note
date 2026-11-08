@@ -139,12 +139,15 @@ export function markLoginForm() {
     `${el.name} ${el.id} ${el.getAttribute('autocomplete') ?? ''} ${el.getAttribute('placeholder') ?? ''} ${el.getAttribute('aria-label') ?? ''}`;
   // 認証コード・ワンタイムパスワードの欄は ID の欄と取り違えない（本人が入れる。SPEC §6.4）
   const codeHint = (el) =>
-    /code|otp|one-?time|token|\bpin\b|認証コード|確認コード|ワンタイム/i.test(hints(el)) ||
-    el.getAttribute('autocomplete') === 'one-time-code';
+    /code|otp|one-?time|token|passcode|\bpin\b|totp|mfa|2fa|verif|認証コード|確認コード|ワンタイム|セキュリティコード|二段階|多要素/i.test(
+      hints(el)
+    ) || el.getAttribute('autocomplete') === 'one-time-code';
   const userHint = (el) =>
     !codeHint(el) && /user|login|account|mail|uid|(^|[\s_-])id(\s|$)|学籍|ユーザ|アカウント/i.test(hints(el));
   const inputs = [...document.querySelectorAll('input')].filter(visible);
-  const password = inputs.find((el) => el.type === 'password');
+  // 伏せ字の欄でも、認証コード（2 段階認証のワンタイムパスワードなど）の欄はパスワードとみなさない（v0.19.7。
+  // とり違えると、2 段階認証の画面を「パスワードの画面にまた戻った＝パスワード違い」と読み、自動ログインを止めていた）
+  const password = inputs.find((el) => el.type === 'password' && !codeHint(el));
   const scope = password?.form ?? document;
   const texts = inputs.filter((el) => textLike(el) && scope.contains(el));
   let user = null;
