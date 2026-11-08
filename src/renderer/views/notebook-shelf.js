@@ -29,8 +29,8 @@ export const NOTES = '/fudebako?tab=notes';
 const st = () => stationeryState(state.data?.stationery);
 
 /** 札の絵：表紙と、ページの左上を拡大した見本（罫線がはっきり見える大きさ） */
-export function cardArt(item, design) {
-  return `${coverArt(item, {width: 64})}<span class="nb-card__page">${pageSvg(design, {width: 92, thumb: true, crop: cropOf(design)})}</span>`;
+export function cardArt(item, design, {cover = 64, page = 92} = {}) {
+  return `${coverArt(item, {width: cover})}<span class="nb-card__page">${pageSvg(design, {width: page, thumb: true, crop: cropOf(design)})}</span>`;
 }
 
 /** 罫の説明（種類・幅） */

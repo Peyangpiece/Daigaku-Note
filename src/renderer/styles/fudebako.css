@@ -1221,10 +1221,16 @@ button.fb-card {
 .nb-card__art:hover {
   background: color-mix(in srgb, var(--paper-ink) 9%, transparent);
 }
-.nb-card__art .nb-cover {
+.nb-card__art .nb-cover,
+.nb-shop-art .nb-cover {
   position: relative;
   z-index: 1;
   transform: rotate(-3deg);
+}
+/* ショップの札（高さ 96 px の台）：表紙とページの拡大を少し重ねて置く */
+.nb-shop-art {
+  display: flex;
+  align-items: center;
 }
 .nb-card__page {
   margin-left: -10px;
