@@ -19,6 +19,9 @@ const WIDE_FOOT = 10;
  * 罫の形式。kind：線の引き方。gap：はじめの行の間（ます・段の線の間）mm。range：マイノートで変えられる幅 [最小, 最大]（mm）。
  * bold：方眼の太線の間隔（ますの数。0 でなし）。rows：英習罫・五線譜の段の数。short：表紙の札の短い名前
  */
+/** 漢字練習の読みの列の幅（ますの何倍か） */
+const KANJI_RUBY = 0.32;
+
 export const FORMATS = {
   a7: {kind: 'ruled', name: '横罫 A（7 mm）', short: 'A 7mm', gap: 7},
   b6: {kind: 'ruled', name: '横罫 B（6 mm）', short: 'B 6mm', gap: 6},
@@ -51,13 +54,45 @@ export const FORMATS = {
     head: 'none',
     line: '#a7afb9'
   },
-  kanji: {kind: 'kanji', name: '漢字練習（十字入りのます）', short: '漢字練習', gap: 15}
+  // 漢字練習（書き取り）：たて書きの行ごとに、ますの右に読みの細い列。ますの中に薄い点線の十字（十字リーダー）。
+  // 字数は市販の漢字練習帳の代表的なもの（行 × 1 行の字数）。ますの大きさは字数から決まる（変えられない。v0.19.6）。
+  // kanji（104 字）は v0.19.0 からの品の id のまま
+  ...Object.fromEntries(
+    [
+      ['kanji50', 5, 10],
+      ['kanji84', 7, 12],
+      ['kanji91', 7, 13],
+      ['kanji100', 10, 10],
+      ['kanji', 8, 13],
+      ['kanji120', 8, 15],
+      ['kanji150', 10, 15],
+      ['kanji200', 10, 20]
+    ].map(([id, lines, chars]) => [
+      id,
+      {
+        kind: 'kanji',
+        name: `漢字練習 ${lines * chars} 字（${lines} 行 × ${chars} 字）`,
+        short: `漢字 ${lines * chars}字`,
+        gap: kanjiCell(lines, chars),
+        lines,
+        chars,
+        head: 'date',
+        line: '#a7afb9'
+      }
+    ])
+  )
 };
 /**
  * 幅が名前に書いてあるノート（「横罫 A（7 mm）」「方眼 5 mm」など）は、幅を変えられない（名前と中身が食いちがわないように。v0.19.4）。
  * 変えられるのは、名前に幅のない英習罫・五線譜・原稿用紙・漢字練習
  */
 export const gapFixed = (format) => /\d\s*mm/.test(FORMATS[format]?.name ?? '');
+
+/** 漢字練習のますの大きさ（mm）：A4 縦の罫を引くところ（左右 12 mm・高さ 245 mm から上の 3 mm を除いたところ）に、ますと読みの列（ますの KANJI_RUBY 倍）が入る大きさ。0.5 mm 刻みで切り下げ */
+function kanjiCell(lines, chars) {
+  const s = Math.min((210 - 24) / (lines * (1 + KANJI_RUBY)), (245 - 3) / chars); // 上の欄の下を 3 mm あける
+  return Math.floor(s * 2) / 2;
+}
 
 /** 種類ごとの変えられる幅（mm）と刻み */
 export const GAP_RANGE = {
@@ -69,7 +104,6 @@ export const GAP_RANGE = {
   english: [2.5, 5],
   staff: [1.5, 3],
   genkou: [6, 9],
-  kanji: [10, 25],
   plain: [7, 7]
 };
 export const GAP_STEP = 0.5;
@@ -290,18 +324,34 @@ export function pageGeometry(raw) {
     headLeft = x0;
     headRight = x0 + total;
   } else if (f.kind === 'kanji') {
-    // ますは上の線の下から（上の線がますの上のわくになる）。外のわくはますの線より太く（v0.19.4）
-    const {left, cols} = centered(g, 12, W);
-    const rows = Math.floor((bottom - top) / g);
-    const y0 = top;
-    const edge = (k, n) => (k === 0 || k === n ? w * 2.2 : w * 1.4);
-    for (let i = 0; i <= rows; i++) L(left, y0 + i * g, left + cols * g, y0 + i * g, edge(i, rows));
-    for (let j = 0; j <= cols; j++) L(left + j * g, y0, left + j * g, y0 + rows * g, edge(j, cols));
-    // ますの中の十字（点線）
-    for (let i = 0; i < rows; i++) L(left, y0 + (i + 0.5) * g, left + cols * g, y0 + (i + 0.5) * g, w, d.line, [1, 1]);
-    for (let j = 0; j < cols; j++) L(left + (j + 0.5) * g, y0, left + (j + 0.5) * g, y0 + rows * g, w, d.line, [1, 1]);
-    headLeft = left;
-    headRight = left + cols * g;
+    // 書き取り（v0.19.6）：行（たて）ごとに、ます（g）の右に読みの列（g × KANJI_RUBY）。行は f.lines 本、1 行に f.chars 字。
+    // わくは左右の真ん中、上は上の欄のすぐ下。外のわくは太く、ますと読みの列の境は細い線。ますの中の十字は薄い点線
+    const n = f.lines;
+    const m = f.chars;
+    const r = Math.round(g * KANJI_RUBY * 100) / 100;
+    const total = n * (g + r);
+    const x0 = (W - total) / 2;
+    const y0 = top + 3; // 上の欄（日付）のすぐ下から
+    const y1 = y0 + m * g;
+    const thick = w * 2.6;
+    for (let i = 0; i <= m; i++) L(x0, y0 + i * g, x0 + total, y0 + i * g, i % m === 0 ? thick : w);
+    for (let k = 0; k < n; k++) {
+      const cx = x0 + k * (g + r);
+      if (k > 0) L(cx, y0, cx, y1);
+      L(cx + g, y0, cx + g, y1);
+    }
+    L(x0, y0, x0, y1, thick);
+    L(x0 + total, y0, x0 + total, y1, thick);
+    // 十字リーダー：罫線より薄い色の細い点線
+    const faint = mix(d.line, 0.45);
+    const fw = w * 0.75;
+    for (let k = 0; k < n; k++) {
+      const cx = x0 + k * (g + r);
+      L(cx + g / 2, y0, cx + g / 2, y1, fw, faint, [0.7, 0.9]);
+      for (let i = 0; i < m; i++) L(cx, y0 + (i + 0.5) * g, cx + g, y0 + (i + 0.5) * g, fw, faint, [0.7, 0.9]);
+    }
+    headLeft = x0;
+    headRight = x0 + total;
   }
   // ページ上部の線（上の欄の下）
   // 上の欄の下の線：v0.18 までの紙と同じく、横罫 0.9 pt・方眼 0.8 pt（ふつうの太さのとき）
@@ -336,6 +386,12 @@ export function cropOf(raw) {
   const h = 70;
   if (kind === 'genkou') return {x: g.w / 2 - w / 2, y: Math.min(...g.lines.map((l) => l.y1)) - 5, w, h}; // わくの上から
   if (kind === 'staff') return {x: 8, y: g.top - 6, w, h};
+  if (kind === 'kanji') {
+    // わくの左上の角から
+    const left = Math.min(...g.lines.map((l) => l.x1));
+    const upper = Math.min(...g.lines.map((l) => l.y1).filter((y) => y >= g.top));
+    return {x: left - 4, y: upper - 4, w, h};
+  }
   if (kind === 'cornell') return {x: 63.5 - w / 2, y: g.top - 8, w, h}; // 手がかりの欄の線が入るところ
   return {x: 0, y: g.top - 8, w, h};
 }
@@ -412,12 +468,32 @@ const NB = [
   ['dotgrid', '#e0a96d', 220],
   ['cornell', '#6fa8a0', 250],
   ['genkou', '#c97b6b', 250],
-  ['kanji', '#8a9a5b', 250]
+  ['kanji50', '#b7c97a', 200],
+  ['kanji84', '#7fb08f', 200],
+  ['kanji91', '#d8a46f', 200],
+  ['kanji100', '#9b8fc4', 200],
+  ['kanji', '#8a9a5b', 200],
+  ['kanji120', '#5f8fb0', 200],
+  ['kanji150', '#c48f9b', 200],
+  ['kanji200', '#6f7f6a', 200]
 ];
 export const STARTER_NOTEBOOKS = NB.filter(([, , p]) => p === 0).map(([f]) => `nb-${f}`);
 /** v0.18 までの紙の選び方（localStorage の note.paper）→ ノートの id */
 export const LEGACY_PAPER_KEYS = {'ruled-6': 'nb-b6', 'ruled-7': 'nb-a7', 'grid-6': 'nb-grid6', 'grid-7': 'nb-grid7'};
-const NICHE = new Set(['staff', 'dotgrid', 'cornell', 'genkou', 'kanji']);
+const NICHE = new Set([
+  'staff',
+  'dotgrid',
+  'cornell',
+  'genkou',
+  'kanji',
+  'kanji50',
+  'kanji84',
+  'kanji91',
+  'kanji100',
+  'kanji120',
+  'kanji150',
+  'kanji200'
+]);
 export const NOTEBOOKS = NB.map(([format, cover, points]) => ({
   id: `nb-${format}`,
   type: 'notebook',

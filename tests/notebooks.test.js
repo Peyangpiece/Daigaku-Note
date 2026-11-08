@@ -68,7 +68,7 @@ test('紙の設定を整える：知らない値は直し、幅は種類ごと�
   for (const f of ['eng13', 'eng15', 'staff', 'genkou', 'kanji']) assert.equal(gapFixed(f), false, f);
   assert.equal(cleanDesign({format: 'eng13', gap: 3.3}).gap, 3.5);
   assert.equal(cleanDesign({format: 'staff', gap: 9}).gap, 3);
-  assert.equal(cleanDesign({format: 'kanji', gap: 99}).gap, 25);
+  assert.equal(cleanDesign({format: 'kanji', gap: 99}).gap, FORMATS.kanji.gap, '漢字練習のますは字数で決まる');
   assert.equal(cleanDesign({format: 'grid5'}).bold, 2, '5 mm 方眼は 10 mm ごとに太線');
   assert.equal(cleanDesign({format: 'b6', bold: 3}).bold, 0, '太線は方眼だけ');
   assert.equal(cleanDesign({format: 'grid5', margin: true}).margin, false, '余白の線は横罫だけ');
@@ -174,4 +174,43 @@ test('方眼：太線の間隔の倍数にそろえて外のわくを太線で�
     dots.every((p) => p.y > pageGeometry({format: 'dotgrid'}).top),
     'ドット方眼：上の線と点が重ならない'
   );
+});
+
+test('漢字練習（書き取り）：字数ごとの行 × 字、ますの右に読みの列、十字は薄い点線', () => {
+  const sizes = {
+    kanji50: 50,
+    kanji84: 84,
+    kanji91: 91,
+    kanji100: 100,
+    kanji: 104,
+    kanji120: 120,
+    kanji150: 150,
+    kanji200: 200
+  };
+  for (const [f, n] of Object.entries(sizes)) {
+    const k = FORMATS[f];
+    assert.equal(k.lines * k.chars, n, f);
+    assert.ok(k.name.includes(`${n} 字`), f);
+    const g = pageGeometry({format: f, head: 'none'});
+    const solid = g.lines.filter((l) => !l.dash);
+    const dashed = g.lines.filter((l) => l.dash);
+    // 横の線：字数 + 1 本。縦の線：行ごとにますの左右（＋外のわく）
+    assert.equal(solid.filter((l) => l.y1 === l.y2 && l.y1 >= g.top).length, k.chars + 1, f);
+    assert.equal(solid.filter((l) => l.x1 === l.x2).length, 2 * k.lines + 1, f);
+    // 十字：行ごとにたて 1 本・ますごとによこ 1 本。罫線より薄い色
+    assert.equal(dashed.length, k.lines * (1 + k.chars), f);
+    assert.ok(
+      dashed.every((l) => l.c !== g.lines[0].c),
+      `${f}：十字は薄い色`
+    );
+    for (const l of g.lines) assert.ok(l.x1 >= 0 && l.x2 <= g.w && l.y2 <= g.bottom + 0.01, f);
+  }
+  // 読みの列：ますの右の細い列（ます 12 mm の 200 字なら 3.84 mm）
+  const g = pageGeometry({format: 'kanji200'});
+  const xs = [...new Set(g.lines.filter((l) => l.x1 === l.x2 && !l.dash).map((l) => +l.x1.toFixed(2)))].sort(
+    (a, b) => a - b
+  );
+  assert.equal(+(xs[1] - xs[0]).toFixed(2), 12);
+  assert.equal(+(xs[2] - xs[1]).toFixed(2), 3.84);
+  assert.equal(cleanDesign({format: 'kanji200'}).head, 'date', '上に日付の欄');
 });
