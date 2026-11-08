@@ -88,7 +88,7 @@ export const methods = {
    */
   async refreshNoteHeader() {
     const m = this.material;
-    if (!this.isNote || !m?.course_id || this.notePaperNow?.scan) return null; // アナログノートの紙には刷らない
+    if (!this.isNote || !m?.course_id || this.notePaperNow?.analog) return null; // アナログノートの紙には刷らない
     const text = noteHeading(m.course_id, m.round_id);
     if (!text) return null;
     try {

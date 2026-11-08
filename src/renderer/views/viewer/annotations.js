@@ -286,9 +286,7 @@ export const methods = {
       const img = a.el.querySelector('img');
       img.className = 'anno-stamp__img anno-stamp__photo';
       a.el.dataset.shape = 'square';
-      // アナログノートから取り込んだ線：紙の上にそのまま重ねる（影なし・押しても選ばない。上から書き足せる）
-      a.el.classList.toggle('anno-stamp--scan', a.style.scan === true);
-      a.el.setAttribute('aria-label', a.style.scan ? 'アナログノートから取り込んだ線' : '写真');
+      a.el.setAttribute('aria-label', '写真');
       this.photoSrc(ref).then((url) => {
         if (url && a.style.ref === ref) img.src = url;
       });

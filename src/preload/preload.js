@@ -67,6 +67,7 @@ const INVOKE = [
   'photo.add',
   'photo.data',
   'annotation.save',
+  'annotation.saveMany',
   'annotation.remove',
   'bookmark.save',
   'bookmark.remove',

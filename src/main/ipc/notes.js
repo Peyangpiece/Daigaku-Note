@@ -6,7 +6,7 @@ import {sha256} from '../sync/files.js';
 import {annoKey, readBase, replaceFile, originalPath} from '../pdf-save.js';
 import {appendNotePage, cleanPaper, createNotePdf, rebuildNotePdf, removeLastNotePage} from '../note-pdf.js';
 import {SCAN_FORMAT_IDS} from '../../shared/scan-code.js';
-import {scanDesign} from '../../shared/notebooks.js';
+import {analogDesign} from '../../shared/notebooks.js';
 import {isPng} from '../pdf-export.js';
 import {createSerial} from '../serial.js';
 import {id, bad, str} from './common.js';
@@ -115,7 +115,7 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
   const scanKey = (mid) => `note.scanPages.${mid}`;
   const scanPages = (mid) => repo.getSetting(scanKey(mid), {}) ?? {};
   const pageDesigns = (mid) =>
-    Object.fromEntries(Object.entries(scanPages(mid)).map(([page, f]) => [page, scanDesign(f)]));
+    Object.fromEntries(Object.entries(scanPages(mid)).map(([page, f]) => [page, analogDesign(f)]));
 
   /** ノートの元の写しを入れ替える：新しい写しを置き、注釈・しおりを付け替える（ファイルへの描き込みは次の上書き保存で） */
   const rebase = async (m, bytes, pages) => {
@@ -176,7 +176,7 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
       let pages = m.pages ?? 1;
       const add = fresh ? list.slice(1) : list;
       for (const f of add) {
-        const r = await appendNotePage(bytes, scanDesign(f));
+        const r = await appendNotePage(bytes, analogDesign(f));
         bytes = r.bytes;
         pages = r.pages;
       }
@@ -253,8 +253,8 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
             return {changed: false};
           const {m, base} = await noteMaterial(materialId);
           const design = repo.getSetting(`note.design.${m.id}`, null) ?? {};
-          // アナログノート（スキャン用の紙）で作ったノートには上の欄の字を刷らない（紙に書いた日付・題がそのまま写る）
-          if (design.scan) return {changed: false};
+          // アナログノートから作ったノートには上の欄の字を刷らない（紙に書いた日付・題がそのまま写る）
+          if (design.analog) return {changed: false};
           const {bytes, pages} = await rebuildNotePdf(base, design, {header: head, pageDesigns: pageDesigns(m.id)});
           await saveHeader(m.id, head, clean);
           await rebase(m, bytes, pages);

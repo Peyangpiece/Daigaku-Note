@@ -203,21 +203,17 @@ a,
   display: block;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
 }
-.scan-dialog__thumb svg,
-.scan-dialog__thumb img {
+.scan-dialog__thumb svg {
   display: block;
-}
-.scan-dialog__thumb img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
 }
 .scan-dialog__label {
   font-size: var(--fs-small);
 }
 .scan-dialog__cam {
   max-width: 220px;
+}
+.scan-dialog__size {
+  max-width: 160px;
 }
 @media (max-width: 760px) {
   .scan-dialog__body {

@@ -185,6 +185,8 @@ export function cleanDesign(raw = {}) {
     // 紙の大きさ（a4・b5）と、スキャン用のノート紙か（四隅の目印と形式のコードを刷る。docs/SPEC-SCAN.md）
     size,
     scan: d.scan === true,
+    // アナログノートから取り込んだページ（スキャン用の紙と同じ大きさ・同じ位置の罫。目印とコードはなし。上の欄の字は刷らない）
+    analog: d.scan === true || d.analog === true,
     gap:
       f.kind === 'kanji'
         ? kanjiCell(f.lines, f.chars, size)
@@ -212,6 +214,14 @@ export function cleanDesign(raw = {}) {
  */
 export function scanDesign(format) {
   return cleanDesign({format, size: 'b5', scan: true, line: SCAN_DROPOUT, headColor: SCAN_DROPOUT, head: 'date'});
+}
+
+/**
+ * アナログノートを取り込んだページの紙：デジタルの Palette ノートの罫の色・形で、スキャン用の紙と同じ大きさ・同じ位置（書いた線がずれない）。
+ * 目印と形式のコードは描かない
+ */
+export function analogDesign(format) {
+  return cleanDesign({format, size: 'b5', analog: true, head: 'date'});
 }
 
 /** ページの大きさ（mm）。紙の大きさ（A4・B5）の縦。原稿用紙だけ横 */
@@ -243,7 +253,7 @@ export function pageGeometry(raw) {
   const z = SIZES[d.size];
   const top = W > H ? WIDE_HEAD : (H - z.body) / 2;
   // スキャン用の紙は、下の端の形式のコード（紙の端から 16 mm まで）にかからないよう、横の紙の下を 18 mm 空ける
-  const bottom = H - (W > H ? (d.scan ? 18 : WIDE_FOOT) : (H - z.body) / 2);
+  const bottom = H - (W > H ? (d.analog ? 18 : WIDE_FOOT) : (H - z.body) / 2);
   const L = (x1, y1, x2, y2, width = w, c = d.line, dash = null) =>
     lines.push({x1, y1, x2, y2, w: width, c, ...(dash ? {dash} : {})});
   // 原稿用紙は 20 ますが上下に入る大きさまで（B5 横では 7.5 mm まで）

@@ -1667,11 +1667,3 @@ svg[data-flat] > ellipse {
   width: 100% !important;
   height: 100% !important;
 }
-
-/* アナログノートから取り込んだ線（scan-dialog.js）：紙と一体に見せ、押しても選ばない（その上にペンで書ける） */
-.anno-stamp--scan {
-  pointer-events: none;
-}
-.anno-stamp--scan .anno-stamp__photo {
-  box-shadow: none;
-}
