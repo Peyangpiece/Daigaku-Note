@@ -341,6 +341,11 @@ async function mockSso({code = false, mfa = null, localLogin = false, stale = 0,
         '<h1>ウェブログインサービス - 過去のリクエスト</h1><p>セキュアなウェブサイトやアプリケーションを閲覧中にブラウザの[戻る]ボタンを使用したため、このページが表示されている可能性があります。</p>'
       );
     }
+    // 統合認証は、一度ログインすれば覚えている（bounce の試験で、LMS から戻ってきたらすぐ LMS へ返す）
+    if (url.pathname === '/idp/login' && req.method === 'GET' && /idp=ok/.test(req.headers.cookie ?? '')) {
+      res.writeHead(302, {Location: `${lmsBase}/sso?ticket=t1`});
+      return res.end();
+    }
     if (url.pathname === '/idp/login' && req.method === 'GET')
       return send(
         res,
@@ -384,10 +389,12 @@ async function mockSso({code = false, mfa = null, localLogin = false, stale = 0,
           res,
           `<form method="post" action="/idp/code"><p>メールに届いた認証コードを入れてください</p><input type="text" name="otp_code" autocomplete="one-time-code"><button type="submit">送信</button></form>`
         );
-      // SAML のように、自動で送信されるフォームで LMS へ戻る
+      // SAML のように、自動で送信されるフォームで LMS へ戻る（統合認証はログインを覚える）
       return send(
         res,
-        `<form id="f" method="get" action="${lmsBase}/sso"><input type="hidden" name="ticket" value="t1"></form><script>document.getElementById('f').submit()</script>`
+        `<form id="f" method="get" action="${lmsBase}/sso"><input type="hidden" name="ticket" value="t1"></form><script>document.getElementById('f').submit()</script>`,
+        200,
+        {'Set-Cookie': 'idp=ok; Path=/'}
       );
     }
     if (url.pathname === '/idp/code') {
