@@ -380,6 +380,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       let ssoClicks = 0;
       let restarted = false;
       let resent = false;
+      let sentField = null;
       for (let step = 0; step < 8; step++) {
         const host = safeHost(page.url());
         if (host === baseHost && (await this._isLoggedIn(page, ctx))) return;
@@ -444,12 +445,27 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           : await page.evaluate(markLoginForm).catch(() => ({user: false, password: false, submit: false}));
         const loc = (role) =>
           form ? page.locator(form[role]).first() : page.locator(`[data-dn-login="${role}"]`).first();
+        // パスワードの欄の名前（name・id）。同じパスワードの画面に戻ったのか、別の伏せ字の欄（2 段階認証など）かを見分ける
+        const fieldKey = () =>
+          loc('password')
+            .evaluate((el) => `${el.getAttribute('name') ?? ''}#${el.id ?? ''}`)
+            .catch(() => '');
         if (f.password) {
-          // 失敗と書いていないのに同じパスワードの画面に戻った（押すのが早すぎて出し直された）ときは、1 回だけ送り直す（v0.17.7）
-          if (sentPassword && !resent) {
+          if (sentPassword) {
             const text = await page.evaluate(() => document.body?.innerText ?? '').catch(() => '');
-            if (!loginFailedText(text)) sentPassword = false;
-            resent = restarted = true;
+            const failed = loginFailedText(text);
+            // パスワードを入れたのとちがう伏せ字の欄が出た（2 段階認証の画面など）：パスワード違いとは決めない。
+            // 本人がログイン窓で続ける（自動ログインは止めない。v0.19.7）
+            if (!failed && (await fieldKey()) !== sentField)
+              throw err(
+                'login-needs-user',
+                '2 段階認証など、本人の入力が要る画面になりました。設定 → 授業と資料 の「ログイン」で窓を開いてください（ID とパスワードは入れておきます）'
+              );
+            // 失敗と書いていないのに同じパスワードの画面に戻った（押すのが早すぎて出し直された）ときは、1 回だけ送り直す（v0.17.7）
+            if (!failed && !resent) {
+              sentPassword = false;
+              resent = restarted = true;
+            }
           }
           if (sentPassword)
             throw err(
@@ -459,6 +475,7 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
           if (f.user) await loc('user').fill(cred.user);
           await loc('password').fill(cred.password);
           sentPassword = sentUser = true;
+          sentField = await fieldKey(); // パスワードを入れた欄（戻ってきたのが同じパスワードの欄かを見分ける）
         } else if (f.user && !sentUser && !sentPassword) {
           await loc('user').fill(cred.user);
           sentUser = true;
