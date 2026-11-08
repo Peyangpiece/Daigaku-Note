@@ -152,6 +152,54 @@ test('取り込み：線は描き直さず、ボールペンの太さより太�
   assert.ok(fine > 0 && fine <= 0.35, `細い線は太くしない（${fine} mm）`);
 });
 
+test('取り込み：かすれと色を整える（字の形・太さはそのまま）', () => {
+  // 0.4 mm の青い線。ところどころインクが乗らず（かすれ）、色にむらがある
+  const {g, img} = paper('a7', 10, []);
+  const W = img.width;
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let v = Math.round(79.8 * 10); v <= Math.round(80.2 * 10); v++)
+    for (let u = 400; u < 1200; u++) {
+      const skip = rnd() < 0.25; // かすれ
+      const tint = Math.round(rnd() * 50); // 色むら
+      img.data.set(skip ? [200, 205, 215, 255] : [30 + tint, 60 + tint, 170 + tint / 2, 255], (v * W + u) * 4);
+    }
+  const shot = photo(
+    img,
+    g,
+    [
+      [60, 40],
+      [1760, 40],
+      [1760, 2440],
+      [60, 2440]
+    ],
+    1820,
+    2480
+  );
+  const r = readScan(shot, {scale: 12});
+  const raw = inkImage(r.ink, 0.53);
+  const tidy = inkImage(r.ink, 0.53, {tidy: true});
+  // 線の真ん中（y = 80 mm）の 50〜110 mm で、濃さが足りない（かすれた）ところの数
+  const row = Math.round(80 * 12);
+  const faint = (im) => {
+    let n = 0;
+    for (let u = 50 * 12; u < 110 * 12; u++) if (im.data[(row * im.width + u) * 4 + 3] < 200) n++;
+    return n;
+  };
+  assert.ok(faint(raw) > 10, `写真のままではかすれが残る（${faint(raw)}）`);
+  assert.equal(faint(tidy), 0, 'かすれは埋まる');
+  const colors = new Set();
+  for (let u = 50 * 12; u < 110 * 12; u++) {
+    const o = (row * tidy.width + u) * 4;
+    colors.add(`${tidy.data[o]},${tidy.data[o + 1]},${tidy.data[o + 2]}`);
+  }
+  assert.deepEqual([...colors], ['29,79,168'], '線は青 1 色（#1d4fa8）');
+  // 太さは変わらない：線の外（y = 80.6 mm）は透明のまま
+  const outRow = Math.round(80.6 * 12);
+  for (let u = 50 * 12; u < 110 * 12; u += 7)
+    assert.ok(tidy.data[(outRow * tidy.width + u) * 4 + 3] < 40, '太くならない');
+});
+
 test('取り込み：逆さに撮った紙・横の原稿用紙も読める。目印がなければ理由を返す', () => {
   const {g, img} = paper('genkou', 5, [[60, 60, 90, 60, '#1a1a1a']]);
   // 横の紙を 180° 回して撮る（四隅の並びを入れ替える）

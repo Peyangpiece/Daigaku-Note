@@ -352,84 +352,196 @@ export function extractInk(img, t, {scale = 12, from = 0.3, low = 0.06, maxWidth
       )
         m[i] = 0; // まわりに 1 つもない点は写真のざらつき
     }
-  thin(m, W, H);
-  // 線の真ん中からの距離（2 回なめる近似。斜めは √2）と、いちばん近い真ん中の濃さ
-  const INF = 1e9;
-  const dist = new Float32Array(N).fill(INF);
-  const core = new Float32Array(N);
-  for (let i = 0; i < N; i++)
-    if (m[i]) {
-      dist[i] = 0;
-      core[i] = r.dark[i];
-    }
-  const S2 = Math.SQRT2;
-  const relax = (i, j, w) => {
-    if (dist[j] + w < dist[i]) {
-      dist[i] = dist[j] + w;
-      core[i] = core[j];
-    }
+  // 小さな抜け（ボールペンのかすれ・写真のざらつき）を埋める：3×3 で広げてから縮める
+  const grow = (src, on) => {
+    const out = new Uint8Array(N);
+    for (let y = 1; y < H - 1; y++)
+      for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        const any =
+          src[i] |
+          src[i - 1] |
+          src[i + 1] |
+          src[i - W] |
+          src[i + W] |
+          src[i - W - 1] |
+          src[i - W + 1] |
+          src[i + W - 1] |
+          src[i + W + 1];
+        const all =
+          src[i] &
+          src[i - 1] &
+          src[i + 1] &
+          src[i - W] &
+          src[i + W] &
+          src[i - W - 1] &
+          src[i - W + 1] &
+          src[i + W - 1] &
+          src[i + W + 1];
+        out[i] = on ? any : all;
+      }
+    return out;
   };
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++) {
-      const i = y * W + x;
-      if (x > 0) relax(i, i - 1, 1);
-      if (y > 0) {
-        relax(i, i - W, 1);
-        if (x > 0) relax(i, i - W - 1, S2);
-        if (x < W - 1) relax(i, i - W + 1, S2);
+  const body = grow(grow(m, true), false);
+  for (let i = 0; i < N; i++) if (!r.use[i]) body[i] = 0;
+  // seed のところからの距離（2 回なめる近似。斜めは √2）。carry の配列は、いちばん近い seed の値を運ぶ
+  const S2 = Math.SQRT2;
+  const chamfer = (seed, carry = []) => {
+    const dist = new Float32Array(N).fill(1e9);
+    for (let i = 0; i < N; i++) if (seed[i]) dist[i] = 0;
+    const relax = (i, j, w) => {
+      if (dist[j] + w < dist[i]) {
+        dist[i] = dist[j] + w;
+        for (const c of carry) c[i] = c[j];
+      }
+    };
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (x > 0) relax(i, i - 1, 1);
+        if (y > 0) {
+          relax(i, i - W, 1);
+          if (x > 0) relax(i, i - W - 1, S2);
+          if (x < W - 1) relax(i, i - W + 1, S2);
+        }
+      }
+    for (let y = H - 1; y >= 0; y--)
+      for (let x = W - 1; x >= 0; x--) {
+        const i = y * W + x;
+        if (x < W - 1) relax(i, i + 1, 1);
+        if (y < H - 1) {
+          relax(i, i + W, 1);
+          if (x < W - 1) relax(i, i + W + 1, S2);
+          if (x > 0) relax(i, i + W - 1, S2);
+        }
+      }
+    return dist;
+  };
+  // 線の中の、紙からの距離（線の真ん中では線の太さの半分）
+  const outside = new Uint8Array(N);
+  for (let i = 0; i < N; i++) outside[i] = body[i] ? 0 : 1;
+  const inner = chamfer(outside);
+  // ひと続きの線ごとのインクの色（濃いところほど重く平均）→ 黒・青・赤・鉛筆
+  const label = new Int32Array(N).fill(-1);
+  const tones = [];
+  const stack = [];
+  for (let s0 = 0; s0 < N; s0++) {
+    if (!body[s0] || label[s0] >= 0) continue;
+    const id = tones.length;
+    const sum = [0, 0, 0];
+    let wsum = 0;
+    label[s0] = id;
+    stack.push(s0);
+    while (stack.length) {
+      const i = stack.pop();
+      const wt = r.dark[i] * r.dark[i];
+      for (let c = 0; c < 3; c++) sum[c] += r.n[i * 3 + c] * wt;
+      wsum += wt;
+      const x = i % W;
+      for (const [dx, dy] of NB) {
+        const u = x + dx;
+        const j = i + dy * W + dx;
+        if (u < 0 || u >= W || j < 0 || j >= N || !body[j] || label[j] >= 0) continue;
+        label[j] = id;
+        stack.push(j);
       }
     }
-  for (let y = H - 1; y >= 0; y--)
-    for (let x = W - 1; x >= 0; x--) {
-      const i = y * W + x;
-      if (x < W - 1) relax(i, i + 1, 1);
-      if (y < H - 1) {
-        relax(i, i + W, 1);
-        if (x < W - 1) relax(i, i + W + 1, S2);
-        if (x > 0) relax(i, i + W - 1, S2);
-      }
+    tones.push(TONE_ORDER.indexOf(inkColor(sum.map((v) => v / (wsum || 1)))));
+  }
+  // 線の真ん中（細線化）と、真ん中からの距離。いちばん近い真ん中の濃さ・太さの半分・線の番号を運ぶ
+  const mid = body.slice();
+  thin(mid, W, H);
+  const core = new Float32Array(N);
+  const half = new Float32Array(N);
+  const comp = new Int32Array(N).fill(-1);
+  for (let i = 0; i < N; i++)
+    if (mid[i]) {
+      core[i] = r.dark[i];
+      half[i] = Math.max(0.5, inner[i] - 0.5);
+      comp[i] = label[i];
     }
+  const dist = chamfer(mid, [core, half, comp]);
   // 線のあたり（いちばん太いボールペンの半分＋ 1 px まで）の、少しでも暗い画素を持つ。
   // 濃さは真ん中の濃さに対する割合、色は白い紙に重ねたとき写真と同じ色になるよう、白との混ざりを戻した色
   const reach = (maxWidth / 2) * scale + 1;
   const keep = [];
-  for (let i = 0; i < N; i++) if (r.use[i] && dist[i] <= reach && r.dark[i] > low && core[i] > 0) keep.push(i);
+  for (let i = 0; i < N; i++)
+    if (r.use[i] && dist[i] <= reach && core[i] > 0 && (r.dark[i] > low || body[i])) keep.push(i);
   const n = keep.length;
   const idx = new Uint32Array(n);
   const rgb = new Uint8Array(n * 3);
   const a = new Uint8Array(n);
   const d = new Uint8Array(n);
+  const hw = new Uint8Array(n);
+  const tone = new Uint8Array(n);
   keep.forEach((i, k) => {
-    const al = Math.min(1, r.dark[i] / core[i]);
+    const al = Math.min(1, Math.max(0, r.dark[i]) / core[i]);
     idx[k] = i;
     a[k] = Math.round(255 * al);
     d[k] = Math.min(255, Math.round(dist[i] * 16));
+    hw[k] = Math.min(255, Math.round(half[i] * 16));
+    tone[k] = Math.max(0, tones[comp[i]] ?? 0);
     for (let c = 0; c < 3; c++) {
       const v = 1 - (1 - r.n[i * 3 + c]) / Math.max(al, 1e-3);
       rgb[k * 3 + c] = Math.round(255 * Math.min(1, Math.max(0, v)));
     }
   });
-  return {width: W, height: H, scale, idx, rgb, a, d};
+  return {width: W, height: H, scale, idx, rgb, a, d, hw, tone};
+}
+
+/** 書いた線の色（紙の白さで割った色の平均）→ ペンの色 */
+export const SCAN_INK_COLORS = {black: '#262626', blue: '#1d4fa8', red: '#cf2e2e', pencil: '#5a5e63'};
+const TONE_ORDER = Object.values(SCAN_INK_COLORS);
+const TONE_RGB = TONE_ORDER.map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
+function inkColor([r, g, b]) {
+  if (b - r > 0.12 && b > g) return SCAN_INK_COLORS.blue;
+  if (r - g > 0.18 && r - b > 0.1) return SCAN_INK_COLORS.red;
+  return (r + g + b) / 3 > 0.42 ? SCAN_INK_COLORS.pencil : SCAN_INK_COLORS.black;
 }
 
 /**
  * 取り出した線を画像（RGBA。線のないところは透明）にする。width（mm）：使ったボールペンの線の太さ。
- * 線の真ん中から太さの半分より外は消す（写真のぼけで太って見える分）。細い線は細いまま（太くはしない）
+ * 線の真ん中から太さの半分より外は消す（写真のぼけで太って見える分）。細い線は細いまま（太くはしない）。
+ * tidy：かすれと色を整える（字の形と太さはそのまま）。線ごとに黒・青・赤・鉛筆の 1 色にし、
+ * 線の真ん中からその線の太さ（ボールペンの太さまで）の中を、むらなく塗る
  */
-export function inkImage(ink, width) {
+export function inkImage(ink, width, {tidy = false} = {}) {
   const out = new Uint8ClampedArray(ink.width * ink.height * 4);
   const R = (width / 2) * ink.scale;
   for (let k = 0; k < ink.idx.length; k++) {
-    const cut = Math.min(1, Math.max(0, R + 0.5 - ink.d[k] / 16));
+    const dk = ink.d[k] / 16;
+    const cut = Math.min(1, Math.max(0, R + 0.5 - dk));
     if (!cut) continue;
     const o = ink.idx[k] * 4;
-    out[o] = ink.rgb[k * 3];
-    out[o + 1] = ink.rgb[k * 3 + 1];
-    out[o + 2] = ink.rgb[k * 3 + 2];
-    out[o + 3] = Math.round(ink.a[k] * cut);
+    let al = ink.a[k] / 255;
+    if (tidy) {
+      const fill = Math.min(1, Math.max(0, Math.min(R, ink.hw[k] / 16) + 0.5 - dk));
+      al = Math.max(al, fill);
+      const c = TONE_RGB[ink.tone[k]];
+      out[o] = c[0];
+      out[o + 1] = c[1];
+      out[o + 2] = c[2];
+    } else {
+      out[o] = ink.rgb[k * 3];
+      out[o + 1] = ink.rgb[k * 3 + 1];
+      out[o + 2] = ink.rgb[k * 3 + 2];
+    }
+    out[o + 3] = Math.round(255 * al * cut);
   }
   return {width: ink.width, height: ink.height, data: out};
 }
+
+// 8 近傍
+const NB = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [1, -1],
+  [1, 1],
+  [-1, 1],
+  [-1, -1]
+];
 
 /** 細線化（Zhang–Suen）。m は 0/1 の Uint8Array（書き換える） */
 function thin(m, W, H) {

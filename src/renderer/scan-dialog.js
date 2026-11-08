@@ -2,6 +2,7 @@
 // カメラ（Mac の連携カメラで iPhone も使える）で Palette スキャンノートを撮るか、写真・スキャンの画像を選ぶ。
 // 1 枚ごとに四隅の目印・形式のコードを読み、書いた線を写真のまま取り出して（shared/scan-read.js）、デジタルの紙の上に並べて見せる。
 // 線は描き直さない。使ったボールペンの太さ（0.3・0.5・0.7）より外（写真のぼけ・にじみで太って見える分）だけを切る。
+// 「かすれと色を整える」（はじめはオン）：線ごとに黒・青・赤・鉛筆の 1 色にし、線の中のかすれを埋める（形・太さはそのまま）。
 // 「取り込む」で回のノートに、デジタルの Palette ノートの紙（B5。罫は刷った紙と同じ位置）のページを足し、線を同じ位置に貼る（上から書き足せる）
 import {esc, toast} from './ui-kit.js';
 import {navigate, reload} from './store.js';
@@ -13,8 +14,17 @@ const api = window.daigaku;
 const MM = 72 / 25.4;
 const MAX_SIDE = 3200; // 読む画像の長い辺（大きい写真は縮めてから読む）
 const SIZE_KEY = 'scan.penSize'; // 選んだボールペンの太さ（この窓を次に開いたときも同じ）
+const TIDY_KEY = 'scan.tidy'; // かすれと色を整えるか（はじめは整える）
 /** ボールペンの線の太さ（mm）：アプリのボールペンと同じ（0.3 → 0.26 mm・0.5 → 0.39 mm・0.7 → 0.53 mm） */
 const lineMm = (size) => sizeWidth(size) / MM;
+
+const savedTidy = () => {
+  try {
+    return localStorage.getItem(TIDY_KEY) !== '0';
+  } catch {
+    return true;
+  }
+};
 
 const savedSize = () => {
   try {
@@ -36,9 +46,9 @@ function toImageData(src, sw, sh, max = MAX_SIDE) {
   return ctx.getImageData(0, 0, c.width, c.height);
 }
 
-/** 取り出した線を、ボールペンの太さで切って PNG に。戻り {bytes, url} */
-async function inkPng(ink, size) {
-  const im = inkImage(ink, lineMm(size));
+/** 取り出した線を、ボールペンの太さで切って PNG に（tidy：かすれと色を整える）。戻り {bytes, url} */
+async function inkPng(ink, size, tidy) {
+  const im = inkImage(ink, lineMm(size), {tidy});
   const c = document.createElement('canvas');
   c.width = im.width;
   c.height = im.height;
@@ -54,6 +64,7 @@ async function inkPng(ink, size) {
 export async function openScan({courseId, roundId, sub = '', materialId = null, onDone = null}) {
   const pages = []; // {format, w, h, ink, url, bytes}（url・bytes は今の太さで切った線の画像）
   let size = savedSize();
+  let tidy = savedTidy();
   const d = document.createElement('dialog');
   d.className = 'scan-dialog';
   d.innerHTML = `
@@ -61,6 +72,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
       <h2>アナログノート</h2>
       <select class="scan-dialog__cam" aria-label="カメラ" hidden></select>
       <select class="scan-dialog__size" aria-label="使ったボールペンの太さ">${PEN_SIZES.map((v) => `<option value="${v}"${v === size ? ' selected' : ''}>ボールペン ${v} mm</option>`).join('')}</select>
+      <label class="scan-dialog__tidy"><input type="checkbox"${tidy ? ' checked' : ''} /> かすれと色を整える</label>
       <button type="button" class="btn btn--small" data-scan="file">画像から…</button>
       <input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
       <button type="button" class="btn btn--small btn--quiet" data-scan="close">やめる</button>
@@ -124,7 +136,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
   const take = async (img) => {
     const r = readScan(img);
     if (r.error) return say(r.error, true);
-    pages.push({format: r.format, w: r.w, h: r.h, ink: r.ink, ...(await inkPng(r.ink, size))});
+    pages.push({format: r.format, w: r.w, h: r.h, ink: r.ink, ...(await inkPng(r.ink, size, tidy))});
     renderPages();
     say(`${FORMATS[r.format].name}を読みました`);
   };
@@ -222,24 +234,35 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     }
   });
   camSel.addEventListener('change', () => start(camSel.value));
-  // 太さを変えたら、読んだページの線を切り直す（線そのものは読み直さない）
-  $('.scan-dialog__size').addEventListener('change', async (e) => {
-    size = PEN_SIZES.includes(e.target.value) ? e.target.value : '0.5';
-    try {
-      localStorage.setItem(SIZE_KEY, size);
-    } catch {
-      // 覚えられなくても、この窓では選んだ太さを使う
-    }
+  // 太さ・整えるかを変えたら、読んだページの線を作り直す（写真は読み直さない）
+  const recut = async () => {
     busy = true;
     try {
       for (const p of pages) {
         URL.revokeObjectURL(p.url);
-        Object.assign(p, await inkPng(p.ink, size));
+        Object.assign(p, await inkPng(p.ink, size, tidy));
       }
       renderPages();
     } finally {
       busy = false;
     }
+  };
+  const remember = (key, value) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // 覚えられなくても、この窓では選んだものを使う
+    }
+  };
+  $('.scan-dialog__size').addEventListener('change', (e) => {
+    size = PEN_SIZES.includes(e.target.value) ? e.target.value : '0.5';
+    remember(SIZE_KEY, size);
+    recut();
+  });
+  $('.scan-dialog__tidy input').addEventListener('change', (e) => {
+    tidy = e.target.checked;
+    remember(TIDY_KEY, tidy ? '1' : '0');
+    recut();
   });
   $('input[type=file]').addEventListener('change', async (e) => {
     busy = true;

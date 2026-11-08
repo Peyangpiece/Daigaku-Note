@@ -222,6 +222,13 @@ a,
 .scan-dialog__size {
   max-width: 160px;
 }
+.scan-dialog__tidy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
 @media (max-width: 760px) {
   .scan-dialog__body {
     grid-template-columns: 1fr;
