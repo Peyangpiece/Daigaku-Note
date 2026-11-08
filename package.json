@@ -1,7 +1,7 @@
 {
   "name": "daigaku-note",
   "productName": "パレットノート",
-  "version": "0.20.2",
+  "version": "0.20.3",
   "description": "大学の LMS の授業資料を授業ごと・回ごとのフォルダにそろえ、PDF に書き込み、資料からクイズを作って復習する電子ノート",
   "private": true,
   "type": "module",
@@ -23,6 +23,7 @@
     "@anthropic-ai/sdk": "0.135.0",
     "@noble/ciphers": "2.4.0",
     "electron-updater": "6.8.9",
+    "jsqr": "1.4.0",
     "mammoth": "1.13.0",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "6.4.299",

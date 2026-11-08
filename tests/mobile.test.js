@@ -231,6 +231,13 @@ test('窓口：写真は中身を確かめ、名前を付けて回のフォル�
 });
 
 // ---- 配るファイル ----
+test('staticFile：ホーム画面に追加する manifest と、QR を読む jsQR も配る', () => {
+  const roots = staticRoots();
+  assert.ok(staticFile('/m/app/manifest.webmanifest', roots)?.endsWith('manifest.webmanifest'));
+  assert.ok(staticFile('/m/app/icon-512.png', roots));
+  assert.ok(staticFile('/m/vendor/jsqr/jsQR.js', roots)?.endsWith(path.join('dist', 'jsQR.js')));
+});
+
 test('staticFile：決めた場所の中だけ。.. や隠しファイル・知らない種類は配らない', () => {
   const roots = staticRoots();
   assert.ok(staticFile('/m/', roots).endsWith(path.join('mobile', 'index.html')));

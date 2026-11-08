@@ -1,5 +1,6 @@
 // スマホのページ（docs/MOBILE.md §5）：ホーム・授業・資料（PDF）・復習・写真。中身はその場でパソコンに聞き、スマホには持たない
-import {NotPaired, Unreachable, call, forget, hello, initPairing, paired} from './client.js';
+import {NotPaired, Unreachable, call, forget, hello, initPairing, pairFrom, paired, standalone} from './client.js';
+import {renderInstall, renderPairScan} from './pair.js';
 import {esc, toast} from './ui.js';
 import {openPdf} from './viewer.js';
 import {openReview} from './review.js';
@@ -25,9 +26,14 @@ const remember = (id) => {
 
 // ---- つながらないとき ----
 function showProblem(e) {
-  if (e instanceof NotPaired)
+  if (e instanceof NotPaired) {
+    if (standalone()) {
+      app.innerHTML = `<div class="m-empty"><h2>パソコンとつながっていません</h2><p>パソコンのパレットノートの「アナログノート…」の窓か「設定 → スマホとつなぐ」で QR を出し、読んでください。</p><button class="m-btn m-btn--primary" data-pair>QR を読む</button></div>`;
+      app.querySelector('[data-pair]').addEventListener('click', () => pairByQr());
+      return;
+    }
     app.innerHTML = `<div class="m-empty"><h2>パソコンとつながっていません</h2><p>パソコンのパレットノートで「設定 → スマホとつなぐ → スマホを追加」を押し、出てきた QR をこのスマホのカメラで読んでください。</p></div>`;
-  else if (e instanceof Unreachable)
+  } else if (e instanceof Unreachable)
     app.innerHTML = `<div class="m-empty"><h2>パソコンに届きません</h2><p>パソコンのパレットノートが開いていて、「スマホとつなぐ」がオンで、パソコンとスマホが同じ Wi-Fi にあるか確かめてください。大学の Wi-Fi ではつながらないことがあります。</p><button class="m-btn m-btn--primary" data-retry>もう一度</button></div>`;
   else
     app.innerHTML = `<div class="m-empty"><h2>うまくいきませんでした</h2><p>${esc(e.message)}</p><button class="m-btn m-btn--primary" data-retry>もう一度</button></div>`;
@@ -244,9 +250,39 @@ async function watchScan() {
   else location.hash = '#/scan';
 }
 
+/** アイコンから開いて、まだつないでいない：パソコンの QR を読んでつなぐ。つながったら始める */
+async function pairByQr() {
+  leave?.();
+  leave = await renderPairScan(app, async (url) => {
+    leave = null;
+    if (!pairFrom(url)) return pairByQr();
+    try {
+      await hello();
+      toast('パソコンとつながりました');
+    } catch (e) {
+      if (e instanceof NotPaired) forget();
+      return showProblem(e);
+    }
+    begin();
+  });
+}
+
+let begun = false;
+function begin() {
+  if (begun) return void route();
+  begun = true;
+  window.addEventListener('hashchange', route);
+  route().then(() => {
+    watchScan();
+    setInterval(watchScan, 3000);
+  });
+}
+
 async function start() {
   const how = initPairing();
-  if (how === 'none') return showProblem(new NotPaired());
+  // QR をスマホのカメラで読んでブラウザで開いた：先にホーム画面に追加する（つなぐのは、追加したアイコンから）
+  if (how === 'install') return renderInstall(app, {fromQr: true});
+  if (how === 'none') return standalone() ? pairByQr() : renderInstall(app, {fromQr: false});
   try {
     if (!paired()) {
       await hello();
@@ -256,10 +292,7 @@ async function start() {
     if (e instanceof NotPaired) forget();
     return showProblem(e);
   }
-  window.addEventListener('hashchange', route);
-  await route();
-  watchScan();
-  setInterval(watchScan, 3000);
+  begin();
 }
 
 start();

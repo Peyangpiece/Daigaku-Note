@@ -131,8 +131,8 @@ a,
   display: grid;
   place-items: center;
   min-height: 360px;
-  max-height: 64vh;
-  overflow: hidden;
+  max-height: 70vh;
+  overflow: auto;
   border-radius: calc(var(--radius) - 2px);
   background: #1d1f22;
 }
@@ -195,9 +195,9 @@ a,
   display: grid;
   justify-items: center;
   gap: 10px;
-  max-width: 440px;
-  margin: 24px;
-  padding: 24px 28px;
+  max-width: 460px;
+  margin: 16px;
+  padding: 18px 24px;
   border-radius: var(--radius);
   background: var(--paper, #fff);
   color: var(--paper-ink);
@@ -214,8 +214,15 @@ a,
 }
 .scan-dialog__qr svg {
   display: block;
-  width: 200px;
-  height: 200px;
+  width: 180px;
+  height: 180px;
+}
+.scan-dialog__steps {
+  margin: 0;
+  padding-left: 1.4em;
+  text-align: left;
+  font-size: var(--fs-small);
+  line-height: 1.6;
 }
 .scan-dialog__note {
   color: color-mix(in srgb, var(--paper-ink) 65%, transparent);
