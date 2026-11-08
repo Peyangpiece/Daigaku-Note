@@ -9,11 +9,11 @@ import {cleanDesign, pageGeometry, pageSize} from '../shared/notebooks.js';
 
 export const A4 = [595.28, 841.89]; // pt（210 × 297 mm）
 const MM = 72 / 25.4;
-/** ページの大きさ（pt）。v3 の原稿用紙は A4 横（v0.19.3）、ほかは A4 縦 */
+/** ページの大きさ（pt）。v3 は紙の設定の大きさ（A4・B5。原稿用紙は横）、ほかは A4 縦 */
 export function pageSizePt(design) {
   if (design?.v !== 3) return A4;
   const {w, h} = pageSize(design);
-  return w > h ? [A4[1], A4[0]] : A4;
+  return [w * MM, h * MM];
 }
 
 // ---- 紙（v0.14.2〜） ----
@@ -235,7 +235,7 @@ export async function appendNotePage(bytes, design, {header = null} = {}) {
  * ノートを同じページ数のまま描き直す（上の欄の字が変わったとき）。ノートの中身は紙と上の欄だけで、書いたものは注釈として別に持つので、
  * 描き直しても書いたものは消えない。題・キーワード・作った日時は前のものを引き継ぐ。戻り：{bytes, pages}
  */
-export async function rebuildNotePdf(bytes, design, {header = null} = {}) {
+export async function rebuildNotePdf(bytes, design, {header = null, pageDesigns = {}} = {}) {
   const old = await PDFDocument.load(bytes, {updateMetadata: false});
   const n = old.getPageCount();
   const doc = await PDFDocument.create({updateMetadata: false});
@@ -246,7 +246,11 @@ export async function rebuildNotePdf(bytes, design, {header = null} = {}) {
   doc.setModificationDate(new Date());
   doc.setKeywords([old.getKeywords() ?? `daigaku-note:${Math.random().toString(36).slice(2)}`]);
   const img = await embed(doc, header);
-  for (let i = 0; i < n; i++) drawNotePage(doc.addPage(pageSizePt(design)), design, img);
+  // pageDesigns：ページごとの紙（アナログノートから取り込んだページはスキャン用の紙のまま。上の欄の字は刷らない）
+  for (let i = 0; i < n; i++) {
+    const own = pageDesigns[i + 1];
+    drawNotePage(doc.addPage(pageSizePt(own ?? design)), own ?? design, own ? null : img);
+  }
   return {bytes: await doc.save(), pages: n};
 }
 

@@ -1,0 +1,223 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {pageGeometry, scanDesign} from '../src/shared/notebooks.js';
+import {
+  findMarkers,
+  homography,
+  inkImage,
+  pageTransform,
+  project,
+  readCode,
+  readScan
+} from '../src/shared/scan-read.js';
+
+const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+
+/** スキャン用の紙を k px/mm で描く（罫・目印・コードと、書いた線 strokes：[[x1, y1, x2, y2, 色]] mm） */
+function paper(format, k, strokes) {
+  const g = pageGeometry(scanDesign(format));
+  const W = Math.round(g.w * k),
+    H = Math.round(g.h * k);
+  const d = new Uint8ClampedArray(W * H * 4).fill(255);
+  const dot = (x, y, r, rgb) => {
+    for (let v = Math.floor((y - r) * k); v <= Math.ceil((y + r) * k); v++)
+      for (let u = Math.floor((x - r) * k); u <= Math.ceil((x + r) * k); u++) {
+        if (u < 0 || v < 0 || u >= W || v >= H) continue;
+        if ((u / k - x) ** 2 + (v / k - y) ** 2 > r * r) continue;
+        d.set([...rgb, 255], (v * W + u) * 4);
+      }
+  };
+  const line = (x1, y1, x2, y2, r, rgb) => {
+    const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) * k * 2) + 1;
+    for (let i = 0; i <= n; i++) dot(x1 + ((x2 - x1) * i) / n, y1 + ((y2 - y1) * i) / n, r, rgb);
+  };
+  for (const l of g.lines) line(l.x1, l.y1, l.x2, l.y2, Math.max(l.w / 2, 0.5 / k), hexRgb(l.c));
+  for (const p of g.polys) {
+    const xs = p.pts.map((q) => q[0]),
+      ys = p.pts.map((q) => q[1]);
+    for (let v = Math.floor(Math.min(...ys) * k); v < Math.ceil(Math.max(...ys) * k); v++)
+      for (let u = Math.floor(Math.min(...xs) * k); u < Math.ceil(Math.max(...xs) * k); u++)
+        if (u >= 0 && v >= 0 && u < W && v < H) d.set([...hexRgb(p.c), 255], (v * W + u) * 4);
+  }
+  for (const [x1, y1, x2, y2, c] of strokes) line(x1, y1, x2, y2, 0.35, hexRgb(c));
+  return {g, img: {width: W, height: H, data: d}};
+}
+
+/** 紙を斜めから撮った写真にする（四隅を corners px へ。まわりは灰色の机、右下ほど暗い影） */
+function photo(src, g, corners, PW, PH) {
+  const Hm = homography(corners, [
+    [0, 0],
+    [g.w, 0],
+    [g.w, g.h],
+    [0, g.h]
+  ]); // 写真 px → 紙 mm
+  const k = src.width / g.w;
+  const d = new Uint8ClampedArray(PW * PH * 4);
+  for (let y = 0; y < PH; y++)
+    for (let x = 0; x < PW; x++) {
+      const [mx, my] = project(Hm, x + 0.5, y + 0.5);
+      const shade = 1 - 0.35 * ((x / PW + y / PH) / 2); // 影
+      let rgb = [150, 145, 140]; // 机
+      if (mx >= 0 && my >= 0 && mx < g.w && my < g.h) {
+        const u = Math.min(src.width - 1, Math.floor(mx * k)),
+          v = Math.min(src.height - 1, Math.floor(my * k));
+        const i = (v * src.width + u) * 4;
+        rgb = [src.data[i], src.data[i + 1], src.data[i + 2]];
+      }
+      d.set([...rgb.map((c) => c * shade), 255], (y * PW + x) * 4);
+    }
+  return {width: PW, height: PH, data: d};
+}
+
+test('取り込み：斜めに撮った紙から目印・向き・形式を読み、書いた線だけを取り出す（罫と影は消える）', () => {
+  const strokes = [
+    [40, 60, 120, 60, '#1a1a1a'], // 黒
+    [40, 100, 120, 130, '#1f3fbf'], // 青
+    [40, 160, 100, 160, '#c8322d'] // 赤
+  ];
+  const {g, img} = paper('a7', 6, strokes);
+  const shot = photo(
+    img,
+    g,
+    [
+      [140, 90],
+      [1020, 140],
+      [1080, 1420],
+      [90, 1380]
+    ],
+    1200,
+    1500
+  );
+  const marks = findMarkers(shot);
+  assert.ok(marks, '目印を見つける');
+  assert.ok(marks.tl[0] < marks.tr[0] && marks.tl[1] < marks.bl[1], '向き');
+  const t = pageTransform(marks);
+  assert.deepEqual([t.w, t.h], [182, 257], 'B5 縦');
+  assert.deepEqual(readCode(shot, t), {format: 'a7', version: 1});
+
+  const r = readScan(shot, {scale: 6});
+  assert.equal(r.format, 'a7');
+  const im = inkImage(r.ink, 0.6);
+  const k = r.ink.scale;
+  const alphaAt = (mx, my) => im.data[(Math.round(my * k) * im.width + Math.round(mx * k)) * 4 + 3];
+  assert.ok(alphaAt(80, 60) > 128, '黒の線が残る');
+  assert.ok(alphaAt(80, 115) > 128, '青の線が残る');
+  assert.ok(alphaAt(70, 160) > 128, '赤の線が残る');
+  // 罫（水色）・紙・目印は透明
+  const ruled = pageGeometry(scanDesign('a7')).lines.find((l) => l.y1 > 180 && l.x1 === 0);
+  assert.ok(alphaAt(150, ruled.y1) < 60, '罫は消える');
+  assert.ok(alphaAt(150, 200.5 + 3) < 60, '紙は透明');
+  assert.equal(alphaAt(8.5, 8.5), 0, '目印は取り出さない');
+  // 線の色を保つ（赤い線は赤く）
+  const p = (Math.round(160 * k) * im.width + Math.round(70 * k)) * 4;
+  assert.ok(im.data[p] > im.data[p + 2] + 40, '赤は赤のまま');
+});
+
+test('取り込み：線は描き直さず、ボールペンの太さより太くしない（細い線は細いまま）', () => {
+  // 0.7 mm の太い線（写真のにじみで太った線）と、0.2 mm の細い線
+  const {g, img} = paper('a7', 10, []);
+  const W = img.width;
+  const band = (y, half) => {
+    for (let v = Math.round((y - half) * 10); v <= Math.round((y + half) * 10); v++)
+      for (let u = 400; u < 1200; u++) img.data.set([26, 26, 26, 255], (v * W + u) * 4);
+  };
+  band(60.2, 0.35);
+  band(100.2, 0.1);
+  const shot = photo(
+    img,
+    g,
+    [
+      [60, 40],
+      [1760, 40],
+      [1760, 2440],
+      [60, 2440]
+    ],
+    1820,
+    2480
+  );
+  const r = readScan(shot, {scale: 12});
+  assert.equal(r.format, 'a7');
+  /** x = 80 mm の縦の並びで、見える（濃さ 1/2 以上）幅（mm） */
+  const widthAt = (im, y0) => {
+    let n = 0;
+    for (let v = Math.round((y0 - 1.5) * 12); v <= Math.round((y0 + 1.5) * 12); v++)
+      if (im.data[(v * im.width + 80 * 12) * 4 + 3] >= 128) n++;
+    return n / 12;
+  };
+  const thick = widthAt(inkImage(r.ink, 0.39), 60.2);
+  assert.ok(thick > 0.25 && thick <= 0.5, `太い線は 0.5 のボールペンの太さまで（${thick} mm）`);
+  const wide = widthAt(inkImage(r.ink, 0.8), 60.2);
+  assert.ok(wide > 0.55, `太さを切らなければ写真の太さのまま（${wide} mm）`);
+  const fine = widthAt(inkImage(r.ink, 0.53), 100.2);
+  assert.ok(fine > 0 && fine <= 0.35, `細い線は太くしない（${fine} mm）`);
+});
+
+test('取り込み：かすれと色を整える（字の形・太さはそのまま）', () => {
+  // 0.4 mm の青い線。ところどころインクが乗らず（かすれ）、色にむらがある
+  const {g, img} = paper('a7', 10, []);
+  const W = img.width;
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let v = Math.round(79.8 * 10); v <= Math.round(80.2 * 10); v++)
+    for (let u = 400; u < 1200; u++) {
+      const skip = rnd() < 0.25; // かすれ
+      const tint = Math.round(rnd() * 50); // 色むら
+      img.data.set(skip ? [200, 205, 215, 255] : [30 + tint, 60 + tint, 170 + tint / 2, 255], (v * W + u) * 4);
+    }
+  const shot = photo(
+    img,
+    g,
+    [
+      [60, 40],
+      [1760, 40],
+      [1760, 2440],
+      [60, 2440]
+    ],
+    1820,
+    2480
+  );
+  const r = readScan(shot, {scale: 12});
+  const raw = inkImage(r.ink, 0.53);
+  const tidy = inkImage(r.ink, 0.53, {tidy: true});
+  // 線の真ん中（y = 80 mm）の 50〜110 mm で、濃さが足りない（かすれた）ところの数
+  const row = Math.round(80 * 12);
+  const faint = (im) => {
+    let n = 0;
+    for (let u = 50 * 12; u < 110 * 12; u++) if (im.data[(row * im.width + u) * 4 + 3] < 200) n++;
+    return n;
+  };
+  assert.ok(faint(raw) > 10, `写真のままではかすれが残る（${faint(raw)}）`);
+  assert.equal(faint(tidy), 0, 'かすれは埋まる');
+  const colors = new Set();
+  for (let u = 50 * 12; u < 110 * 12; u++) {
+    const o = (row * tidy.width + u) * 4;
+    colors.add(`${tidy.data[o]},${tidy.data[o + 1]},${tidy.data[o + 2]}`);
+  }
+  assert.deepEqual([...colors], ['29,79,168'], '線は青 1 色（#1d4fa8）');
+  // 太さは変わらない：線の外（y = 80.6 mm）は透明のまま
+  const outRow = Math.round(80.6 * 12);
+  for (let u = 50 * 12; u < 110 * 12; u += 7)
+    assert.ok(tidy.data[(outRow * tidy.width + u) * 4 + 3] < 40, '太くならない');
+});
+
+test('取り込み：逆さに撮った紙・横の原稿用紙も読める。目印がなければ理由を返す', () => {
+  const {g, img} = paper('genkou', 5, [[60, 60, 90, 60, '#1a1a1a']]);
+  // 横の紙を 180° 回して撮る（四隅の並びを入れ替える）
+  const shot = photo(
+    img,
+    g,
+    [
+      [1160, 820],
+      [80, 860],
+      [60, 70],
+      [1140, 40]
+    ],
+    1240,
+    900
+  );
+  const r = readScan(shot, {scale: 3});
+  assert.equal(r.format, 'genkou');
+  assert.deepEqual([r.w, r.h], [257, 182], 'B5 横');
+  const blank = {width: 400, height: 500, data: new Uint8ClampedArray(400 * 500 * 4).fill(255)};
+  assert.match(readScan(blank).error, /目印/);
+});

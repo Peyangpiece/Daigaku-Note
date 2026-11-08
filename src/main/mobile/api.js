@@ -31,13 +31,15 @@ const bad = (msg) => {
 const okId = (v) => (isUlid(v) ? v : bad('ID が不正です'));
 
 /**
- * @param {{handlers: Map<string, Function>, repo, getWindow, broadcast?, now?}} deps
+ * @param {{handlers: Map<string, Function>, repo, scan?, getWindow, broadcast?, now?}} deps
+ *   scan：アナログノートをスマホで撮るときの受け渡し（scan-relay.js）
  *   broadcast(channel, payload)：パソコンのすべての窓に知らせる（横に並べた窓にも）。なければ元の窓だけ
  * @returns {Record<string, (arg: object) => Promise<object>>}
  */
 export function createMobileApi({
   handlers,
   repo,
+  scan = null,
   getWindow = () => null,
   broadcast = (ch, payload) => getWindow()?.webContents.send(ch, payload), // main.js はすべての窓の画面へ（frames.js）
   now = () => new Date()
@@ -154,6 +156,18 @@ export function createMobileApi({
     /** PDF・ノートに貼った写真の画像（貼りもの style.type 'photo'） */
     async 'photo.data'({ids}) {
       return call('photo.data', {ids: Array.isArray(ids) ? ids.slice(0, 200) : []});
+    },
+    /** アナログノート：パソコンで取り込みの窓が開いているか（開いていれば送り先の授業・回） */
+    async 'scan.waiting'() {
+      return {session: scan?.current() ?? null};
+    },
+    /** アナログノート：撮った 1 枚をパソコンの取り込みの窓へ。窓が読み終えるのを待ち、読めたかを返す */
+    async 'scan.send'({id, data}) {
+      if (!scan) bad('この操作はスマホからはできません');
+      const type = photoType(data);
+      if (!['jpg', 'png', 'webp'].includes(type)) bad('写真（JPEG・PNG・WebP）だけ送れます');
+      if (data.length > PHOTO_MAX) bad('写真が大きすぎます（1 枚 30MB まで）');
+      return scan.deliver(okId(id), data);
     },
     /** 写真を回のフォルダへ（中身の頭で写真か確かめ、名前は撮った日時から付ける） */
     async 'photo.upload'({courseId, roundId = null, files}) {

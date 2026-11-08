@@ -1,10 +1,12 @@
 // IPC の窓口：授業の回のノート（note.*）と、PDF・ノートに貼る写真（photo.*）。index.js が register を呼ぶ（SPEC §8.6・§9.3）
-import {app} from 'electron';
+import {app, systemPreferences} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {sha256} from '../sync/files.js';
 import {annoKey, readBase, replaceFile, originalPath} from '../pdf-save.js';
 import {appendNotePage, cleanPaper, createNotePdf, rebuildNotePdf, removeLastNotePage} from '../note-pdf.js';
+import {SCAN_FORMAT_IDS} from '../../shared/scan-code.js';
+import {analogDesign} from '../../shared/notebooks.js';
 import {isPng} from '../pdf-export.js';
 import {createSerial} from '../serial.js';
 import {id, bad, str} from './common.js';
@@ -109,6 +111,12 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
     });
   });
 
+  // アナログノートから取り込んだページ（ページの番号 → 紙の形式）。描き直すときもそのページはスキャン用の紙のまま
+  const scanKey = (mid) => `note.scanPages.${mid}`;
+  const scanPages = (mid) => repo.getSetting(scanKey(mid), {}) ?? {};
+  const pageDesigns = (mid) =>
+    Object.fromEntries(Object.entries(scanPages(mid)).map(([page, f]) => [page, analogDesign(f)]));
+
   /** ノートの元の写しを入れ替える：新しい写しを置き、注釈・しおりを付け替える（ファイルへの描き込みは次の上書き保存で） */
   const rebase = async (m, bytes, pages) => {
     const h = sha256(Buffer.from(bytes));
@@ -149,6 +157,68 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
         })
   );
 
+  // アナログノートをスマホで撮る（scan-relay.js）：取り込みの窓が開いたら、スマホから受け始める。
+  // スマホに見せる送り先（授業・回）をここで作る。戻り：{id, mobile: {enabled, devices}}（スマホ連携がオンか・つないだスマホの数）
+  handle('scan.remoteOpen', async ({courseId, roundId, materialId}, e) => {
+    let c = null;
+    let r = null;
+    if (materialId != null) {
+      const m = repo.get('material', id(materialId) ?? bad('ノートが不正です'));
+      c = m?.course_id ? repo.get('course', m.course_id) : null;
+      r = m?.round_id ? repo.get('round', m.round_id) : null;
+    } else {
+      c = courseId != null ? repo.get('course', id(courseId) ?? bad('授業が不正です')) : null;
+      r = roundId != null ? repo.get('round', id(roundId) ?? bad('回が不正です')) : null;
+    }
+    // 回の呼び方はノートの上の欄と同じ（renderer/notebook.js）：番号のない回（0）は付けた題か「その他」
+    const roundName = r ? (r.number > 0 ? `第${r.number}回` : r.title_user || 'その他') : null;
+    const label = [c?.name, roundName].filter(Boolean).join(' ') || 'ノート';
+    const sid = ctx.scanRelay.open(e?.senderFrame ?? e?.sender, label);
+    const mob = ctx.mobile;
+    const devices = mob ? (await mob.devices.list()).length : 0;
+    return {id: sid, mobile: {enabled: !!mob?.server.running, devices}};
+  });
+  handle('scan.remoteClose', ({id: sid}) => (ctx.scanRelay.close(String(sid ?? '')), {ok: true}));
+  // 窓が、スマホから来た 1 枚を読み終えた（読めたか・知らせる言葉）
+  handle('scan.remoteReply', ({photoId, result}) => ({ok: ctx.scanRelay.reply(String(photoId ?? ''), result)}));
+
+  // カメラを使ってよいか（アナログノートの取り込み）。Mac は初めてのとき OS が聞く。戻り {ok}
+  handle('camera.access', async () => {
+    if (process.platform !== 'darwin') return {ok: true};
+    if (systemPreferences.getMediaAccessStatus('camera') === 'granted') return {ok: true};
+    return {ok: await systemPreferences.askForMediaAccess('camera').catch(() => false)};
+  });
+
+  // アナログノートの取り込み（docs/SPEC-SCAN.md）：取り込んだ紙の形式ごとに、スキャン用の紙（B5）のページを足す。
+  // fresh（ノートを今作って、1 ページ目がまだ白紙）なら 1 ページ目を最初の紙にする（1 ページ目の紙はノートを作るときに選んだもの）。
+  // 上の欄の字（授業・回）は刷らない（紙に書いた日付・題がそのまま写るため）。戻り：{pages, first}（最初の取り込みのページ）
+  handle('note.addScanPages', ({materialId, formats, fresh = false}, e) =>
+    exclusive(String(materialId), async () => {
+      const list = Array.isArray(formats) ? formats.slice(0, 200) : bad('紙の形式が不正です');
+      if (!list.length || list.some((f) => !SCAN_FORMAT_IDS.includes(f))) bad('紙の形式が不正です');
+      const {m, base} = await noteMaterial(materialId);
+      let bytes = base;
+      let pages = m.pages ?? 1;
+      const add = fresh ? list.slice(1) : list;
+      for (const f of add) {
+        const r = await appendNotePage(bytes, analogDesign(f));
+        bytes = r.bytes;
+        pages = r.pages;
+      }
+      if (add.length) await rebase(m, bytes, pages);
+      const first = pages - list.length + 1;
+      repo.setSetting(scanKey(m.id), {
+        ...scanPages(m.id),
+        ...Object.fromEntries(list.map((f, i) => [first + i, f]))
+      });
+      changed();
+      const out = {pages, first, bytes: asBytes(bytes)};
+      if (e?.senderFrame && add.length)
+        notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, pages, bytes: asBytes(bytes), replace: true});
+      return out;
+    })
+  );
+
   // ノートの最後のページを消す（何も書いていない・付箋もない白紙のときだけ。1 ページは残す）。戻り：{pages}
   handle('note.removePage', ({materialId}, e) =>
     trial.isTrial(materialId)
@@ -164,6 +234,11 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
           )
             bad('最後のページに書いたもの・付箋があるため消せません');
           await rebase(m, r.bytes, r.pages);
+          const sp = scanPages(m.id);
+          if (sp[last]) {
+            delete sp[last];
+            repo.setSetting(scanKey(m.id), sp);
+          }
           changed();
           if (e?.senderFrame) notifyOthers(e.senderFrame, 'note.pages', {materialId: m.id, pages: r.pages});
           return {pages: r.pages};
@@ -178,7 +253,10 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
       : exclusive(String(materialId), async () => {
           const {m, base} = await noteMaterial(materialId);
           const d = cleanPaper(paper);
-          const {bytes, pages} = await rebuildNotePdf(base, d, {header: await readHeader(m.id)});
+          const {bytes, pages} = await rebuildNotePdf(base, d, {
+            header: await readHeader(m.id),
+            pageDesigns: pageDesigns(m.id)
+          });
           repo.setSetting(`note.design.${m.id}`, d);
           await rebase(m, bytes, pages);
           const out = {pages, bytes: asBytes(bytes), paper: d};
@@ -200,7 +278,9 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
             return {changed: false};
           const {m, base} = await noteMaterial(materialId);
           const design = repo.getSetting(`note.design.${m.id}`, null) ?? {};
-          const {bytes, pages} = await rebuildNotePdf(base, design, {header: head});
+          // アナログノートから作ったノートには上の欄の字を刷らない（紙に書いた日付・題がそのまま写る）
+          if (design.analog) return {changed: false};
+          const {bytes, pages} = await rebuildNotePdf(base, design, {header: head, pageDesigns: pageDesigns(m.id)});
           await saveHeader(m.id, head, clean);
           await rebase(m, bytes, pages);
           return {changed: true, pages, bytes: asBytes(bytes)};
@@ -238,6 +318,7 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
       }
       await fsp.rm(headerFile(m.id), {force: true}).catch(() => {});
       repo.removeSetting(`note.design.${m.id}`);
+      repo.removeSetting(scanKey(m.id));
       repo.removeSetting(`note.head.${m.id}`);
       notifyOthers(from, 'note.removed', {materialId: m.id});
       changed();

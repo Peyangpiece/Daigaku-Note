@@ -2,6 +2,8 @@
 // ページの計算（pageGeometry）は mm の線・点で返し、PDF（main/note-pdf.js）と画面の見本（SVG）が同じ計算を使う。
 // 罫の名前と幅は、学習ノートの代表的なもの（販売店の商品ページで確かめた。C 5 mm だけは確かめられず、一般に知られている幅。docs/SPEC-NOTEBOOK.md §3.1）。表紙は全テンプレート共通の形で、色だけを変える
 
+import {SCAN_DROPOUT, scanMarks} from './scan-code.js';
+
 /** A4 縦（mm） */
 export const PAGE_W = 210;
 export const PAGE_H = 297;
@@ -11,6 +13,14 @@ export const PAGE_H = 297;
  */
 export const HEAD_H = 26;
 export const FOOT_H = 26;
+/**
+ * 紙の大きさ（mm。縦のとき）。body：罫を引くところの高さ（上下は同じ幅に空ける）。
+ * A4 はキャンパスノート A4・A 罫 35 行（245 mm）。B5 はスキャン用のノート紙（docs/SPEC-SCAN.md）で、セミ B5 のキャンパスノート・A 罫 30 行（210 mm）にそろえる
+ */
+export const SIZES = {
+  a4: {w: 210, h: 297, body: 245, label: 'A4'},
+  b5: {w: 182, h: 257, body: 210, label: 'B5'}
+};
 /** A4 横（原稿用紙）の上の欄と下の余白（mm） */
 const WIDE_HEAD = 20;
 const WIDE_FOOT = 10;
@@ -88,9 +98,13 @@ export const FORMATS = {
  */
 export const gapFixed = (format) => /\d\s*mm/.test(FORMATS[format]?.name ?? '');
 
-/** 漢字練習のますの大きさ（mm）：A4 縦の罫を引くところ（左右 12 mm・高さ 245 mm から上の 3 mm を除いたところ）に、ますと読みの列（ますの KANJI_RUBY 倍）が入る大きさ。0.5 mm 刻みで切り下げ */
-function kanjiCell(lines, chars) {
-  const s = Math.min((210 - 24) / (lines * (1 + KANJI_RUBY)), (245 - 3) / chars); // 上の欄の下を 3 mm あける
+/**
+ * 漢字練習のますの大きさ（mm）：紙の罫を引くところ（左右 12 mm・高さ body から上の 3 mm を除いたところ）に、
+ * ますと読みの列（ますの KANJI_RUBY 倍）が入る大きさ。0.5 mm 刻みで切り下げ
+ */
+function kanjiCell(lines, chars, size = 'a4') {
+  const z = SIZES[size] ?? SIZES.a4;
+  const s = Math.min((z.w - 24) / (lines * (1 + KANJI_RUBY)), (z.body - 3) / chars); // 上の欄の下を 3 mm あける
   return Math.floor(s * 2) / 2;
 }
 
@@ -164,10 +178,21 @@ export function cleanDesign(raw = {}) {
   const d = raw && typeof raw === 'object' ? raw : {};
   const format = Object.hasOwn(FORMATS, d.format) ? d.format : 'b6';
   const f = FORMATS[format];
+  const size = Object.hasOwn(SIZES, d.size) ? d.size : 'a4';
   return {
     v: 3,
     format,
-    gap: gapFixed(format) ? f.gap : clampGap(f.kind, d.gap, f.gap),
+    // 紙の大きさ（a4・b5）と、スキャン用のノート紙か（四隅の目印と形式のコードを刷る。docs/SPEC-SCAN.md）
+    size,
+    scan: d.scan === true,
+    // アナログノートから取り込んだページ（スキャン用の紙と同じ大きさ・同じ位置の罫。目印とコードはなし。上の欄の字は刷らない）
+    analog: d.scan === true || d.analog === true,
+    gap:
+      f.kind === 'kanji'
+        ? kanjiCell(f.lines, f.chars, size)
+        : gapFixed(format)
+          ? f.gap
+          : clampGap(f.kind, d.gap, f.gap),
     line: hex(d.line, f.line ?? DEFAULT_LINE),
     weight: Object.hasOwn(WEIGHTS, d.weight) ? d.weight : 'normal',
     head: HEADS.includes(d.head) ? d.head : (f.head ?? 'line'),
@@ -183,9 +208,27 @@ export function cleanDesign(raw = {}) {
   };
 }
 
-/** ページの大きさ（mm）。原稿用紙だけ A4 横 */
+/**
+ * スキャン用のノート紙の設定（B5・四隅の目印と形式のコードつき・罫はドロップアウトカラー。docs/SPEC-SCAN.md）。
+ * 刷る紙（scripts/scan-sheets.mjs）と、取り込んだときのアプリの紙が同じ設定を使う
+ */
+export function scanDesign(format) {
+  return cleanDesign({format, size: 'b5', scan: true, line: SCAN_DROPOUT, headColor: SCAN_DROPOUT, head: 'date'});
+}
+
+/**
+ * アナログノートを取り込んだページの紙：デジタルの Palette ノートの罫の色・形で、スキャン用の紙と同じ大きさ・同じ位置（書いた線がずれない）。
+ * 目印と形式のコードは描かない
+ */
+export function analogDesign(format) {
+  return cleanDesign({format, size: 'b5', analog: true, head: 'date'});
+}
+
+/** ページの大きさ（mm）。紙の大きさ（A4・B5）の縦。原稿用紙だけ横 */
 export function pageSize(raw) {
-  return FORMATS[cleanDesign(raw).format].landscape ? {w: PAGE_H, h: PAGE_W} : {w: PAGE_W, h: PAGE_H};
+  const d = cleanDesign(raw);
+  const z = SIZES[d.size];
+  return FORMATS[d.format].landscape ? {w: z.h, h: z.w} : {w: z.w, h: z.h};
 }
 
 /** 方眼などを左右の真ん中にそろえる：左右 side mm ずつ空けた幅に入るだけのます。戻り {left, cols} */
@@ -207,11 +250,14 @@ export function pageGeometry(raw) {
   const lines = [];
   const dots = [];
   const polys = [];
-  const top = W > H ? WIDE_HEAD : HEAD_H;
-  const bottom = H - (W > H ? WIDE_FOOT : FOOT_H);
+  const z = SIZES[d.size];
+  const top = W > H ? WIDE_HEAD : (H - z.body) / 2;
+  // スキャン用の紙は、下の端の形式のコード（紙の端から 16 mm まで）にかからないよう、横の紙の下を 18 mm 空ける
+  const bottom = H - (W > H ? (d.analog ? 18 : WIDE_FOOT) : (H - z.body) / 2);
   const L = (x1, y1, x2, y2, width = w, c = d.line, dash = null) =>
     lines.push({x1, y1, x2, y2, w: width, c, ...(dash ? {dash} : {})});
-  const g = d.gap;
+  // 原稿用紙は 20 ますが上下に入る大きさまで（B5 横では 7.5 mm まで）
+  const g = f.kind === 'genkou' ? Math.min(d.gap, Math.floor(((bottom - top) / 20) * 2) / 2) : d.gap;
   let headLeft = 0;
   let headRight = W;
   if (f.kind === 'ruled' || f.kind === 'dotruled') {
@@ -371,6 +417,8 @@ export function pageGeometry(raw) {
     dots.push({x: x0 + 15.5, y: y - 0.4, r: 0.45, c: d.headColor}, {x: x0 + 30.5, y: y - 0.4, r: 0.45, c: d.headColor});
   }
   // headerY：上の欄の字（回のノートの授業・回・題・日付）の下の端（上の線の 4 mm 上）
+  // スキャン用のノート紙：四隅の目印と、下の端の形式のコード（docs/SPEC-SCAN.md）。刷った紙とアプリの紙で同じものを描く
+  if (d.scan) polys.push(...scanMarks(W, H, d.format));
   return {w: W, h: H, top, bottom, paper: d.paper, lines, dots, polys, headLeft, headerY: top - 4};
 }
 

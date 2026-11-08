@@ -89,3 +89,153 @@ a,
   width: 100%;
   margin-top: var(--space-1);
 }
+
+/* ---- アナログノートの取り込み（scan-dialog.js） ---- */
+.scan-dialog {
+  width: min(1100px, 94vw);
+  max-height: 92vh;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: inherit;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.scan-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+.scan-dialog__head,
+.scan-dialog__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.scan-dialog__head h2 {
+  margin: 0 auto 0 0;
+  font-size: var(--fs-h3, 1.1rem);
+}
+.scan-dialog__foot {
+  justify-content: flex-end;
+  border-top: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
+}
+.scan-dialog__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 12px;
+  padding: 0 16px 12px;
+  min-height: 0;
+}
+.scan-dialog__view {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  max-height: 64vh;
+  overflow: hidden;
+  border-radius: calc(var(--radius) - 2px);
+  background: #1d1f22;
+}
+.scan-dialog__view video,
+.scan-dialog__overlay {
+  grid-area: 1 / 1;
+  max-width: 100%;
+  max-height: 64vh;
+}
+.scan-dialog__overlay {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.scan-dialog__view video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.scan-dialog__status {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 10px;
+  margin: 0;
+  color: #fff;
+  font-size: var(--fs-small);
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.scan-dialog__status.is-error {
+  color: #ffd2cf;
+}
+.scan-dialog__shot {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  width: 58px;
+  height: 58px;
+  margin-left: -29px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: color-mix(in srgb, #fff 30%, transparent);
+  cursor: pointer;
+}
+.scan-dialog__shot:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.scan-dialog__pages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  max-height: 64vh;
+  list-style: none;
+}
+.scan-dialog__page {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+.scan-dialog__thumb {
+  position: relative;
+  display: block;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+.scan-dialog__thumb svg,
+.scan-dialog__thumb img {
+  display: block;
+}
+.scan-dialog__thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.scan-dialog__label {
+  font-size: var(--fs-small);
+}
+.scan-dialog__cam {
+  max-width: 220px;
+}
+.scan-dialog__size {
+  max-width: 160px;
+}
+.scan-dialog__phone {
+  margin: 0 auto 0 0;
+  font-size: var(--fs-small);
+  color: color-mix(in srgb, var(--paper-ink) 70%, transparent);
+}
+.scan-dialog__tidy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .scan-dialog__body {
+    grid-template-columns: 1fr;
+  }
+}
