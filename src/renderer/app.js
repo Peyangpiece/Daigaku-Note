@@ -47,6 +47,7 @@ import {
   setNotePaper
 } from './notebook.js';
 import {TRIAL_ID, closeNoteTry} from './views/notebook-try.js';
+import {openScan} from './scan-dialog.js';
 import {deskRoute} from './desk.js'; // クイズ・ホームの四隅の道具（筆箱・ポーチ・シール帳・素材）
 
 const api = window.daigaku;
@@ -649,12 +650,18 @@ document.addEventListener('click', async (e) => {
       // 紙を選んで作る（前に選んだ紙に ✓。選んだ紙は次の初期値になる）
       const r = el.getBoundingClientRect();
       const cur = notePaper().key;
+      // いちばん下は「アナログノート」：Palette スキャンノートを撮って取り込む（scan-dialog.js。docs/SPEC-SCAN.md）
       openMenu(
         'ノートの紙',
-        notePaperList().map((p) => [p.key, `${p.key === cur ? '✓ ' : '　 '}${p.label}`]),
+        [
+          ...notePaperList().map((p) => [p.key, `${p.key === cur ? '✓ ' : '　 '}${p.label}`]),
+          ['scan', '　 アナログノート…']
+        ],
         r.left,
         r.bottom + 4,
         async (key) => {
+          if (key === 'scan')
+            return openScan({courseId: el.dataset.courseId, roundId: el.dataset.roundId, sub: el.dataset.sub || ''});
           setNotePaper(key);
           el.disabled = true;
           await openNotebook(el.dataset.courseId, el.dataset.roundId, {

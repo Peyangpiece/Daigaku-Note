@@ -58,6 +58,8 @@ const INVOKE = [
   'note.open',
   'note.addPage',
   'note.trial',
+  'note.addScanPages',
+  'camera.access',
   'note.trialEnd',
   'note.removePage',
   'note.setHeader',

@@ -171,3 +171,21 @@ test('原稿用紙（v3）のノートは A4 横で作り、足すページも�
     assert.ok(Math.abs(width - A4[1]) < 0.01 && Math.abs(height - A4[0]) < 0.01);
   }
 });
+
+test('ノートを描き直しても、アナログノートから取り込んだページはスキャン用の紙（B5）のまま', async () => {
+  const {scanDesign} = await import('../src/shared/notebooks.js');
+  const a4 = cleanPaper({v: 3, format: 'b6'});
+  const one = await createNotePdf(a4);
+  const {bytes: two} = await appendNotePage(one, scanDesign('a7'));
+  const {bytes} = await rebuildNotePdf(two, cleanPaper({v: 3, format: 'grid5'}), {
+    header: PNG,
+    pageDesigns: {2: scanDesign('a7')}
+  });
+  const doc = await PDFDocument.load(bytes);
+  const [p1, p2] = doc.getPages().map((p) => p.getSize());
+  assert.ok(Math.abs(p1.width - A4[0]) < 0.01, '1 ページ目は A4');
+  assert.ok(
+    Math.abs(p2.width - (182 * 72) / 25.4) < 0.01 && Math.abs(p2.height - (257 * 72) / 25.4) < 0.01,
+    '2 ページ目は B5'
+  );
+});

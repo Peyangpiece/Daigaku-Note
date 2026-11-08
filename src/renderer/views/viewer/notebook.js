@@ -24,6 +24,7 @@ import {navigate, state} from '../../store.js';
 import {KIND_OF, itemOf} from '../../../shared/stationery.js';
 import {MOD, SHIFT, key} from './shared.js';
 
+import {openScan} from '../../scan-dialog.js';
 const api = window.daigaku;
 const PHOTO_PX = 2400; // 写真の長い辺（px）。これより大きければ縮める
 const PHOTO_SHARE = 0.6; // 貼ったときの大きさ：ページの幅の 6 割（高さは半分）まで
@@ -87,7 +88,7 @@ export const methods = {
    */
   async refreshNoteHeader() {
     const m = this.material;
-    if (!this.isNote || !m?.course_id) return null;
+    if (!this.isNote || !m?.course_id || this.notePaperNow?.scan) return null; // アナログノートの紙には刷らない
     const text = noteHeading(m.course_id, m.round_id);
     if (!text) return null;
     try {
@@ -262,6 +263,9 @@ export const methods = {
         ? ''
         : '<button type="button" class="btn btn--small btn--quiet viewer-addpage__delete" data-v="delete-note" title="ファイルはパソコンのゴミ箱へ">ノートを削除…</button>') +
       '<button type="button" class="btn btn--small btn--quiet" data-v="remove-page" title="何も書いていない白紙のときだけ。↶ で戻せます">− 最後のページを消す</button>' +
+      (this.material?.trial
+        ? ''
+        : '<button type="button" class="btn btn--small btn--quiet" data-v="scan-pages" title="Palette スキャンノートを撮って、このノートにページを足す">アナログノート…</button>') +
       `<button type="button" class="btn btn--small" data-v="add-page" title="${key(SHIFT, MOD, 'N')}。最後のページの下のほうまで書くと自動でも足します">＋ ページを追加</button>`;
     this.pagesEl.append(box);
     this.addPageBox = box;
@@ -270,6 +274,15 @@ export const methods = {
       if (v === 'add-page') this.addNotePage();
       else if (v === 'remove-page') this.removeNotePage();
       else if (v === 'delete-note') this.deleteNote();
+      else if (v === 'scan-pages')
+        openScan({
+          materialId: this.materialId,
+          // 足したページと、貼った線（注釈）をこの画面にも出す
+          onDone: async ({pages, bytes}) => {
+            await this.appendNotePages(bytes, pages);
+            await this.syncFromPhone({all: true});
+          }
+        });
       else if (v === 'note-paper') {
         const b = e.target.closest('[data-v]');
         this.toggleBarMenu(b, () => this.openPaperMenu(b));

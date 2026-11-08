@@ -162,7 +162,9 @@ export function normalizeAnnotation(input, {pageCount = Infinity} = {}) {
       if (labels) cleanStyle.labels = labels;
     } else if (type === 'sticker' && (isBuiltinSticker(s.ref) || /^[0-9a-f]{64}$/.test(s.ref ?? '')))
       cleanStyle = {type, ref: s.ref};
-    else if (type === 'photo' && /^[0-9a-f]{64}$/.test(s.ref ?? '')) cleanStyle = {type, ref: s.ref};
+    else if (type === 'photo' && /^[0-9a-f]{64}$/.test(s.ref ?? ''))
+      // scan：アナログノートから取り込んだ線（ページいっぱい・影なし・選んで動かせない。docs/SPEC-SCAN.md）
+      cleanStyle = {type, ref: s.ref, ...(s.scan === true ? {scan: true} : {})};
     else throw new Error('貼りものが不正です');
     return {
       page,
