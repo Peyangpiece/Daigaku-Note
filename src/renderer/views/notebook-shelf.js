@@ -40,7 +40,8 @@ export function formatSpec(design) {
   if (f.kind === 'plain') return '無地';
   if (['genkou'].includes(f.kind)) return `${KIND_LABEL[f.kind]}・ます ${d.gap} mm`;
   if (['english', 'staff'].includes(f.kind)) return `${KIND_LABEL[f.kind]}・線の間 ${d.gap} mm`;
-  if (['grid', 'dotgrid', 'kanji'].includes(f.kind)) return `${KIND_LABEL[f.kind]}・${d.gap} mm`;
+  if (f.kind === 'kanji') return `${KIND_LABEL[f.kind]}・ます ${d.gap} mm`;
+  if (['grid', 'dotgrid'].includes(f.kind)) return `${KIND_LABEL[f.kind]}・${d.gap} mm`;
   return `${KIND_LABEL[f.kind]}・行の間 ${d.gap} mm`;
 }
 
