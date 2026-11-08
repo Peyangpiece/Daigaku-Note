@@ -1,19 +1,25 @@
 // アナログノートの取り込み（docs/SPEC-SCAN.md）：回の付箋の「＋ ノート」のメニューのいちばん下「アナログノート」から開く。
-// 撮るのはスマホのカメラ（スマホ連携。つないでいなければ、この窓で QR を出してつなぐ）。このパソコンのカメラでも撮れる。
-// 1 枚ごとに四隅の目印・形式のコードを読み、書いた線を写真のまま取り出して（shared/scan-read.js）、デジタルの紙の上に並べて見せる。
+// その場で読む：カメラ（Mac の連携カメラで iPhone も）の映像を見続け、Palette スキャンノートの四隅の目印と形式のコードが読めて
+// 紙が止まったら、自分で取り込む（shared/scan-live.js）。取り込んだ紙がカメラから外れたら、次のページを待つ。
+// 読み取り（数秒）は Web Worker（scan-worker.js）で行い、その間も映像と枠を止めない。
+// カメラがないときは、スマホで撮って送る（スマホ連携。つないでいなければ、この窓で QR を出してつなぐ）。
+// 1 枚ごとに書いた線を写真のまま取り出して（shared/scan-read.js）、デジタルの紙の上に並べて見せる。
 // 線は描き直さない。使ったボールペンの太さ（0.3・0.5・0.7）より外（写真のぼけ・にじみで太って見える分）だけを切る。
 // スマホで撮った写真は、この窓が開いているあいだ受けて読む（main/scan-relay.js）。
 // 「かすれと色を整える」（はじめはオン）：線ごとに黒・青・赤・鉛筆の 1 色にし、線の中のかすれを埋める（形・太さはそのまま）。
 // 「取り込む」で回のノートに、デジタルの Palette ノートの紙（B5。罫は刷った紙と同じ位置）のページを足し、線を同じ位置に貼る（上から書き足せる）
 import {esc, toast} from './ui-kit.js';
 import {navigate, reload} from './store.js';
-import {readScan, findMarkers, inkImage} from '../shared/scan-read.js';
+import {readScan, findMarkers, inkImage, pageTransform, readCode} from '../shared/scan-read.js';
+import {createLiveScan} from '../shared/scan-live.js';
 import {FORMATS, analogDesign, pageSvg} from '../shared/notebooks.js';
 import {PEN_SIZES, sizeWidth} from '../shared/stationery.js';
 
 const api = window.daigaku;
 const MM = 72 / 25.4;
 const MAX_SIDE = 3200; // 読む画像の長い辺（大きい写真は縮めてから読む）
+const LIVE_SIDE = 960; // その場で見る映像の長い辺（目印とコードはこの大きさで読める）
+const LIVE_MS = 200; // 映像を見る間隔
 const SIZE_KEY = 'scan.penSize'; // 選んだボールペンの太さ（この窓を次に開いたときも同じ）
 const TIDY_KEY = 'scan.tidy'; // かすれと色を整えるか（はじめは整える）
 /** ボールペンの線の太さ（mm）：アプリのボールペンと同じ（0.3 → 0.26 mm・0.5 → 0.39 mm・0.7 → 0.53 mm） */
@@ -58,6 +64,46 @@ async function inkPng(ink, size, tidy) {
   return {bytes: new Uint8Array(await blob.arrayBuffer()), url: URL.createObjectURL(blob)};
 }
 
+/** 読み取り役（Web Worker）。作れないときは、この画面で読む（遅いが同じ結果） */
+function createReader() {
+  let worker = null;
+  try {
+    worker = new Worker(new URL('./scan-worker.js', import.meta.url), {type: 'module'});
+  } catch {
+    worker = null;
+  }
+  const waiting = new Map();
+  let seq = 0;
+  if (worker) {
+    worker.onmessage = (e) => {
+      waiting.get(e.data.id)?.(e.data.r);
+      waiting.delete(e.data.id);
+    };
+    worker.onerror = () => {
+      for (const done of waiting.values()) done({error: '読み取れませんでした。もう一度カメラに向けてください'});
+      waiting.clear();
+      worker = null;
+    };
+  }
+  return {
+    /** 1 枚を読む。戻り readScan と同じ */
+    read(image) {
+      if (!worker) return Promise.resolve(readScan(image));
+      const id = ++seq;
+      return new Promise((resolve) => {
+        waiting.set(id, resolve);
+        worker.postMessage({id, image: {width: image.width, height: image.height, data: image.data}}, [
+          image.data.buffer
+        ]);
+      });
+    },
+    close() {
+      worker?.terminate();
+      worker = null;
+    }
+  };
+}
+
 /**
  * 取り込みの窓を開く。materialId（ノート）を渡すとそのノートに足す（PDF の編集画面の「アナログノート…」）。
  * なければ courseId・roundId・sub の回のノートに足す（なければ作る。回の付箋の「＋ ノート」のメニュー）
@@ -72,18 +118,18 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     <div class="scan-dialog__head">
       <h2>アナログノート</h2>
       <select class="scan-dialog__cam" aria-label="カメラ" hidden></select>
-      <button type="button" class="btn btn--small" data-scan="pccam">このパソコンのカメラ</button>
+      <button type="button" class="btn btn--small" data-scan="mode">スマホで撮る</button>
       <select class="scan-dialog__size" aria-label="使ったボールペンの太さ">${PEN_SIZES.map((v) => `<option value="${v}"${v === size ? ' selected' : ''}>ボールペン ${v} mm</option>`).join('')}</select>
       <label class="scan-dialog__tidy"><input type="checkbox"${tidy ? ' checked' : ''} /> かすれと色を整える</label>
       <button type="button" class="btn btn--small btn--quiet" data-scan="close">やめる</button>
     </div>
     <div class="scan-dialog__body">
       <div class="scan-dialog__view">
-        <div class="scan-dialog__phonebox"></div>
-        <video playsinline muted hidden></video>
-        <canvas class="scan-dialog__overlay" hidden></canvas>
+        <div class="scan-dialog__phonebox" hidden></div>
+        <video playsinline muted></video>
+        <canvas class="scan-dialog__overlay"></canvas>
         <p class="scan-dialog__status" role="status"></p>
-        <button type="button" class="scan-dialog__shot" data-scan="shot" aria-label="撮る" disabled hidden></button>
+        <button type="button" class="scan-dialog__shot" data-scan="shot" aria-label="いま読む" title="いま読む（止まるのを待たずに）" disabled></button>
       </div>
       <ol class="scan-dialog__pages" aria-label="取り込むページ"></ol>
     </div>
@@ -113,8 +159,10 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
   let remote = null; // スマホで撮る：{id, mobile}（scan-relay.js）
   let offPhoto = () => {};
   let poll = 0;
+  const reader = createReader();
   const close = () => {
     stop();
+    reader.close();
     offPhoto();
     clearInterval(poll);
     if (remote) api['scan.remoteClose']({id: remote.id});
@@ -141,14 +189,15 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
 
   /** 1 枚を読む（目印・形式・線）。戻り {ok, message} */
   const take = async (img) => {
-    const r = readScan(img);
+    const r = await reader.read(img);
+    if (!d.isConnected) return {ok: false, message: '取り込みの窓が閉じられました'};
     if (r.error) {
       say(r.error, true);
       return {ok: false, message: r.error};
     }
     pages.push({format: r.format, w: r.w, h: r.h, ink: r.ink, ...(await inkPng(r.ink, size, tidy))});
     renderPages();
-    const message = `${FORMATS[r.format].name}を読みました`;
+    const message = `${pages.length} ページ目：${FORMATS[r.format].name}を読みました`;
     say(message);
     return {ok: true, message};
   };
@@ -241,11 +290,23 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
     });
   });
 
-  // カメラ：目印が写っているかを見て、枠を重ねて見せる
+  // その場で読む（shared/scan-live.js）：映像を 200 ms ごとに見て、紙の枠と形式を重ね、止まったら自分で取り込む
+  const live = createLiveScan();
+  let reading = false;
+  let flash = 0; // 取り込んだときに枠を光らせる（残りの回数）
+  const LIVE_SAY = {
+    none: 'Palette スキャンノートをカメラに向けてください。四隅の黒い目印が全部写ると、自分で読み取ります',
+    nocode: '紙の下のコードが読めません。もう少し近づけるか、明るいところで向けてください'
+  };
+  // カメラを始める。使えなければスマホの案内に切り替える
   const start = async (deviceId) => {
     stop();
     const ok = await api['camera.access']?.({});
-    if (ok && ok.ok === false) return say('このパソコンのカメラを使えません。スマホで撮ってください', true);
+    const fail = () => {
+      setMode('phone');
+      say('このパソコンのカメラを使えません。スマホで撮ってください', true);
+    };
+    if (ok && ok.ok === false) return fail();
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -255,12 +316,13 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
         }
       });
     } catch {
-      return say('このパソコンのカメラを使えません。スマホで撮ってください', true);
+      return fail();
     }
+    if (!d.isConnected) return stop();
     video.srcObject = stream;
     await video.play().catch(() => {});
     $('[data-scan="shot"]').disabled = false;
-    // カメラの一覧（初めてのときは、許可のあとで名前が分かる）
+    // カメラの一覧（初めてのときは、許可のあとで名前が分かる。Mac の連携カメラの iPhone もここに出る）
     const cams = (await navigator.mediaDevices.enumerateDevices()).filter((x) => x.kind === 'videoinput');
     const now = stream.getVideoTracks()[0]?.getSettings().deviceId;
     camSel.innerHTML = cams
@@ -270,24 +332,111 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
       )
       .join('');
     camSel.hidden = cams.length < 2;
-    say('紙の四隅の黒い目印が全部写るように撮ってください');
-    timer = setInterval(watch, 500);
+    say(LIVE_SAY.none);
+    timer = setInterval(watch, LIVE_MS);
+  };
+  /** いまの映像をいちばん細かく読む（取り込む）。読んでいる間に次の紙が止まったら、読み終えてから続けて読む */
+  let queued = false;
+  const capture = async () => {
+    if (!video.videoWidth) return;
+    if (reading) {
+      queued = true;
+      return;
+    }
+    reading = true;
+    say('読み取っています…');
+    try {
+      const r = await take(toImageData(video, video.videoWidth, video.videoHeight));
+      if (r.ok) {
+        flash = 4;
+        say(`${r.message}。次のページは、この紙をカメラから外してから向けてください`);
+      } else live.retry();
+    } finally {
+      reading = false;
+    }
+    if (queued && d.isConnected && !video.hidden) {
+      queued = false;
+      capture();
+    }
   };
   const watch = () => {
-    if (busy || !video.videoWidth) return;
-    const img = toImageData(video, video.videoWidth, video.videoHeight, 800);
-    const m = findMarkers(img);
+    if (!video.videoWidth || video.hidden) return;
+    const img = toImageData(video, video.videoWidth, video.videoHeight, LIVE_SIDE);
+    const marks = findMarkers(img);
+    const t = marks && pageTransform(marks);
+    const code = t && readCode(img, t);
+    const step = live.step(marks ? {marks, format: code?.format ?? null} : null);
+    if (step.phase === 'capture') capture();
+    // 枠：見えた紙の四隅を結ぶ。止まるのを待つ間は、緑が四隅から伸びる。取り込んだら光る
     overlay.width = img.width;
     overlay.height = img.height;
     const ctx = overlay.getContext('2d');
     ctx.clearRect(0, 0, img.width, img.height);
-    if (!m) return;
-    ctx.strokeStyle = '#2fb36a';
-    ctx.lineWidth = Math.max(3, img.width / 200);
-    ctx.beginPath();
-    for (const [i, p] of [m.tl, m.tr, m.br, m.bl].entries()) (i ? ctx.lineTo : ctx.moveTo).call(ctx, ...p);
-    ctx.closePath();
+    if (!reading && !flash) {
+      if (step.phase === 'none') say(LIVE_SAY.none);
+      else if (step.phase === 'nocode') say(LIVE_SAY.nocode);
+      else if (step.phase === 'steady') say(`${FORMATS[code.format].name}　そのまま動かさないでください`);
+    }
+    if (!marks) return;
+    const quad = [marks.tl, marks.tr, marks.br, marks.bl];
+    const line = Math.max(3, img.width / 220);
+    const path = () => {
+      ctx.beginPath();
+      for (const [i, p] of quad.entries()) (i ? ctx.lineTo : ctx.moveTo).call(ctx, ...p);
+      ctx.closePath();
+    };
+    ctx.lineJoin = 'round';
+    if (flash > 0) {
+      flash--;
+      path();
+      ctx.fillStyle = `rgba(47, 179, 106, ${0.12 * flash})`;
+      ctx.fill();
+    }
+    path();
+    ctx.lineWidth = line;
+    ctx.strokeStyle =
+      step.phase === 'nocode' ? '#e0a526' : step.phase === 'done' ? '#2fb36a' : 'rgba(255,255,255,0.85)';
     ctx.stroke();
+    if (step.phase === 'steady' || step.phase === 'capture') {
+      // 止まるのを待つ：四隅から辺の長さの progress/2 ずつ緑を伸ばす
+      ctx.strokeStyle = '#2fb36a';
+      ctx.lineWidth = line * 1.6;
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const a = quad[i];
+        const b = quad[(i + 1) % 4];
+        const f = step.progress / 2;
+        ctx.moveTo(...a);
+        ctx.lineTo(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f);
+        ctx.moveTo(...b);
+        ctx.lineTo(b[0] + (a[0] - b[0]) * f, b[1] + (a[1] - b[1]) * f);
+      }
+      ctx.stroke();
+    }
+    // 形式の名前（コードから）を紙の上の辺に
+    if (code) {
+      const label = step.phase === 'done' ? `✓ ${FORMATS[code.format].name}` : FORMATS[code.format].name;
+      ctx.font = `600 ${Math.round(img.width / 40)}px system-ui, sans-serif`;
+      const [x, y] = marks.tl;
+      const wText = ctx.measureText(label).width;
+      const pad = img.width / 120;
+      ctx.fillStyle = step.phase === 'done' ? '#2fb36a' : 'rgba(29,31,34,0.8)';
+      ctx.fillRect(x, y - img.width / 40 - pad * 2.4, wText + pad * 2, img.width / 40 + pad * 1.6);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, x + pad, y - pad * 1.4);
+    }
+  };
+  /** カメラで読む（'camera'）か、スマホで撮る（'phone'）か */
+  const setMode = (mode) => {
+    const cam = mode === 'camera';
+    for (const el of [video, overlay, $('[data-scan="shot"]')]) el.hidden = !cam;
+    phoneBox.hidden = cam;
+    $('[data-scan="mode"]').textContent = cam ? 'スマホで撮る' : 'このパソコンのカメラ';
+    if (!cam) {
+      stop();
+      camSel.hidden = true;
+      overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+    }
   };
 
   d.addEventListener('click', async (e) => {
@@ -300,15 +449,13 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
       qr = null;
       return drawPhone(last);
     }
-    if (what === 'pccam') {
-      // スマホの代わりに、このパソコンのカメラ（Mac の連携カメラも）で撮る。もう一度押すとスマホの案内に戻る
-      const on = video.hidden;
-      for (const el of [video, overlay, $('[data-scan="shot"]')]) el.hidden = !on;
-      phoneBox.hidden = on;
-      b.textContent = on ? 'スマホで撮る' : 'このパソコンのカメラ';
-      camSel.hidden = true;
-      if (on) return start();
-      stop();
+    if (what === 'mode') {
+      // このパソコンのカメラ（その場で読む）と、スマホで撮る を切り替える
+      if (video.hidden) {
+        setMode('camera');
+        return start();
+      }
+      setMode('phone');
       return say('');
     }
     if (what === 'remove') {
@@ -317,15 +464,9 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
       return renderPages();
     }
     if (what === 'shot') {
-      if (!video.videoWidth) return;
-      busy = true;
-      say('読んでいます…');
-      try {
-        await take(toImageData(video, video.videoWidth, video.videoHeight));
-      } finally {
-        busy = false;
-      }
-      return;
+      // 止まるのを待たずに、いま読む（同じ紙をもう一度読みたいときも）
+      if (!video.videoWidth || reading) return;
+      return capture();
     }
     if (what === 'import') {
       busy = true;
@@ -381,6 +522,7 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
   });
   renderPages();
   openRemote();
+  start();
 }
 
 /** 回のノートにページを足し、取り出した線を貼る。戻り：{materialId, added}（added：{pages, first, bytes}）か null（知らせは出した） */
