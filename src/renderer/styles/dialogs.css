@@ -222,10 +222,43 @@ a,
 .scan-dialog__size {
   max-width: 160px;
 }
-.scan-dialog__phone {
-  margin: 0 auto 0 0;
+.scan-dialog [hidden] {
+  display: none !important;
+}
+/* スマホで撮る：つなぎ方（QR）と、スマホを待っているか */
+.scan-dialog__phonebox {
+  grid-area: 1 / 1;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  max-width: 440px;
+  margin: 24px;
+  padding: 24px 28px;
+  border-radius: var(--radius);
+  background: var(--paper, #fff);
+  color: var(--paper-ink);
+  text-align: center;
+}
+.scan-dialog__phonebox h3 {
+  margin: 0;
+  font-size: var(--fs-h3, 1.1rem);
+}
+.scan-dialog__phonebox p {
+  margin: 0;
   font-size: var(--fs-small);
-  color: color-mix(in srgb, var(--paper-ink) 70%, transparent);
+  line-height: 1.6;
+}
+.scan-dialog__qr svg {
+  display: block;
+  width: 200px;
+  height: 200px;
+}
+.scan-dialog__phone-state {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--paper-ink) 60%, transparent);
+}
+.scan-dialog__phone-state.is-on {
+  color: #2f8f5b;
 }
 .scan-dialog__tidy {
   display: inline-flex;

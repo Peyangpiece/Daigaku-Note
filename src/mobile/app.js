@@ -235,16 +235,13 @@ async function renderScan() {
   const draw = () => {
     if (!session) {
       box.innerHTML =
-        '<p>パソコンのパレットノートで、回の「＋ ノート」→「アナログノート…」を開いてください。開くと、ここで撮れるようになります。</p>';
+        '<p>パソコンのパレットノートで、回の「＋ ノート」→「アナログノート…」を押してください。押すと、ここで撮れるようになります。</p>';
       return;
     }
     box.innerHTML = `
       <h2>${esc(session.label)}</h2>
-      <p class="m-muted">Palette スキャンノートの四隅の黒い目印が全部写るように、真上から撮ってください。撮ったページはパソコンの窓に並びます。</p>
-      <div class="m-row">
-        <label class="m-btn m-btn--primary m-btn--wide"><span class="ico ico--camera" aria-hidden="true"></span> 撮る<input type="file" accept="image/*" capture="environment" data-v="shoot" hidden></label>
-        <label class="m-btn m-btn--wide">写真を選ぶ<input type="file" accept="image/*" multiple data-v="pickfile" hidden></label>
-      </div>
+      <p class="m-muted">「撮る」でカメラが開きます。Palette スキャンノートの四隅の黒い目印が全部写るように、真上から撮ってください。撮ったページはパソコンの窓に並びます。</p>
+      <label class="m-btn m-btn--primary m-btn--wide m-shoot"><span class="ico ico--camera" aria-hidden="true"></span> 撮る<input type="file" accept="image/*" capture="environment" data-v="shoot" hidden></label>
       <p class="m-muted" data-v="status" role="status"></p>
       ${sent.length ? `<ol class="m-list">${sent.map((x) => `<li class="m-item${x.ok ? '' : ' m-item--off'}">${esc(x.message)}</li>`).join('')}</ol>` : ''}`;
     const status = box.querySelector('[data-v="status"]');
@@ -264,20 +261,19 @@ async function renderScan() {
       draw();
     };
     box.querySelector('[data-v="shoot"]').onchange = (e) => send(e.target.files).finally(() => (e.target.value = ''));
-    box.querySelector('[data-v="pickfile"]').onchange = (e) =>
-      send(e.target.files).finally(() => (e.target.value = ''));
   };
   // パソコンの窓が開いた・閉じた・開き直されたかを 2 秒ごとに見る（撮っている間は書き換えない）
   const check = async () => {
     let next = null;
     try {
-      next = (await call('scan.waiting')).session;
+      next = (await call('scan.waiting', {watching: true})).session;
     } catch {
       next = null;
     }
     if (next?.id === session?.id) return;
     if (box.querySelector('[data-v="status"]')?.textContent.includes('送って')) return;
     session = next;
+    if (next) scanShown = next.id;
     sent = [];
     draw();
   };
@@ -307,6 +303,28 @@ async function route() {
   }
 }
 
+// パソコンで「アナログノート…」を押したら、撮る画面に切り替える（3 秒ごとに見る。画面が見えているときだけ）。
+// 資料・復習の途中では切り替えず、知らせだけ出す。同じ取り込みでは 1 回だけ（撮る画面から戻ったら、また連れて行かない）
+let scanShown = null;
+async function watchScan() {
+  if (document.visibilityState !== 'visible') return;
+  const path = location.hash.replace(/^#/, '').split('?')[0] || '/';
+  if (path === '/scan') return;
+  let s = null;
+  try {
+    s = (await call('scan.waiting')).session;
+  } catch {
+    return;
+  }
+  if (!s || s.id === scanShown) return;
+  scanShown = s.id;
+  if (path.startsWith('/pdf/') || path === '/review')
+    toast(
+      `パソコンでアナログノートの取り込みが始まりました（${s.label}）。ホームの「アナログノートを撮る」から撮れます`
+    );
+  else location.hash = '#/scan';
+}
+
 async function start() {
   const how = initPairing();
   if (how === 'none') return showProblem(new NotPaired());
@@ -320,7 +338,9 @@ async function start() {
     return showProblem(e);
   }
   window.addEventListener('hashchange', route);
-  route();
+  await route();
+  watchScan();
+  setInterval(watchScan, 3000);
 }
 
 start();

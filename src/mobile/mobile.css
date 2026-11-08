@@ -133,6 +133,11 @@ a {
   background: var(--primary);
   color: var(--on-primary);
 }
+.m-shoot {
+  min-height: 64px;
+  margin-top: 12px;
+  font-size: 18px;
+}
 .m-row {
   display: flex;
   gap: 8px;

@@ -157,9 +157,12 @@ export function createMobileApi({
     async 'photo.data'({ids}) {
       return call('photo.data', {ids: Array.isArray(ids) ? ids.slice(0, 200) : []});
     },
-    /** アナログノート：パソコンで取り込みの窓が開いているか（開いていれば送り先の授業・回） */
-    async 'scan.waiting'() {
-      return {session: scan?.current() ?? null};
+    /**
+     * アナログノート：パソコンで取り込みの窓が開いているか（開いていれば送り先の授業・回）。
+     * watching：撮る画面から見ている（パソコンの窓に「スマホとつながっています」と出す）
+     */
+    async 'scan.waiting'({watching = false} = {}) {
+      return {session: scan?.current({watching: watching === true}) ?? null};
     },
     /** アナログノート：撮った 1 枚をパソコンの取り込みの窓へ。窓が読み終えるのを待ち、読めたかを返す */
     async 'scan.send'({id, data}) {

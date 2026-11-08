@@ -4,13 +4,14 @@
 import {ulid} from '../shared/ids.js';
 
 export const RELAY_TIMEOUT_MS = 60_000; // 窓が 1 枚を読み終えるのを待つ長さ
+export const PHONE_SEEN_MS = 6_000; // スマホが撮る画面を開いているとみなす長さ（スマホは 2 秒ごとに見に来る）
 
 /**
- * @param {{timeoutMs?: number}} [opt]
+ * @param {{timeoutMs?: number, now?: () => number}} [opt]
  * 窓（frame）は send(channel, payload) を持つもの（Electron の WebFrameMain）
  */
-export function createScanRelay({timeoutMs = RELAY_TIMEOUT_MS} = {}) {
-  let session = null; // {id, frame, label}
+export function createScanRelay({timeoutMs = RELAY_TIMEOUT_MS, now = () => Date.now()} = {}) {
+  let session = null; // {id, frame, label, seenAt}
   const waiting = new Map(); // 写真の番号 → {resolve, timer, sessionId}
 
   const settle = (photoId, result) => {
@@ -29,7 +30,7 @@ export function createScanRelay({timeoutMs = RELAY_TIMEOUT_MS} = {}) {
     /** 取り込みの窓が開いた：スマホから受け始める（前の窓の分は打ち切る）。戻り：番号 */
     open(frame, label) {
       if (session) drop(session.id, 'パソコンの取り込みの窓が開き直されました。もう一度撮ってください');
-      session = {id: ulid(), frame, label: String(label ?? '').slice(0, 120)};
+      session = {id: ulid(), frame, label: String(label ?? '').slice(0, 120), seenAt: -Infinity};
       return session.id;
     },
     /** 取り込みの窓が閉じた */
@@ -38,9 +39,15 @@ export function createScanRelay({timeoutMs = RELAY_TIMEOUT_MS} = {}) {
       drop(id, 'パソコンの取り込みの窓が閉じられました');
       session = null;
     },
-    /** スマホに見せる、いま受けている窓（なければ null） */
-    current() {
-      return session ? {id: session.id, label: session.label} : null;
+    /** スマホに見せる、いま受けている窓（なければ null）。watching（撮る画面から見に来た）なら、その時刻を覚える */
+    current({watching = false} = {}) {
+      if (!session) return null;
+      if (watching) session.seenAt = now();
+      return {id: session.id, label: session.label};
+    },
+    /** 窓に見せる：スマホが撮る画面を開いているか（少し前に見に来たか） */
+    phoneSeen(id) {
+      return !!session && session.id === id && now() - session.seenAt < PHONE_SEEN_MS;
     },
     /** スマホから 1 枚：窓に渡し、読めたか（{ok, message, pages}）を待つ */
     deliver(id, bytes) {
