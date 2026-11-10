@@ -22,6 +22,8 @@ const GLIDE_STOP = 0.02;
 // 字を書く合間（次の字へペンを運ぶ間）に置いた手は手のひら。ペンを遠ざけて少し待てば、指で動かせる
 const PAD_PALM_MS = 700;
 const PAD_HOVER_MS = 300;
+// 時間だけで手のひらとみなした指が、これだけ動いたら指に戻す（CSS のピクセル。置いた手のずれより大きく）
+const PALM_RELEASE_PX = 30;
 
 export const methods = {
   onPointerDown(e) {
@@ -33,7 +35,12 @@ export const methods = {
     }
     if (e.pointerType === 'touch') {
       this.touchIds.add(e.pointerId);
-      if (this.palmLikely() || this.bigTouch(e)) this.palmIds.add(e.pointerId);
+      if (this.bigTouch(e)) this.palmIds.add(e.pointerId);
+      else if (this.palmLikely()) {
+        // 時間だけで手のひらとみなした指：はっきり指で払ったら、指に戻す（palmRelease）
+        this.palmIds.add(e.pointerId);
+        this.palmSoft.set(e.pointerId, {x: e.clientX, y: e.clientY});
+      }
       if (this.palmIds.has(e.pointerId)) return; // 手のひら：何もしない
       // 2 本目の指は書き込みに使わない（ピンチ）。1 本目で始めたことも取りやめる（ペンで書いている間の手のひらは無視）
       if (this.drawing?.byPen) return;
@@ -218,12 +225,29 @@ export const methods = {
    */
   palmOff() {
     for (const id of this.touchIds) this.palmIds.add(id);
+    this.palmSoft.clear(); // ペンを下ろしたときに触れていたものは、指に戻さない
     this.stopGlide();
     if (this.pan && this.touchIds.has(this.pan.pointer)) {
       if (this.pan.frame) cancelAnimationFrame(this.pan.frame);
       this.pan = null;
     }
     if (this.pinch?.touch) this.cancelPinch();
+  },
+
+  /**
+   * 書いた直後（時間だけで手のひらとみなした間）に触れた指が、はっきり動いた（払った）：手のひらは置いたまま大きくは動かない
+   * ので、指に戻してページを動かし始める。ペンで書いている・ペンを浮かせて動かしている間はそのまま（字を書く手の動き）。
+   * 書いてすぐ指でページを動かそうとすると、約 1 秒止まってから動いていた（v0.22.6）
+   */
+  palmRelease(e) {
+    const s = this.palmSoft.get(e.pointerId);
+    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < PALM_RELEASE_PX) return;
+    this.palmSoft.delete(e.pointerId);
+    const now = performance.now();
+    if (this.drawing?.byPen || now - (this.hoverAt ?? -Infinity) < PAD_HOVER_MS || this.touchIds.size > 1) return;
+    this.palmIds.delete(e.pointerId);
+    if (!this.pan && !this.drawing && DRAW_TOOLS.includes(this.tool))
+      this.pan = {pointer: e.pointerId, x: e.clientX, y: e.clientY};
   },
 
   /** iPad：触れた面が大きい（手のひら。指よりはっきり大きい）。iPad が大きさを渡さなければ、いつも false */
@@ -237,6 +261,7 @@ export const methods = {
    */
   palmLate(id) {
     this.palmIds.add(id);
+    this.palmSoft.delete(id);
     if (this.pan?.pointer === id) {
       if (this.pan.frame) cancelAnimationFrame(this.pan.frame);
       this.pan = null;
@@ -271,8 +296,10 @@ export const methods = {
       else this.hoverAt = performance.now();
     } else if (e.buttons) this.inputAt = performance.now();
     if (e.pointerType === 'touch' && !this.palmIds.has(e.pointerId) && this.bigTouch(e)) this.palmLate(e.pointerId);
+    if (e.pointerType === 'touch' && this.palmSoft.has(e.pointerId)) this.palmRelease(e);
     if (e.pointerType === 'touch' && this.palmIds.has(e.pointerId)) return; // 手のひらと決めた指は、離すまで何もしない
-    if (e.pointerType === 'touch' && this.palmLikely() && !this.pinch) return;
+    // パソコン（Surface など）：ペンの近くの指は動きごとに見る。iPad は触れたときに指ごとに決めている（palmIds）
+    if (e.pointerType === 'touch' && !api.pad && this.palmLikely() && !this.pinch) return;
     if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);
     const pan = this.pan;
     if (pan?.pointer === e.pointerId) {
