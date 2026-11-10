@@ -1,7 +1,8 @@
 # iPad アプリ（ipad/。docs/SYNC.md・docs/MOBILE.md §8）：Capacitor で包んだアプリを Mac で作る。
 # - 既定のブランチで package.json の版が上がったとき（と、手で「TestFlight に送る」に印を付けたとき）：署名して App Store Connect
-#   （TestFlight）へ送る。署名の証明書とプロファイルは、App Store Connect API キー（Secrets の APPSTORE_API_KEY_ID・
-#   APPSTORE_API_ISSUER_ID・APPSTORE_API_KEY_P8。役割は管理者）で Xcode が自動で作る。ビルド番号はこの実行の番号
+#   （TestFlight）へ送る。アーカイブは署名せずに作り、書き出しのときに App Store Connect API キー（Secrets の APPSTORE_API_KEY_ID・
+#   APPSTORE_API_ISSUER_ID・APPSTORE_API_KEY_P8。役割は管理者）で、Apple が預かる配布用の証明書（クラウド署名）で署名する
+#   （作業用の Mac に証明書を作らない）。ビルド番号はこの実行の番号
 # - iPad アプリを変えるプルリクエスト：シミュレータ向けに作れるかだけ確かめる（署名しない）
 name: iPad
 
@@ -85,10 +86,12 @@ jobs:
           key="$RUNNER_TEMP/AuthKey_$KEY_ID.p8"
           printf '%s\n' "$KEY_P8" > "$key"
           auth=(-allowProvisioningUpdates -authenticationKeyPath "$key" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER")
+          # アーカイブは署名せずに作る。署名は書き出し（exportArchive）で、Apple が預かる配布用の証明書（クラウド署名）で行う。
+          # アーカイブで署名すると、作業用の Mac ごとに開発用の証明書が作られ、上限に達して止まった（v0.23.1）
           xcodebuild -project ipad/ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" archive \
-            DEVELOPMENT_TEAM=9G78U9XD92 CODE_SIGN_STYLE=Automatic MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
-            "${auth[@]}" | tail -n 40
+            DEVELOPMENT_TEAM=9G78U9XD92 MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -n 40
           cat > "$RUNNER_TEMP/export.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
