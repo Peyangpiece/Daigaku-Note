@@ -65,3 +65,16 @@ body {
 .s-error {
   color: #c5221f;
 }
+/* 写真を撮って読む：ボタンの中の、見えないファイルを選ぶ欄（ボタン全体で押せる） */
+.s-btn--file {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+}
+.s-btn--file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  font-size: 100px;
+}

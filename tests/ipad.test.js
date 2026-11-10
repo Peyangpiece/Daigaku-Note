@@ -47,3 +47,9 @@ test('アプリの設定：バンドル ID・iPad 専用・カメラと LAN の�
   // アプリの中で開いたページは、ホーム画面に追加したアイコンと同じ扱い（QR の # でつなぐ）
   assert.match(read('src/mobile/client.js'), /PaletteNoteApp/);
 });
+
+test('最初の画面：カメラの映像が出ないときのために、写真を撮って QR を読める', () => {
+  const js = read('ipad/src/start.js');
+  assert.match(js, /type="file" accept="image\/\*" capture="environment"/);
+  assert.match(js, /readPhoto/);
+});
