@@ -71,7 +71,7 @@ export function padIndexHtml(raw) {
     .replace(map[0], `<script type="importmap">${body}</script>`)
     .replace(
       '<meta charset="utf-8" />',
-      '<meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n    <meta name="apple-mobile-web-app-capable" content="yes" />\n    <link rel="stylesheet" href="/p/pad/pad.css" />'
+      '<meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n    <meta name="apple-mobile-web-app-capable" content="yes" />\n    <meta name="apple-mobile-web-app-title" content="パレットノート" />\n    <link rel="manifest" href="/m/app/manifest.webmanifest" />\n    <link rel="stylesheet" href="/p/pad/pad.css" />'
     )
     .replace(app, '<script type="module" src="/p/pad/boot.js"></script>');
 }

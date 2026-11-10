@@ -4,7 +4,7 @@
   "description": "パソコンのパレットノートとつなぐスマホのページ（アナログノートの読み取り・資料・復習）",
   "lang": "ja",
   "start_url": "/m/",
-  "scope": "/m/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#fbf8f1",
   "theme_color": "#fbf8f1",
