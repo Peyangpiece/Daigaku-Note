@@ -7,3 +7,7 @@ src/renderer/vendor/
 .claude/skills/render-blender-output/
 .claude/skills/script-blender-automation/
 .claude/skills/create-3d-scene/
+
+# iPad アプリ（Capacitor が作る Xcode のプロジェクトと、組み立てた画面）
+ipad/ios/
+ipad/www/

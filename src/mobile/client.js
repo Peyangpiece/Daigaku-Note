@@ -33,7 +33,9 @@ const save = () => {
 
 /** ホーム画面に追加したアイコンから開いている（ブラウザのタブではない） */
 export const standalone = () =>
-  window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  window.matchMedia?.('(display-mode: standalone)').matches ||
+  window.navigator.standalone === true ||
+  /PaletteNoteApp/.test(navigator.userAgent); // iPad のアプリ（ipad/。アプリの中で開いたページ）
 
 /**
  * 鍵を読む。戻りは 'new'（いまつなぐ）・'stored'（前につないだ）・'install'（QR からブラウザで開いた：先にホーム画面に追加）・'none'。

@@ -105,8 +105,9 @@ export function open(key, bytes) {
  * QR に入れるスマホの入口の URL（鍵は # の後ろ。サーバーには送られない）。
  * secure：https（スマホのブラウザでカメラを使える。その場で読む）
  */
-export const pairUrl = ({host, port, deviceId, key, secure = false}) =>
-  `${secure ? 'https' : 'http'}://${host}:${port}/m/#d=${deviceId}&k=${toB64(key)}`;
+// httpPort：http の入口（iPad のアプリはこのパソコンが作った証明書の https を開けないので、暗号化した窓口へ http でつなぐ。docs/MOBILE.md §8）
+export const pairUrl = ({host, port, deviceId, key, secure = false, httpPort = null}) =>
+  `${secure ? 'https' : 'http'}://${host}:${port}/m/#d=${deviceId}&k=${toB64(key)}${httpPort ? `&hp=${httpPort}` : ''}`;
 
 /** pairUrl の # の後ろを読む。形が悪ければ null */
 export function readPairHash(hash) {

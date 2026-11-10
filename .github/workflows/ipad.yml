@@ -1,0 +1,106 @@
+# iPad アプリ（ipad/。docs/SYNC.md・docs/MOBILE.md §8）：Capacitor で包んだアプリを Mac で作る。
+# - 既定のブランチで package.json の版が上がったとき（と、手で「TestFlight に送る」に印を付けたとき）：署名して App Store Connect
+#   （TestFlight）へ送る。署名の証明書とプロファイルは、App Store Connect API キー（Secrets の APPSTORE_API_KEY_ID・
+#   APPSTORE_API_ISSUER_ID・APPSTORE_API_KEY_P8。役割は管理者）で Xcode が自動で作る。ビルド番号はこの実行の番号
+# - iPad アプリを変えるプルリクエスト：シミュレータ向けに作れるかだけ確かめる（署名しない）
+name: iPad
+
+on:
+  push:
+    branches: ['**']
+    paths: ['package.json']
+  pull_request:
+    paths:
+      - 'ipad/**'
+      - '.github/workflows/ipad.yml'
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: 'TestFlight に送る'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ipad-${{ github.ref }}
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      # 送るか：手で印を付けた・既定のブランチで版が上がった push（前のコミットと package.json の版が違う）
+      - id: d
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DEFAULT_REF: refs/heads/${{ github.event.repository.default_branch }}
+          UPLOAD: ${{ inputs.upload }}
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          up=false
+          if [ "$EVENT" = workflow_dispatch ] && [ "$UPLOAD" = true ]; then up=true; fi
+          if [ "$EVENT" = push ] && [ "$REF" = "$DEFAULT_REF" ]; then
+            prev=$(git show HEAD~1:package.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version)}catch{console.log('')}})")
+            if [ "$prev" != "$v" ]; then up=true; fi
+          fi
+          if [ "$EVENT" = push ] && [ "$up" = false ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; fi
+          echo "upload=$up" >> "$GITHUB_OUTPUT"
+          echo "版 $v・TestFlight に送る：$up"
+      - if: steps.d.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.d.outputs.skip != 'true'
+        run: npm ci --ignore-scripts # jsQR（iPad アプリの画面に入れる）を取るだけ。Electron は要らない
+      - if: steps.d.outputs.skip != 'true'
+        working-directory: ipad
+        run: npm install --no-audit --no-fund && npm run build
+      # プルリクエスト：シミュレータ向けに作れるか（署名しない）
+      - if: steps.d.outputs.skip != 'true' && steps.d.outputs.upload != 'true'
+        shell: bash # pipefail：xcodebuild の失敗を tail で隠さない
+        run: |
+          xcodebuild -project ipad/ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO | tail -n 30
+      # 署名して TestFlight へ送る
+      - if: steps.d.outputs.upload == 'true'
+        shell: bash
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8 }}
+          VERSION: ${{ steps.d.outputs.version }}
+          BUILD: ${{ github.run_number }}
+        run: |
+          if [ -z "$KEY_ID" ] || [ -z "$ISSUER" ] || [ -z "$KEY_P8" ]; then
+            echo "::error::App Store Connect API キー（APPSTORE_API_KEY_ID・APPSTORE_API_ISSUER_ID・APPSTORE_API_KEY_P8）がありません"; exit 1
+          fi
+          key="$RUNNER_TEMP/AuthKey_$KEY_ID.p8"
+          printf '%s\n' "$KEY_P8" > "$key"
+          auth=(-allowProvisioningUpdates -authenticationKeyPath "$key" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER")
+          xcodebuild -project ipad/ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" archive \
+            DEVELOPMENT_TEAM=9G78U9XD92 CODE_SIGN_STYLE=Automatic MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+            "${auth[@]}" | tail -n 40
+          cat > "$RUNNER_TEMP/export.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>9G78U9XD92</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -exportPath "$RUNNER_TEMP/export" "${auth[@]}" | tail -n 40
+          rm -f "$key"
+          echo "TestFlight に送りました：版 $VERSION（ビルド $BUILD）"
