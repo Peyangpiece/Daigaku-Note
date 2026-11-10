@@ -34,7 +34,18 @@ test(
   async () => {
     const home = mkdtempSync(path.join(tmpdir(), 'dn-pad-'));
     const {_electron, chromium, devices} = require('playwright');
-    const app = await _electron.launch({
+    // 別のファイルの通しテスト（app.test.js）と同時に動くので、Electron の実行ファイルを相手がまだ書き込んでいる（展開している）と
+    // spawn が ETXTBSY で失敗する。書き終わるのを待って起動し直す
+    const launchApp = async (opts) => {
+      for (let i = 0; ; i++)
+        try {
+          return await _electron.launch(opts);
+        } catch (e) {
+          if (!/ETXTBSY/.test(String(e?.message)) || i >= 10) throw e;
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+    };
+    const app = await launchApp({
       args: ['.', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--password-store=basic'],
       cwd: ROOT,
       env: {
