@@ -6,6 +6,7 @@ import {fromB64, toB64} from '../../shared/mobile-wire.js';
 import {createDrive, loginLoopback, refreshAccess, revoke} from './google.js';
 import {fingerprint, newMasterKey} from './keys.js';
 import {createPusher} from './sync.js';
+import {loadClientSecret} from './client-secret.js';
 
 export const PUSH_EVERY_MS = 30 * 60 * 1000;
 
@@ -23,7 +24,7 @@ export function createCloud({
   openExternal,
   log = () => {},
   fetch = globalThis.fetch,
-  config = GOOGLE_DESKTOP,
+  config = {...GOOGLE_DESKTOP, clientSecret: GOOGLE_DESKTOP.clientSecret || loadClientSecret()},
   onChange = () => {},
   now = () => new Date()
 }) {

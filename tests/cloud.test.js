@@ -274,3 +274,24 @@ test('連携：クライアント ID がなければ準備中。連携してい�
   await assert.rejects(cloud.link(), /準備中/);
   await assert.rejects(cloud.push(), /連携していません/);
 });
+
+test('クライアント ID：パソコン用（デスクトップ）と iPad 用（iOS）が入っている。秘密はリポジトリに入れず、作るときに入れる', async () => {
+  const {GOOGLE_DESKTOP, GOOGLE_IOS} = await import('../src/shared/google-client.js');
+  assert.match(GOOGLE_DESKTOP.clientId, /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/);
+  assert.match(GOOGLE_IOS.clientId, /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/);
+  assert.notEqual(GOOGLE_DESKTOP.clientId, GOOGLE_IOS.clientId);
+  assert.equal(GOOGLE_DESKTOP.clientSecret, '', 'リポジトリには秘密を書かない');
+  const {loadClientSecret} = await import('../src/main/cloud/client-secret.js');
+  assert.equal(loadClientSecret({env: {GOOGLE_DESKTOP_CLIENT_SECRET: ' s1 '}, read: () => 'f'}), 's1');
+  assert.equal(loadClientSecret({env: {}, read: () => 'from-file\n'}), 'from-file');
+  assert.equal(
+    loadClientSecret({
+      env: {},
+      read: () => {
+        throw new Error('なし');
+      }
+    }),
+    ''
+  );
+  assert.equal(googleReady({clientId: GOOGLE_DESKTOP.clientId, clientSecret: 'x'}), true);
+});
