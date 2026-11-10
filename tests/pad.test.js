@@ -235,6 +235,8 @@ test('padIndexHtml：app.js の前に boot.js、暗号の部品を import の対
   assert.ok(!out.includes('src="app.js"'));
   assert.match(out, /name="viewport"/);
   assert.match(out, /\/p\/pad\/pad\.css/);
+  // Windows で取り出したファイル（改行が CRLF）でも同じ
+  assert.equal(padIndexHtml(html.replace(/\n/g, '\r\n')), out);
 });
 
 test('staticFile：パソコンの画面のファイル・pdf.js・three.js・iPad の部品を配る。外は配らない', () => {

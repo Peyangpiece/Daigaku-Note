@@ -53,7 +53,9 @@ export const PAD_INDEX = '/p/src/renderer/index.html';
  * 画面の幅に合わせる・iPad の見た目（pad.css）を足す・暗号の部品を import の対応表に足す（CSP のハッシュも直す）・
  * app.js の前に、パソコンとのやりとりを用意する boot.js を読む（window.daigaku を作ってから app.js を読む）
  */
-export function padIndexHtml(html) {
+export function padIndexHtml(raw) {
+  // Windows で取り出したファイルは改行が CRLF（CSP のハッシュは LF の中身で書いてある）。LF にそろえる
+  const html = raw.replace(/\r\n/g, '\n');
   const map = html.match(/<script type="importmap">([\s\S]*?)<\/script>/);
   if (!map) throw new Error('index.html に import の対応表がありません');
   const json = JSON.parse(map[1]);
