@@ -12,7 +12,10 @@ export const PAD_DENY = {
   'backup.openDir': 'フォルダは、パソコンの画面で開いてください',
   'mobile.enable': 'スマホ・iPad の設定は、パソコンの画面で変えてください',
   'mobile.pair': 'スマホ・iPad の追加は、パソコンの画面でしてください',
-  'mobile.setFull': 'スマホ・iPad の設定は、パソコンの画面で変えてください'
+  'mobile.setFull': 'スマホ・iPad の設定は、パソコンの画面で変えてください',
+  'cloud.link': 'Google との連携は、パソコンの画面でしてください',
+  'cloud.unlink': 'Google との連携は、パソコンの画面で外してください',
+  'cloud.wipe': 'Google ドライブのデータは、パソコンの画面で消してください'
 };
 
 /** パソコンのフォルダを選んで登録する（パソコンの選ぶ窓が要る） */
@@ -123,5 +126,7 @@ export const PAD_QUIET = new Set([
   'mobile.pair',
   'mobile.rename',
   'mobile.remove',
-  'mobile.setFull'
+  'mobile.setFull',
+  'cloud.status',
+  'cloud.push'
 ]);

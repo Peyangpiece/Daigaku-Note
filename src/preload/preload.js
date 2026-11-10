@@ -108,6 +108,11 @@ const INVOKE = [
   'mobile.rename',
   'mobile.remove',
   'mobile.setFull',
+  'cloud.status',
+  'cloud.link',
+  'cloud.unlink',
+  'cloud.push',
+  'cloud.wipe',
   'annotation.list'
 ];
 const ON = [

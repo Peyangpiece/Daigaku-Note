@@ -1,7 +1,7 @@
 // パレットノート メインプロセスの入口（DESIGN-M0 §3）。常駐・トレイ・窓・起動手順。
 // M0 の骨格：DB・設定・ジョブ・スケジューラ・IPC をつなぐ。LMS 操作とファイル操作はここ（メイン）だけで行う。
 import {app, BrowserWindow, Menu, Notification, Tray, dialog, nativeImage, nativeTheme, net, shell} from 'electron';
-import {existsSync, mkdirSync, readdirSync, statSync} from 'node:fs';
+import {existsSync, mkdirSync, readdirSync, statSync, promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {openDatabase} from './db/db.js';
@@ -30,7 +30,9 @@ import {createUpdater} from './updater.js';
 import {createFolders} from './folders.js';
 import {createQuizService} from './quiz/service.js';
 import {runSelfTest, selfTestPath} from './self-check.js';
-import {applyStagedRestore, runBackup} from './backup.js';
+import {applyStagedRestore, exportBackup, runBackup} from './backup.js';
+import {readBase} from './pdf-save.js';
+import {createCloud} from './cloud/index.js';
 import {createNotifier} from './notify.js';
 import {createImporter} from './import-watch.js';
 import {asciiUserAgent} from './user-agent.js';
@@ -427,6 +429,19 @@ app.whenReady().then(async () => {
     });
     ctx.importer.refresh().catch((e) => log.warn(`取り込みの見張りを始められませんでした: ${e.message}`));
     registerIpc(ctx, {getWindow: () => win});
+    // Google ドライブでそろえる（docs/SYNC.md）。連携しているあいだは 30 分ごとに変わったものを送る
+    ctx.cloud = createCloud({
+      repo,
+      secrets: ctx.secrets,
+      exportDb: (file) => exportBackup(ctx.db, file),
+      materials: () => repo.listMaterialsAll(),
+      readMaterial: async (m) =>
+        /\.pdf$/i.test(m.path) ? (await readBase(m, path.join(userData, 'originals'))).bytes : fsp.readFile(m.path),
+      userData,
+      openExternal: (url) => shell.openExternal(url),
+      log: (m) => log.info(m)
+    });
+    ctx.cloud.start();
     // スマホ連携（docs/MOBILE.md）。オンにしてあれば、同じ Wi-Fi のスマホに向けて始める
     {
       const devices = createDevices({repo, secrets: ctx.secrets});

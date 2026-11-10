@@ -114,6 +114,14 @@ test(
       // 設定の「データ」タブ：バックアップ
       await win.evaluate(() => (location.hash = '#/settings?tab=data'));
       await win.waitForSelector('[data-backup="export"]', {timeout: 30000});
+      // Google ドライブ（docs/SYNC.md）：クライアント ID がまだないので準備中
+      await win.waitForFunction(
+        () => /準備中|連携/.test(document.querySelector('[data-v="cloud"]')?.textContent ?? ''),
+        null,
+        {
+          timeout: 30000
+        }
+      );
       // 裏で状態が変わって描き直しても、打っている欄のカーソルは動かず、日本語の変換中は欄を作り直さない
       await win.evaluate(() => (location.hash = '#/folder-new'));
       await win.waitForSelector('#fn-name');
