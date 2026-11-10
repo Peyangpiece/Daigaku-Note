@@ -206,6 +206,32 @@ test(
         return {span: css(span), body: css(document.body), selectstart: ev.defaultPrevented, menu, typing};
       });
       assert.deepEqual(palm, {span: 'none', body: 'none', selectstart: true, menu: 0, typing: 'text'});
+      // 書く道具のページ：ペン先・手のひらを止めて置いても拡大鏡を出さない（touchstart の既定の動きを止める）。ほかの道具では止めない
+      const loupe = await ipad.evaluate(() => {
+        const pages = document.querySelector('.viewer-pages');
+        const page = document.querySelector('.pdf-page');
+        const touch = (target) => {
+          const t = new Touch({identifier: 9, target, clientX: 300, clientY: 300});
+          const ev = new TouchEvent('touchstart', {
+            bubbles: true,
+            cancelable: true,
+            touches: [t],
+            targetTouches: [t],
+            changedTouches: [t]
+          });
+          target.dispatchEvent(ev);
+          target.dispatchEvent(new TouchEvent('touchend', {bubbles: true, cancelable: true, changedTouches: [t]}));
+          return ev.defaultPrevented;
+        };
+        const was = pages.dataset.tool;
+        pages.dataset.tool = 'ink';
+        const ink = touch(page);
+        pages.dataset.tool = 'select';
+        const select = touch(page);
+        pages.dataset.tool = was;
+        return {ink, select};
+      });
+      assert.deepEqual(loupe, {ink: true, select: false});
       // 指でページを動かす（ペンを使ったあと）：描き直し 1 回に 1 度だけスクロールし、速く払って離すと慣性で流れる。止めてから離すと流れない
       const pan = await ipad.evaluate(async () => {
         const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
