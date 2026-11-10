@@ -2,6 +2,11 @@
 
 版ごとの変更。新しい版が上。公開のときに Release の本文へその版の節が入る（`.github/workflows/release.yml`）。
 
+## 0.23.1
+
+- 設定 → データ の「いま送る」（Google ドライブへ送る）が「materials is not a function or its return value is not iterable」で失敗していたのを直した（0.22.0 から。資料の一覧を授業ごとにまとめた形のまま渡していた）
+- iPad でパソコンなしで使うための準備（段階 2-2）：パソコンと同じデータベースの処理を、iPad の中でも動かせる部品（sql.js）を入れた（まだ画面からは使わない）
+
 ## 0.23.0
 
 - iPad のアプリで「パソコンなしで使う（Google ドライブ）」の準備ができるようにした（段階 2-1。docs/SYNC.md §7）

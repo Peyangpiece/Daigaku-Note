@@ -1,7 +1,7 @@
 // Google ドライブでそろえる（docs/SYNC.md）：包み方・鍵・ログイン・ドライブ・送り出し
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, mkdirSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {openBlob, openJson, sealBlob, sealJson} from '../src/shared/vault.js';
@@ -294,4 +294,27 @@ test('クライアント ID：パソコン用（デスクトップ）と iPad �
     ''
   );
   assert.equal(googleReady({clientId: GOOGLE_DESKTOP.clientId, clientSecret: 'x'}), true);
+});
+
+test('送り出し：資料を授業ごとにまとめた形（repo.listMaterialsAll）で渡されても送る（v0.23.1 で直した）', async () => {
+  const {fake, drive, master} = setup();
+  const userData = mkdtempSync(path.join(tmpdir(), 'dn-cloud-grouped-'));
+  const grouped = {C1: [{id: 'M1', status: 'ok', path: '/x/a.pdf', sha256: 'h1', name: 'a.pdf'}]};
+  const r = await createPusher({
+    drive,
+    master,
+    exportDb: (file) => writeFileSync(file, 'DB'),
+    materials: () => grouped,
+    readMaterial: async () => new Uint8Array(Buffer.from('PDF')),
+    userData,
+    device: 'pc'
+  }).push();
+  assert.equal(r.uploaded, 3); // 資料 1・データベース・目録
+  const mf = [...fake.files.values()].find((f) => f.name === MANIFEST);
+  assert.deepEqual(Object.keys(openJson(deriveKeys(master).enc, mf.bytes, MANIFEST).materials), ['M1']);
+});
+
+test('つなぎ方：main.js は資料を授業ごとの形から並びにして送り出しに渡す', () => {
+  const main = readFileSync(new URL('../src/main/main.js', import.meta.url), 'utf8');
+  assert.match(main, /materials: \(\) => Object\.values\(repo\.listMaterialsAll\(\)\)\.flat\(\)/);
 });
