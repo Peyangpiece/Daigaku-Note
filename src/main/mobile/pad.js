@@ -150,6 +150,20 @@ export function createPadApi({
       return {ok: true, name: path.basename(m.path), mime: m.mime ?? null, bytes};
     },
     'pdf.exportData': (arg) => need(ctx.pdfExportData)(arg),
+    /**
+     * 手を止めるたびのファイルへの上書き（文字入れを画像にして送る。PDF を作り直す）は iPad では重いのでしない。
+     * パソコンで次にこの PDF を開いたときに上書きする（スマホで書いたときと同じ pdf.stale）
+     */
+    async 'pdf.markStale'({materialId}) {
+      const m =
+        repo.get('material', isUlid(materialId) ? materialId : bad('資料が不正です')) ?? bad('資料がありません');
+      const stale = new Set(repo.getSetting('pdf.stale', []));
+      if (!stale.has(m.id)) {
+        stale.add(m.id);
+        repo.setSetting('pdf.stale', [...stale]);
+      }
+      return {ok: true, changed: false, name: m.name};
+    },
     'term.readCalendarData': (arg) => need(ctx.readCalendarData)(arg),
     'backup.exportData': () => need(ctx.backupExportData)(),
     'backup.importData': (arg) => need(ctx.backupImportData)(arg)

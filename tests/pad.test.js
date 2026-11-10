@@ -198,7 +198,7 @@ test('窓口：書き出し・学年暦・バックアップは、パソコン�
       backupImportData: async (a) => (seen.push(['bi', a]), {ok: true})
     }
   );
-  for (const ch of PAD_EXTRA.filter((c) => c !== 'material.data'))
+  for (const ch of PAD_EXTRA.filter((c) => !['material.data', 'pdf.markStale'].includes(c)))
     assert.equal((await pad.call({ch, arg: {x: 1}, client: C1, frame: 'frame-top1'})).r.ok, true);
   assert.deepEqual(
     seen.map((s) => s[0]),
@@ -231,7 +231,7 @@ test('padIndexHtml：app.js の前に boot.js、暗号の部品を import の対
   assert.equal(JSON.parse(map).imports.three, '../../node_modules/three/build/three.module.js');
   const hash = createHash('sha256').update(map).digest('base64');
   assert.ok(out.includes(`'sha256-${hash}'`), 'CSP のハッシュが新しい対応表のもの');
-  assert.ok(out.includes('<script type="module" src="/p/pad/boot.js"></script>'));
+  assert.ok(out.includes('<script type="module" src="/m/p/pad/boot.js"></script>'));
   assert.ok(!out.includes('src="app.js"'));
   assert.match(out, /name="viewport"/);
   assert.match(out, /\/p\/pad\/pad\.css/);
@@ -241,20 +241,20 @@ test('padIndexHtml：app.js の前に boot.js、暗号の部品を import の対
 
 test('staticFile：パソコンの画面のファイル・pdf.js・three.js・iPad の部品を配る。外は配らない', () => {
   for (const p of [
-    '/p/src/renderer/app.js',
-    '/p/src/renderer/styles/base.css',
-    '/p/src/shared/pad-channels.js',
-    '/p/node_modules/pdfjs-dist/legacy/build/pdf.min.mjs',
-    '/p/node_modules/three/build/three.module.js',
-    '/p/pad/boot.js',
-    '/p/pad/bridge.js',
-    '/p/pad/pad.css'
+    '/m/p/src/renderer/app.js',
+    '/m/p/src/renderer/styles/base.css',
+    '/m/p/src/shared/pad-channels.js',
+    '/m/p/node_modules/pdfjs-dist/legacy/build/pdf.min.mjs',
+    '/m/p/node_modules/three/build/three.module.js',
+    '/m/p/pad/boot.js',
+    '/m/p/pad/bridge.js',
+    '/m/p/pad/pad.css'
   ])
     assert.ok(staticFile(p), p);
   assert.equal(staticFile(PAD_INDEX), null, 'index.html は直して配る');
-  assert.equal(staticFile('/p/src/main/main.js'), null);
-  assert.equal(staticFile('/p/node_modules/electron/index.js'), null);
-  assert.equal(staticFile('/p/src/renderer/../main/secrets.js'), null);
+  assert.equal(staticFile('/m/p/src/main/main.js'), null);
+  assert.equal(staticFile('/m/p/node_modules/electron/index.js'), null);
+  assert.equal(staticFile('/m/p/src/renderer/../main/secrets.js'), null);
 });
 
 // ---- サーバー ----
@@ -310,7 +310,7 @@ test('サーバー：知らせの待ちは、同時に受ける窓口の数に�
   }
 });
 
-test('サーバー：/p/ はパソコンの画面の入口へ。index.html は iPad 用に直して配る', async () => {
+test('サーバー：/p/・/m/p/ はパソコンの画面の入口へ。index.html は iPad 用に直して配る', async () => {
   const {server, base} = await startServer();
   try {
     let res = await fetch(`${base}/p/`, {redirect: 'manual'});
@@ -319,8 +319,19 @@ test('サーバー：/p/ はパソコンの画面の入口へ。index.html は i
     res = await fetch(`${base}${PAD_INDEX}?pane=embed&side=left`);
     assert.equal(res.status, 200);
     assert.match(await res.text(), /\/p\/pad\/boot\.js/);
-    res = await fetch(`${base}/p/src/renderer/fonts/noto-sans-jp.css`);
+    res = await fetch(`${base}/m/p/`, {redirect: 'manual'});
+    assert.equal(res.headers.get('location'), PAD_INDEX);
+    res = await fetch(`${base}/m/p/src/renderer/fonts/noto-sans-jp.css`);
     assert.equal(res.status, 200);
+    // 変わっていなければ送り直さない（304）
+    const etag = res.headers.get('etag');
+    assert.ok(etag);
+    res = await fetch(`${base}/m/p/src/renderer/fonts/noto-sans-jp.css`, {headers: {'If-None-Match': etag}});
+    assert.equal(res.status, 304);
+    // 3D モデル（iPad はブラウザで直接読む）
+    res = await fetch(`${base}/m/p/src/renderer/assets/stationery/eraser.glb`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'model/gltf-binary');
   } finally {
     await server.stop();
   }
@@ -350,8 +361,20 @@ test('ホーム画面に追加したアプリ：範囲（scope）は / で、iPa
   const m = JSON.parse(readFileSync(new URL('../src/mobile/manifest.webmanifest', import.meta.url), 'utf8'));
   assert.equal(m.scope, '/');
   assert.ok(PAD_INDEX.startsWith(m.scope) && m.start_url.startsWith(m.scope));
+  // 範囲が /m/ のままの古いアイコンでも、iPad の画面はアプリの中（/m/ の下に置く）
+  assert.ok(PAD_INDEX.startsWith('/m/'));
   assert.equal(m.display, 'standalone');
   // iPad の画面からホーム画面に追加しても、同じアプリになる
   const out = padIndexHtml(readFileSync(new URL('../src/renderer/index.html', import.meta.url), 'utf8'));
   assert.match(out, /<link rel="manifest" href="\/m\/app\/manifest\.webmanifest" \/>/);
+});
+
+test('窓口：iPad の書き込みは、ファイルへの上書きをパソコンで次に開いたときに回す（pdf.stale）', async () => {
+  const rows = {[ULID]: {id: ULID, name: '第1回.pdf', path: '/x/第1回.pdf', status: 'ok'}};
+  const repo = fakeRepo(rows);
+  const pad = createPadApi({handlers: new Map(), ctx: {}, repo, hub: createPadHub()});
+  const r = await pad.call({ch: 'pdf.markStale', arg: {materialId: ULID}, client: C1, frame: 'frame-top1'});
+  assert.deepEqual(r.r, {ok: true, changed: false, name: '第1回.pdf'});
+  await pad.call({ch: 'pdf.markStale', arg: {materialId: ULID}, client: C1, frame: 'frame-top1'});
+  assert.deepEqual(repo.getSetting('pdf.stale', []), [ULID]);
 });

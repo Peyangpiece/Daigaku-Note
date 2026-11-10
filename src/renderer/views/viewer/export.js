@@ -72,6 +72,10 @@ export const methods = {
         if (!(await this.settle())) throw new Error('保存できていない注釈があります');
         if (!this.fileDirty && !manual) return;
         this.fileDirty = false;
+        // iPad（パソコンと同じ画面。docs/MOBILE.md §8）：手を止めるたびの上書き（文字入れを画像にして送る）は重いのでしない。
+        // パソコンで次にこの PDF を開いたときに上書きする。「上書き保存」を押したとき・試し書き（'trial'）はここで保存する
+        if (api.pad && !manual && this.materialId !== 'trial')
+          return void (await api['pdf.markStale']({materialId: this.materialId}));
         const r = await api['pdf.save']({materialId: this.materialId, texts: await this.textImages(snaps)});
         if (r?.error) {
           // ほかのアプリで変更された・元の写しがないときは、何度も試さず止める（「書き出す…」は使える）

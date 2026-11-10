@@ -4,9 +4,9 @@
 // - パソコンの選ぶ・保存する窓を出す窓口（PAD_LOCAL）は、iPad でファイルを選ぶ・保存する・開くに置き換える
 // - 指で長押ししたら右クリック（contextmenu）にする（パソコンの画面は右クリックのメニューを使う）
 import {Busy, NotPaired, Unreachable, call, initPairing, paired} from '/m/app/client.js';
-import {PAD_DENY, PAD_FILE_MAX, PAD_POLL_MS} from '/p/src/shared/pad-channels.js';
+import {PAD_DENY, PAD_FILE_MAX, PAD_POLL_MS} from '/m/p/src/shared/pad-channels.js';
 
-const PHONE_VIEW = 'daigaku-note.view'; // 'phone'：スマホの画面を選んだ（/m/ から自分で /p/ へ移らない）
+const PHONE_VIEW = 'daigaku-note.view'; // 'phone'：スマホの画面を選んだ（/m/ から自分で /m/p/ へ移らない）
 const CONCURRENCY = 3; // 同時に送る窓口の要求（パソコンは 4 件まで受ける。1 つは知らせの待ちに）
 const FILE_MAX_MB = Math.round(PAD_FILE_MAX / 1024 / 1024);
 
@@ -248,6 +248,14 @@ const LOCAL = {
     if (tooBig(f)) return {error: `iPad から読み込めるのは ${FILE_MAX_MB}MB までです。パソコンで読み込んでください`};
     return send('backup.importData', {bytes: await readFile(f)});
   },
+  /** 持ち物の 3D モデル（アプリに入っている部品。資料ではない）：暗号化した窓口を通さず、ブラウザが直接読んで覚える */
+  async 'stationery.model'({model}) {
+    const id = String(model ?? '');
+    if (!/^[a-z0-9-]+$/.test(id)) return {error: 'そのモデルはありません'};
+    const res = await fetch(`/m/p/src/renderer/assets/stationery/${id}.glb`).catch(() => null);
+    if (!res?.ok) return {error: res ? 'そのモデルはありません' : 'パソコンとつながっていません'};
+    return {bytes: new Uint8Array(await res.arrayBuffer())};
+  },
   async 'shell.openExternal'({url}) {
     const u = String(url ?? '');
     if (!/^https:\/\/[^\s]+$/i.test(u)) return {error: 'URL が不正です'};
@@ -347,7 +355,8 @@ function makeApi(client, win) {
   win.addEventListener('pagehide', () => frames.delete(frame));
   const send = (ch, arg) => rpc(client, frame, ch, arg);
   let held = null;
-  const zoom = (z) => (win.document.documentElement.style.zoom = String(z));
+  // 1 倍のときは zoom を外す（Safari は zoom があると描き方の速い道を使わないことがある）
+  const zoom = (z) => (win.document.documentElement.style.zoom = Math.abs(z - 1) < 0.001 ? '' : String(z));
   const base = {
     on(ch, fn) {
       let set = listeners.get(ch);

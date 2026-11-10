@@ -8,10 +8,8 @@ body {
 }
 /* 文字を選ばない：ペンで書いている間に手のひらが触れると、iPad はページの文字を選び始める（画面全体が選ばれる）。
    文字を打つ欄の中だけは選べる（bridge.js の selectstart も同じ） */
-html,
-body,
-body * {
-  -webkit-user-select: none;
+body {
+  -webkit-user-select: none; /* 子にも及ぶ（user-select: auto は親が none なら none） */
   user-select: none;
 }
 input,
