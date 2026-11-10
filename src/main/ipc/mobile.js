@@ -33,7 +33,14 @@ export function register({handle, ctx, repo}) {
     await server.refreshTls?.().catch(() => {});
     const secure = !!server.tlsPort;
     const {id: deviceId, key} = await devices.create();
-    const url = pairUrl({host: h, port: secure ? server.tlsPort : server.port, deviceId, key, secure});
+    const url = pairUrl({
+      host: h,
+      port: secure ? server.tlsPort : server.port,
+      deviceId,
+      key,
+      secure,
+      httpPort: server.port
+    });
     const qr = qrcode(0, 'M');
     qr.addData(url);
     qr.make();

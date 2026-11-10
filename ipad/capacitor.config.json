@@ -1,0 +1,13 @@
+{
+  "appId": "jp.daigakunote.ipad",
+  "appName": "パレットノート",
+  "webDir": "www",
+  "appendUserAgent": "PaletteNoteApp",
+  "server": {
+    "allowNavigation": ["*"]
+  },
+  "ios": {
+    "contentInset": "never",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}

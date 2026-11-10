@@ -1,0 +1,16 @@
+{
+  "name": "palette-note-ipad",
+  "private": true,
+  "description": "パレットノートの iPad アプリ（docs/SYNC.md・docs/MOBILE.md §8）。Capacitor で包む",
+  "type": "module",
+  "scripts": {
+    "build": "node build-www.mjs && npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

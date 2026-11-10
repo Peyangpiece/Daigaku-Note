@@ -29,5 +29,5 @@ export default [
     }
   },
   {files: ['**/*.cjs'], languageOptions: {sourceType: 'commonjs', globals: {...globals.node}}},
-  {ignores: ['node_modules/', 'release/', 'dist/', 'src/renderer/vendor/']}
+  {ignores: ['node_modules/', 'release/', 'dist/', 'src/renderer/vendor/', 'ipad/ios/', 'ipad/www/']}
 ];
