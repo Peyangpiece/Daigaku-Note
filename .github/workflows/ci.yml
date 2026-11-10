@@ -18,6 +18,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Electron の実行ファイルを先に入れる。入っていないと、最初に require('electron') した通しテストがその場で展開し、
+      # 同時に動くもう一方の通しテストの起動が ETXTBSY（書き込み中の実行ファイル）で失敗する
+      - run: node node_modules/electron/install.js
       - run: npx playwright install --with-deps chromium
       - run: npm run lint
       - run: npm run format:check
