@@ -249,7 +249,23 @@ test(
         const drawing = ((v.drawing = {byPen: true}), at(5000));
         const w = {...methods, touchIds: new Set([3]), palmIds: new Set(), pan: {pointer: 3}, glide: 0, pinch: null};
         w.palmOff();
-        return {recent, later, hover, hoverOld, drawing, palmOff: [...w.palmIds], pan: w.pan};
+        // 触れた面の大きさ：大きい触れは手のひら。動かし始めたあとで大きくなったら、そこで動かすのをやめる
+        const big = methods.bigTouch({width: 120, height: 60});
+        const small = methods.bigTouch({width: 30, height: 30});
+        const none = methods.bigTouch({});
+        const g = {...methods, palmIds: new Set(), pan: {pointer: 5}, pinch: null};
+        g.palmLate(5);
+        return {
+          recent,
+          later,
+          hover,
+          hoverOld,
+          drawing,
+          palmOff: [...w.palmIds],
+          pan: w.pan,
+          size: [big, small, none],
+          late: [[...g.palmIds], g.pan]
+        };
       });
       assert.deepEqual(palmPad, {
         recent: true,
@@ -258,7 +274,9 @@ test(
         hoverOld: false,
         drawing: true,
         palmOff: [3],
-        pan: null
+        pan: null,
+        size: [true, false, false],
+        late: [[5], null]
       });
       const pan = await ipad.evaluate(async () => {
         const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');

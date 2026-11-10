@@ -1,6 +1,7 @@
 // PDF の編集画面：ポインタの振り分け（押す・動かす・離す）。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 import {DRAW_TOOLS, api} from './shared.js';
 import {syntheticMove} from '../../../shared/ink.js';
+import {PALM_SIZE, contactSize} from '../../../shared/pad-channels.js';
 import {figureSize, growsWithSize} from '../../../shared/figures.js';
 import {growFigure, renderFigure} from '../../figure-view.js';
 
@@ -32,7 +33,8 @@ export const methods = {
     }
     if (e.pointerType === 'touch') {
       this.touchIds.add(e.pointerId);
-      if (this.palmLikely()) this.palmIds.add(e.pointerId);
+      if (this.palmLikely() || this.bigTouch(e)) this.palmIds.add(e.pointerId);
+      if (this.palmIds.has(e.pointerId)) return; // 手のひら：何もしない
       // 2 本目の指は書き込みに使わない（ピンチ）。1 本目で始めたことも取りやめる（ペンで書いている間の手のひらは無視）
       if (this.drawing?.byPen) return;
       // ペンが画面の近くにある・少し前まで使っていた間の指は手のひら：何もしない（Surface などで、ペンを下ろす前に
@@ -224,6 +226,24 @@ export const methods = {
     if (this.pinch?.touch) this.cancelPinch();
   },
 
+  /** iPad：触れた面が大きい（手のひら。指よりはっきり大きい）。iPad が大きさを渡さなければ、いつも false */
+  bigTouch(e) {
+    return !!api.pad && contactSize(e) >= PALM_SIZE;
+  },
+
+  /**
+   * 指と思って動かし始めたあとで、触れた面が大きくなった（手のひらは、置いた瞬間は端だけが触れて小さい）：手のひらにし、
+   * その指で動かしている・ピンチしているのをやめる（ピンチは元の倍率に戻す）
+   */
+  palmLate(id) {
+    this.palmIds.add(id);
+    if (this.pan?.pointer === id) {
+      if (this.pan.frame) cancelAnimationFrame(this.pan.frame);
+      this.pan = null;
+    }
+    if (this.pinch?.touch) this.cancelPinch();
+  },
+
   stopGlide() {
     if (this.glide) cancelAnimationFrame(this.glide);
     this.glide = 0;
@@ -250,6 +270,7 @@ export const methods = {
       if (!api.pad || e.buttons) this.penAt = performance.now();
       else this.hoverAt = performance.now();
     } else if (e.buttons) this.inputAt = performance.now();
+    if (e.pointerType === 'touch' && !this.palmIds.has(e.pointerId) && this.bigTouch(e)) this.palmLate(e.pointerId);
     if (e.pointerType === 'touch' && this.palmIds.has(e.pointerId)) return; // 手のひらと決めた指は、離すまで何もしない
     if (e.pointerType === 'touch' && this.palmLikely() && !this.pinch) return;
     if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);
