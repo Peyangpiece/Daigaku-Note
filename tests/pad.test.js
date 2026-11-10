@@ -395,7 +395,7 @@ test('触れた面の大きさの記録（pad.touchLog）：ログに残すだ�
     frame: 'frame-top1'
   });
   assert.deepEqual(r.r, {ok: true});
-  assert.deepEqual(lines, ['pad touch: 触れた面の大きさ 24,0,130（手のひら 1 件）']);
+  assert.deepEqual(lines, ['pad touch: 触れた面の大きさ 24,0,130（手のひら 1 件・ペンとして届いた 0 回）']);
   await pad.call({ch: 'pad.touchLog', arg: {sizes: []}, client: C1, frame: 'frame-top1'});
   assert.equal(lines.length, 1); // 空なら残さない
 });

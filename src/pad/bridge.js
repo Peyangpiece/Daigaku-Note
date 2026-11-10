@@ -534,13 +534,18 @@ function noLoupe(win) {
 
 // ---- 触れた面の大きさの記録（手のひらの見分けの境目を合わせるため。パソコンのログに残す）----
 const TOUCH_LOG_EVERY = 30; // これだけ触れたら送る
-const touchLog = {open: new Map(), sizes: [], palm: 0, sending: false};
+const touchLog = {open: new Map(), sizes: [], palm: 0, pens: 0, sending: false};
 let client0 = null; // 上の画面のやりとりの番号（installBridge が入れる。並べた左右の iframe では送らない）
 const logFrame = tagOf();
 
 /** 触れるごとの最大の大きさを集め、たまったらパソコンへ送る（送れなくても捨てる。操作には関わらない） */
 function sizeLog(win) {
   const doc = win.document;
+  // ペン（Apple Pencil など）として届いた数も数える（ペンが指として届く iPad・ペンでは、手のひらの見分けが効かないため）
+  doc.addEventListener('pointerdown', (e) => e.pointerType === 'pen' && touchLog.pens++, {
+    capture: true,
+    passive: true
+  });
   const seen = (e) => {
     if (e.pointerType !== 'touch') return;
     const n = contactSize(e);
@@ -557,9 +562,10 @@ function sizeLog(win) {
     if (touchLog.sizes.length < TOUCH_LOG_EVERY || touchLog.sending || !client0) return;
     const sizes = touchLog.sizes.splice(0);
     const palm = touchLog.palm;
-    touchLog.palm = 0;
+    const pens = touchLog.pens;
+    touchLog.palm = touchLog.pens = 0;
     touchLog.sending = true;
-    rpc(client0, logFrame, 'pad.touchLog', {sizes, palm}).finally(() => (touchLog.sending = false));
+    rpc(client0, logFrame, 'pad.touchLog', {sizes, palm, pens}).finally(() => (touchLog.sending = false));
   };
   doc.addEventListener('pointerup', done, {capture: true, passive: true});
   doc.addEventListener('pointercancel', done, {capture: true, passive: true});
