@@ -47,7 +47,17 @@ export function register({handle, ctx, repo}) {
   });
 
   handle('mobile.remove', async ({deviceId}) => {
-    await mobile().devices.remove(id(deviceId) ?? bad('スマホが不正です'));
+    const did = id(deviceId) ?? bad('スマホが不正です');
+    await mobile().devices.remove(did);
+    mobile().padHub?.drop(did); // パソコンと同じ画面で開いていれば、待ちを終える
+    return status();
+  });
+
+  // パソコンと同じ画面（iPad。docs/MOBILE.md §8）を使ってよいか。オンにすると、その端末からパソコンの画面と同じ操作ができる
+  handle('mobile.setFull', async ({deviceId, on}) => {
+    const did = id(deviceId) ?? bad('スマホが不正です');
+    mobile().devices.setFull(did, on === true);
+    if (on !== true) mobile().padHub?.drop(did);
     return status();
   });
 }

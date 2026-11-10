@@ -90,7 +90,25 @@ const nextDay = (data, now = new Date()) => {
 };
 
 // ---- 画面 ----
+/** パソコンと同じ画面（iPad。docs/MOBILE.md §8）を使ってよい端末か（パソコンの設定でオンにしたもの） */
+const PHONE_VIEW = 'daigaku-note.view';
+let padFull = null;
+const choosePhone = () => {
+  try {
+    return localStorage.getItem(PHONE_VIEW) === 'phone';
+  } catch {
+    return false;
+  }
+};
+const bigScreen = () =>
+  /iPad/.test(navigator.userAgent) ||
+  (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)) ||
+  Math.min(screen.width, screen.height) >= 700;
+
 async function renderHome() {
+  padFull ??= (await call('pad.status').catch(() => null))?.full === true;
+  // iPad など大きな画面で、パソコンと同じ画面を使ってよければ、そちらで開く（スマホの画面を選んだときは開かない）
+  if (padFull && bigScreen() && !choosePhone()) return location.replace('/p/');
   home = await call('home');
   // パソコンで「アナログノート…」の窓を開いていれば、いちばん上に出す
   const scanWaiting = (await call('scan.waiting').catch(() => null))?.session ?? null;
@@ -116,7 +134,8 @@ async function renderHome() {
             .join('')}</ul>`
         : '<p class="m-muted">まだ資料がありません。</p>'
     }</section>
-    <section class="m-card"><h2>授業の一覧</h2><ul class="m-list">${home.courses.map(courseBtn).join('')}</ul></section>`;
+    <section class="m-card"><h2>授業の一覧</h2><ul class="m-list">${home.courses.map(courseBtn).join('')}</ul></section>
+    ${padFull ? '<a class="m-card m-review" href="/p/"><strong>パソコンと同じ画面で開く</strong><span>iPad 向け</span></a>' : ''}`;
 }
 
 async function renderCourse(id) {

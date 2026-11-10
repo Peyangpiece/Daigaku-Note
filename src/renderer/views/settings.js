@@ -342,7 +342,7 @@ async function renderMobile(box, st = null, pair = null) {
     ? `<ul class="mobile-devices">${s.devices
         .map(
           (d) =>
-            `<li><strong>${esc(d.name)}</strong> <span class="muted">つないだ日 ${esc(fmtDate(d.created))}・最後に使った日 ${esc(fmtDate(d.lastSeen))}${d.ip ? `（${esc(d.ip)} から）` : ''}</span> <button type="button" class="btn btn--small btn--quiet" data-mobile-rename="${esc(d.id)}" data-name="${esc(d.name)}">名前</button><button type="button" class="btn btn--small btn--quiet" data-mobile-remove="${esc(d.id)}">外す</button></li>`
+            `<li><strong>${esc(d.name)}</strong> <span class="muted">つないだ日 ${esc(fmtDate(d.created))}・最後に使った日 ${esc(fmtDate(d.lastSeen))}${d.ip ? `（${esc(d.ip)} から）` : ''}</span> <button type="button" class="btn btn--small btn--quiet" data-mobile-rename="${esc(d.id)}" data-name="${esc(d.name)}">名前</button><button type="button" class="btn btn--small btn--quiet" data-mobile-remove="${esc(d.id)}">外す</button><label class="mobile-full"><input type="checkbox" data-mobile-full="${esc(d.id)}" ${d.full ? 'checked' : ''}> パソコンと同じ画面を使う（iPad 向け）</label></li>`
         )
         .join('')}</ul>`
     : '<p class="muted">つないだスマホはまだありません。</p>';
@@ -359,8 +359,14 @@ async function renderMobile(box, st = null, pair = null) {
           : ''
       }
       ${devices}
-      <p class="muted">つながらないときは、家の Wi-Fi で試してください（大学の Wi-Fi は端末どうしがつながらないことが多い）。</p>`
+      <p class="muted">つながらないときは、家の Wi-Fi で試してください（大学の Wi-Fi は端末どうしがつながらないことが多い）。</p>
+      <p class="muted">「パソコンと同じ画面を使う」をオンにした端末（iPad など）では、このパソコンの画面とまったく同じ画面で、同じ操作ができます（パソコンのパレットノートが開いていて、同じ Wi-Fi にあるあいだ）。</p>`
         : devices
+    }
+    ${
+      api.pad
+        ? `<div class="about__row"><span class="muted">いまこの画面は iPad で開いています。</span> <button type="button" class="btn btn--small btn--quiet" data-pad-phone>スマホの画面に切り替える</button></div>`
+        : ''
     }`;
   box.querySelector('[data-mobile-on]').onchange = async (e) => {
     const r = await api['mobile.enable']({on: e.target.checked});
@@ -387,6 +393,27 @@ async function renderMobile(box, st = null, pair = null) {
         }
       }, 2000);
     };
+  for (const c of box.querySelectorAll('[data-mobile-full]'))
+    c.onchange = async () => {
+      if (
+        c.checked &&
+        !(await confirmDialog(
+          'この端末で、パソコンと同じ画面を使えるようにしますか？ 資料・ノート・クイズだけでなく、設定（LMS の接続・AI のキー・バックアップなど）も、この端末から変えられるようになります。自分の iPad だけオンにしてください。',
+          {ok: 'オンにする'}
+        ))
+      ) {
+        c.checked = false;
+        return;
+      }
+      const r = await api['mobile.setFull']({deviceId: c.dataset.mobileFull, on: c.checked});
+      if (r?.error) {
+        c.checked = !c.checked;
+        return toast(r.error, {error: true});
+      }
+      renderMobile(box, r);
+    };
+  const toPhone = box.querySelector('[data-pad-phone]');
+  if (toPhone) toPhone.onclick = () => api.pad.toPhone();
   for (const b of box.querySelectorAll('[data-mobile-remove]'))
     b.onclick = async () => {
       const ok = await confirmDialog(

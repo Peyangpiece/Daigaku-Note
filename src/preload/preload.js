@@ -107,6 +107,7 @@ const INVOKE = [
   'mobile.pair',
   'mobile.rename',
   'mobile.remove',
+  'mobile.setFull',
   'annotation.list'
 ];
 const ON = [

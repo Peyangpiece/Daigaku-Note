@@ -10,6 +10,12 @@ export class NotPaired extends Error {
     super('パソコンとつながっていません');
   }
 }
+/** パソコンが込み合っている（同時に受ける要求の数を超えた）。少し待って送り直す */
+export class Busy extends Error {
+  constructor() {
+    super('パソコンが込み合っています。少し待ってから試してください');
+  }
+}
 /** パソコンに届かない（同じ Wi-Fi でない・パレットノートが閉じている・「スマホとつなぐ」がオフ） */
 export class Unreachable extends Error {
   constructor() {
@@ -105,6 +111,8 @@ export async function call(ch, arg = {}) {
     throw new NotPaired();
   }
   if (res.status === 409) throw new Error('スマホとパソコンの時計が 5 分以上ずれています。時刻を合わせてください');
+  if (res.status === 503) throw new Busy();
+  if (res.status === 413) throw new Error('送るものが大きすぎます');
   // QR を読んだ直後に開けない：その QR はもう使われた（QR は 1 回だけ）
   if (res.status === 400 && pair.fresh) {
     forget();

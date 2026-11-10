@@ -1,12 +1,15 @@
 // IPC の窓口：学期・授業・回（term.*・course.update・round.add・round.update）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
 import {dialog} from 'electron';
 import {promises as fsp} from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {renameCourse} from '../folders.js';
 import {addRound, removeRound, mergeAutoTerms, removeTerm, saveTerm, syncRoundDates} from '../terms.js';
 import {parseCalendar} from '../../shared/calendar.js';
 import {calendarText} from '../calendar-pdf.js';
 import {str, id, bad} from './common.js';
+
+const CALENDAR_MAX = 50 * 1024 * 1024;
 
 export function register({handle, ctx, repo, files, getWindow}) {
   // 学期の保存（main/terms.js）。term.id があればその学期を直す（学期名・年度を変えても同じ学期のまま）
@@ -31,9 +34,11 @@ export function register({handle, ctx, repo, files, getWindow}) {
     };
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
     if (r.canceled || !r.filePaths?.[0]) return {ok: false};
-    const file = r.filePaths[0];
+    return readCalendarFile(r.filePaths[0], year);
+  });
+  const readCalendarFile = async (file, year, name = path.basename(file)) => {
     const stat = await fsp.stat(file);
-    if (stat.size > 50 * 1024 * 1024) bad('ファイルが大きすぎます（50MB まで）');
+    if (stat.size > CALENDAR_MAX) bad('ファイルが大きすぎます（50MB まで）');
     let text;
     try {
       text = await calendarText(file); // PDF は灰色のます目（休講）に印を付ける
@@ -43,8 +48,24 @@ export function register({handle, ctx, repo, files, getWindow}) {
     if (!text.trim())
       bad('文字のないファイルです（画像だけの PDF は読めません。文字の入った PDF か、テキストにしてください）');
     const y = Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : null;
-    return {ok: true, file: path.basename(file), ...parseCalendar(text, {year: y ?? undefined})};
-  });
+    return {ok: true, file: name, ...parseCalendar(text, {year: y ?? undefined})};
+  };
+  // iPad（パソコンと同じ画面。docs/MOBILE.md §8）：iPad で選んだファイルの中身を受け、一時ファイルにして同じように読む
+  ctx.readCalendarData = async ({year, name, bytes}) => {
+    const base = path.basename(str(name, 255) ?? bad('ファイル名が不正です'));
+    const ext = path.extname(base).toLowerCase();
+    if (!['.pdf', '.docx', '.txt', '.md'].includes(ext)) bad('学年暦は PDF・Word・テキストのファイルにしてください');
+    if (!(bytes instanceof Uint8Array)) bad('ファイルの中身が不正です');
+    if (bytes.length > CALENDAR_MAX) bad('ファイルが大きすぎます（50MB まで）');
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'palette-cal-'));
+    const file = path.join(dir, `calendar${ext}`);
+    try {
+      await fsp.writeFile(file, bytes);
+      return await readCalendarFile(file, year, base);
+    } finally {
+      await fsp.rm(dir, {recursive: true, force: true}).catch(() => {});
+    }
+  };
 
   handle('term.remove', ({termId}) => {
     removeTerm(repo, typeof termId === 'string' ? termId : '');

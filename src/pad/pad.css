@@ -1,0 +1,108 @@
+/* パソコンと同じ画面（iPad。docs/MOBILE.md §8）：パソコンの画面に足す、iPad だけの見た目と案内 */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  -webkit-touch-callout: none; /* 長押しは右クリックのメニューにする（bridge.js）。iPad の「コピー・共有」の吹き出しは出さない */
+  touch-action: manipulation; /* 2 回押して拡大しない（押した反応を遅らせない） */
+}
+
+/* つないでいない・オンにしていない・届かないときの案内（パソコンの画面を読む前） */
+.pad-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--paper, #fbf8f1);
+}
+.pad-gate__box {
+  max-width: 520px;
+  padding: 24px;
+  border-radius: 14px;
+  background: var(--card, #fff);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 12%);
+  color: var(--paper-ink, #2b2b2b);
+  line-height: 1.7;
+}
+.pad-gate__box h2 {
+  margin: 0 0 8px;
+  font-size: 1.2em;
+}
+.pad-gate__row,
+.pad-sheet__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* パソコンとつながっていない間の帯 */
+.pad-banner {
+  position: fixed;
+  top: env(safe-area-inset-top, 0);
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: #b3261e;
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* ファイルを選ぶ・保存する・開くシート */
+.pad-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
+  background: rgb(0 0 0 / 35%);
+}
+.pad-sheet__box {
+  width: min(560px, 100%);
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--card, #fff);
+  color: var(--paper-ink, #2b2b2b);
+  line-height: 1.6;
+  word-break: break-all;
+}
+.pad-sheet__box p {
+  margin: 0;
+}
+
+.pad-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px; /* 指で押しやすい大きさ */
+  padding: 0 18px;
+  border: 1px solid rgb(0 0 0 / 18%);
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+.pad-btn--primary {
+  border-color: transparent;
+  background: #2f6fb5;
+  color: #fff;
+}
+/* ボタンの中のファイルを選ぶ input（見えないが、ボタン全体で押せる） */
+.pad-file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  font-size: 100px;
+  cursor: pointer;
+}

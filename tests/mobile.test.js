@@ -414,8 +414,15 @@ test('サーバー：大きすぎる本文は読まずに 413。知らない端�
   const {server, devices} = await startServer();
   try {
     const port = server.port;
-    // 100MB と言う要求：1 バイトも読まずに断る
-    assert.equal((await rawPost(port, {length: 100 * 1024 * 1024})).status, 413);
+    // 200MB と言う要求：1 バイトも読まずに断る
+    assert.equal((await rawPost(port, {length: 200 * 1024 * 1024})).status, 413);
+    // つないだ端末でも、パソコンと同じ画面（iPad）でなければ 48MB より大きな本文は断る（先頭 26 バイトだけ読む）
+    const phone = await devices.create();
+    await devices.activate(phone.id, 'iPhone');
+    assert.equal(
+      (await rawPost(port, {length: 100 * 1024 * 1024, chunk: Buffer.from(phone.id + 'x'.repeat(100))})).status,
+      413
+    );
     // 知らない端末が 40MB 送ると言う：先頭 26 バイトだけで断る（残りを待たない）
     const t0 = Date.now();
     const r = await rawPost(port, {length: 40 * 1024 * 1024, chunk: Buffer.from(ULID + 'x'.repeat(100))});
