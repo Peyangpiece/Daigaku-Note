@@ -263,7 +263,32 @@ const LOCAL = {
 // ---- 知らせ ----
 const frames = new Map(); // 画面の番号 → {win, listeners: Map(channel → Set(fn))}
 
+// ペンで書いている間は「変わった」（state.changed）を待たせ、手を止めてから 1 回にまとめて渡す。受け取った画面は状態を全部読み直す
+// （パソコンから暗号化した状態を受け取り、iPad で解いて読む）ので、書いている最中に重なると線が遅れる。上書き保存のたびに来る
+const PEN_QUIET_MS = 2000;
+const penState = {down: 0, at: -Infinity}; // すべての画面のペン（down は押している数）
+const penBusy = () => penState.down > 0 || performance.now() - penState.at < PEN_QUIET_MS;
+let heldChange = null; // 待たせている state.changed（最後のもの）
+let heldTimer = 0;
+function holdChange(ev) {
+  heldChange = ev;
+  if (heldTimer) return;
+  const check = () => {
+    if (penBusy()) return void (heldTimer = setTimeout(check, 500));
+    heldTimer = 0;
+    const e = heldChange;
+    heldChange = null;
+    if (e) deliver(e);
+  };
+  heldTimer = setTimeout(check, 500);
+}
+
 function dispatch(ev) {
+  if (ev.ch === 'state.changed' && penBusy()) return holdChange(ev);
+  deliver(ev);
+}
+
+function deliver(ev) {
   for (const [id, f] of frames) {
     if (f.win.closed) {
       frames.delete(id);
@@ -356,8 +381,60 @@ function makeApi(client, win) {
   });
 }
 
+// ---- 手のひら：文字を選ばない ----
+/** 文字を打つ欄（ここだけは文字を選べる） */
+const EDITABLE = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+const PEN_RECENT_MS = 1500; // ペンを離してからこれだけの間に触れた指は手のひらとみなす
+
+/**
+ * ペンで書いている間に手のひらが触れると、iPad はページの文字を選び始める（画面全体が選ばれる）。
+ * 文字を打つ欄の外では文字を選ばせない（pad.css の user-select と同じ。CSS の効かない所の分）。マウス（トラックパッド）で選ぶのは許す
+ */
+function palmGuard(win, pen) {
+  let last = 'touch';
+  win.addEventListener(
+    'pointerdown',
+    (e) => {
+      // pad.css：マウスのときだけ PDF の文字を選べる。変わったときだけ書く（書くたびにページ全体の見た目を計算し直し、書き始めが遅れる）
+      if (e.pointerType !== last) win.document.documentElement.dataset.padInput = e.pointerType;
+      last = e.pointerType;
+      if (e.pointerType === 'pen') {
+        if (!pen.down) penState.down++;
+        pen.down = true;
+      }
+    },
+    {capture: true, passive: true}
+  );
+  for (const t of ['pointerup', 'pointercancel'])
+    win.addEventListener(
+      t,
+      (e) => {
+        if (e.pointerType !== 'pen') return;
+        if (pen.down) penState.down = Math.max(0, penState.down - 1);
+        pen.down = false;
+        pen.at = penState.at = performance.now();
+      },
+      {capture: true, passive: true}
+    );
+  win.addEventListener(
+    'pointermove',
+    (e) => {
+      if (e.pointerType === 'pen') pen.at = penState.at = performance.now(); // 浮かせたペン（近づけると動きが来る iPad もある）
+    },
+    {capture: true, passive: true}
+  );
+  win.document.addEventListener(
+    'selectstart',
+    (e) => {
+      if (last === 'mouse' || e.target?.closest?.(EDITABLE) || e.target?.parentElement?.closest?.(EDITABLE)) return;
+      e.preventDefault();
+    },
+    true
+  );
+}
+
 // ---- 指の長押し → 右クリック（パソコンの画面の右クリックのメニュー）----
-function longPress(win) {
+function longPress(win, pen) {
   let timer = null;
   let start = null;
   let fired = false;
@@ -365,17 +442,21 @@ function longPress(win) {
     clearTimeout(timer);
     timer = null;
   };
+  // 手のひらかもしれない：ペンを使っている・使った直後、またはペンで書く画面（一度ペンを使ったページ。PDF の編集画面の data-pen）
+  const palm = (target) =>
+    pen.down || performance.now() - pen.at < PEN_RECENT_MS || !!target.closest?.('[data-pen="seen"]');
   const doc = win.document;
   doc.addEventListener(
     'pointerdown',
     (e) => {
       fired = false;
       if (e.pointerType !== 'touch' || !e.isPrimary) return;
-      if (e.target.closest?.('input, textarea, [contenteditable="true"], select')) return;
+      if (e.target.closest?.(EDITABLE) || palm(e.target)) return;
       start = {x: e.clientX, y: e.clientY, sx: e.screenX, sy: e.screenY, target: e.target};
       clear();
       timer = setTimeout(() => {
         timer = null;
+        if (palm(start.target)) return; // 押している間にペンを下ろした
         fired = true;
         start.target.dispatchEvent(
           new MouseEvent('contextmenu', {
@@ -413,13 +494,20 @@ function longPress(win) {
   );
 }
 
+/** 手のひらの守りと、指の長押し（画面ごと。並べた左右の画面は、それぞれのペンの使い方を見る） */
+function guard(win) {
+  const pen = {down: false, at: -Infinity};
+  palmGuard(win, pen);
+  longPress(win, pen);
+}
+
 /** 用意する。パソコンの画面を読んでよければ true */
 export async function installBridge() {
   // 並べた左右の iframe：上の画面のやりとりを使う（知らせの待ちを 1 つにする）
   const top = window.parent !== window ? window.parent.__padBridge : null;
   if (top) {
     window.daigaku = top.forFrame(window);
-    longPress(window);
+    guard(window);
     return true;
   }
   const state = initPairing();
@@ -481,7 +569,7 @@ export async function installBridge() {
   const client = tagOf();
   window.__padBridge = {forFrame: (win) => makeApi(client, win)};
   window.daigaku = makeApi(client, window);
-  longPress(window);
+  guard(window);
   pollLoop(client);
   return true;
 }

@@ -345,3 +345,13 @@ test('PAD_QUIET：名前はパソコンの画面の窓口か iPad だけの窓�
   const allowed = new Set([...[...invoke.matchAll(/'([a-zA-Z.]+)'/g)].map((m) => m[1]), ...PAD_EXTRA]);
   for (const ch of PAD_QUIET) assert.ok(allowed.has(ch), ch);
 });
+
+test('ホーム画面に追加したアプリ：範囲（scope）は / で、iPad の画面（/p/）もアプリの中（Safari のバーを出さない）', () => {
+  const m = JSON.parse(readFileSync(new URL('../src/mobile/manifest.webmanifest', import.meta.url), 'utf8'));
+  assert.equal(m.scope, '/');
+  assert.ok(PAD_INDEX.startsWith(m.scope) && m.start_url.startsWith(m.scope));
+  assert.equal(m.display, 'standalone');
+  // iPad の画面からホーム画面に追加しても、同じアプリになる
+  const out = padIndexHtml(readFileSync(new URL('../src/renderer/index.html', import.meta.url), 'utf8'));
+  assert.match(out, /<link rel="manifest" href="\/m\/app\/manifest\.webmanifest" \/>/);
+});

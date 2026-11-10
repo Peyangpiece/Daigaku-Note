@@ -172,6 +172,7 @@ export const methods = {
   /** 1 本目の指で始めたこと（なぞり中のマーカー・動かし中の注釈・置く前の文字入れや付箋）を取りやめる。2 本目の指が来たときなど */
   cancelPointer() {
     this.tap = null;
+    if (this.pan?.frame) cancelAnimationFrame(this.pan.frame);
     this.pan = null;
     const dr = this.drawing;
     if (dr?.kind === 'eraser') {
