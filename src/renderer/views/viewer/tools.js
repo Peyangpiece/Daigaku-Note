@@ -488,7 +488,11 @@ export const methods = {
     this.touchIds = new Set();
     this.palmIds = new Set(); // 手のひらと決めた指（離すまで使わない。pointer.js）
     this.palmSoft = new Map(); // そのうち時間だけで決めたもの → 触れた所（はっきり払ったら指に戻す。pointer.js の palmRelease）
+    this.bigSpots = new Map(); // 触れている手のひら（面の大きいもの）→ 位置（pointer.js の knuckleAt）
     const lift = (e) => {
+      const big = this.bigSpots.get(e.pointerId);
+      if (big) (this.bigRecent ??= []).push({...big, t: performance.now()});
+      this.bigSpots.delete(e.pointerId);
       this.touchIds.delete(e.pointerId);
       this.palmIds.delete(e.pointerId);
       this.palmSoft.delete(e.pointerId);
