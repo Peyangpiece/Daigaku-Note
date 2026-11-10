@@ -9,11 +9,15 @@ import path from 'node:path';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = ['db', 'annotation', 'bookmark', 'quiz'];
 
+// 外のテストの子として扱わせない（NODE_TEST_CONTEXT があると、中のテストのファイルを走らせない）。結果は TAP で読む
+const env = {...process.env, DAIGAKU_SQL: 'sqljs'};
+delete env.NODE_TEST_CONTEXT;
+
 for (const f of FILES)
   test(`sql.js でも同じ結果：tests/${f}.test.js`, {timeout: 120000}, () => {
     const r = spawnSync(process.execPath, ['--test', `tests/${f}.test.js`], {
       cwd: ROOT,
-      env: {...process.env, DAIGAKU_SQL: 'sqljs'},
+      env,
       encoding: 'utf8'
     });
     const fail = /^# fail (\d+)/m.exec(r.stdout)?.[1];
