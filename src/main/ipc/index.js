@@ -2,7 +2,8 @@
 import {BrowserWindow, ipcMain} from 'electron';
 import {createSerial} from '../serial.js';
 import {createScanRelay} from '../scan-relay.js';
-import {sendAll} from '../frames.js';
+import {sendAll, tapPad} from '../frames.js';
+import {PAD_QUIET} from '../../shared/pad-channels.js';
 import * as stateIpc from './state.js';
 import * as connectionsIpc from './connections.js';
 import * as termsIpc from './terms.js';
@@ -26,7 +27,10 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
     handlers.set(channel, fn);
     return ipcMain.handle(channel, async (_e, arg) => {
       try {
-        return await fn(arg ?? {}, _e);
+        const r = await fn(arg ?? {}, _e);
+        // パソコンの画面で変えた：パソコンと同じ画面の iPad に「変わった」を知らせる（docs/MOBILE.md §8）
+        if (!PAD_QUIET.has(channel) && !r?.error) tapPad('state.changed', {});
+        return r;
       } catch (e) {
         log.warn(`ipc ${channel}: ${e.message}`);
         return {error: e.message};
@@ -37,6 +41,7 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
   // スマホからは from なし＝すべての窓のすべての画面
   const notifyOthers = (from, channel, payload) => {
     for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) sendAll(w.webContents, channel, payload, from);
+    tapPad(channel, payload, from);
   };
   ctx.notifyOthers = notifyOthers;
   // ノートごとの順番待ち：ページの足し引き・描き直し・消す・上書き保存を重ねない（ipc/notes.js・ipc/pdf.js）

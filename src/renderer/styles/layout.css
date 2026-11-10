@@ -207,6 +207,12 @@
 .mobile-devices li {
   margin-bottom: 4px;
 }
+/* 端末ごとの「パソコンと同じ画面を使う」（iPad。docs/MOBILE.md §8） */
+.mobile-full {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.92em;
+}
 /* 設定の上の項目のボタン（押すとその項目まで送る） */
 .settings__jump {
   display: flex;

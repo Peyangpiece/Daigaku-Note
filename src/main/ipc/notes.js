@@ -10,7 +10,7 @@ import {analogDesign} from '../../shared/notebooks.js';
 import {isPng} from '../pdf-export.js';
 import {createSerial} from '../serial.js';
 import {id, bad, str} from './common.js';
-import {sendAll} from '../frames.js';
+import {sendMain} from '../frames.js';
 import * as trial from '../trial-note.js';
 
 /** ノートのファイル名（回ごと。同じ回フォルダの中でも、自分のフォルダの中でも名前が重ならないように回を入れる） */
@@ -34,7 +34,7 @@ export function register({handle, ctx, repo, files, folders, getWindow, notifyOt
   // ノートの上の欄に印刷する画像（授業・回・題・日付。ノートごと）。足すページにも同じものを印刷する
   const headerFile = (mid) => path.join(app.getPath('userData'), 'notes', `${mid}-head.png`);
   const readHeader = (mid) => fsp.readFile(headerFile(mid)).catch(() => null);
-  const changed = () => sendAll(getWindow()?.webContents, 'state.changed', {});
+  const changed = () => sendMain(getWindow()?.webContents, 'state.changed', {});
   const okHeader = (header) =>
     header instanceof Uint8Array && header.length <= 512 * 1024 && isPng(header) ? Buffer.from(header) : null;
   const saveHeader = async (mid, head, text) => {

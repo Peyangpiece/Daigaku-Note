@@ -7,6 +7,7 @@ import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 import {promises as fsp} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {MAX_SKEW_MS, open, seal} from '../../shared/mobile-wire.js';
@@ -14,6 +15,8 @@ import {MAX_SKEW_MS, open, seal} from '../../shared/mobile-wire.js';
 export const DEFAULT_PORT = 47390;
 export const DEFAULT_TLS_PORT = 47391; // https（スマホのブラウザでカメラを使う。tls-cert.js）
 const BODY_MAX = 48 * 1024 * 1024; // 写真 1 枚（30MB）の base64（4/3 倍）＋余り。スマホは写真を 1 枚ずつ送る
+const PAD_BODY_MAX = 128 * 1024 * 1024; // パソコンと同じ画面の iPad（§8）：ファイル 1 つ 90MB（PAD_FILE_MAX）の base64＋余り
+const POLL_MAX = 8; // 知らせを待っている要求（iPad の画面ごとに 1 つ）。窓口の同時の数（INFLIGHT_MAX）には数えない
 const HEAD = 26; // 本文の頭：端末の番号（ULID）
 const PENDING_MAX = 4096; // QR を読んだだけの端末のあいさつの大きさの上限
 const INFLIGHT_MAX = 4; // 同時に受ける窓口の要求
@@ -30,8 +33,47 @@ export function staticRoots() {
     ['/m/shared/', path.join(SRC, 'shared')],
     ['/m/pdfjs/', pkgDir('pdfjs-dist', 'package.json')],
     ['/m/vendor/noble/', pkgDir('@noble/ciphers', 'chacha.js')],
-    ['/m/vendor/jsqr/', pkgDir('jsqr', 'dist/jsQR.js')] // QR を読む（ホーム画面に追加したスマホのページで、パソコンの QR を読んでつなぐ）
+    ['/m/vendor/jsqr/', pkgDir('jsqr', 'dist/jsQR.js')], // QR を読む（ホーム画面に追加したスマホのページで、パソコンの QR を読んでつなぐ）
+    // パソコンと同じ画面（iPad。§8）：パソコンの画面のファイルを、パソコンのアプリの中と同じ並びで配る（node_modules への相対の参照がそのまま通る）
+    ['/p/src/renderer/', path.join(SRC, 'renderer')],
+    ['/p/src/shared/', path.join(SRC, 'shared')],
+    ['/p/node_modules/pdfjs-dist/', pkgDir('pdfjs-dist', 'package.json')],
+    // three は package.json も本体（three.cjs）も require で引けない（exports に出していない・配布物では three.cjs を外す）。
+    // pdfjs-dist と同じ node_modules にある
+    ['/p/node_modules/three/', path.join(pkgDir('pdfjs-dist', 'package.json'), '..', 'three')],
+    ['/p/pad/', path.join(SRC, 'pad')]
   ];
+}
+
+/** パソコンと同じ画面の入口（iPad。§8）。パソコンの画面の index.html を、iPad で動くように直して配る */
+export const PAD_INDEX = '/p/src/renderer/index.html';
+
+/**
+ * パソコンの画面の index.html → iPad のページ：
+ * 画面の幅に合わせる・iPad の見た目（pad.css）を足す・暗号の部品を import の対応表に足す（CSP のハッシュも直す）・
+ * app.js の前に、パソコンとのやりとりを用意する boot.js を読む（window.daigaku を作ってから app.js を読む）
+ */
+export function padIndexHtml(raw) {
+  // Windows で取り出したファイルは改行が CRLF（CSP のハッシュは LF の中身で書いてある）。LF にそろえる
+  const html = raw.replace(/\r\n/g, '\n');
+  const map = html.match(/<script type="importmap">([\s\S]*?)<\/script>/);
+  if (!map) throw new Error('index.html に import の対応表がありません');
+  const json = JSON.parse(map[1]);
+  json.imports['@noble/ciphers/'] = '/m/vendor/noble/';
+  const body = `\n${JSON.stringify(json, null, 2)}\n`;
+  const hash = (t) => `'sha256-${createHash('sha256').update(t).digest('base64')}'`;
+  const old = hash(map[1]);
+  if (!html.includes(old)) throw new Error('index.html の CSP に import の対応表のハッシュがありません');
+  const app = '<script type="module" src="app.js"></script>';
+  if (!html.includes(app)) throw new Error('index.html に app.js がありません');
+  return html
+    .replace(old, hash(body))
+    .replace(map[0], `<script type="importmap">${body}</script>`)
+    .replace(
+      '<meta charset="utf-8" />',
+      '<meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n    <meta name="apple-mobile-web-app-capable" content="yes" />\n    <link rel="stylesheet" href="/p/pad/pad.css" />'
+    )
+    .replace(app, '<script type="module" src="/p/pad/boot.js"></script>');
 }
 
 const TYPES = {
@@ -46,6 +88,9 @@ const TYPES = {
   '.bcmap': 'application/octet-stream',
   '.pfb': 'application/octet-stream',
   '.ttf': 'font/ttf',
+  '.woff2': 'font/woff2',
+  '.glb': 'model/gltf-binary',
+  '.jpg': 'image/jpeg',
   '.wasm': 'application/wasm'
 };
 
@@ -58,6 +103,7 @@ export function staticFile(urlPath, roots = staticRoots()) {
     return null;
   }
   if (p === '/m' || p === '/m/') return path.join(SRC, 'mobile', 'index.html');
+  if (p === PAD_INDEX) return null; // padIndexHtml で直して配る
   for (const [prefix, dir] of roots) {
     if (!p.startsWith(prefix)) continue;
     const rel = p.slice(prefix.length);
@@ -72,6 +118,8 @@ export function staticFile(urlPath, roots = staticRoots()) {
 
 /** このパソコンの LAN の IPv4（家庭や大学の内向きの番号だけ。Wi-Fi・有線を先に） */
 export function lanAddresses(ifaces = os.networkInterfaces()) {
+  // 通しテスト（LAN のない CI・コンテナ）：決めた番号を LAN の番号として使う
+  if (process.env.DAIGAKU_TEST_LAN && arguments.length === 0) return [process.env.DAIGAKU_TEST_LAN];
   const priv = (a) => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a);
   const out = [];
   for (const [name, list] of Object.entries(ifaces))
@@ -90,6 +138,7 @@ export function lanAddresses(ifaces = os.networkInterfaces()) {
 export function createMobileServer({
   devices,
   api,
+  pad = null,
   log = () => {},
   now = () => Date.now(),
   onMoved = () => {},
@@ -101,6 +150,8 @@ export function createMobileServer({
   let tlsPort = null;
   let tlsCert = null; // いま使っている証明書（PEM）
   let inflight = 0;
+  let polls = 0;
+  let padHtml = null; // padIndexHtml の結果（1 回だけ作る）
   const seen = new Map(); // 端末 → Map(nonce → 期限)
 
   const replay = (deviceId, nonce) => {
@@ -173,22 +224,29 @@ export function createMobileServer({
   async function onApi(req, res) {
     const len = Number(req.headers['content-length']);
     if (!Number.isSafeInteger(len) || len < HEAD + 40) return refuse(req, res, 400, 'bad request');
-    if (len > BODY_MAX) return refuse(req, res, 413, 'too large');
+    if (len > PAD_BODY_MAX) return refuse(req, res, 413, 'too large');
     if (inflight >= INFLIGHT_MAX) return refuse(req, res, 503, 'busy');
     inflight++;
+    let held = true;
+    // 知らせを待つ要求（pad.poll）は長く居座るので、窓口の同時の数から外す
+    const release = () => {
+      if (held) inflight--;
+      held = false;
+    };
     try {
-      await api1(req, res, len);
+      await api1(req, res, len, release);
     } finally {
-      inflight--;
+      release();
     }
   }
 
-  async function api1(req, res, len) {
+  async function api1(req, res, len, release = () => {}) {
     const head = await readHead(req, HEAD);
     if (!head) return refuse(req, res, 400, 'bad request');
     const deviceId = head.subarray(0, HEAD).toString('ascii');
     const key = await devices.keyOf(deviceId);
     if (!key) return refuse(req, res, 403, 'unknown device'); // スマホは「つなぎ直してください」を出す
+    if (len > BODY_MAX && !devices.isFull?.(deviceId)) return refuse(req, res, 413, 'too large');
     // QR を読んだだけの端末が送れるのはあいさつ（小さい）だけ
     if (devices.isPending(deviceId) && len > PENDING_MAX) return refuse(req, res, 413, 'too large');
     const body = await readExact(req, len, head).catch(() => null);
@@ -215,7 +273,32 @@ export function createMobileServer({
       onMoved(moved);
     }
     if (ch === 'hello') result = {ok: true};
-    else if (!Object.hasOwn(api, ch)) result = {error: 'この操作はスマホからはできません'};
+    else if (ch === 'pad.status') result = {full: !!devices.isFull?.(deviceId)};
+    else if (ch === 'pad.call' || ch === 'pad.poll') {
+      const a = arg && typeof arg === 'object' ? arg : {};
+      if (!pad) result = {error: 'この操作はスマホからはできません'};
+      else if (!devices.isFull?.(deviceId))
+        result = {
+          error:
+            'パソコンと同じ画面は、まだ使えません。パソコンの 設定 → スマホ で、この端末の「パソコンと同じ画面」をオンにしてください',
+          notFull: true
+        };
+      else if (ch === 'pad.call') result = await pad.call(a);
+      else {
+        release();
+        if (polls >= POLL_MAX) result = {events: [], reset: false, busy: true};
+        else {
+          polls++;
+          try {
+            result = await pad.poll(deviceId, a);
+          } catch (e) {
+            result = {error: e.message};
+          } finally {
+            polls--;
+          }
+        }
+      }
+    } else if (!Object.hasOwn(api, ch)) result = {error: 'この操作はスマホからはできません'};
     else
       try {
         result = (await api[ch](arg && typeof arg === 'object' ? arg : {})) ?? {};
@@ -233,6 +316,20 @@ export function createMobileServer({
     if (url.pathname === '/') {
       res.writeHead(302, {Location: '/m/'});
       return res.end();
+    }
+    if (url.pathname === '/p' || url.pathname === '/p/') {
+      res.writeHead(302, {Location: PAD_INDEX});
+      return res.end();
+    }
+    if (url.pathname === PAD_INDEX) {
+      padHtml ??= padIndexHtml(await fsp.readFile(path.join(SRC, 'renderer', 'index.html'), 'utf8'));
+      res.writeHead(200, {
+        'Content-Type': TYPES['.html'],
+        'Cache-Control': 'no-cache',
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'no-referrer'
+      });
+      return res.end(req.method === 'HEAD' ? undefined : padHtml);
     }
     const file = staticFile(url.pathname);
     if (!file) return send(res, 404, 'not found');

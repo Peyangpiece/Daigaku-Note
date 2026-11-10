@@ -12,8 +12,9 @@ import {createLogger} from './log.js';
 import {registerIpc} from './ipc/index.js';
 import {createDevices} from './mobile/devices.js';
 import {createMobileApi} from './mobile/api.js';
-import {sendAll} from './frames.js';
+import {sendMain, setPadTap} from './frames.js';
 import {createMobileServer, lanAddresses} from './mobile/server.js';
+import {createPadApi, createPadHub} from './mobile/pad.js';
 import {certFor} from './mobile/tls-cert.js';
 import {JobRunner} from './jobs.js';
 import {Scheduler} from './scheduler.js';
@@ -380,7 +381,7 @@ app.whenReady().then(async () => {
       repo,
       files: ctx.files,
       log: (m) => log.info(m),
-      onProgress: (p) => sendAll(win?.webContents, 'sync.progress', p)
+      onProgress: (p) => sendMain(win?.webContents, 'sync.progress', p)
     });
     // 同じ LMS の接続が 2 つ以上あれば 1 つにまとめる（セットアップのやり直しで増え、授業が 2 つずつ並んでいた）
     await ctx.engine
@@ -404,7 +405,7 @@ app.whenReady().then(async () => {
     const notifier = createNotifier({repo, Notification, openWindow, log: (m) => log.warn(m)});
     ctx.notifier = notifier; // スケジューラの「今日の復習」の知らせ（§12.1）
     const notify = (ch, payload) => {
-      sendAll(win?.webContents, ch, payload);
+      sendMain(win?.webContents, ch, payload);
       notifier.onEvent(ch, payload);
     };
     ctx.backup = async () => runBackup({db, dir: path.join(userData, 'backups')});
@@ -420,7 +421,7 @@ app.whenReady().then(async () => {
       downloadsDir: () => app.getPath('downloads'),
       notify: (ch, payload) => {
         notify(ch, payload);
-        sendAll(win?.webContents, 'state.changed', {});
+        sendMain(win?.webContents, 'state.changed', {});
       },
       log: (m) => log.info(m)
     });
@@ -436,9 +437,14 @@ app.whenReady().then(async () => {
         getWindow: () => win,
         broadcast: (ch, payload) => ctx.notifyOthers(null, ch, payload)
       });
+      // パソコンと同じ画面（iPad。docs/MOBILE.md §8）：パソコンの画面の窓口を通し、画面への知らせを iPad にも渡す
+      const padHub = createPadHub();
+      setPadTap((ch, payload, except) => padHub.push(ch, payload, except));
+      const pad = createPadApi({handlers: ctx.handlers, ctx, repo, hub: padHub, log: (m) => log.info(m)});
       const server = createMobileServer({
         devices,
         api,
+        pad,
         // https の証明書（スマホのブラウザでカメラを使う）。秘密の鍵は秘密の保管（secrets.js）に置く
         tls: async () => {
           const old = await ctx.secrets.get('mobile.tls').catch(() => null);
@@ -456,7 +462,7 @@ app.whenReady().then(async () => {
             oncePerDay: `mobile-moved:${d.id}:${d.to}`
           })
       });
-      ctx.mobile = {devices, api, server};
+      ctx.mobile = {devices, api, server, padHub};
       if (repo.getSetting('mobile.enabled', false))
         server.start().catch((e) => log.warn(`スマホ連携を始められませんでした：${e.message}`));
     }
@@ -483,7 +489,7 @@ app.whenReady().then(async () => {
         onStatus: (s) => {
           ctx.status = s;
           ctx.refreshTray?.();
-          sendAll(win?.webContents, 'state.changed', {status: s});
+          sendMain(win?.webContents, 'state.changed', {status: s});
         },
         log: (m) => log.info(m)
       })
@@ -499,7 +505,7 @@ app.whenReady().then(async () => {
           // 起動したとき（更新のあとも）は、同期の予定を待たずにログインまで済ませる
           ctx.jobs.enqueue('login', {});
           ctx.jobs.start();
-          sendAll(win?.webContents, 'state.changed', {browser: ctx.browser});
+          sendMain(win?.webContents, 'state.changed', {browser: ctx.browser});
         });
     // Chromium（約 150 MB）は LMS をつないでいるときだけ取り込む。つないでいなければ、つないだとき（ipc.js の setup.createConnection）に取り込む
     if (connections.length) ctx.installBrowser();

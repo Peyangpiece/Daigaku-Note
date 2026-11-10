@@ -42,7 +42,14 @@ export function createDevices({repo, secrets, now = () => Date.now()}) {
     async list() {
       return (await prune())
         .filter((d) => !d.pending)
-        .map(({id, name, created, lastSeen, ip}) => ({id, name, created, lastSeen, ip: ip ?? null}));
+        .map(({id, name, created, lastSeen, ip, full}) => ({
+          id,
+          name,
+          created,
+          lastSeen,
+          ip: ip ?? null,
+          full: !!full
+        }));
     },
     /** 新しい端末（待ち）を作り、鍵を返す。QR に入れる */
     async create() {
@@ -71,6 +78,22 @@ export function createDevices({repo, secrets, now = () => Date.now()}) {
         keys.set(id, key);
       }
       return keys.get(id);
+    },
+    /** パソコンと同じ画面（iPad。docs/MOBILE.md §8）を使ってよい端末か。パソコンの設定でオンにしたものだけ */
+    isFull(id) {
+      const d = read().find((x) => x.id === id);
+      return !!d && !d.pending && d.full === true;
+    },
+    /** パソコンと同じ画面を使ってよいか（パソコンの設定 → スマホとつなぐ） */
+    setFull(id, on) {
+      const list = read();
+      const d =
+        list.find((x) => x.id === id && !x.pending) ??
+        (() => {
+          throw new Error('このスマホは見つかりませんでした');
+        })();
+      d.full = on === true;
+      write(list);
     },
     /** まだ QR を読んだだけ（待ち）の端末か */
     isPending(id) {

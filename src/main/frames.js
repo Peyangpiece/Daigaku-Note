@@ -17,3 +17,22 @@ export function sendAll(wc, channel, payload, except = null) {
     }
   }
 }
+
+// iPad（パソコンと同じ画面。docs/MOBILE.md §8）：パソコンの画面への知らせを、つないだ iPad の画面にも渡す（main.js が setPadTap で入れる）
+let padTap = null;
+export function setPadTap(fn) {
+  padTap = fn;
+}
+/** iPad にも知らせる（1 回の知らせにつき 1 回）。except は書いた画面（iPad の画面なら、その画面には返さない） */
+export function tapPad(channel, payload, except = null) {
+  try {
+    padTap?.(channel, payload, except);
+  } catch {
+    // iPad に渡せなくても、パソコンの画面には届いている
+  }
+}
+/** パソコンの窓（いちばん前の窓のすべての画面）と iPad に知らせる */
+export function sendMain(wc, channel, payload) {
+  sendAll(wc, channel, payload);
+  tapPad(channel, payload);
+}

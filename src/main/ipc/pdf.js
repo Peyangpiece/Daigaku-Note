@@ -10,7 +10,7 @@ import {annotationToClient, normalizeAnnotation, clampSize} from '../../shared/a
 import {normalizeBookmark} from '../../shared/bookmark.js';
 import {cleanAlign} from '../../shared/text-runs.js';
 import {str, id, PDFJS_DIR, PDFJS_ASSET, bad} from './common.js';
-import {sendAll} from '../frames.js';
+import {sendMain} from '../frames.js';
 import * as trial from '../trial-note.js';
 
 export function register({handle, ctx, repo, log, getWindow, notifyOthers = () => {}}) {
@@ -167,7 +167,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
       images: textImages(rows, texts),
       originalsDir: originalsDir()
     });
-    if (r.changed) sendAll(getWindow()?.webContents, 'state.changed', {});
+    if (r.changed) sendMain(getWindow()?.webContents, 'state.changed', {});
     const stale = repo.getSetting('pdf.stale', []);
     if (stale.includes(m.id))
       repo.setSetting(
@@ -178,13 +178,17 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
   };
 
   // 試し書きの書き出し：書いたものを描き込んだ PDF を、選んだ場所に保存する（資料の一覧には入れない）
-  const exportTrial = async (options, texts) => {
+  const trialBytes = async (options, texts) => {
     const {base, rows, name} = trial.trialForExport();
     const out = await exportAnnotatedPdfOffThread(base, rows, {
       images: textImages(rows, texts),
       markers: options?.markers === 'black' ? 'black' : 'blue',
       notes: options?.notes !== false
     });
+    return {out, name};
+  };
+  const exportTrial = async (options, texts) => {
+    const {out, name} = await trialBytes(options, texts);
     const opts = {title: '書き出す', defaultPath: `${name}.pdf`, filters: [{name: 'PDF', extensions: ['pdf']}]};
     const win = getWindow();
     const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
@@ -196,17 +200,29 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
   };
 
   // 注釈付きで別名で書き出す（§9.7）。注釈の位置と中身は DB のものを使い、レンダラからは文字入れの画像だけ受け取る
-  handle('pdf.export', async ({materialId, options, texts}) => {
-    if (trial.isTrial(materialId)) return exportTrial(options, texts);
-    const m = pdfMaterial(materialId);
+  const exportBytes = async (m, options, texts) => {
     const markers = options?.markers === 'black' ? 'black' : 'blue';
     const notes = options?.notes !== false;
     const rows = repo.listAnnotations(annoKey(m)).map(annotationToClient);
     const images = textImages(rows, texts);
     const base = await readBase(m, originalsDir()).catch(() => bad('元の PDF を読めませんでした'));
     if (!base.pristine) bad('元の PDF の写しが見つからないため書き出せません');
-    const src = base.bytes;
-    const out = await exportAnnotatedPdfOffThread(src, rows, {images, markers, notes});
+    return exportAnnotatedPdfOffThread(base.bytes, rows, {images, markers, notes});
+  };
+  // iPad（パソコンと同じ画面。docs/MOBILE.md §8）：保存の窓を出さず、注釈付きの PDF の中身を返す（iPad の側で保存する）
+  ctx.pdfExportData = async ({materialId, options, texts}) => {
+    if (trial.isTrial(materialId)) {
+      const {out, name} = await trialBytes(options, texts);
+      return {ok: true, name: `${name}.pdf`, bytes: out};
+    }
+    const m = pdfMaterial(materialId);
+    const out = await exportBytes(m, options, texts);
+    return {ok: true, name: `${m.name.replace(/\.pdf$/i, '')}_注釈.pdf`, bytes: out};
+  };
+  handle('pdf.export', async ({materialId, options, texts}) => {
+    if (trial.isTrial(materialId)) return exportTrial(options, texts);
+    const m = pdfMaterial(materialId);
+    const out = await exportBytes(m, options, texts);
     const dir = path.dirname(m.path);
     const opts = {
       title: '注釈付きで書き出す',
@@ -239,7 +255,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
           status: 'ok',
           read_at: new Date().toISOString()
         });
-      sendAll(win?.webContents, 'state.changed', {});
+      sendMain(win?.webContents, 'state.changed', {});
     }
     return {ok: true, name: path.basename(file)};
   });
