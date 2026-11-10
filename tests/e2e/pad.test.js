@@ -233,15 +233,33 @@ test(
       });
       assert.deepEqual(loupe, {ink: true, select: false});
       // 指でページを動かす（ペンを使ったあと）：描き直し 1 回に 1 度だけスクロールし、速く払って離すと慣性で流れる。止めてから離すと流れない
-      // iPad の手のひらの見分け：ペンを離して少し（250ms）たてば、指で動かせる。浮かせたペン（近づけただけ）は数えない
+      // iPad の手のひらの見分け：ペンを離して 0.7 秒・浮かせたペンを動かして 0.3 秒の間に触れたものは手のひら。
+      // ペンを下ろしたら、いま触れている指は手のひらにし、指で動かしているのをやめる
       const palmPad = await ipad.evaluate(async () => {
         const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
         const now = performance.now();
-        const v = {...methods, penSeen: true, drawing: null};
+        const v = {...methods, penSeen: true, drawing: null, hoverAt: -Infinity};
         const at = (ms) => ((v.penAt = now - ms), v.palmLikely());
-        return {recent: at(100), later: at(400), drawing: ((v.drawing = {byPen: true}), at(5000))};
+        const recent = at(100);
+        const later = at(900);
+        v.hoverAt = now - 100;
+        const hover = v.palmLikely();
+        v.hoverAt = now - 600;
+        const hoverOld = v.palmLikely();
+        const drawing = ((v.drawing = {byPen: true}), at(5000));
+        const w = {...methods, touchIds: new Set([3]), palmIds: new Set(), pan: {pointer: 3}, glide: 0, pinch: null};
+        w.palmOff();
+        return {recent, later, hover, hoverOld, drawing, palmOff: [...w.palmIds], pan: w.pan};
       });
-      assert.deepEqual(palmPad, {recent: true, later: false, drawing: true});
+      assert.deepEqual(palmPad, {
+        recent: true,
+        later: false,
+        hover: true,
+        hoverOld: false,
+        drawing: true,
+        palmOff: [3],
+        pan: null
+      });
       const pan = await ipad.evaluate(async () => {
         const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
         const v = {...methods, destroyed: false};

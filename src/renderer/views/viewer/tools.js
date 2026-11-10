@@ -486,7 +486,13 @@ export const methods = {
     });
     // 画面に触れている指（ページの外で離したときも数え落とさないよう window で受ける）
     this.touchIds = new Set();
-    const lift = (e) => this.touchIds.delete(e.pointerId);
+    this.palmIds = new Set(); // 手のひらと決めた指（離すまで使わない。pointer.js）
+    const lift = (e) => {
+      this.touchIds.delete(e.pointerId);
+      this.palmIds.delete(e.pointerId);
+    };
+    // iPad：スクロールしている間は、新しいページの絵を描き始めない（pages.js の busy）
+    if (api.pad) this.on(window, 'scroll', () => (this.scrollAt = performance.now()), {passive: true});
     this.on(window, 'pointerup', lift);
     this.on(window, 'pointercancel', lift);
     this.on(el, 'touchstart', (e) => this.onTouchStart(e), {passive: false});

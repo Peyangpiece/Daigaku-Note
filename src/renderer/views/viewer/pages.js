@@ -1,7 +1,10 @@
 // PDF の編集画面：ページの描画と拡大（pdf.js・ピンチ・見えているページだけ描く）。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
 import * as pdfjs from '../../../../node_modules/pdfjs-dist/legacy/build/pdf.min.mjs';
 import {CSS_UNITS} from '../../desk-tools.js';
-import {canvasScale, ZOOMS, clampZoom, PINCH_IDLE, PINCH_SPEED, INDEX_W, INDEX_OVER} from './shared.js';
+import {api, canvasScale, ZOOMS, clampZoom, PINCH_IDLE, PINCH_SPEED, INDEX_W, INDEX_OVER} from './shared.js';
+
+// iPad：動かすのをやめてから、新しく見えたページの絵を描き始めるまで（ms）
+const RENDER_IDLE = 150;
 
 export const methods = {
   // ---- 表示 ----
@@ -127,13 +130,25 @@ export const methods = {
     if (p.dx || p.dy) window.scrollBy(-p.dx, -p.dy); // 指を動かした分だけ、ページも指について動く
   },
 
+  /** ピンチを取りやめる（ペンを下ろした：2 本の指は手のひらだった）。倍率も場所も変えない */
+  cancelPinch() {
+    const p = this.pinch;
+    this.pinch = null;
+    if (!p) return;
+    if (p.frame) cancelAnimationFrame(p.frame);
+    this.pagesEl.style.transform = '';
+    this.pagesEl.style.transformOrigin = '';
+    this.pagesEl.style.willChange = '';
+    this.renderSoon();
+  },
+
   // タッチ画面の 2 本指で拡大・縮小する（Electron はブラウザのピンチ拡大を切っているので、自分で受ける）。
   // 基準は 2 本の指の真ん中。指をそろえて動かすとスクロールにもなる（文字隠しの道具では 1 本指がなぞりになるため）
   onTouchStart(e) {
     if (e.touches.length !== 2 || !this.pages.length || (this.pinch && !this.pinch.touch) || this.drawing?.byPen)
       return;
     // ペンを近くで使っている間の 2 か所の触れは手のひら：ピンチにしない（ページが動いて線が途切れるため。v0.16.29）
-    if (this.palmLikely?.()) {
+    if (this.palmLikely?.() || this.palmIds?.size) {
       if (e.cancelable) e.preventDefault();
       return;
     }
@@ -215,12 +230,33 @@ export const methods = {
       }
   },
 
+  /**
+   * 動かしている最中か（ピンチ・iPad の指のスクロールと慣性・ブラウザのスクロール）。この間に大きなページの絵を描くと、
+   * 描く間と絵を GPU へ送る間だけ画面が止まり、拡大したあとのスクロールが重くなっていた
+   */
+  moving() {
+    if (this.pinch?.touch) return true;
+    if (!api.pad) return false;
+    return !!(this.pan || this.glide) || performance.now() - (this.scrollAt ?? -Infinity) < RENDER_IDLE;
+  },
+
+  /** 見えていてまだ描いていないページを、動きが止まってから描く */
+  renderSoon() {
+    clearTimeout(this.renderTimer);
+    this.renderTimer = setTimeout(() => {
+      if (this.destroyed) return;
+      if (this.moving()) return this.renderSoon();
+      for (const q of this.pages) if (q.visible && !q.rendered) this.renderPage(q);
+    }, RENDER_IDLE);
+  },
+
   onIntersect(entries) {
     for (const e of entries) {
       const p = this.pages[Number(e.target.dataset.page) - 1];
       if (!p) continue; // 消したページ（ノートの最後のページ）
       p.visible = e.isIntersecting;
-      if (p.visible && !p.rendered && !this.pinch?.touch) this.renderPage(p);
+      if (p.visible && !p.rendered && this.moving()) this.renderSoon();
+      else if (p.visible && !p.rendered) this.renderPage(p);
       else if (!p.visible && p.rendered) {
         // 離れたページの絵は捨てる（§9.2：見えている前後だけ描く）
         p.renderTask?.cancel();

@@ -17,16 +17,22 @@ const GLIDE_REST_MS = 80;
 const GLIDE_MIN = 0.25;
 const GLIDE_DECAY = 0.996;
 const GLIDE_STOP = 0.02;
-// iPad：ペンを離してから、触れた指を手のひらとみなす間（ms）
-const PAD_PALM_MS = 250;
+// iPad の手のひらの見分け：ペンを画面から離してからの間・ペンを浮かせて（近づけて）動かしてからの間（ms）。
+// 字を書く合間（次の字へペンを運ぶ間）に置いた手は手のひら。ペンを遠ざけて少し待てば、指で動かせる
+const PAD_PALM_MS = 700;
+const PAD_HOVER_MS = 300;
 
 export const methods = {
   onPointerDown(e) {
     this.inputAt = performance.now(); // ファイルへの上書き保存は、手を止めてから（export.js）
     this.stopGlide(); // 指で流したスクロールは、触れたら止める
-    if (e.pointerType === 'pen') this.penAt = performance.now();
+    if (e.pointerType === 'pen') {
+      this.penAt = performance.now();
+      this.palmOff(); // ペンを下ろした：いま触れている指は手のひら（動かしている・ピンチしているのをやめる）
+    }
     if (e.pointerType === 'touch') {
       this.touchIds.add(e.pointerId);
+      if (this.palmLikely()) this.palmIds.add(e.pointerId);
       // 2 本目の指は書き込みに使わない（ピンチ）。1 本目で始めたことも取りやめる（ペンで書いている間の手のひらは無視）
       if (this.drawing?.byPen) return;
       // ペンが画面の近くにある・少し前まで使っていた間の指は手のひら：何もしない（Surface などで、ペンを下ろす前に
@@ -204,22 +210,47 @@ export const methods = {
     this.glide = requestAnimationFrame(step);
   },
 
+  /**
+   * ペンを下ろしたとき：いま触れている指はすべて手のひらとし、離すまで使わない。指で動かしている・流れている・ピンチの途中なら
+   * やめる（ピンチは元の倍率に戻す）。手を先に置いてから書き始めると、手のひらでページが動いて線がずれていた
+   */
+  palmOff() {
+    for (const id of this.touchIds) this.palmIds.add(id);
+    this.stopGlide();
+    if (this.pan && this.touchIds.has(this.pan.pointer)) {
+      if (this.pan.frame) cancelAnimationFrame(this.pan.frame);
+      this.pan = null;
+    }
+    if (this.pinch?.touch) this.cancelPinch();
+  },
+
   stopGlide() {
     if (this.glide) cancelAnimationFrame(this.glide);
     this.glide = 0;
   },
 
   palmLikely() {
-    // iPad：手のひらは iPad が先に除き、ペンは画面に触れているときだけ数える（Apple Pencil は近づけただけでも動きが来るので、
-    // 浮かせたペンまで数えると、ペンを持った手の指で動かす・ピンチするのが効かず、遅れて見えた）
-    if (api.pad)
-      return this.penSeen && (this.drawing?.byPen || performance.now() - (this.penAt ?? -Infinity) < PAD_PALM_MS);
+    // iPad：ペンで書いている・書いた直後・ペンを浮かせて動かした直後に触れたものは手のひら。浮かせたペンは、動きが止まると
+    // すぐ数えない（ずっと数えると、ペンを持った手の指で動かす・ピンチするのが効かず、遅れて見えた。v0.22.5）
+    if (api.pad) {
+      const now = performance.now();
+      return (
+        this.penSeen &&
+        (this.drawing?.byPen ||
+          now - (this.penAt ?? -Infinity) < PAD_PALM_MS ||
+          now - (this.hoverAt ?? -Infinity) < PAD_HOVER_MS)
+      );
+    }
     return this.penSeen && performance.now() - (this.penAt ?? -Infinity) < 1000;
   },
 
   onPointerMove(e) {
-    if (e.pointerType === 'pen' && (!api.pad || e.buttons)) this.penAt = performance.now();
-    else if (e.buttons) this.inputAt = performance.now(); // 浮かせたペンの動きも数える（Surface のペンは近づけると動きが来る）
+    if (e.pointerType === 'pen') {
+      // 浮かせたペンの動きも数える（Surface のペンは近づけると動きが来る）。iPad は浮かせた動きを別に数える（palmLikely）
+      if (!api.pad || e.buttons) this.penAt = performance.now();
+      else this.hoverAt = performance.now();
+    } else if (e.buttons) this.inputAt = performance.now();
+    if (e.pointerType === 'touch' && this.palmIds.has(e.pointerId)) return; // 手のひらと決めた指は、離すまで何もしない
     if (e.pointerType === 'touch' && this.palmLikely() && !this.pinch) return;
     if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);
     const pan = this.pan;

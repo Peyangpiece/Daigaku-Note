@@ -348,6 +348,7 @@ class Viewer extends DeskTools {
     delete this.root.dataset.flatArt;
     this.offPhone?.();
     clearTimeout(this.pinchTimer);
+    clearTimeout(this.renderTimer);
     clearTimeout(this.syncTimer);
     for (const off of this.listeners) off();
     this.observer?.disconnect();
