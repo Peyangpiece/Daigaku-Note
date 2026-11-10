@@ -247,14 +247,36 @@ test(
         v.hoverAt = now - 600;
         const hoverOld = v.palmLikely();
         const drawing = ((v.drawing = {byPen: true}), at(5000));
-        const w = {...methods, touchIds: new Set([3]), palmIds: new Set(), pan: {pointer: 3}, glide: 0, pinch: null};
+        const w = {
+          ...methods,
+          touchIds: new Set([3]),
+          palmIds: new Set(),
+          palmSoft: new Map(),
+          pan: {pointer: 3},
+          glide: 0,
+          pinch: null
+        };
         w.palmOff();
         // 触れた面の大きさ：大きい触れは手のひら。動かし始めたあとで大きくなったら、そこで動かすのをやめる
         const big = methods.bigTouch({width: 120, height: 60});
         const small = methods.bigTouch({width: 30, height: 30});
         const none = methods.bigTouch({});
-        const g = {...methods, palmIds: new Set(), pan: {pointer: 5}, pinch: null};
+        const g = {...methods, palmIds: new Set(), palmSoft: new Map(), pan: {pointer: 5}, pinch: null};
         g.palmLate(5);
+        // 書いた直後に触れた指（時間だけで手のひら）：少し動いただけなら手のひらのまま、はっきり払ったら指に戻して動かし始める
+        const r = {
+          ...methods,
+          tool: 'ink',
+          touchIds: new Set([7]),
+          palmIds: new Set([7]),
+          palmSoft: new Map([[7, {x: 100, y: 100}]]),
+          pan: null,
+          drawing: null,
+          hoverAt: -Infinity
+        };
+        r.palmRelease({pointerId: 7, clientX: 110, clientY: 105});
+        const stay = r.palmIds.has(7);
+        r.palmRelease({pointerId: 7, clientX: 100, clientY: 160});
         return {
           recent,
           later,
@@ -264,7 +286,8 @@ test(
           palmOff: [...w.palmIds],
           pan: w.pan,
           size: [big, small, none],
-          late: [[...g.palmIds], g.pan]
+          late: [[...g.palmIds], g.pan],
+          release: [stay, r.palmIds.has(7), r.pan?.pointer]
         };
       });
       assert.deepEqual(palmPad, {
@@ -276,7 +299,8 @@ test(
         palmOff: [3],
         pan: null,
         size: [true, false, false],
-        late: [[5], null]
+        late: [[5], null],
+        release: [true, false, 7]
       });
       const pan = await ipad.evaluate(async () => {
         const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
