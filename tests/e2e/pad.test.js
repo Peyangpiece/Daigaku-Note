@@ -102,7 +102,7 @@ test(
         [qr.deviceId, toB64(key)]
       );
       // まだパソコンでオンにしていない：案内だけ
-      await ipad.goto(`${base}/p/`);
+      await ipad.goto(`${base}/m/p/`);
       await ipad.waitForSelector('.pad-gate', {timeout: 30000});
       assert.match(await ipad.textContent('.pad-gate'), /まだ使えません/);
       // パソコンでオンにする → もう一度試すとパソコンと同じ画面
@@ -208,7 +208,7 @@ test(
       assert.deepEqual(palm, {span: 'none', body: 'none', selectstart: true, menu: 0, typing: 'text'});
       // 指でページを動かす（ペンを使ったあと）：描き直し 1 回に 1 度だけスクロールし、速く払って離すと慣性で流れる。止めてから離すと流れない
       const pan = await ipad.evaluate(async () => {
-        const {methods} = await import('/p/src/renderer/views/viewer/pointer.js');
+        const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
         const v = {...methods, destroyed: false};
         const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
         const swipe = async (rest) => {
@@ -267,6 +267,13 @@ test(
         ];
       }, pc.courseId);
       for (const m of denied) assert.match(m, /パソコンの画面/);
+
+      // 持ち物の 3D モデル：暗号化した窓口を通さず、ブラウザで直接読む（中身は GLB）
+      const glb = await ipad.evaluate(async () => {
+        const r = await window.daigaku['stationery.model']({model: 'eraser'});
+        return r.error ?? String.fromCharCode(...r.bytes.slice(0, 4));
+      });
+      assert.equal(glb, 'glTF');
 
       // 設定の画面：iPad だけの案内（スマホの画面に切り替える）
       await ipad.evaluate(() => (location.hash = '#/settings?tab=mobile'));

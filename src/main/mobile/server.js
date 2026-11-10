@@ -35,18 +35,20 @@ export function staticRoots() {
     ['/m/vendor/noble/', pkgDir('@noble/ciphers', 'chacha.js')],
     ['/m/vendor/jsqr/', pkgDir('jsqr', 'dist/jsQR.js')], // QR を読む（ホーム画面に追加したスマホのページで、パソコンの QR を読んでつなぐ）
     // パソコンと同じ画面（iPad。§8）：パソコンの画面のファイルを、パソコンのアプリの中と同じ並びで配る（node_modules への相対の参照がそのまま通る）
-    ['/p/src/renderer/', path.join(SRC, 'renderer')],
-    ['/p/src/shared/', path.join(SRC, 'shared')],
-    ['/p/node_modules/pdfjs-dist/', pkgDir('pdfjs-dist', 'package.json')],
+    ['/m/p/src/renderer/', path.join(SRC, 'renderer')],
+    ['/m/p/src/shared/', path.join(SRC, 'shared')],
+    ['/m/p/node_modules/pdfjs-dist/', pkgDir('pdfjs-dist', 'package.json')],
     // three は package.json も本体（three.cjs）も require で引けない（exports に出していない・配布物では three.cjs を外す）。
     // pdfjs-dist と同じ node_modules にある
-    ['/p/node_modules/three/', path.join(pkgDir('pdfjs-dist', 'package.json'), '..', 'three')],
-    ['/p/pad/', path.join(SRC, 'pad')]
+    ['/m/p/node_modules/three/', path.join(pkgDir('pdfjs-dist', 'package.json'), '..', 'three')],
+    ['/m/p/pad/', path.join(SRC, 'pad')]
   ];
 }
 
 /** パソコンと同じ画面の入口（iPad。§8）。パソコンの画面の index.html を、iPad で動くように直して配る */
-export const PAD_INDEX = '/p/src/renderer/index.html';
+// /m/ の下に置く：ホーム画面に追加したアプリの範囲（manifest の scope）が /m/ のままのアイコン（v0.21.0 までに追加したもの・
+// iPad が manifest を読まなかったとき）でも、アプリの中として開く（外とみなされると Safari のバーが出る。v0.21.2）
+export const PAD_INDEX = '/m/p/src/renderer/index.html';
 
 /**
  * パソコンの画面の index.html → iPad のページ：
@@ -71,9 +73,9 @@ export function padIndexHtml(raw) {
     .replace(map[0], `<script type="importmap">${body}</script>`)
     .replace(
       '<meta charset="utf-8" />',
-      '<meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n    <meta name="apple-mobile-web-app-capable" content="yes" />\n    <meta name="apple-mobile-web-app-title" content="パレットノート" />\n    <link rel="manifest" href="/m/app/manifest.webmanifest" />\n    <link rel="stylesheet" href="/p/pad/pad.css" />'
+      '<meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />\n    <meta name="apple-mobile-web-app-capable" content="yes" />\n    <meta name="apple-mobile-web-app-title" content="パレットノート" />\n    <link rel="manifest" href="/m/app/manifest.webmanifest" />\n    <link rel="stylesheet" href="/m/p/pad/pad.css" />'
     )
-    .replace(app, '<script type="module" src="/p/pad/boot.js"></script>');
+    .replace(app, '<script type="module" src="/m/p/pad/boot.js"></script>');
 }
 
 const TYPES = {
@@ -317,7 +319,7 @@ export function createMobileServer({
       res.writeHead(302, {Location: '/m/'});
       return res.end();
     }
-    if (url.pathname === '/p' || url.pathname === '/p/') {
+    if (['/p', '/p/', '/m/p', '/m/p/'].includes(url.pathname)) {
       res.writeHead(302, {Location: PAD_INDEX});
       return res.end();
     }
@@ -333,14 +335,25 @@ export function createMobileServer({
     }
     const file = staticFile(url.pathname);
     if (!file) return send(res, 404, 'not found');
-    const data = await fsp.readFile(file).catch(() => null);
-    if (!data) return send(res, 404, 'not found');
-    res.writeHead(200, {
+    const st = await fsp.stat(file).catch(() => null);
+    if (!st?.isFile()) return send(res, 404, 'not found');
+    // 変わっていなければ送り直さない（ブラウザが覚えている写しを使う）。パソコンと同じ画面は画面のファイルが多く
+    // （JS・CSS・フォント・3D モデル）、開くたびに全部を送り直すと重い
+    const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+    const head = {
       'Content-Type': TYPES[path.extname(file).toLowerCase()],
       'Cache-Control': 'no-cache',
+      ETag: etag,
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer'
-    });
+    };
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, head);
+      return res.end();
+    }
+    const data = await fsp.readFile(file).catch(() => null);
+    if (!data) return send(res, 404, 'not found');
+    res.writeHead(200, head);
     res.end(req.method === 'HEAD' ? undefined : data);
   }
 

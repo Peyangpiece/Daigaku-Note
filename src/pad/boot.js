@@ -2,4 +2,4 @@
 // つないでいない・パソコンでオンにしていないときは、案内だけを出して app.js は読まない
 import {installBridge} from './bridge.js';
 
-if (await installBridge()) await import('/p/src/renderer/app.js');
+if (await installBridge()) await import('/m/p/src/renderer/app.js');

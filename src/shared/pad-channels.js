@@ -30,7 +30,8 @@ export const PAD_LOCAL = [
   'term.readCalendar',
   'backup.export',
   'backup.import',
-  'shell.openExternal'
+  'shell.openExternal',
+  'stationery.model'
 ];
 
 /** iPad だけが使う窓口（ファイルの中身を渡す・受ける。パソコンの画面にはない） */
@@ -39,7 +40,8 @@ export const PAD_EXTRA = [
   'pdf.exportData',
   'term.readCalendarData',
   'backup.exportData',
-  'backup.importData'
+  'backup.importData',
+  'pdf.markStale'
 ];
 
 /** iPad とやりとりするファイル 1 つの大きさの上限（暗号化して JSON で運ぶので、iPad のメモリに収まる大きさに） */
@@ -77,6 +79,7 @@ export const PAD_QUIET = new Set([
   'pdf.export',
   'pdf.exportData',
   'pdf.save',
+  'pdf.markStale',
   'pdf.textStyle',
   'note.addPage',
   'note.trial',
