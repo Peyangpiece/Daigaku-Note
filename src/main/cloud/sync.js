@@ -87,7 +87,9 @@ export function createPusher({
 
       // 資料
       const mats = {};
-      for (const m of materials()) {
+      // 資料の並び。授業ごとにまとめた形（{授業の id: [資料…]}）を渡されても受ける
+      const list = materials();
+      for (const m of Array.isArray(list) ? list : Object.values(list ?? {}).flat()) {
         if (m.status !== 'ok' || !m.path) continue;
         const src = m.base_sha256 || m.sha256 || null; // 中身のハッシュ（PDF は元の PDF のもの）
         const same = src && unchanged(prev?.materials?.[m.id], src);

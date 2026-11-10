@@ -434,7 +434,8 @@ app.whenReady().then(async () => {
       repo,
       secrets: ctx.secrets,
       exportDb: (file) => exportBackup(ctx.db, file),
-      materials: () => repo.listMaterialsAll(),
+      // listMaterialsAll は授業ごとにまとめた形（{授業の id: [資料…]}）。送るのは資料の並び（v0.23.1。それまで送れなかった）
+      materials: () => Object.values(repo.listMaterialsAll()).flat(),
       readMaterial: async (m) =>
         /\.pdf$/i.test(m.path) ? (await readBase(m, path.join(userData, 'originals'))).bytes : fsp.readFile(m.path),
       userData,

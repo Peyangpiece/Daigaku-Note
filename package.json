@@ -1,7 +1,7 @@
 {
   "name": "daigaku-note",
   "productName": "パレットノート",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "description": "大学の LMS の授業資料を授業ごと・回ごとのフォルダにそろえ、PDF に書き込み、資料からクイズを作って復習する電子ノート",
   "private": true,
   "type": "module",
@@ -37,7 +37,8 @@
     "electron-builder": "26.15.3",
     "eslint": "9.39.1",
     "globals": "^15.15.0",
-    "prettier": "3.6.2"
+    "prettier": "3.6.2",
+    "sql.js": "1.16.0"
   },
   "prettier": {
     "printWidth": 120,
