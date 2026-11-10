@@ -329,6 +329,80 @@ test(
         gesture: [true, 1, [], 1],
         resting: [false, 1, [1], 2]
       });
+      // タッチペンの手の見分け：手のひらの近く・上側は関節。書いている合間は、最後に書いた所＋覚えた手の位置の近くが関節。
+      // 次の画を書き始めたら、直前の関節の点（大きな触れで書いた点）を消し、取り消しの手にも残さない
+      const hand = await ipad.evaluate(async () => {
+        const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
+        try {
+          localStorage.removeItem('palette.hand');
+        } catch {
+          // なくてもよい
+        }
+        const now = performance.now();
+        const v = {...methods, bigSpots: new Map([[9, {x: 500, y: 600}]]), bigRecent: [], lastStroke: null};
+        const nearPalm = v.knuckleAt(450, 500); // 手のひらの上側
+        const belowPalm = v.knuckleAt(500, 760); // 手のひらのずっと下
+        const farPen = v.knuckleAt(200, 200); // ペン先（手のひらから遠い）
+        v.bigSpots.clear();
+        for (let i = 0; i < 3; i++) v.handLearn(380, 330, {x: 300, y: 300}); // 関節はペン先の右下 (80, 30)
+        v.lastStroke = {x: 300, y: 300, t: now};
+        const byHand = v.knuckleAt(385, 335);
+        const next = v.knuckleAt(320, 310); // 最後に書いた所のすぐ近く（続けて書く）
+        let removed = null;
+        const dot = {key: 'k1', removed: false};
+        const w = {
+          ...methods,
+          bigSpots: new Map(),
+          bigRecent: [],
+          hand: null,
+          undoStack: [{key: 'k1', before: null, after: {}}],
+          lastStroke: {x: 600, y: 500, t: now, dot, size: 104},
+          removeAnno(a) {
+            removed = a.key;
+          }
+        };
+        w.dropKnuckleDot({clientX: 300, clientY: 300});
+        // ペンで書いた小さな点（「、」）は、離れた所で書き始めても残す
+        const keep = {key: 'k2', removed: false};
+        const z = {
+          ...methods,
+          bigSpots: new Map(),
+          bigRecent: [],
+          hand: {dx: 0, dy: 0, n: 0},
+          undoStack: [],
+          lastStroke: {x: 600, y: 500, t: now, dot: keep, size: 42},
+          removeAnno() {
+            throw new Error('消してはいけない');
+          }
+        };
+        z.dropKnuckleDot({clientX: 300, clientY: 300});
+        // 書いていた触れが大きくなった：書きかけを消す
+        let cancelled = 0;
+        const c = {
+          ...methods,
+          palmIds: new Set(),
+          palmSoft: new Map(),
+          bigSpots: new Map(),
+          drawing: {pointer: 4},
+          pan: null,
+          pinch: null,
+          cancelPointer() {
+            cancelled++;
+          }
+        };
+        c.palmLate(4, {clientX: 1, clientY: 2});
+        return {nearPalm, belowPalm, farPen, byHand, next, removed, undo: w.undoStack.length, cancelled};
+      });
+      assert.deepEqual(hand, {
+        nearPalm: true,
+        belowPalm: false,
+        farPen: false,
+        byHand: true,
+        next: false,
+        removed: 'k1',
+        undo: 0,
+        cancelled: 1
+      });
       const pan = await ipad.evaluate(async () => {
         const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
         const v = {...methods, destroyed: false};

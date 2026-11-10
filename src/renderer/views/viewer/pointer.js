@@ -28,6 +28,19 @@ const PALM_RELEASE_PX = 30;
 // 書き始めてからこれより早く・動かずに触れたなら 2 本指の操作（ピンチ）。それより後なら、書いている手の関節・手のひら
 const TOUCH_GESTURE_MS = 250;
 const TOUCH_WRITE_PX = 8; // これより動いていたら、書いている（あとから触れたものは関節・手のひら）
+// タッチペン（指として届くペン）の手の見分け（iPad）。ピクセルは CSS のピクセル（iPad ではおよそ 1cm が 52）
+const PALM_NEAR = 180; // 手のひら（触れた面の大きいもの）からこの距離の内側は、関節とみなす
+const PALM_BELOW = 60; // ただし手のひらより下は、ここまで（関節は手のひらの上側に触れる）
+const PALM_RECENT_MS = 800; // 手のひらが離れてから、この間はまだそこにあるものとする
+const STROKE_RECENT_MS = 1500; // 最後に書いてから、この間を「書いている合間」とする
+const STROKE_NEAR = 40; // 最後に書いた所からこれより近ければ、続けて書いた（関節とはみなさない）
+const HAND_NEAR = 70; // 覚えた関節の位置（最後に書いた所＋手の位置）からこれより近ければ、関節
+const HAND_MIN = 30; // 覚える関節の位置：ペン先からこの距離からここまで
+const HAND_MAX = 320;
+const HAND_KEY = 'palette.hand'; // 覚えた手の位置（この端末に覚える）
+const DOT_MOVE = 4; // これより動かず、DOT_MS より短く触れて書いたものは点
+const DOT_MS = 400;
+const DOT_BIG = 83; // 点を書いた触れの大きさがこれ以上なら、関節の点らしい（ペン先は 21〜63 が多い）
 
 export const methods = {
   onPointerDown(e) {
@@ -39,8 +52,13 @@ export const methods = {
     }
     if (e.pointerType === 'touch') {
       this.touchIds.add(e.pointerId);
-      if (this.bigTouch(e)) this.palmIds.add(e.pointerId);
-      else if (this.palmLikely()) {
+      if (this.bigTouch(e)) {
+        this.palmIds.add(e.pointerId);
+        this.bigSpots.set(e.pointerId, {x: e.clientX, y: e.clientY});
+      } else if (this.knuckleAt(e.clientX, e.clientY)) {
+        this.palmIds.add(e.pointerId);
+        if (this.drawing && !this.drawing.byPen && this.penXY) this.handLearn(e.clientX, e.clientY, this.penXY);
+      } else if (this.palmLikely()) {
         // 時間だけで手のひらとみなした指：はっきり指で払ったら、指に戻す（palmRelease）
         this.palmIds.add(e.pointerId);
         this.palmSoft.set(e.pointerId, {x: e.clientX, y: e.clientY});
@@ -52,8 +70,11 @@ export const methods = {
       // 手を置くと、手のひらでピンチ・スクロールになり、書いている線が動いて途切れていた。v0.16.29）
       if (this.palmLikely()) return;
       if (this.liveTouches() > 1 && this.secondTouch(e)) return;
-      if (this.liveTouches() === 1)
-        this.firstTouch = {id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY, moved: 0};
+      if (this.liveTouches() === 1) {
+        this.dropKnuckleDot(e);
+        this.firstTouch = {id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY, moved: 0, size: 0};
+        this.penXY = {x: e.clientX, y: e.clientY};
+      }
     }
     if (e.pointerType === 'pen' && !this.penSeen) {
       this.penSeen = true;
@@ -279,6 +300,7 @@ export const methods = {
     }
     if (f.moved >= TOUCH_WRITE_PX) {
       this.palmIds.add(e.pointerId);
+      if (this.penXY) this.handLearn(e.clientX, e.clientY, this.penXY);
       return true;
     }
     if (performance.now() - f.t < TOUCH_GESTURE_MS) {
@@ -287,8 +309,98 @@ export const methods = {
     }
     this.cancelPointer();
     this.palmIds.add(f.id);
-    this.firstTouch = {id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY, moved: 0};
+    this.handLearn(f.x, f.y, {x: e.clientX, y: e.clientY});
+    this.firstTouch = {id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY, moved: 0, size: 0};
+    this.penXY = {x: e.clientX, y: e.clientY};
     return false;
+  },
+
+  // ---- タッチペン（指として届くペン）の手の見分け（iPad）----
+  /** 覚えた手の位置（関節 − ペン先。この端末に覚える） */
+  handOf() {
+    if (!this.hand) {
+      try {
+        const h = JSON.parse(localStorage.getItem(HAND_KEY) ?? 'null');
+        this.hand = h && Number.isFinite(h.dx) && Number.isFinite(h.dy) && Number.isFinite(h.n) ? h : null;
+      } catch {
+        this.hand = null;
+      }
+      this.hand ??= {dx: 0, dy: 0, n: 0};
+    }
+    return this.hand;
+  },
+
+  /** 関節（kx, ky）とそのときのペン先（p）から、手の位置を覚える（新しいものほど重く、20 回分の平均） */
+  handLearn(kx, ky, p) {
+    if (!api.pad || !p) return;
+    const dx = kx - p.x;
+    const dy = ky - p.y;
+    const d = Math.hypot(dx, dy);
+    if (d < HAND_MIN || d > HAND_MAX) return;
+    const h = this.handOf();
+    h.n = Math.min(h.n + 1, 20);
+    h.dx += (dx - h.dx) / h.n;
+    h.dy += (dy - h.dy) / h.n;
+    try {
+      localStorage.setItem(HAND_KEY, JSON.stringify(h));
+    } catch {
+      // 覚えられなくても、この画面の間は使える
+    }
+  },
+
+  /** 手のひら（触れている・少し前まで触れていた、面の大きいもの）の位置 */
+  palmSpots() {
+    const now = performance.now();
+    this.bigRecent = (this.bigRecent ?? []).filter((s) => now - s.t < PALM_RECENT_MS);
+    return [...(this.bigSpots?.values() ?? []), ...this.bigRecent];
+  },
+
+  /**
+   * そこに触れたのは関節か（触れた面が小さくても）：
+   * - 手のひらの近く（PALM_NEAR）で、手のひらより下すぎない所
+   * - 書いている合間（最後に書いてから STROKE_RECENT_MS）に、最後に書いた所＋覚えた手の位置の近く
+   * ただし最後に書いた所のすぐ近く（続けて書いた）は、関節とみなさない
+   */
+  knuckleAt(x, y) {
+    if (!api.pad) return false;
+    const now = performance.now();
+    const s = this.lastStroke;
+    const recent = !!s && now - s.t < STROKE_RECENT_MS;
+    if (recent && Math.hypot(x - s.x, y - s.y) < STROKE_NEAR) return false;
+    for (const p of this.palmSpots()) if (Math.hypot(x - p.x, y - p.y) < PALM_NEAR && y - p.y < PALM_BELOW) return true;
+    const h = this.handOf();
+    return recent && h.n >= 2 && Math.hypot(x - (s.x + h.dx), y - (s.y + h.dy)) < HAND_NEAR;
+  },
+
+  /** 指・タッチペンで書き終えた：書いた所と、点だったか（関節で書いた点かもしれない）を覚える */
+  noteStroke(e, a) {
+    if (e.pointerType !== 'touch' || !api.pad) return;
+    const f = this.firstTouch?.id === e.pointerId ? this.firstTouch : null;
+    const now = performance.now();
+    const dot = !!a && !!f && f.moved < DOT_MOVE && now - f.t < DOT_MS;
+    this.lastStroke = {x: e.clientX, y: e.clientY, t: now, dot: dot ? a : null, size: f?.size ?? 0};
+  },
+
+  /**
+   * 次の画を書き始めた所（e）から見て、直前に書いた点が関節で書いたものらしければ消す（取り消しの手にも残さない）：
+   * 点を書いた触れが大きい・手のひらの近く・覚えた関節の位置に合う。書き始めた所のすぐ近くの点（「、」など）は残す
+   */
+  dropKnuckleDot(e) {
+    const s = this.lastStroke;
+    const a = s?.dot;
+    if (!a || a.removed || !api.pad) return;
+    this.lastStroke = {...s, dot: null};
+    if (performance.now() - s.t > STROKE_RECENT_MS || Math.hypot(e.clientX - s.x, e.clientY - s.y) < STROKE_NEAR)
+      return;
+    const h = this.handOf();
+    const byHand = h.n >= 2 && Math.hypot(s.x - (e.clientX + h.dx), s.y - (e.clientY + h.dy)) < HAND_NEAR;
+    const byPalm = this.palmSpots().some((p) => Math.hypot(s.x - p.x, s.y - p.y) < PALM_NEAR && s.y - p.y < PALM_BELOW);
+    const big = s.size >= DOT_BIG;
+    if (!(big || byPalm || byHand)) return;
+    if (big || byPalm) this.handLearn(s.x, s.y, {x: e.clientX, y: e.clientY});
+    const i = this.undoStack.findLastIndex((st) => st.key === a.key && st.before === null);
+    if (i >= 0) this.undoStack.splice(i, 1);
+    this.removeAnno(a, false);
   },
 
   /** iPad：触れた面が大きい（手のひら。指よりはっきり大きい）。iPad が大きさを渡さなければ、いつも false */
@@ -300,9 +412,12 @@ export const methods = {
    * 指と思って動かし始めたあとで、触れた面が大きくなった（手のひらは、置いた瞬間は端だけが触れて小さい）：手のひらにし、
    * その指で動かしている・ピンチしているのをやめる（ピンチは元の倍率に戻す）
    */
-  palmLate(id) {
+  palmLate(id, e = null) {
     this.palmIds.add(id);
     this.palmSoft.delete(id);
+    if (e) this.bigSpots.set(id, {x: e.clientX, y: e.clientY});
+    // 書いていた触れが大きくなった：関節・手のひらで書いていた。書きかけを消す（ペン先は 83 を超えない。ログで確かめた）
+    if (this.drawing?.pointer === id) this.cancelPointer();
     if (this.pan?.pointer === id) {
       if (this.pan.frame) cancelAnimationFrame(this.pan.frame);
       this.pan = null;
@@ -336,11 +451,17 @@ export const methods = {
       if (!api.pad || e.buttons) this.penAt = performance.now();
       else this.hoverAt = performance.now();
     } else if (e.buttons) this.inputAt = performance.now();
-    if (e.pointerType === 'touch' && !this.palmIds.has(e.pointerId) && this.bigTouch(e)) this.palmLate(e.pointerId);
+    if (e.pointerType === 'touch' && !this.palmIds.has(e.pointerId) && this.bigTouch(e)) this.palmLate(e.pointerId, e);
+    if (e.pointerType === 'touch' && this.bigSpots.has(e.pointerId))
+      this.bigSpots.set(e.pointerId, {x: e.clientX, y: e.clientY});
     if (e.pointerType === 'touch' && this.palmSoft.has(e.pointerId)) this.palmRelease(e);
     if (e.pointerType === 'touch' && this.palmIds.has(e.pointerId)) return; // 手のひらと決めた指は、離すまで何もしない
     const f = this.firstTouch;
-    if (f?.id === e.pointerId) f.moved = Math.max(f.moved, Math.hypot(e.clientX - f.x, e.clientY - f.y));
+    if (f?.id === e.pointerId) {
+      f.moved = Math.max(f.moved, Math.hypot(e.clientX - f.x, e.clientY - f.y));
+      f.size = Math.max(f.size, contactSize(e));
+    }
+    if (this.drawing?.pointer === e.pointerId) this.penXY = {x: e.clientX, y: e.clientY};
     // パソコン（Surface など）：ペンの近くの指は動きごとに見る。iPad は触れたときに指ごとに決めている（palmIds）
     if (e.pointerType === 'touch' && !api.pad && this.palmLikely() && !this.pinch) return;
     if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);
@@ -408,7 +529,7 @@ export const methods = {
       this.pan = null;
     }
     const dr = this.drawing;
-    if (dr?.pointer === e.pointerId && dr.kind === 'ink') return void this.finishInk(e);
+    if (dr?.pointer === e.pointerId && dr.kind === 'ink') return void this.noteStroke(e, this.finishInk(e));
     if (dr?.pointer === e.pointerId && dr.kind === 'line') return void this.finishLine();
     if (dr?.pointer === e.pointerId && dr.kind === 'eraser') {
       this.drawing = null;
