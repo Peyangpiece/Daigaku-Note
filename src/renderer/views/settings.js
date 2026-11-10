@@ -299,7 +299,8 @@ export function renderSettings({data}, route = '/settings') {
       <section class="card" id="st-data"><h3>バックアップ</h3>
         <p class="muted">資料のファイルは含みません。毎日自動で 7 日分取っています。</p>
         <div class="about__row"><button type="button" class="btn btn--small" data-backup="export">書き出す</button><button type="button" class="btn btn--small" data-backup="import">読み込む…</button><button type="button" class="btn btn--small btn--quiet" data-backup="dir">自動バックアップを開く</button></div>
-      </section>`,
+      </section>
+      <section class="card" id="st-cloud"><h3>Google ドライブ</h3><div data-v="cloud">読み込み中…</div></section>`,
     about: `
       <section class="card" id="st-about"><h3>情報</h3>
         <p>パレットノート ${esc(data.version)}<span class="about__alpha">α 版</span></p>
@@ -441,9 +442,79 @@ async function renderMobile(box, st = null, pair = null) {
     };
 }
 
+/**
+ * Google ドライブ（docs/SYNC.md）：連携する・外す・いま送る。データと資料を暗号化して送る（鍵はこのパソコンと iPad だけ）
+ */
+async function renderCloud(box, st = null) {
+  if (!box?.isConnected) return;
+  const s = st ?? (await api['cloud.status']());
+  if (s?.error) return void (box.textContent = s.error);
+  const when = (iso) => (iso ? new Date(iso).toLocaleString('ja-JP', {dateStyle: 'short', timeStyle: 'short'}) : '');
+  const last = s.last
+    ? s.last.ok
+      ? `最後に送った日時 ${esc(when(s.last.at))}`
+      : `<span class="error-text">送れませんでした（${esc(when(s.last.at))}）：${esc(s.last.message)}</span>`
+    : 'まだ送っていません';
+  const intro =
+    '<p class="muted">データと資料を暗号化して、あなたの Google ドライブ（このアプリだけの見えない領域）に置きます。鍵はこのパソコンと、つないだ iPad だけが持ちます（Google からも中身は読めません）。パソコンが閉じていても iPad で使えるようにするための準備です（iPad のアプリは準備中）。</p>';
+  if (!s.ready) {
+    box.innerHTML = `${intro}<p class="muted">Google との連携は準備中です。</p>`;
+    return;
+  }
+  box.innerHTML = s.linked
+    ? `${intro}
+      <p><strong>${esc(s.email ?? 'Google アカウント')}</strong> と連携しています。<span class="muted">${last}${s.busy ? '（送っています…）' : ''}</span></p>
+      ${s.fingerprint ? `<p class="muted">鍵の印：<code>${esc(s.fingerprint)}</code>（iPad と同じ鍵か確かめるときに使います）</p>` : ''}
+      <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button><button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button></div>`
+    : `${intro}<div class="about__row"><button type="button" class="btn btn--small" data-cloud="link">Google と連携する…</button></div>`;
+  if (s.busy) setTimeout(() => renderCloud(box), 2000); // 送り終わるまで見直す
+  for (const b of box.querySelectorAll('[data-cloud]'))
+    b.onclick = async () => {
+      const what = b.dataset.cloud;
+      if (
+        what === 'wipe' &&
+        !(await confirmDialog(
+          'Google ドライブに置いたこのアプリのデータを、すべて消しますか？ このパソコンのデータは消えません。',
+          {ok: '消す', danger: true}
+        ))
+      )
+        return;
+      if (
+        what === 'unlink' &&
+        !(await confirmDialog(
+          'Google との連携を外しますか？ ドライブのデータは残ります（同じアカウントで連携し直すと続きから使えます）。',
+          {ok: '外す'}
+        ))
+      )
+        return;
+      b.disabled = true;
+      if (what === 'link') toast('ブラウザで Google にログインしてください');
+      const r = await api[`cloud.${what}`]();
+      b.disabled = false;
+      if (r?.error) {
+        toast(r.error, {error: true});
+        return renderCloud(box);
+      }
+      if (what === 'link' && r.conflict) {
+        const wipe = await confirmDialog(
+          'Google ドライブに、別の鍵で暗号化したこのアプリのデータがあります（前に別のパソコンで連携したなど）。消して作り直しますか？ 消さないと、このパソコンからは送れません。',
+          {ok: '消して作り直す', danger: true}
+        );
+        if (wipe) {
+          const w = await api['cloud.wipe']();
+          if (w?.error) toast(w.error, {error: true});
+          else api['cloud.push']().then(() => renderCloud(box));
+        }
+      }
+      if (what === 'push') toast(r.skipped ? '変わったものはありませんでした' : `送りました（${r.uploaded} 件）`);
+      renderCloud(box, r.status);
+    };
+}
+
 function bind() {
   const $ = (id) => document.getElementById(id);
   renderMobile(document.querySelector('[data-v="mobile"]'));
+  renderCloud(document.querySelector('[data-v="cloud"]'));
   for (const b of document.querySelectorAll('[data-backup]'))
     b.onclick = async () => {
       const what = b.dataset.backup;

@@ -274,3 +274,7 @@
 .st-teams__how code {
   overflow-wrap: anywhere;
 }
+/* 設定の中の失敗の知らせ（Google ドライブに送れなかったなど） */
+.error-text {
+  color: var(--danger-ink);
+}

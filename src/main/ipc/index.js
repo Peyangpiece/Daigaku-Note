@@ -17,6 +17,7 @@ import * as settingsIpc from './settings.js';
 import * as appIpc from './app.js';
 import * as mobileIpc from './mobile.js';
 import * as importsIpc from './imports.js';
+import * as cloudIpc from './cloud.js';
 
 export function registerIpc(ctx, {getWindow = () => null} = {}) {
   const {repo, registry, jobs, files, secrets, log, folders} = ctx;
@@ -62,7 +63,8 @@ export function registerIpc(ctx, {getWindow = () => null} = {}) {
     settingsIpc,
     appIpc,
     mobileIpc,
-    importsIpc
+    importsIpc,
+    cloudIpc
   ])
     m.register(c);
 }
