@@ -183,6 +183,7 @@ test(
       const pg = await ctx.newPage();
       const errors = [];
       pg.on('pageerror', (e) => errors.push(e.message));
+      if (process.env.DEBUG_LOCAL) pg.on('console', (m) => console.error('console', m.type(), m.text().slice(0, 300)));
       const h = {'access-control-allow-origin': '*'};
       await pg.route('https://oauth2.googleapis.com/token', (r) =>
         r.fulfill({
@@ -241,6 +242,7 @@ test(
       assert.deepEqual(saved, {ok: true});
       await pg.waitForTimeout(2500); // 保存は少し待ってから
       await pg.reload();
+      await pg.waitForFunction(() => !!window.daigaku, null, {timeout: 60000});
       const again = await pg.evaluate(
         async (id) => (await window.daigaku['pdf.open']({materialId: id})).textStyle,
         mat.id
