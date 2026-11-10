@@ -19,7 +19,9 @@ export const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 export const clampZoom = (z) => Math.min(4, Math.max(0.25, z));
 // 1 ページの絵（canvas）の画素数の上限。拡大 4 倍 × Retina で A4 が 5,700 万画素（約 228 MB）になるのを防ぐ。
 // 超えるときは描く解像度を落とし、CSS で大きさを合わせる（pdf.js の maxCanvasPixels と同じ考え）
-export const MAX_CANVAS_PIXELS = 16 * 1024 * 1024;
+// iPad（パソコンと同じ画面）は 1 枚あたり 8 百万画素まで：大きな絵は描くのも、拡大・縮小の間に GPU へ送るのも重く、
+// 拡大したあとのピンチ・スクロール・ペンが遅れていた（iPad の画面の細かさなら、拡大しても文字はつぶれない）
+export const MAX_CANVAS_PIXELS = (window.daigaku?.pad ? 8 : 16) * 1024 * 1024;
 export const FILE_SAVE_DELAY = 3000; // 最後に触ってから、ファイルに上書き保存するまで（ms）
 // 注釈を保存してからファイルを上書きするまで（ms）。続けて書いている間は待つ
 export const PINCH_IDLE = 180;

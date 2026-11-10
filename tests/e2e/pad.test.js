@@ -233,6 +233,15 @@ test(
       });
       assert.deepEqual(loupe, {ink: true, select: false});
       // 指でページを動かす（ペンを使ったあと）：描き直し 1 回に 1 度だけスクロールし、速く払って離すと慣性で流れる。止めてから離すと流れない
+      // iPad の手のひらの見分け：ペンを離して少し（250ms）たてば、指で動かせる。浮かせたペン（近づけただけ）は数えない
+      const palmPad = await ipad.evaluate(async () => {
+        const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
+        const now = performance.now();
+        const v = {...methods, penSeen: true, drawing: null};
+        const at = (ms) => ((v.penAt = now - ms), v.palmLikely());
+        return {recent: at(100), later: at(400), drawing: ((v.drawing = {byPen: true}), at(5000))};
+      });
+      assert.deepEqual(palmPad, {recent: true, later: false, drawing: true});
       const pan = await ipad.evaluate(async () => {
         const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
         const v = {...methods, destroyed: false};
