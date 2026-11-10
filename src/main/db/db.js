@@ -6,6 +6,13 @@ import path from 'node:path';
 const MIGRATIONS_DIR = fileURLToPath(new URL('./migrations/', import.meta.url));
 
 async function loadDriver() {
+  // テストで、iPad と同じ sql.js（src/shared/sqljs-db.js）で動かして、同じ結果になるかを確かめる（tests/sqljs.test.js）
+  if (process.env.DAIGAKU_SQL === 'sqljs') {
+    const {default: initSqlJs} = await import('sql.js');
+    const {SqlJsDatabase} = await import('../../shared/sqljs-db.js');
+    const SQL = await initSqlJs();
+    return (file) => new SqlJsDatabase(SQL, file && file !== ':memory:' ? readFileSync(file) : null);
+  }
   try {
     const {DatabaseSync} = await import('node:sqlite');
     return (file) => new DatabaseSync(file);
