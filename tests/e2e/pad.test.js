@@ -162,6 +162,50 @@ test(
       );
 
       if (process.env.PAD_SHOT) await ipad.screenshot({path: `${process.env.PAD_SHOT}/viewer.png`});
+
+      // 手のひら：指・ペンでは PDF の文字を選ばない（画面全体が選ばれない）。ペンを使った画面では長押しでメニューを出さない
+      const palm = await ipad.evaluate(async () => {
+        const span = document.querySelector('.pdf-page__text span');
+        const css = (el) => getComputedStyle(el).webkitUserSelect || getComputedStyle(el).userSelect;
+        const ev = new Event('selectstart', {bubbles: true, cancelable: true});
+        span.dispatchEvent(ev);
+        const page = document.querySelector('.pdf-page') ?? span;
+        const pen = (type) =>
+          page.dispatchEvent(
+            new PointerEvent(type, {
+              bubbles: true,
+              pointerType: 'pen',
+              pointerId: 7,
+              isPrimary: true,
+              clientX: 300,
+              clientY: 300
+            })
+          );
+        pen('pointerdown');
+        pen('pointerup');
+        let menu = 0;
+        document.addEventListener('contextmenu', () => menu++, true);
+        page.dispatchEvent(
+          new PointerEvent('pointerdown', {
+            bubbles: true,
+            pointerType: 'touch',
+            pointerId: 8,
+            isPrimary: true,
+            clientX: 320,
+            clientY: 320
+          })
+        );
+        await new Promise((r) => setTimeout(r, 900));
+        page.dispatchEvent(
+          new PointerEvent('pointerup', {bubbles: true, pointerType: 'touch', pointerId: 8, isPrimary: true})
+        );
+        const input = document.createElement('input');
+        document.body.append(input);
+        const typing = css(input);
+        input.remove();
+        return {span: css(span), body: css(document.body), selectstart: ev.defaultPrevented, menu, typing};
+      });
+      assert.deepEqual(palm, {span: 'none', body: 'none', selectstart: true, menu: 0, typing: 'text'});
       // iPad で書いた注釈が、パソコンに残る
       const saved = await ipad.evaluate(
         (materialId) =>
