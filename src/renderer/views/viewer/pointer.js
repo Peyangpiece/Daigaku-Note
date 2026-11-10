@@ -24,6 +24,10 @@ const PAD_PALM_MS = 700;
 const PAD_HOVER_MS = 300;
 // 時間だけで手のひらとみなした指が、これだけ動いたら指に戻す（CSS のピクセル。置いた手のずれより大きく）
 const PALM_RELEASE_PX = 30;
+// 指・タッチペン（電池のないペン。iPad には指として届く）で書いている間に、もう 1 か所触れたとき：
+// 書き始めてからこれより早く・動かずに触れたなら 2 本指の操作（ピンチ）。それより後なら、書いている手の関節・手のひら
+const TOUCH_GESTURE_MS = 250;
+const TOUCH_WRITE_PX = 8; // これより動いていたら、書いている（あとから触れたものは関節・手のひら）
 
 export const methods = {
   onPointerDown(e) {
@@ -47,7 +51,9 @@ export const methods = {
       // ペンが画面の近くにある・少し前まで使っていた間の指は手のひら：何もしない（Surface などで、ペンを下ろす前に
       // 手を置くと、手のひらでピンチ・スクロールになり、書いている線が動いて途切れていた。v0.16.29）
       if (this.palmLikely()) return;
-      if (this.touchIds.size > 1) return this.cancelPointer();
+      if (this.liveTouches() > 1 && this.secondTouch(e)) return;
+      if (this.liveTouches() === 1)
+        this.firstTouch = {id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY, moved: 0};
     }
     if (e.pointerType === 'pen' && !this.penSeen) {
       this.penSeen = true;
@@ -244,10 +250,45 @@ export const methods = {
     if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < PALM_RELEASE_PX) return;
     this.palmSoft.delete(e.pointerId);
     const now = performance.now();
-    if (this.drawing?.byPen || now - (this.hoverAt ?? -Infinity) < PAD_HOVER_MS || this.touchIds.size > 1) return;
+    if (this.drawing?.byPen || now - (this.hoverAt ?? -Infinity) < PAD_HOVER_MS || this.liveTouches() > 0) return;
     this.palmIds.delete(e.pointerId);
     if (!this.pan && !this.drawing && DRAW_TOOLS.includes(this.tool))
       this.pan = {pointer: e.pointerId, x: e.clientX, y: e.clientY};
+  },
+
+  /** 手のひらと決めたものを除いた、触れている指の数 */
+  liveTouches() {
+    let n = 0;
+    for (const id of this.touchIds) if (!this.palmIds.has(id)) n++;
+    return n;
+  },
+
+  /**
+   * 指・タッチペンで書いている（消している・引いている）間に、もう 1 か所触れた。true なら、この触れでは何もしない。
+   * - 書き始めてすぐ（TOUCH_GESTURE_MS）で動いていない：2 本指の操作の始まり。書きかけをやめる（ピンチになる）
+   * - 書いている線が動いている：あとから触れたのは、書いている手の関節・手のひら。無視して書き続ける
+   * - 書き始めた所で止まったまま：先に触れていたほうが関節・手のひら（点だけ書いた）。それをやめ、あとの触れで書く（false）
+   * 書いていないとき（指で動かしているなど）は、これまでどおり 2 本目の指でやめる（ピンチ）
+   */
+  secondTouch(e) {
+    const d = this.drawing;
+    const f = this.firstTouch;
+    if (!d || d.byPen || !f || d.pointer !== f.id || this.palmIds.has(f.id)) {
+      this.cancelPointer();
+      return true;
+    }
+    if (f.moved >= TOUCH_WRITE_PX) {
+      this.palmIds.add(e.pointerId);
+      return true;
+    }
+    if (performance.now() - f.t < TOUCH_GESTURE_MS) {
+      this.cancelPointer();
+      return true;
+    }
+    this.cancelPointer();
+    this.palmIds.add(f.id);
+    this.firstTouch = {id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY, moved: 0};
+    return false;
   },
 
   /** iPad：触れた面が大きい（手のひら。指よりはっきり大きい）。iPad が大きさを渡さなければ、いつも false */
@@ -298,6 +339,8 @@ export const methods = {
     if (e.pointerType === 'touch' && !this.palmIds.has(e.pointerId) && this.bigTouch(e)) this.palmLate(e.pointerId);
     if (e.pointerType === 'touch' && this.palmSoft.has(e.pointerId)) this.palmRelease(e);
     if (e.pointerType === 'touch' && this.palmIds.has(e.pointerId)) return; // 手のひらと決めた指は、離すまで何もしない
+    const f = this.firstTouch;
+    if (f?.id === e.pointerId) f.moved = Math.max(f.moved, Math.hypot(e.clientX - f.x, e.clientY - f.y));
     // パソコン（Surface など）：ペンの近くの指は動きごとに見る。iPad は触れたときに指ごとに決めている（palmIds）
     if (e.pointerType === 'touch' && !api.pad && this.palmLikely() && !this.pinch) return;
     if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);

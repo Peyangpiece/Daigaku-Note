@@ -460,7 +460,10 @@ function longPress(win, pen) {
     (e) => {
       fired = false;
       if (e.pointerType !== 'touch' || !e.isPrimary) return;
-      if (e.target.closest?.(EDITABLE) || palm(e.target) || contactSize(e) >= PALM_SIZE) return;
+      // 書く道具のページでは長押しにしない（タッチペン・指で書き始めの所に止めた・書いている手の関節が触れたままのとき、
+      // 右クリックのメニューが出て書いている線が途切れる）
+      if (e.target.closest?.(EDITABLE) || e.target.closest?.(DRAW_SURFACE) || palm(e.target)) return;
+      if (contactSize(e) >= PALM_SIZE) return;
       start = {x: e.clientX, y: e.clientY, sx: e.screenX, sy: e.screenY, target: e.target};
       clear();
       timer = setTimeout(() => {
