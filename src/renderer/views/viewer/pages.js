@@ -121,7 +121,9 @@ export const methods = {
     this.pagesEl.style.transform = '';
     this.pagesEl.style.transformOrigin = '';
     this.pagesEl.style.willChange = '';
-    if (Math.abs(p.zoom - this.zoom) > 0.001) this.setZoom(p.zoom, p); // 2 本指で動かしただけなら描き直さない
+    if (Math.abs(p.zoom - this.zoom) > 0.001)
+      this.setZoom(p.zoom, p); // 2 本指で動かしただけなら描き直さない
+    else for (const q of this.pages) if (q.visible && !q.rendered) this.renderPage(q); // ピンチの間に止めた絵を描き直す
     if (p.dx || p.dy) window.scrollBy(-p.dx, -p.dy); // 指を動かした分だけ、ページも指について動く
   },
 
@@ -154,6 +156,8 @@ export const methods = {
       dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1
     };
     this.pagesEl.style.transformOrigin = `${x - r.left}px ${y - r.top}px`;
+    // 描いている途中のページの絵はやめる（指を動かしている間に重い描画が割り込まない。離したら新しい倍率で描く）
+    this.pauseRenders();
     // 指を動かしている間は、ページの並びを 1 枚の絵として GPU で動かす（拡大のたびに全ページを描き直さない。iPad で重かった）
     this.pagesEl.style.willChange = 'transform';
   },
@@ -202,12 +206,21 @@ export const methods = {
     }
   },
 
+  /** ピンチの間：描きかけのページの絵をやめ、離すまで新しく描かない（endPinch → setZoom で描き直す） */
+  pauseRenders() {
+    for (const p of this.pages)
+      if (p.renderTask && p.rendered && !p.drawn) {
+        p.renderTask.cancel();
+        p.rendered = false;
+      }
+  },
+
   onIntersect(entries) {
     for (const e of entries) {
       const p = this.pages[Number(e.target.dataset.page) - 1];
       if (!p) continue; // 消したページ（ノートの最後のページ）
       p.visible = e.isIntersecting;
-      if (p.visible && !p.rendered) this.renderPage(p);
+      if (p.visible && !p.rendered && !this.pinch?.touch) this.renderPage(p);
       else if (!p.visible && p.rendered) {
         // 離れたページの絵は捨てる（§9.2：見えている前後だけ描く）
         p.renderTask?.cancel();
@@ -220,6 +233,7 @@ export const methods = {
   async renderPage(p) {
     p.renderTask?.cancel();
     p.rendered = true;
+    p.drawn = false;
     const vp = p.viewport;
     const dpr = canvasScale(vp, window.devicePixelRatio || 1);
     const canvas = document.createElement('canvas');
@@ -234,6 +248,7 @@ export const methods = {
       if (p.renderTask !== task || this.destroyed) return;
       p.canvas.replaceWith(canvas); // 描き終わってから差し替える（ちらつかない）
       p.canvas = canvas;
+      p.drawn = true;
       this.renderTextLayer(p, vp).catch((e) => console.warn('文字の層を作れませんでした', e));
     } catch (e) {
       if (e?.name !== 'RenderingCancelledException' && p.renderTask === task) p.rendered = false;

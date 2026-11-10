@@ -1,5 +1,5 @@
 // PDF の編集画面：ポインタの振り分け（押す・動かす・離す）。Viewer のメソッド（viewer.js が prototype に足す。this は Viewer）
-import {DRAW_TOOLS} from './shared.js';
+import {DRAW_TOOLS, api} from './shared.js';
 import {syntheticMove} from '../../../shared/ink.js';
 import {figureSize, growsWithSize} from '../../../shared/figures.js';
 import {growFigure, renderFigure} from '../../figure-view.js';
@@ -17,6 +17,8 @@ const GLIDE_REST_MS = 80;
 const GLIDE_MIN = 0.25;
 const GLIDE_DECAY = 0.996;
 const GLIDE_STOP = 0.02;
+// iPad：ペンを離してから、触れた指を手のひらとみなす間（ms）
+const PAD_PALM_MS = 250;
 
 export const methods = {
   onPointerDown(e) {
@@ -208,11 +210,15 @@ export const methods = {
   },
 
   palmLikely() {
+    // iPad：手のひらは iPad が先に除き、ペンは画面に触れているときだけ数える（Apple Pencil は近づけただけでも動きが来るので、
+    // 浮かせたペンまで数えると、ペンを持った手の指で動かす・ピンチするのが効かず、遅れて見えた）
+    if (api.pad)
+      return this.penSeen && (this.drawing?.byPen || performance.now() - (this.penAt ?? -Infinity) < PAD_PALM_MS);
     return this.penSeen && performance.now() - (this.penAt ?? -Infinity) < 1000;
   },
 
   onPointerMove(e) {
-    if (e.pointerType === 'pen') this.penAt = performance.now();
+    if (e.pointerType === 'pen' && (!api.pad || e.buttons)) this.penAt = performance.now();
     else if (e.buttons) this.inputAt = performance.now(); // 浮かせたペンの動きも数える（Surface のペンは近づけると動きが来る）
     if (e.pointerType === 'touch' && this.palmLikely() && !this.pinch) return;
     if (this.tool === 'eraser' && !this.drawing && e.pointerType !== 'touch') this.moveRing(e);
