@@ -113,6 +113,7 @@ const INVOKE = [
   'cloud.unlink',
   'cloud.push',
   'cloud.wipe',
+  'cloud.keyQr',
   'annotation.list'
 ];
 const ON = [

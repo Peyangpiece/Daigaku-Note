@@ -49,7 +49,27 @@ test('アプリの設定：バンドル ID・iPad 専用・カメラと LAN の�
 });
 
 test('最初の画面：カメラの映像が出ないときのために、写真を撮って QR を読める', () => {
-  const js = read('ipad/src/start.js');
+  const js = read('ipad/src/scanner.js');
   assert.match(js, /type="file" accept="image\/\*" capture="environment"/);
   assert.match(js, /readPhoto/);
+  assert.match(read('ipad/src/start.js'), /photoButton\(\)/);
+});
+
+test('パソコンなしで使う：Google のログインから戻る URL スキームを Info.plist に入れ、使うプラグインを入れている', async () => {
+  const {GOOGLE_IOS} = await import('../src/shared/google-client.js');
+  const plist = read('ipad/ios/App/App/Info.plist');
+  assert.match(plist, /CFBundleURLTypes/);
+  assert.ok(plist.includes(`<string>${GOOGLE_IOS.scheme}</string>`));
+  const pkg = JSON.parse(read('ipad/package.json'));
+  for (const p of ['@capacitor/app', '@capacitor/browser', '@capacitor/filesystem'])
+    assert.match(pkg.dependencies[p] ?? '', /^\d+\.\d+\.\d+$/, `${p} の版を固定する`);
+  const spm = read('ipad/ios/App/CapApp-SPM/Package.swift');
+  for (const p of ['CapacitorApp', 'CapacitorBrowser', 'CapacitorFilesystem']) assert.match(spm, new RegExp(p));
+  // 組み立てで、パソコンと同じ部品（暗号化・鍵）と @noble を入れる。中継の src/shared は本体を読む
+  const build = read('ipad/build-www.mjs');
+  for (const f of ['vault.js', 'vault-keys.js', 'google-client.js']) {
+    assert.ok(build.includes(`'${f}'`), f);
+    assert.match(read(`ipad/src/shared/${f}`), new RegExp(`src/shared/${f.replace('.', '\\.')}`));
+  }
+  assert.match(read('ipad/src/index.html'), /"@noble\/hashes\/": "\.\/vendor\/noble-hashes\/"/);
 });
