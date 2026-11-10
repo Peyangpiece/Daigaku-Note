@@ -302,6 +302,33 @@ test(
         late: [[5], null],
         release: [true, false, 7]
       });
+      // 指・タッチペンで書いている間のもう 1 か所：書いている最中なら関節・手のひら（無視して書き続ける）。書き始めてすぐなら
+      // 2 本指の操作（書きかけをやめる）。書き始めの所で止まっていたなら、先のほうが関節（それをやめて、あとの触れで書く）
+      const second = await ipad.evaluate(async () => {
+        const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
+        const make = (age, moved) => {
+          let cancelled = 0;
+          const v = {
+            ...methods,
+            touchIds: new Set([1, 2]),
+            palmIds: new Set(),
+            drawing: {pointer: 1, byPen: false},
+            firstTouch: {id: 1, t: performance.now() - age, x: 0, y: 0, moved},
+            cancelPointer() {
+              cancelled++;
+              this.drawing = null;
+            }
+          };
+          const skip = v.secondTouch({pointerId: 2, clientX: 50, clientY: 50});
+          return [skip, cancelled, [...v.palmIds], v.firstTouch?.id];
+        };
+        return {writing: make(800, 40), gesture: make(50, 0), resting: make(800, 2)};
+      });
+      assert.deepEqual(second, {
+        writing: [true, 0, [2], 1],
+        gesture: [true, 1, [], 1],
+        resting: [false, 1, [1], 2]
+      });
       const pan = await ipad.evaluate(async () => {
         const {methods} = await import('/m/p/src/renderer/views/viewer/pointer.js');
         const v = {...methods, destroyed: false};
