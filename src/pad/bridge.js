@@ -263,7 +263,32 @@ const LOCAL = {
 // ---- 知らせ ----
 const frames = new Map(); // 画面の番号 → {win, listeners: Map(channel → Set(fn))}
 
+// ペンで書いている間は「変わった」（state.changed）を待たせ、手を止めてから 1 回にまとめて渡す。受け取った画面は状態を全部読み直す
+// （パソコンから暗号化した状態を受け取り、iPad で解いて読む）ので、書いている最中に重なると線が遅れる。上書き保存のたびに来る
+const PEN_QUIET_MS = 2000;
+const penState = {down: 0, at: -Infinity}; // すべての画面のペン（down は押している数）
+const penBusy = () => penState.down > 0 || performance.now() - penState.at < PEN_QUIET_MS;
+let heldChange = null; // 待たせている state.changed（最後のもの）
+let heldTimer = 0;
+function holdChange(ev) {
+  heldChange = ev;
+  if (heldTimer) return;
+  const check = () => {
+    if (penBusy()) return void (heldTimer = setTimeout(check, 500));
+    heldTimer = 0;
+    const e = heldChange;
+    heldChange = null;
+    if (e) deliver(e);
+  };
+  heldTimer = setTimeout(check, 500);
+}
+
 function dispatch(ev) {
+  if (ev.ch === 'state.changed' && penBusy()) return holdChange(ev);
+  deliver(ev);
+}
+
+function deliver(ev) {
   for (const [id, f] of frames) {
     if (f.win.closed) {
       frames.delete(id);
@@ -370,9 +395,13 @@ function palmGuard(win, pen) {
   win.addEventListener(
     'pointerdown',
     (e) => {
+      // pad.css：マウスのときだけ PDF の文字を選べる。変わったときだけ書く（書くたびにページ全体の見た目を計算し直し、書き始めが遅れる）
+      if (e.pointerType !== last) win.document.documentElement.dataset.padInput = e.pointerType;
       last = e.pointerType;
-      win.document.documentElement.dataset.padInput = e.pointerType; // pad.css：マウスのときだけ PDF の文字を選べる
-      if (e.pointerType === 'pen') pen.down = true;
+      if (e.pointerType === 'pen') {
+        if (!pen.down) penState.down++;
+        pen.down = true;
+      }
     },
     {capture: true, passive: true}
   );
@@ -381,15 +410,16 @@ function palmGuard(win, pen) {
       t,
       (e) => {
         if (e.pointerType !== 'pen') return;
+        if (pen.down) penState.down = Math.max(0, penState.down - 1);
         pen.down = false;
-        pen.at = performance.now();
+        pen.at = penState.at = performance.now();
       },
       {capture: true, passive: true}
     );
   win.addEventListener(
     'pointermove',
     (e) => {
-      if (e.pointerType === 'pen') pen.at = performance.now(); // 浮かせたペン（近づけると動きが来る iPad もある）
+      if (e.pointerType === 'pen') pen.at = penState.at = performance.now(); // 浮かせたペン（近づけると動きが来る iPad もある）
     },
     {capture: true, passive: true}
   );

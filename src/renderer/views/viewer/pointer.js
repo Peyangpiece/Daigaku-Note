@@ -10,9 +10,18 @@ const inBox = (el, e) => {
   return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
 };
 
+// 指で流したスクロール（慣性）：離す前のこの長さの動きから速さを出す・これより長く止めてから離したら流さない・
+// これより遅ければ流さない（ピクセル / ミリ秒）・1 ミリ秒ごとの減り方・これより遅くなったら止める
+const GLIDE_SAMPLE_MS = 100;
+const GLIDE_REST_MS = 80;
+const GLIDE_MIN = 0.25;
+const GLIDE_DECAY = 0.996;
+const GLIDE_STOP = 0.02;
+
 export const methods = {
   onPointerDown(e) {
     this.inputAt = performance.now(); // ファイルへの上書き保存は、手を止めてから（export.js）
+    this.stopGlide(); // 指で流したスクロールは、触れたら止める
     if (e.pointerType === 'pen') this.penAt = performance.now();
     if (e.pointerType === 'touch') {
       this.touchIds.add(e.pointerId);
@@ -143,6 +152,61 @@ export const methods = {
   },
 
   /** 手のひららしいか：ペンを画面の近く（浮かせた状態も含む）で 1 秒以内に使った */
+  /**
+   * 指でページを動かす（ペンを使ったあとの 1 本指）。動いた分を貯め、画面の描き直し 1 回に 1 度だけスクロールする
+   * （指の動きのたびにスクロールすると、iPad の Safari では追いつかずに指から遅れる）
+   */
+  panBy(pan, e) {
+    pan.dx = (pan.dx ?? 0) + pan.x - e.clientX;
+    pan.dy = (pan.dy ?? 0) + pan.y - e.clientY;
+    pan.x = e.clientX;
+    pan.y = e.clientY;
+    (pan.trail ??= []).push([e.timeStamp, e.clientX, e.clientY]);
+    if (pan.trail.length > 12) pan.trail.shift();
+    if (pan.frame) return;
+    pan.frame = requestAnimationFrame(() => {
+      pan.frame = 0;
+      if (pan.dx || pan.dy) window.scrollBy(pan.dx, pan.dy);
+      pan.dx = pan.dy = 0;
+    });
+  },
+
+  /** 指を離した：残りを動かし、離す直前の速さで少し流す（慣性。ブラウザのスクロールと同じ手ざわり） */
+  endPan(pan, e) {
+    if (pan.frame) {
+      cancelAnimationFrame(pan.frame);
+      pan.frame = 0;
+      if (pan.dx || pan.dy) window.scrollBy(pan.dx, pan.dy);
+    }
+    const trail = pan.trail ?? [];
+    const last = trail.at(-1);
+    if (!last || e.timeStamp - last[0] > GLIDE_REST_MS) return; // 止めてから離した
+    const first = trail.find((t) => last[0] - t[0] <= GLIDE_SAMPLE_MS) ?? last;
+    const dt = last[0] - first[0];
+    if (dt <= 0) return;
+    let vx = (first[1] - last[1]) / dt; // スクロールの向き（指と逆）。ピクセル / ミリ秒
+    let vy = (first[2] - last[2]) / dt;
+    if (Math.hypot(vx, vy) < GLIDE_MIN) return;
+    this.stopGlide();
+    let prev = performance.now();
+    const step = (now) => {
+      const t = Math.min(50, now - prev);
+      prev = now;
+      window.scrollBy(vx * t, vy * t);
+      const k = GLIDE_DECAY ** t;
+      vx *= k;
+      vy *= k;
+      if (this.destroyed || Math.hypot(vx, vy) < GLIDE_STOP) return void (this.glide = 0);
+      this.glide = requestAnimationFrame(step);
+    };
+    this.glide = requestAnimationFrame(step);
+  },
+
+  stopGlide() {
+    if (this.glide) cancelAnimationFrame(this.glide);
+    this.glide = 0;
+  },
+
   palmLikely() {
     return this.penSeen && performance.now() - (this.penAt ?? -Infinity) < 1000;
   },
@@ -155,10 +219,7 @@ export const methods = {
     const pan = this.pan;
     if (pan?.pointer === e.pointerId) {
       if (this.drawing) return; // ペンで書いている間の手のひら
-      window.scrollBy(pan.x - e.clientX, pan.y - e.clientY);
-      pan.x = e.clientX;
-      pan.y = e.clientY;
-      return;
+      return void this.panBy(pan, e);
     }
     const dr = this.drawing;
     // 書いている・消している・引いている間の、押していない合成の動き（buttons が 0）は使わない（書いていない線が出るため。v0.16.28）
@@ -214,7 +275,10 @@ export const methods = {
   },
 
   onPointerUp(e) {
-    if (this.pan?.pointer === e.pointerId) this.pan = null;
+    if (this.pan?.pointer === e.pointerId) {
+      this.endPan(this.pan, e);
+      this.pan = null;
+    }
     const dr = this.drawing;
     if (dr?.pointer === e.pointerId && dr.kind === 'ink') return void this.finishInk(e);
     if (dr?.pointer === e.pointerId && dr.kind === 'line') return void this.finishLine();

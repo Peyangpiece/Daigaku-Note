@@ -206,6 +206,37 @@ test(
         return {span: css(span), body: css(document.body), selectstart: ev.defaultPrevented, menu, typing};
       });
       assert.deepEqual(palm, {span: 'none', body: 'none', selectstart: true, menu: 0, typing: 'text'});
+      // 指でページを動かす（ペンを使ったあと）：描き直し 1 回に 1 度だけスクロールし、速く払って離すと慣性で流れる。止めてから離すと流れない
+      const pan = await ipad.evaluate(async () => {
+        const {methods} = await import('/p/src/renderer/views/viewer/pointer.js');
+        const v = {...methods, destroyed: false};
+        const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+        const swipe = async (rest) => {
+          window.scrollTo(0, 0);
+          await frame();
+          const p = {pointer: 1, x: 400, y: 700};
+          let t = performance.now();
+          for (let i = 1; i <= 8; i++) {
+            t += 8;
+            v.panBy(p, {clientX: 400, clientY: 700 - i * 12, timeStamp: t}); // 8 ミリ秒ごとに 12px 上へ（速い払い）
+          }
+          await frame();
+          const moved = window.scrollY;
+          v.endPan(p, {timeStamp: t + rest});
+          await new Promise((r) => setTimeout(r, 300));
+          const after = window.scrollY;
+          v.stopGlide();
+          return {moved, after};
+        };
+        const fast = await swipe(5);
+        const rested = await swipe(200);
+        return {max: document.documentElement.scrollHeight - innerHeight, fast, rested};
+      });
+      assert.ok(pan.max > 200, `スクロールできる長さ ${pan.max}`);
+      assert.equal(pan.fast.moved, 96, '指が動いた分だけ');
+      assert.ok(pan.fast.after > pan.fast.moved + 20, `離したあと流れる ${JSON.stringify(pan.fast)}`);
+      assert.equal(pan.rested.after, pan.rested.moved, '止めてから離すと流れない');
+
       // iPad で書いた注釈が、パソコンに残る
       const saved = await ipad.evaluate(
         (materialId) =>
