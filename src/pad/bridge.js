@@ -4,7 +4,7 @@
 // - パソコンの選ぶ・保存する窓を出す窓口（PAD_LOCAL）は、iPad でファイルを選ぶ・保存する・開くに置き換える
 // - 指で長押ししたら右クリック（contextmenu）にする（パソコンの画面は右クリックのメニューを使う）
 import {Busy, NotPaired, Unreachable, call, initPairing, paired} from '/m/app/client.js';
-import {PAD_DENY, PAD_FILE_MAX, PAD_POLL_MS} from '/m/p/src/shared/pad-channels.js';
+import {PAD_DENY, PAD_FILE_MAX, PAD_POLL_MS, PALM_SIZE, contactSize} from '/m/p/src/shared/pad-channels.js';
 
 const PHONE_VIEW = 'daigaku-note.view'; // 'phone'：スマホの画面を選んだ（/m/ から自分で /m/p/ へ移らない）
 const CONCURRENCY = 3; // 同時に送る窓口の要求（パソコンは 4 件まで受ける。1 つは知らせの待ちに）
@@ -460,7 +460,7 @@ function longPress(win, pen) {
     (e) => {
       fired = false;
       if (e.pointerType !== 'touch' || !e.isPrimary) return;
-      if (e.target.closest?.(EDITABLE) || palm(e.target)) return;
+      if (e.target.closest?.(EDITABLE) || palm(e.target) || contactSize(e) >= PALM_SIZE) return;
       start = {x: e.clientX, y: e.clientY, sx: e.screenX, sy: e.screenY, target: e.target};
       clear();
       timer = setTimeout(() => {
@@ -485,7 +485,9 @@ function longPress(win, pen) {
   doc.addEventListener(
     'pointermove',
     (e) => {
-      if (timer && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) clear();
+      // 動いた・触れた面が大きくなった（手のひら）：長押しにしない
+      if (timer && start && (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10 || contactSize(e) >= PALM_SIZE))
+        clear();
     },
     {capture: true, passive: true}
   );
@@ -530,12 +532,46 @@ function noLoupe(win) {
     doc.addEventListener(t, (e) => e.preventDefault(), {passive: false});
 }
 
+// ---- 触れた面の大きさの記録（手のひらの見分けの境目を合わせるため。パソコンのログに残す）----
+const TOUCH_LOG_EVERY = 30; // これだけ触れたら送る
+const touchLog = {open: new Map(), sizes: [], palm: 0, sending: false};
+let client0 = null; // 上の画面のやりとりの番号（installBridge が入れる。並べた左右の iframe では送らない）
+const logFrame = tagOf();
+
+/** 触れるごとの最大の大きさを集め、たまったらパソコンへ送る（送れなくても捨てる。操作には関わらない） */
+function sizeLog(win) {
+  const doc = win.document;
+  const seen = (e) => {
+    if (e.pointerType !== 'touch') return;
+    const n = contactSize(e);
+    touchLog.open.set(e.pointerId, Math.max(touchLog.open.get(e.pointerId) ?? 0, n));
+  };
+  doc.addEventListener('pointerdown', seen, {capture: true, passive: true});
+  doc.addEventListener('pointermove', seen, {capture: true, passive: true});
+  const done = (e) => {
+    if (e.pointerType !== 'touch' || !touchLog.open.has(e.pointerId)) return;
+    const n = touchLog.open.get(e.pointerId);
+    touchLog.open.delete(e.pointerId);
+    touchLog.sizes.push(n);
+    if (n >= PALM_SIZE) touchLog.palm++;
+    if (touchLog.sizes.length < TOUCH_LOG_EVERY || touchLog.sending || !client0) return;
+    const sizes = touchLog.sizes.splice(0);
+    const palm = touchLog.palm;
+    touchLog.palm = 0;
+    touchLog.sending = true;
+    rpc(client0, logFrame, 'pad.touchLog', {sizes, palm}).finally(() => (touchLog.sending = false));
+  };
+  doc.addEventListener('pointerup', done, {capture: true, passive: true});
+  doc.addEventListener('pointercancel', done, {capture: true, passive: true});
+}
+
 /** 手のひらの守りと、指の長押し（画面ごと。並べた左右の画面は、それぞれのペンの使い方を見る） */
 function guard(win) {
   const pen = {down: false, at: -Infinity};
   palmGuard(win, pen);
   longPress(win, pen);
   noLoupe(win);
+  sizeLog(win);
 }
 
 /** 用意する。パソコンの画面を読んでよければ true */
@@ -604,6 +640,7 @@ export async function installBridge() {
     // 覚えられなくてもよい
   }
   const client = tagOf();
+  client0 = client;
   window.__padBridge = {forFrame: (win) => makeApi(client, win)};
   window.daigaku = makeApi(client, window);
   guard(window);

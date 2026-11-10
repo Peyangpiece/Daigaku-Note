@@ -164,6 +164,15 @@ export function createPadApi({
       }
       return {ok: true, changed: false, name: m.name};
     },
+    /**
+     * iPad で触れた面の大きさの記録（手のひらの見分けの境目を合わせるため）。ログに残すだけ。
+     * sizes：触れるごとの最大の大きさ（CSS のピクセル）、palm：そのうち手のひらとみなした数
+     */
+    'pad.touchLog'({sizes, palm}) {
+      const list = (Array.isArray(sizes) ? sizes : []).slice(0, 200).map((n) => Math.round(Number(n) || 0));
+      if (list.length) log(`pad touch: 触れた面の大きさ ${list.join(',')}（手のひら ${Number(palm) || 0} 件）`);
+      return {ok: true};
+    },
     'term.readCalendarData': (arg) => need(ctx.readCalendarData)(arg),
     'backup.exportData': () => need(ctx.backupExportData)(),
     'backup.importData': (arg) => need(ctx.backupImportData)(arg)

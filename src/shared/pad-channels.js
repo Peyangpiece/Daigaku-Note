@@ -44,8 +44,18 @@ export const PAD_EXTRA = [
   'term.readCalendarData',
   'backup.exportData',
   'backup.importData',
-  'pdf.markStale'
+  'pdf.markStale',
+  'pad.touchLog'
 ];
+
+/**
+ * 手のひらの見分け（触れた面の大きさ）：触れている間に、触れた範囲（PointerEvent の width・height。CSS のピクセル）の
+ * 長いほうが一度でもこれ以上になったら、離すまで手のひらとみなす。指はおよそ 1〜2cm。指を取り違えないよう、はっきり大きい
+ * ものだけにする。iPad が大きさを渡さない（いつも 1 などの小さな値）ときは、時間による見分けだけになる
+ */
+export const PALM_SIZE = 90;
+/** 触れた面の大きさ：PointerEvent の幅・高さの長いほう（ないときは 0） */
+export const contactSize = (e) => Math.max(Number(e?.width) || 0, Number(e?.height) || 0);
 
 /** iPad とやりとりするファイル 1 つの大きさの上限（暗号化して JSON で運ぶので、iPad のメモリに収まる大きさに） */
 export const PAD_FILE_MAX = 90 * 1024 * 1024;

@@ -9,7 +9,7 @@ import {open, seal} from '../src/shared/mobile-wire.js';
 import {createDevices} from '../src/main/mobile/devices.js';
 import {createPadApi, createPadHub} from '../src/main/mobile/pad.js';
 import {PAD_INDEX, createMobileServer, padIndexHtml, staticFile} from '../src/main/mobile/server.js';
-import {PAD_DENY, PAD_EXTRA, PAD_LOCAL, PAD_QUIET} from '../src/shared/pad-channels.js';
+import {PAD_DENY, PAD_EXTRA, PAD_LOCAL, PAD_QUIET, PALM_SIZE, contactSize} from '../src/shared/pad-channels.js';
 
 const ULID = '01JABCDEFGHJKMNPQRSTVWXYZ0';
 const C1 = 'client-aaaaaaaa';
@@ -198,7 +198,7 @@ test('窓口：書き出し・学年暦・バックアップは、パソコン�
       backupImportData: async (a) => (seen.push(['bi', a]), {ok: true})
     }
   );
-  for (const ch of PAD_EXTRA.filter((c) => !['material.data', 'pdf.markStale'].includes(c)))
+  for (const ch of PAD_EXTRA.filter((c) => !['material.data', 'pdf.markStale', 'pad.touchLog'].includes(c)))
     assert.equal((await pad.call({ch, arg: {x: 1}, client: C1, frame: 'frame-top1'})).r.ok, true);
   assert.deepEqual(
     seen.map((s) => s[0]),
@@ -377,4 +377,32 @@ test('窓口：iPad の書き込みは、ファイルへの上書きをパソコ
   assert.deepEqual(r.r, {ok: true, changed: false, name: '第1回.pdf'});
   await pad.call({ch: 'pdf.markStale', arg: {materialId: ULID}, client: C1, frame: 'frame-top1'});
   assert.deepEqual(repo.getSetting('pdf.stale', []), [ULID]);
+});
+
+test('触れた面の大きさの記録（pad.touchLog）：ログに残すだけ。数でないものは 0、200 件まで', async () => {
+  const lines = [];
+  const pad = createPadApi({
+    handlers: new Map(),
+    ctx: {},
+    repo: fakeRepo({}),
+    hub: createPadHub(),
+    log: (m) => lines.push(m)
+  });
+  const r = await pad.call({
+    ch: 'pad.touchLog',
+    arg: {sizes: [24.4, 'x', 130], palm: 1},
+    client: C1,
+    frame: 'frame-top1'
+  });
+  assert.deepEqual(r.r, {ok: true});
+  assert.deepEqual(lines, ['pad touch: 触れた面の大きさ 24,0,130（手のひら 1 件）']);
+  await pad.call({ch: 'pad.touchLog', arg: {sizes: []}, client: C1, frame: 'frame-top1'});
+  assert.equal(lines.length, 1); // 空なら残さない
+});
+
+test('手のひらの見分け（触れた面の大きさ）：長いほうで見る。値がなければ 0', () => {
+  assert.equal(contactSize({width: 120, height: 40}), 120);
+  assert.equal(contactSize({width: 1, height: 1}), 1);
+  assert.equal(contactSize({}), 0);
+  assert.ok(PALM_SIZE > 60, '指（およそ 1〜2cm）を手のひらと取り違えない');
 });
