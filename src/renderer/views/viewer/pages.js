@@ -117,8 +117,10 @@ export const methods = {
     const p = this.pinch;
     this.pinch = null;
     if (!p || this.destroyed) return;
+    if (p.frame) cancelAnimationFrame(p.frame);
     this.pagesEl.style.transform = '';
     this.pagesEl.style.transformOrigin = '';
+    this.pagesEl.style.willChange = '';
     if (Math.abs(p.zoom - this.zoom) > 0.001) this.setZoom(p.zoom, p); // 2 本指で動かしただけなら描き直さない
     if (p.dx || p.dy) window.scrollBy(-p.dx, -p.dy); // 指を動かした分だけ、ページも指について動く
   },
@@ -152,6 +154,8 @@ export const methods = {
       dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1
     };
     this.pagesEl.style.transformOrigin = `${x - r.left}px ${y - r.top}px`;
+    // 指を動かしている間は、ページの並びを 1 枚の絵として GPU で動かす（拡大のたびに全ページを描き直さない。iPad で重かった）
+    this.pagesEl.style.willChange = 'transform';
   },
 
   onTouchMove(e) {
@@ -162,7 +166,12 @@ export const methods = {
     p.zoom = clampZoom((p.start * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)) / p.dist);
     p.dx = (a.clientX + b.clientX) / 2 - p.x;
     p.dy = (a.clientY + b.clientY) / 2 - p.y;
-    this.pagesEl.style.transform = `translate(${p.dx}px, ${p.dy}px) scale(${p.zoom / this.zoom})`;
+    // 見た目を変えるのは画面を描く回（1 コマ）に 1 度だけ（指の動きはそれより多く来る）
+    p.frame ||= requestAnimationFrame(() => {
+      p.frame = 0;
+      if (this.pinch === p)
+        this.pagesEl.style.transform = `translate(${p.dx}px, ${p.dy}px) scale(${p.zoom / this.zoom})`;
+    });
   },
 
   onTouchEnd(e) {

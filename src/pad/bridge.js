@@ -503,11 +503,39 @@ function longPress(win, pen) {
   );
 }
 
+// ---- iPad の拡大鏡・画面全体の拡大を出さない ----
+/** ペンで書く道具のときのページ（viewer.css で touch-action: none。指はスクロールせず、ペンは線を書く） */
+const DRAW_SURFACE =
+  ".viewer-pages:is([data-tool='ink'], [data-tool='line'], [data-tool='eraser'], [data-tool='mask']) .pdf-page";
+const PRESSABLE = `${EDITABLE}, button, a[href], label, summary`;
+
+/**
+ * 書く道具のページで、ペン先や手のひらを止めて置くと、iPad は長押しとみなして拡大鏡（文字を選ぶためのルーペ）を出す。
+ * user-select: none では止まらないので、そこでの touchstart の既定の動き（長押しの拡大鏡・吹き出し・クリックへの読み替え）を止める。
+ * 線を書く・指で動かす・ピンチは pointer と touch の知らせで受けているので、そのまま届く（既定の動きだけが止まる）。
+ * あわせて、ピンチで画面全体（ツールバーごと）が拡大されないようにする（PDF の拡大は viewer が自分で受ける）
+ */
+function noLoupe(win) {
+  const doc = win.document;
+  doc.addEventListener(
+    'touchstart',
+    (e) => {
+      const t = e.target;
+      if (!e.cancelable || !t?.closest?.(DRAW_SURFACE) || t.closest(PRESSABLE)) return;
+      e.preventDefault();
+    },
+    {capture: true, passive: false}
+  );
+  for (const t of ['gesturestart', 'gesturechange'])
+    doc.addEventListener(t, (e) => e.preventDefault(), {passive: false});
+}
+
 /** 手のひらの守りと、指の長押し（画面ごと。並べた左右の画面は、それぞれのペンの使い方を見る） */
 function guard(win) {
   const pen = {down: false, at: -Infinity};
   palmGuard(win, pen);
   longPress(win, pen);
+  noLoupe(win);
 }
 
 /** 用意する。パソコンの画面を読んでよければ true */
