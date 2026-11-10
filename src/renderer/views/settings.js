@@ -456,7 +456,7 @@ async function renderCloud(box, st = null) {
       : `<span class="error-text">送れませんでした（${esc(when(s.last.at))}）：${esc(s.last.message)}</span>`
     : 'まだ送っていません';
   const intro =
-    '<p class="muted">データと資料を暗号化して、あなたの Google ドライブ（このアプリだけの見えない領域）に置きます。鍵はこのパソコンと、つないだ iPad だけが持ちます（Google からも中身は読めません）。パソコンが閉じていても iPad で使えるようにするための準備です（iPad のアプリは準備中）。</p>';
+    '<p class="muted">データと資料を暗号化して、あなたの Google ドライブ（このアプリだけの見えない領域）に置きます。鍵はこのパソコンと、つないだ iPad だけが持ちます（Google からも中身は読めません）。パソコンが閉じていても iPad のアプリで使えるようにします（「iPad に鍵を渡す」で iPad とつなぎます）。</p>';
   if (!s.ready) {
     box.innerHTML = `${intro}<p class="muted">Google との連携は準備中です。</p>`;
     return;
@@ -465,7 +465,7 @@ async function renderCloud(box, st = null) {
     ? `${intro}
       <p><strong>${esc(s.email ?? 'Google アカウント')}</strong> と連携しています。<span class="muted">${last}${s.busy ? '（送っています…）' : ''}</span></p>
       ${s.fingerprint ? `<p class="muted">鍵の印：<code>${esc(s.fingerprint)}</code>（iPad と同じ鍵か確かめるときに使います）</p>` : ''}
-      <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button><button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button></div>`
+      <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button><button type="button" class="btn btn--small" data-cloud="keyQr">iPad に鍵を渡す…</button><button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button></div>`
     : `${intro}<div class="about__row"><button type="button" class="btn btn--small" data-cloud="link">Google と連携する…</button></div>`;
   if (s.busy) setTimeout(() => renderCloud(box), 2000); // 送り終わるまで見直す
   for (const b of box.querySelectorAll('[data-cloud]'))
@@ -487,6 +487,7 @@ async function renderCloud(box, st = null) {
         ))
       )
         return;
+      if (what === 'keyQr') return showKeyQr(box);
       b.disabled = true;
       if (what === 'link') toast('ブラウザで Google にログインしてください');
       const r = await api[`cloud.${what}`]();
@@ -509,6 +510,18 @@ async function renderCloud(box, st = null) {
       if (what === 'push') toast(r.skipped ? '変わったものはありませんでした' : `送りました（${r.uploaded} 件）`);
       renderCloud(box, r.status);
     };
+}
+
+/** iPad に鍵を渡す QR：iPad のパレットノートで「パソコンなしで使う」を選び、この QR を読む。閉じるまで出す */
+async function showKeyQr(box) {
+  const r = await api['cloud.keyQr']();
+  if (r?.error) return toast(r.error, {error: true});
+  box.querySelector('.cloud-key')?.remove();
+  const el = document.createElement('div');
+  el.className = 'mobile-qr cloud-key';
+  el.innerHTML = `<div class="mobile-qr__code">${r.svg}</div><p>iPad のパレットノートで「パソコンなしで使う（Google ドライブ）」を選び、この QR を読んでください。鍵の印 <code>${esc(r.fingerprint ?? '')}</code> が iPad にも出れば、同じ鍵です。<br><strong>QR は人に見せないでください</strong>（この QR とあなたの Google アカウントがあれば、ドライブの中身を読めます）。</p><div class="about__row"><button type="button" class="btn btn--small btn--quiet" data-cloud-key-close>閉じる</button></div>`;
+  box.append(el);
+  el.querySelector('[data-cloud-key-close]').onclick = () => el.remove();
 }
 
 function bind() {

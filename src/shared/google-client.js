@@ -8,7 +8,10 @@ export const GOOGLE_DESKTOP = {
   clientSecret: '' // リポジトリには入れない。作るときに入れる（main/cloud/client-secret.js）
 };
 export const GOOGLE_IOS = {
-  clientId: '201000811340-l3lu4n3hif3o1dqoqr26d145h4mavh7u.apps.googleusercontent.com'
+  clientId: '201000811340-l3lu4n3hif3o1dqoqr26d145h4mavh7u.apps.googleusercontent.com',
+  // iOS のクライアントの戻り先：クライアント ID を逆さにした URL スキーム（ipad/ios/App/App/Info.plist の CFBundleURLTypes に入れる）
+  scheme: 'com.googleusercontent.apps.201000811340-l3lu4n3hif3o1dqoqr26d145h4mavh7u',
+  redirectUri: 'com.googleusercontent.apps.201000811340-l3lu4n3hif3o1dqoqr26d145h4mavh7u:/oauth2redirect'
 };
 
 /** ドライブの、このアプリだけの見えない領域と、アカウントを画面に出すためのメールアドレス */

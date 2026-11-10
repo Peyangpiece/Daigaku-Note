@@ -4,7 +4,7 @@ import os from 'node:os';
 import {GOOGLE_DESKTOP, googleReady} from '../../shared/google-client.js';
 import {fromB64, toB64} from '../../shared/mobile-wire.js';
 import {createDrive, loginLoopback, refreshAccess, revoke} from './google.js';
-import {fingerprint, newMasterKey} from './keys.js';
+import {fingerprint, keyQr, newMasterKey} from './keys.js';
 import {createPusher} from './sync.js';
 import {loadClientSecret} from './client-secret.js';
 
@@ -86,6 +86,14 @@ export function createCloud({
       }
       api.push().catch(() => {}); // 最初の送り出しは裏で
       return {ok: true, email: r.email};
+    },
+
+    /** iPad に鍵を渡す QR の中身（連携していて、鍵があるときだけ） */
+    async keyQr() {
+      if (!account()) throw new Error('Google と連携していません');
+      const master = await masterKey();
+      if (!master) throw new Error('暗号化の鍵がありません。連携し直してください');
+      return keyQr(master);
     },
 
     /** 連携を外す（ドライブのデータと鍵は残す。同じアカウントで連携し直せば続きから） */

@@ -15,7 +15,8 @@ export const PAD_DENY = {
   'mobile.setFull': 'スマホ・iPad の設定は、パソコンの画面で変えてください',
   'cloud.link': 'Google との連携は、パソコンの画面でしてください',
   'cloud.unlink': 'Google との連携は、パソコンの画面で外してください',
-  'cloud.wipe': 'Google ドライブのデータは、パソコンの画面で消してください'
+  'cloud.wipe': 'Google ドライブのデータは、パソコンの画面で消してください',
+  'cloud.keyQr': 'iPad に鍵を渡す QR は、パソコンの画面で出してください'
 };
 
 /** パソコンのフォルダを選んで登録する（パソコンの選ぶ窓が要る） */
