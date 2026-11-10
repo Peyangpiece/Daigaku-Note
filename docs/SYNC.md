@@ -15,7 +15,7 @@
 
 - OAuth 2.0（インストール型のアプリの流れ）：既定のブラウザで Google のログインを開き、このパソコンの `127.0.0.1` の一時の口で受け取る（PKCE）。受け取った更新用のトークンは、パスワードと同じく OS の仕組みで暗号化して持つ（`secrets.js` の `cloud.google`）
 - 権限は `drive.appdata`（ドライブの中の、このアプリだけの見えない領域。利用者のほかのファイルは見えない）と、アカウントを画面に出すための `openid email`
-- クライアント ID は Google Cloud のコンソールで作る（`src/shared/google-client.js`。パソコン用は「デスクトップ アプリ」、iPad 用は「iOS」）。インストール型のアプリのクライアントの秘密は、配布物に入るので秘密として扱われない（Google の決まり）
+- クライアント ID は Google Cloud のコンソールで作る（プロジェクト `palette-note-514306`。`src/shared/google-client.js`。パソコン用は「デスクトップ アプリ」、iPad 用は「iOS」：バンドル ID `jp.daigakunote.ipad`・チーム ID `9G78U9XD92`）。同意画面は「外部」・テストの段階（テストユーザーに入れたアカウントだけが使える）。デスクトップのクライアントの秘密はリポジトリに置かず、Release が GitHub の Secrets（`GOOGLE_DESKTOP_CLIENT_SECRET`）から配布物に入れる（手元では同じ名前の環境変数。`main/cloud/client-secret.js`）。インストール型のアプリのクライアントの秘密は、配布物に入るので秘密として扱われない（Google の決まり）
 - 「連携を外す」：トークンを取り消して消す。ドライブのデータは残す（「ドライブのデータを消す」で消せる）
 
 ## 3. 暗号化（`src/shared/vault.js`）

@@ -172,6 +172,14 @@ jobs:
       # 作るだけにして、下の publish ジョブで 1 回にまとめて載せる
       # Mac は入れ物の名前を英字にする（electron-builder.yml の mac の説明。表示名は「パレットノート」）
       # Developer ID のときは mac.identity（electron-builder.yml では null）をチーム ID にして、electron-builder に署名と公証をさせる
+      # Google のデスクトップ アプリのクライアントの秘密（リポジトリには入れない。docs/SYNC.md §2）。ないときは連携が「準備中」になる
+      - name: Google のクライアントの秘密を入れる
+        shell: bash
+        env:
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: |
+          if [ -z "$GOOGLE_DESKTOP_CLIENT_SECRET" ]; then echo "::warning::GOOGLE_DESKTOP_CLIENT_SECRET がないので、Google ドライブとの連携は準備中になります"; exit 0; fi
+          printf '%s' "$GOOGLE_DESKTOP_CLIENT_SECRET" > src/main/cloud/google-client-secret.txt
       - name: 作る
         shell: bash
         run: |

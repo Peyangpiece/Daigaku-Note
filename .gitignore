@@ -8,4 +8,5 @@ dist/
 *.sqlite-wal
 *.sqlite-shm
 secrets.json
+src/main/cloud/google-client-secret.txt
 __pycache__/
