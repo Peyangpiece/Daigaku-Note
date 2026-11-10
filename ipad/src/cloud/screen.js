@@ -8,6 +8,8 @@ import {pull} from './pull.js';
 import {fromB64, http, login, store, toB64} from './native.js';
 
 const KEY = 'palette.cloud';
+/** パソコンなしで使う画面（パソコンの画面を、このアプリの中の窓口で動かす。build-www.mjs が入れる） */
+export const LOCAL_APP = '/m/p/src/renderer/index.html';
 const esc = (s) =>
   String(s ?? '').replace(
     /[&<>"']/g,
@@ -64,11 +66,12 @@ export function openCloud(app, back) {
       <div class="s-row" data-v="actions">
         ${step === 1 ? '<button type="button" class="s-btn s-btn--primary" data-v="login">Google にログイン</button>' : ''}
         ${step === 2 ? `<button type="button" class="s-btn s-btn--primary" data-v="key">鍵の QR を読む</button>${photoButton()}` : ''}
-        ${step === 3 ? '<button type="button" class="s-btn s-btn--primary" data-v="pull">ドライブから読み込む</button>' : ''}
+        ${step === 3 && s.last ? '<button type="button" class="s-btn s-btn--primary" data-v="open">ノートを開く</button>' : ''}
+        ${step === 3 ? `<button type="button" class="s-btn ${s.last ? '' : 's-btn--primary'}" data-v="pull">ドライブから読み込む</button>` : ''}
         <button type="button" class="s-btn" data-v="back">戻る</button>
       </div>
       <p class="s-muted" data-v="progress"></p>
-      ${step === 3 ? '<p class="s-muted">読み込んだデータでノートを開く画面は、次の版で入ります。</p>' : ''}
+      ${step === 3 ? '<p class="s-muted">iPad で書いたものは、まだパソコンには戻りません（次の版で戻せるようにします）。パソコンで新しく送ったものを読み込むと、iPad で書いたものはパソコンのものに置き換わります。</p>' : ''}
       ${s.refreshToken ? '<div class="s-row"><button type="button" class="s-btn" data-v="reset">この iPad から外す</button></div>' : ''}`;
     const on = (v, fn) => {
       const b = app.querySelector(`[data-v="${v}"]`);
@@ -79,6 +82,7 @@ export function openCloud(app, back) {
     on('key', () => scan(app, keyQr));
     if (step === 2) bindPhoto(app, keyQr);
     on('pull', doPull);
+    on('open', () => location.assign(LOCAL_APP));
     on('reset', doReset);
   };
 
