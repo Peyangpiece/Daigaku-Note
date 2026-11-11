@@ -30,8 +30,11 @@ export function createPusher({
   readMaterial,
   userData,
   device,
+  origin = 'pc', // 送った端末の種類（'pc'・'ipad'）。目録に書く
   log = () => {},
-  now = () => new Date()
+  now = () => new Date(),
+  // 送ってよいか：ドライブの今の目録（なければ null）を見て、だめなら理由の文字を返す（ほかの端末のデータを上書きしない。docs/SYNC.md §11）
+  allow = () => null
 }) {
   const keys = deriveKeys(master);
 
@@ -69,6 +72,8 @@ export function createPusher({
       const remote = await drive.list();
       const byName = new Map(remote.map((f) => [f.name, f]));
       const prev = await readManifest(remote); // ほかの鍵で作ったものなら、ここで止まる（消さない）
+      const stop = allow(prev);
+      if (stop) throw new Error(stop);
       let uploaded = 0;
       let bytes = 0;
       const put = async (name, plain) => {
@@ -137,6 +142,7 @@ export function createPusher({
         version: MANIFEST_VERSION,
         at: now().toISOString(),
         device,
+        origin,
         db: {name: DB_NAME, sha256: dbHash},
         materials: mats,
         files
@@ -167,7 +173,7 @@ export function createPusher({
           await drive.remove(f.id).catch((e) => log(`cloud: 消せませんでした（${f.name}）：${e.message}`));
           removed++;
         }
-      return {uploaded, removed, bytes, skipped: same};
+      return {uploaded, removed, bytes, skipped: same, manifest};
     },
 
     /** ドライブのこのアプリの中身を全部消す（作り直す・連携をやめるとき） */

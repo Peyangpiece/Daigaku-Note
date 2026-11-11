@@ -384,3 +384,28 @@ test('合言葉：鍵を合言葉で包んでドライブに置き、ほかの�
   assert.deepEqual(fromB64(other.store.get('cloud.key')), master);
   assert.equal((await other.cloud.status()).fingerprint, fingerprint(master));
 });
+
+test('送り出し：送った端末の種類を目録に書く。ほかの端末のデータがあれば送らない（上書きして消さない）', async () => {
+  const {fake, drive, master} = setup();
+  const userData = mkdtempSync(path.join(tmpdir(), 'dn-cloud-origin-'));
+  const make = (origin, allow) =>
+    createPusher({
+      drive,
+      master,
+      exportDb: (file) => writeFileSync(file, `DB-${origin}`),
+      materials: () => [],
+      readMaterial: async () => new Uint8Array(),
+      userData,
+      device: origin === 'ipad' ? 'iPad-1' : 'pc',
+      origin,
+      allow
+    });
+  // iPad だけで始めて送った
+  const r = await make('ipad').push();
+  assert.equal(r.manifest.origin, 'ipad');
+  // パソコンは iPad のデータを上書きしない（main/cloud/index.js と同じ決まり）
+  const pcAllow = (prev) => (prev?.origin === 'ipad' ? 'iPad のデータがあります' : null);
+  await assert.rejects(make('pc', pcAllow).push(), /iPad のデータがあります/);
+  const mf = [...fake.files.values()].find((f) => f.name === MANIFEST);
+  assert.equal(openJson(deriveKeys(master).enc, mf.bytes, MANIFEST).origin, 'ipad', '目録はそのまま');
+});

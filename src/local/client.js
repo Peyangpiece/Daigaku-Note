@@ -6,13 +6,16 @@ import {createPadApi, createPadHub} from '../main/mobile/pad.js';
 import {setPadTap} from '../main/frames.js';
 import {originalPath} from '../main/pdf-save.js';
 import {PAD_QUIET} from '../shared/pad-channels.js';
-import {openBlob, openJson, sealBlob} from '../shared/vault.js';
+import {openBlob, openJson, sealBlob, sealJson} from '../shared/vault.js';
+import {createPusher} from '../main/cloud/sync.js';
+import {promises as fsp} from 'node:fs';
+import {createDriveReader, refresh} from '/cloud/google.js';
 import {deriveKeys} from '../shared/vault-keys.js';
 import {startLocal} from './runtime.js';
 import {SqlJsDatabase} from '../shared/sqljs-db.js';
 import {sha256} from '@noble/hashes/sha2.js';
 import {vfs} from './vfs.js';
-import {store, fromB64} from '/cloud/native.js';
+import {store, fromB64, http} from '/cloud/native.js';
 
 export class NotPaired extends Error {}
 export class Busy extends Error {}
@@ -55,7 +58,7 @@ async function boot() {
   const local = await store.get(LOCAL_DB);
   let bytes;
   let notice = '';
-  const base = manifest?.db?.sha256 ?? null;
+  let base = manifest?.db?.sha256 ?? null;
   if (local && (meta?.base ?? null) === base) bytes = openBlob(keys.enc, local, LOCAL_DB);
   else if (manifest) {
     if (local) notice = 'パソコンのデータが新しくなったので、iPad で書いたものの代わりにパソコンのものを開きました';
@@ -78,11 +81,25 @@ async function boot() {
       try {
         await store.put(LOCAL_DB, sealBlob(keys.enc, local_.db.export(), LOCAL_DB));
         localStorage.setItem(LOCAL_META, JSON.stringify({base, at: new Date().toISOString()}));
+        cloudApi.later(); // しばらくしたらドライブへ送る
       } catch (e) {
         console.warn('iPad のデータを保存できませんでした', e);
       }
     }, SAVE_DELAY);
   };
+  // ---- ドライブへ送る（docs/SYNC.md §11）：パソコンの送り出し（main/cloud/sync.js）をそのまま、この iPad の中で動かす ----
+  const cloudApi = iPadCloud({
+    cloud,
+    db: local_.db,
+    repo: local_.repo,
+    onPushed: async (m) => {
+      // 送ったものが、この iPad の元になる（次に開くときも iPad で変えたデータベースを使い、読み込みで読み直さない）
+      base = m.db?.sha256 ?? base;
+      await store.put('manifest', sealJson(keys.enc, m, 'manifest'));
+      localStorage.setItem(LOCAL_META, JSON.stringify({base, at: new Date().toISOString()}));
+    }
+  });
+  local_.ctx.cloud = cloudApi;
   const {repo} = local_;
   for (const [id, f] of Object.entries(manifest?.materials ?? {})) {
     const m = repo.get('material', id);
@@ -100,6 +117,99 @@ async function boot() {
   setPadTap((ch, payload, except) => hub.push(ch, payload, except));
   const pad = createPadApi({handlers: local_.handlers, ctx: local_.ctx, repo, hub, log: (m) => console.info(m)});
   return {pad, local: local_, save, notice, manifest};
+}
+
+// ---- ドライブへ送る（iPad の設定 → データ の「いま送る」・変えてからしばらくして自動で）----
+const PUSH_DELAY = 60_000;
+const DEVICE_KEY = 'palette.device';
+const deviceName = () => {
+  let id = localStorage.getItem(DEVICE_KEY);
+  if (!id) {
+    id = Array.from(crypto.getRandomValues(new Uint8Array(4)), (x) => x.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem(DEVICE_KEY, id);
+  }
+  return `iPad-${id}`;
+};
+const LAST = 'palette.cloud.last'; // 最後に送った結果（設定の画面に出す）
+
+function iPadCloud({cloud, db, repo, onPushed}) {
+  let access = null;
+  let busy = null;
+  let timer = null;
+  const getToken = async (fresh) => {
+    if (!fresh && access && access.expiresAt - Date.now() > 60_000) return access.accessToken;
+    if (!cloud.refreshToken) throw new Error('Google にログインしていません');
+    access = await refresh(http, {refreshToken: cloud.refreshToken});
+    return access.accessToken;
+  };
+  const master = fromB64(cloud.key);
+  const record = (last) => localStorage.setItem(LAST, JSON.stringify(last));
+  const api = {
+    async status() {
+      let last = null;
+      try {
+        last = JSON.parse(localStorage.getItem(LAST) ?? 'null');
+      } catch {
+        last = null;
+      }
+      return {
+        ready: true,
+        linked: true,
+        locked: false,
+        passphrase: true,
+        email: cloud.email ?? null,
+        linkedAt: null,
+        last,
+        busy: !!busy,
+        fingerprint: cloud.fp ?? null,
+        ipad: true
+      };
+    },
+    push() {
+      busy ??= (async () => {
+        const at = new Date().toISOString();
+        try {
+          const pusher = createPusher({
+            drive: createDriveReader({http, getToken}),
+            master,
+            exportDb: (file) => fsp.writeFile(file, db.export()),
+            materials: () => Object.values(repo.listMaterialsAll()).flat(),
+            readMaterial: (m) => fsp.readFile(m.path),
+            userData: '/app/userData',
+            device: deviceName(),
+            origin: 'ipad',
+            // パソコンが送ったデータがあるときは、iPad からは送らない（上書きして消さない）
+            allow: (prev) =>
+              prev && prev.origin !== 'ipad'
+                ? 'ドライブにはパソコンが送ったデータがあります。上書きしないように、iPad からは送りません（両方向にそろえる機能は、次の版で入ります）'
+                : null
+          });
+          const r = await pusher.push();
+          await onPushed(r.manifest);
+          record({at, ok: true, uploaded: r.uploaded, bytes: r.bytes, removed: r.removed});
+          return r;
+        } catch (e) {
+          record({at, ok: false, message: e.message});
+          throw e;
+        } finally {
+          busy = null;
+        }
+      })();
+      return busy;
+    },
+    /** 変えてからしばらくしたら送る（送れなければ、次に変えたときにまた試す） */
+    later() {
+      clearTimeout(timer);
+      timer = setTimeout(
+        () => api.push().catch((e) => console.warn('ドライブへ送れませんでした', e.message)),
+        PUSH_DELAY
+      );
+    },
+    keyQr: async () => {
+      throw new Error('iPad に鍵を渡す QR は、パソコンの画面で出してください');
+    }
+  };
+  return api;
 }
 
 // ---- データベースの作り（マイグレーション。iPad で新しく始める・アプリがデータより新しいとき）----

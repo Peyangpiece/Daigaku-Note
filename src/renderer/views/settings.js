@@ -472,7 +472,7 @@ async function renderCloud(box, st = null) {
             ? '<p class="muted">合言葉を決めてあります。iPad は Google にログインして合言葉を入れると使えます。</p>'
             : '<p class="muted">合言葉を決めると、iPad は Google にログインして合言葉を入れるだけで使えます（「iPad に鍵を渡す」の QR は要りません）。</p>'
       }
-      <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button>${s.locked ? '' : `<button type="button" class="btn btn--small" data-cloud="passphrase">${s.passphrase ? '合言葉を変える…' : '合言葉を決める…'}</button><button type="button" class="btn btn--small" data-cloud="keyQr">iPad に鍵を渡す…</button>`}<button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button></div>`
+      <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button>${s.locked || s.ipad ? '' : `<button type="button" class="btn btn--small" data-cloud="passphrase">${s.passphrase ? '合言葉を変える…' : '合言葉を決める…'}</button><button type="button" class="btn btn--small" data-cloud="keyQr">iPad に鍵を渡す…</button>`}${s.ipad ? '' : '<button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button>'}</div>${s.ipad ? '<p class="muted">この iPad のデータを暗号化してドライブへ送ります（変えてから 1 分ほどで自動でも送ります）。ほかの iPad で同じ Google アカウントと合言葉を入れると、同じデータを使えます。</p>' : ''}`
     : `${intro}<div class="about__row"><button type="button" class="btn btn--small" data-cloud="link">Google と連携する…</button></div>`;
   if (s.busy) setTimeout(() => renderCloud(box), 2000); // 送り終わるまで見直す
   for (const b of box.querySelectorAll('[data-cloud]'))

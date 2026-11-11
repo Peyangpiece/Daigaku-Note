@@ -143,6 +143,26 @@ export function createDriveReader({http, getToken, sleep = (ms) => new Promise((
       return out;
     },
     get: (id) => call(`${DRIVE}/files/${id}?alt=media`, true),
+    /** 中身（バイト列）を置く（iPad から送る。id があれば入れ替える）。戻り：{id} */
+    put(name, bytes, id = null) {
+      const b = `palette${Math.random().toString(36).slice(2)}${Date.now()}`;
+      const meta = JSON.stringify(id ? {} : {name, parents: ['appDataFolder']});
+      const te = new TextEncoder();
+      const head = te.encode(
+        `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${b}\r\nContent-Type: application/octet-stream\r\n\r\n`
+      );
+      const tail = te.encode(`\r\n--${b}--`);
+      const body = new Uint8Array(head.length + bytes.length + tail.length);
+      body.set(head);
+      body.set(bytes, head.length);
+      body.set(tail, head.length + bytes.length);
+      const url = id
+        ? `${UPLOAD}/files/${id}?uploadType=multipart&fields=id`
+        : `${UPLOAD}/files?uploadType=multipart&fields=id`;
+      return call(url, false, {method: id ? 'PATCH' : 'POST', type: `multipart/related; boundary=${b}`, body});
+    },
+    /** 消す */
+    remove: (id) => call(`${DRIVE}/files/${id}`, false, {method: 'DELETE', type: 'application/json', body: undefined}),
     /** 文字の中身を置く（合言葉で包んだ鍵など。id があれば入れ替える）。戻り：{id} */
     putText(name, text, id = null) {
       const b = `palette${Math.random().toString(36).slice(2)}${Date.now()}`;

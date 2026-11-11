@@ -114,6 +114,7 @@ test('入口：パソコンの画面の index.html を、iPad の中の窓口で
   const hash = `'sha256-${createHash('sha256').update(map).digest('base64')}'`;
   assert.ok(html.includes(hash), 'CSP に import の対応表のハッシュ');
   assert.match(html, /'wasm-unsafe-eval'/);
+  assert.match(html, /connect-src 'self' blob: https:\/\/oauth2\.googleapis\.com https:\/\/www\.googleapis\.com/);
   const imports = JSON.parse(map).imports;
   assert.equal(imports.electron, '/m/p/src/local/shims/electron.js');
   assert.ok(imports.three, 'パソコンの画面の対応も残す');
