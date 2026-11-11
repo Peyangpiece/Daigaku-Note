@@ -4,7 +4,7 @@ import {app, BrowserWindow, Menu, Notification, Tray, dialog, nativeImage, nativ
 import {existsSync, mkdirSync, readdirSync, statSync, promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
-import {openDatabase} from './db/db.js';
+import {latestVersion, openDatabase} from './db/db.js';
 import {syncRoundDates} from './terms.js';
 import {Repo} from './db/repo.js';
 import {createSecrets} from './secrets.js';
@@ -430,6 +430,7 @@ app.whenReady().then(async () => {
     ctx.importer.refresh().catch((e) => log.warn(`取り込みの見張りを始められませんでした: ${e.message}`));
     registerIpc(ctx, {getWindow: () => win});
     // Google ドライブでそろえる（docs/SYNC.md）。連携しているあいだは 30 分ごとに変わったものを送る
+    const {DatabaseSync} = await import('node:sqlite');
     ctx.cloud = createCloud({
       repo,
       secrets: ctx.secrets,
@@ -440,6 +441,10 @@ app.whenReady().then(async () => {
         /\.pdf$/i.test(m.path) ? (await readBase(m, path.join(userData, 'originals'))).bytes : fsp.readFile(m.path),
       userData,
       openExternal: (url) => shell.openExternal(url),
+      // iPad のデータを取り込むとき（docs/SYNC.md §12）：資料の保存先・データベースを開く・知っている版
+      rootDir: () => ctx.rootDir(),
+      openDb: (file) => new DatabaseSync(file),
+      maxVersion: latestVersion(),
       log: (m) => log.info(m)
     });
     ctx.cloud.start();
