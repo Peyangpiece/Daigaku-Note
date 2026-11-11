@@ -4,7 +4,7 @@
 // - iPad で変えたデータベースは、暗号化して local-db に置く（ドライブへ返すのは段階 3）
 import {createPadApi, createPadHub} from '../main/mobile/pad.js';
 import {setPadTap} from '../main/frames.js';
-import {originalPath} from '../main/pdf-save.js';
+import {originalPath, readBase} from '../main/pdf-save.js';
 import {PAD_QUIET} from '../shared/pad-channels.js';
 import {openBlob, openJson, sealBlob, sealJson} from '../shared/vault.js';
 import {createPusher} from '../main/cloud/sync.js';
@@ -174,14 +174,16 @@ function iPadCloud({cloud, db, repo, onPushed}) {
             master,
             exportDb: (file) => fsp.writeFile(file, db.export()),
             materials: () => Object.values(repo.listMaterialsAll()).flat(),
-            readMaterial: (m) => fsp.readFile(m.path),
+            // パソコンと同じく、PDF は書き込みを描き込む前の元の PDF を送る（main.js の readMaterial。上書き保存の写しがあればそれ）
+            readMaterial: async (m) =>
+              /\.pdf$/i.test(m.path) ? (await readBase(m, '/app/userData/originals')).bytes : fsp.readFile(m.path),
             userData: '/app/userData',
             device: deviceName(),
             origin: 'ipad',
             // パソコンが送ったデータがあるときは、iPad からは送らない（上書きして消さない）
             allow: (prev) =>
               prev && prev.origin !== 'ipad'
-                ? 'ドライブにはパソコンが送ったデータがあります。上書きしないように、iPad からは送りません（両方向にそろえる機能は、次の版で入ります）'
+                ? 'ドライブにはパソコンが送ったデータがあります。上書きしないように、iPad からは送りません。最初の画面の「ドライブから読み込む」で、パソコンのデータを読み込んでから続けてください'
                 : null
           });
           const r = await pusher.push();

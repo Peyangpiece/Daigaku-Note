@@ -27,5 +27,7 @@ export function register({handle, ctx}) {
     ...(await cloud().unlock(passphrase)),
     status: await cloud().status()
   }));
+  // iPad のデータを取り込む（次の起動で入れ替わる。画面で開き直すかを聞く）
+  handle('cloud.adoptIpad', async () => cloud().adoptIpad());
   handle('cloud.wipe', async () => ({...(await cloud().wipe()), status: await cloud().status()}));
 }

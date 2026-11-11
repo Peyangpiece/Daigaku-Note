@@ -360,6 +360,13 @@ export class Repo {
     const r = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
     return r ? JSON.parse(r.value) : fallback;
   }
+  /** 設定をすべて：[[名前, 値]]（iPad のデータを取り込むとき、このパソコンだけの設定を残すのに使う） */
+  listSettings() {
+    return this.db
+      .prepare('SELECT key, value FROM settings')
+      .all()
+      .map((r) => [r.key, JSON.parse(r.value)]);
+  }
   removeSetting(key) {
     this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
   }

@@ -409,3 +409,58 @@ test('送り出し：送った端末の種類を目録に書く。ほかの端�
   const mf = [...fake.files.values()].find((f) => f.name === MANIFEST);
   assert.equal(openJson(deriveKeys(master).enc, mf.bytes, MANIFEST).origin, 'ipad', '目録はそのまま');
 });
+
+test('パソコン：iPad が送ったデータは、取り込むまで上書きしない（画面に「取り込む」を出す）。取り込んだあとは送る', async () => {
+  const {toB64} = await import('../src/shared/mobile-wire.js');
+  const {IPAD_HELD} = await import('../src/main/cloud/index.js');
+  const {ADOPTED} = await import('../src/main/cloud/adopt.js');
+  const fake = fakeDrive();
+  const fetch = async (url, init) =>
+    String(url).startsWith('https://oauth2.googleapis.com/token')
+      ? Response.json({access_token: 'A', expires_in: 3600})
+      : fake.fetch(url, init);
+  const userData = mkdtempSync(path.join(tmpdir(), 'dn-cloud-held-'));
+  const master = newMasterKey();
+  // iPad が送った
+  const ipad = await createPusher({
+    drive: createDrive({getToken: async () => 'A', fetch}),
+    master,
+    exportDb: (f) => writeFileSync(f, 'DB-ipad'),
+    materials: () => [],
+    readMaterial: async () => new Uint8Array(),
+    userData,
+    device: 'iPad-1',
+    origin: 'ipad'
+  }).push();
+  const settings = new Map([['cloud.account', {email: 'a@example.com'}]]);
+  const store = new Map([
+    ['cloud.google', {refreshToken: 'R'}],
+    ['cloud.key', toB64(master)]
+  ]);
+  const cloud = createCloud({
+    repo: {
+      getSetting: (k, d) => settings.get(k) ?? d,
+      setSetting: (k, v) => settings.set(k, v),
+      removeSetting: (k) => settings.delete(k)
+    },
+    secrets: {
+      get: async (k) => store.get(k) ?? null,
+      set: async (k, v) => void store.set(k, v),
+      remove: async (k) => void store.delete(k)
+    },
+    fetch,
+    config: {clientId: 'c', clientSecret: 's'},
+    exportDb: (f) => writeFileSync(f, 'DB-pc'),
+    materials: () => [],
+    readMaterial: async () => new Uint8Array(),
+    userData,
+    openExternal: () => {}
+  });
+  await assert.rejects(cloud.push(), (e) => e.message === IPAD_HELD);
+  assert.equal((await cloud.status()).last.ipad, true, '画面に「iPad のデータを取り込む」を出す');
+  // 取り込んだ（次の起動で入れ替わったデータベースに、取り込んだ目録の時刻が入っている）
+  settings.set(ADOPTED, ipad.manifest.at);
+  const r = await cloud.push();
+  assert.equal(r.manifest.origin, 'pc');
+  assert.equal((await cloud.status()).last.ok, true);
+});

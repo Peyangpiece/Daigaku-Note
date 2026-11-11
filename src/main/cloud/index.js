@@ -6,15 +6,22 @@ import {fromB64, toB64} from '../../shared/mobile-wire.js';
 import {createDrive, loginLoopback, refreshAccess, revoke} from './google.js';
 import {fingerprint, keyQr, newMasterKey} from './keys.js';
 import {createPusher} from './sync.js';
+import {ADOPTED, adoptIpad} from './adopt.js';
 import {loadClientSecret} from './client-secret.js';
 import {KEYRING, keyringBytes, makeKeyring, openKeyring, readKeyringBytes} from '../../shared/keyring.js';
 
 export const PUSH_EVERY_MS = 30 * 60 * 1000;
 
 /**
- * @param {{repo, secrets, exportDb, materials, readMaterial, userData, openExternal, log?, fetch?, config?, onChange?}} deps
+ * @param {{repo, secrets, exportDb, materials, readMaterial, userData, openExternal, rootDir?, openDb?, maxVersion?,
+ *   log?, fetch?, config?, onChange?}} deps
  *   onChange：状態が変わった（画面に出し直す）
+ *   rootDir・openDb・maxVersion：iPad のデータを取り込むとき（adopt.js）の資料の保存先・データベースを開く関数・知っている版
  */
+/** ドライブに iPad が送ったデータがあって、まだ取り込んでいないので送らない（画面で「取り込む」を出す） */
+export const IPAD_HELD =
+  'ドライブには iPad で書いたデータがあります。上書きしないように、このパソコンからは送りません。「iPad のデータを取り込む」で、このパソコンに取り込めます';
+
 export function createCloud({
   repo,
   secrets,
@@ -23,6 +30,9 @@ export function createCloud({
   readMaterial,
   userData,
   openExternal,
+  rootDir = () => userData,
+  openDb = null,
+  maxVersion = Infinity,
   log = () => {},
   fetch = globalThis.fetch,
   config = {...GOOGLE_DESKTOP, clientSecret: GOOGLE_DESKTOP.clientSecret || loadClientSecret()},
@@ -59,11 +69,8 @@ export function createCloud({
       device: os.hostname(),
       log,
       now,
-      // iPad が送ったデータ（iPad だけで始めたなど）があるときは、パソコンからは送らない（上書きして消さない。取り込みは docs/SYNC.md §11）
-      allow: (prev) =>
-        prev?.origin === 'ipad'
-          ? 'ドライブには iPad で書いたデータがあります。上書きしないように、このパソコンからは送りません（iPad のデータをパソコンに取り込む機能は、次の版で入ります）'
-          : null
+      // iPad が送ったデータ（iPad だけで始めたなど）があるときは、取り込むまでパソコンからは送らない（上書きして消さない。docs/SYNC.md §12）
+      allow: (prev) => (prev?.origin === 'ipad' && repo.getSetting(ADOPTED, null) !== prev.at ? IPAD_HELD : null)
     });
   };
   /** ドライブの合言葉で包んだ鍵（なければ null）：{id, ring} */
@@ -179,7 +186,7 @@ export function createCloud({
           if (r.uploaded) log(`cloud: ${r.uploaded} 件を送りました（${r.bytes} バイト）`);
           return r;
         } catch (e) {
-          record({at, ok: false, message: e.message});
+          record({at, ok: false, message: e.message, ...(e.message === IPAD_HELD ? {ipad: true} : {})});
           log(`cloud: 送れませんでした：${e.message}`);
           throw e;
         } finally {
@@ -188,6 +195,27 @@ export function createCloud({
         }
       })();
       return busy;
+    },
+
+    /** ドライブの iPad のデータを、このパソコンに取り込む準備をする（データベースは次の起動で入れ替わる。docs/SYNC.md §12） */
+    async adoptIpad() {
+      if (!account()) throw new Error('Google と連携していません');
+      if (!openDb) throw new Error('iPad のデータを取り込めません');
+      const master = await masterKey();
+      if (!master) throw new Error('暗号化の鍵がありません。合言葉を入れてください');
+      await busy?.catch(() => {});
+      const r = await adoptIpad({
+        drive,
+        master,
+        userData,
+        root: rootDir(),
+        settings: repo.listSettings(),
+        open: openDb,
+        maxVersion,
+        log
+      });
+      log(`cloud: iPad（${r.device ?? '?'}・${r.at}）のデータを取り込みます。資料 ${r.materials}・ファイル ${r.files}`);
+      return {ok: true, ...r};
     },
 
     /** ドライブのこのアプリの中身を消し、鍵を作り直す（ほかの鍵で作ったものがあって読めないとき・やり直すとき） */
