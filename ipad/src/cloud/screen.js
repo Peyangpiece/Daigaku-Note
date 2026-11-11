@@ -74,12 +74,18 @@ export function openCloud(app, back) {
       <div class="s-row" data-v="actions">
         ${step === 1 ? '<button type="button" class="s-btn s-btn--primary" data-v="login">Google にログイン</button>' : ''}
         ${step === 2 ? keyStep() : ''}
-        ${step === 3 && s.last ? '<button type="button" class="s-btn s-btn--primary" data-v="open">ノートを開く</button>' : ''}
-        ${step === 3 ? `<button type="button" class="s-btn ${s.last ? '' : 's-btn--primary'}" data-v="pull">ドライブから読み込む</button>` : ''}
+        ${step === 3 && (s.last || s.fresh) ? '<button type="button" class="s-btn s-btn--primary" data-v="open">ノートを開く</button>' : ''}
+        ${step === 3 ? `<button type="button" class="s-btn ${s.last || s.fresh ? '' : 's-btn--primary'}" data-v="pull">ドライブから読み込む</button>` : ''}
         <button type="button" class="s-btn" data-v="back">戻る</button>
       </div>
       <p class="s-muted" data-v="progress"></p>
-      ${step === 3 ? '<p class="s-muted">iPad で書いたものは、まだパソコンには戻りません（次の版で戻せるようにします）。パソコンで新しく送ったものを読み込むと、iPad で書いたものはパソコンのものに置き換わります。</p>' : ''}
+      ${
+        step === 3
+          ? s.fresh && !s.last
+            ? '<p class="s-muted">このアカウントでは初めてなので、iPad だけで新しく始めます（「ノートを開く」）。PDF などは iPad のファイルから取り込みます。manabo からの自動取得と、Claude Code での問題作成はパソコンだけでできます。</p>'
+            : '<p class="s-muted">iPad で書いたものは、まだパソコンには戻りません（次の版で戻せるようにします）。パソコンで新しく送ったものを読み込むと、iPad で書いたものはパソコンのものに置き換わります。</p>'
+          : ''
+      }
       ${s.refreshToken ? '<div class="s-row"><button type="button" class="s-btn" data-v="reset">この iPad から外す</button></div>' : ''}`;
     const on = (v, fn) => {
       const b = app.querySelector(`[data-v="${v}"]`);

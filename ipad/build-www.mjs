@@ -1,5 +1,5 @@
 // iPad アプリに入れる画面（www）を組み立てる：最初の画面（src）と QR を読む部品（jsQR）
-import {cpSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -57,6 +57,17 @@ nm('@noble/hashes');
 // パソコンと同じ画面の部品（bridge.js）が話す相手を、このアプリの中の窓口にする
 mkdirSync(path.join(www, 'm', 'app'), {recursive: true});
 writeFileSync(path.join(www, 'm', 'app', 'client.js'), "export * from '/m/p/src/local/client.js';\n");
+// データベースの作り（マイグレーション）：iPad で新しく始めるときに当てる（HTTP では一覧を読めないので、まとめて 1 つにする）
+const migDir = path.join(repo, 'src', 'main', 'db', 'migrations');
+writeFileSync(
+  p('src', 'local', 'migrations.json'),
+  JSON.stringify(
+    readdirSync(migDir)
+      .filter((f) => /^\d{4}_.+\.sql$/.test(f))
+      .sort()
+      .map((name) => ({name, sql: readFileSync(path.join(migDir, name), 'utf8')}))
+  )
+);
 const {localIndexHtml} = await import(pathToFileURL(path.join(repo, 'src', 'local', 'index-html.js')).href);
 writeFileSync(
   p('src', 'renderer', 'index.html'),

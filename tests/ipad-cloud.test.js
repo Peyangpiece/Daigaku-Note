@@ -223,3 +223,13 @@ test('base64（アプリの中のファイルとのやりとり）：大きな�
   const b = new Uint8Array(300_000).map((_, i) => i % 256);
   assert.deepEqual(fromB64(toB64(b)), b);
 });
+
+test('読み込み：iPad が自分で作ったもの（iPad で変えたデータベース・iPad で書いたファイル）は消さない', async () => {
+  const {drive, master, pusher} = setup();
+  await pusher().push();
+  const store = memStore();
+  for (const n of ['local-db', 'local-files', 'w-0123', 'f-old']) store.m.set(n, new Uint8Array([1]));
+  const r = await pull({drive, store, master});
+  assert.equal(r.removed, 1); // f-old だけ
+  for (const n of ['local-db', 'local-files', 'w-0123']) assert.ok(store.m.has(n), n);
+});
