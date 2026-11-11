@@ -49,7 +49,22 @@ export function createCloud({
   const pusher = async () => {
     const master = await masterKey();
     if (!master) throw new Error('暗号化の鍵がありません。連携し直してください');
-    return createPusher({drive, master, exportDb, materials, readMaterial, userData, device: os.hostname(), log, now});
+    return createPusher({
+      drive,
+      master,
+      exportDb,
+      materials,
+      readMaterial,
+      userData,
+      device: os.hostname(),
+      log,
+      now,
+      // iPad が送ったデータ（iPad だけで始めたなど）があるときは、パソコンからは送らない（上書きして消さない。取り込みは docs/SYNC.md §11）
+      allow: (prev) =>
+        prev?.origin === 'ipad'
+          ? 'ドライブには iPad で書いたデータがあります。上書きしないように、このパソコンからは送りません（iPad のデータをパソコンに取り込む機能は、次の版で入ります）'
+          : null
+    });
   };
   /** ドライブの合言葉で包んだ鍵（なければ null）：{id, ring} */
   const remoteKeyring = async () => {

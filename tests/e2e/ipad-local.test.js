@@ -315,12 +315,17 @@ test(
         if (req.method() === 'OPTIONS') return r.fulfill({status: 204, headers: h});
         if (u.pathname.startsWith('/upload/')) {
           const boundary = req.headers()['content-type'].split('boundary=')[1];
-          const parts = req.postData().split(`--${boundary}`);
+          const parts = req.postDataBuffer().toString('latin1').split(`--${boundary}`);
           const meta = JSON.parse(parts[1].split('\r\n\r\n')[1]);
-          const text = parts[2].split('\r\n\r\n').slice(1).join('\r\n\r\n').replace(/\r\n$/, '');
-          const id = `id${++n}`;
-          files.set(id, {name: meta.name, bytes: Buffer.from(text)});
+          const raw = parts[2].split('\r\n\r\n').slice(1).join('\r\n\r\n').replace(/\r\n$/, '');
+          const patch = req.method() === 'PATCH';
+          const id = patch ? u.pathname.split('/').pop() : `id${++n}`;
+          files.set(id, {name: patch ? files.get(id).name : meta.name, bytes: Buffer.from(raw, 'latin1')});
           return r.fulfill({status: 200, contentType: 'application/json', headers: h, body: JSON.stringify({id})});
+        }
+        if (req.method() === 'DELETE') {
+          files.delete(u.pathname.split('/').pop());
+          return r.fulfill({status: 204, headers: h});
         }
         if (u.pathname === '/drive/v3/files') {
           const list = [...files].map(([id, f]) => ({id, name: f.name, size: String(f.bytes.length)}));
@@ -376,6 +381,57 @@ test(
         made.id
       );
       assert.equal(opened, pdf.length);
+      // ドライブへ送る（バックアップ）：データベース・資料・目録を暗号化して置く
+      const pushed = await pg.evaluate(async () => window.daigaku['cloud.push']());
+      assert.ok(!pushed?.error, pushed?.error);
+      const names = [...files.values()].map((f) => f.name);
+      for (const name of ['keyring', 'manifest', 'db']) assert.ok(names.includes(name), name);
+      assert.ok(
+        names.some((name) => name.startsWith('f-')),
+        '資料'
+      );
+      // 別の iPad：ログインして合言葉を入れ、読み込むと、同じ PDF が開ける
+      const ctx2 = await browser.newContext({viewport: {width: 1180, height: 820}, hasTouch: true});
+      await ctx2.addInitScript(capacitorStub);
+      const pg2 = await ctx2.newPage();
+      pg2.on('pageerror', (e) => errors.push(e.message));
+      await pg2.route('https://oauth2.googleapis.com/token', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          headers: h,
+          body: JSON.stringify({refresh_token: 'R', access_token: 'A', expires_in: 3600})
+        })
+      );
+      await pg2.route('https://www.googleapis.com/**', async (r) => {
+        const u = new URL(r.request().url());
+        if (u.pathname === '/drive/v3/files') {
+          const list = [...files].map(([id, f]) => ({id, name: f.name, size: String(f.bytes.length)}));
+          return r.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            headers: h,
+            body: JSON.stringify({files: list})
+          });
+        }
+        return r.fulfill({status: 200, headers: h, body: files.get(u.pathname.split('/').pop()).bytes});
+      });
+      await pg2.goto(`http://127.0.0.1:${srv.address().port}/`);
+      await pg2.click('[data-v="cloud"]');
+      await pg2.click('[data-v="login"]');
+      await pg2.waitForSelector('[data-v="unlock"]', {timeout: 30000});
+      await pg2.fill('[data-v="pass"]', 'はじめてのあいことば');
+      await pg2.click('[data-v="unlock"]');
+      await pg2.waitForSelector('[data-v="pull"]', {timeout: 60000});
+      await pg2.click('[data-v="pull"]');
+      await pg2.waitForSelector('[data-v="open"]', {timeout: 60000});
+      await pg2.click('[data-v="open"]');
+      await pg2.waitForFunction(() => !!window.daigaku, null, {timeout: 60000});
+      const restored = await pg2.evaluate(
+        async (id) => (await window.daigaku['pdf.open']({materialId: id})).bytes?.length ?? 0,
+        made.id
+      );
+      assert.equal(restored, pdf.length);
       assert.deepEqual(errors, []);
     } finally {
       await browser.close();

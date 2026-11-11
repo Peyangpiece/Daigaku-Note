@@ -19,6 +19,11 @@ export function localIndexHtml(raw) {
   return (
     html
       .replace(old, `${hash(body)} 'wasm-unsafe-eval'`) // sql.js（WebAssembly）を動かす
+      // ドライブへ送る（docs/SYNC.md §11）：Google のトークンとドライブの窓口だけにつなぐ
+      .replace(
+        "connect-src 'self' blob:",
+        "connect-src 'self' blob: https://oauth2.googleapis.com https://www.googleapis.com"
+      )
       .replace(map[0], `<script type="importmap">${body}</script>`)
       // sql.js は大域の initSqlJs を作る古い形の部品。env.js（process・Buffer）は boot.js より先に
       .replace(
