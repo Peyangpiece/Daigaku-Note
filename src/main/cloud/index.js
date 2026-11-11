@@ -7,6 +7,7 @@ import {createDrive, loginLoopback, refreshAccess, revoke} from './google.js';
 import {fingerprint, keyQr, newMasterKey} from './keys.js';
 import {createPusher} from './sync.js';
 import {loadClientSecret} from './client-secret.js';
+import {KEYRING, keyringBytes, makeKeyring, openKeyring, readKeyringBytes} from '../../shared/keyring.js';
 
 export const PUSH_EVERY_MS = 30 * 60 * 1000;
 
@@ -50,6 +51,12 @@ export function createCloud({
     if (!master) throw new Error('暗号化の鍵がありません。連携し直してください');
     return createPusher({drive, master, exportDb, materials, readMaterial, userData, device: os.hostname(), log, now});
   };
+  /** ドライブの合言葉で包んだ鍵（なければ null）：{id, ring} */
+  const remoteKeyring = async () => {
+    const f = (await drive.list()).find((x) => x.name === KEYRING);
+    if (!f) return null;
+    return {id: f.id, ring: readKeyringBytes(await drive.get(f.id))};
+  };
   const record = (last) => {
     repo.setSetting('cloud.last', last);
     onChange();
@@ -61,6 +68,9 @@ export function createCloud({
       return {
         ready: googleReady(config),
         linked: !!account(),
+        // 鍵がない（ドライブの合言葉で包んだ鍵を、合言葉で開く前）
+        locked: !!account() && !master,
+        passphrase: !!repo.getSetting('cloud.keyring', null),
         email: account()?.email ?? null,
         linkedAt: account()?.linkedAt ?? null,
         last: repo.getSetting('cloud.last', null),
@@ -77,6 +87,16 @@ export function createCloud({
       access = {accessToken: r.accessToken, expiresAt: r.expiresAt};
       if (!(await masterKey())) await secrets.set('cloud.key', toB64(newMasterKey()));
       repo.setSetting('cloud.account', {email: r.email, linkedAt: now().toISOString()});
+      // ほかの端末（iPad だけで始めた・ほかのパソコン）が合言葉で鍵を置いていたら、その鍵を使う（合言葉を聞く）
+      const remote = await remoteKeyring().catch(() => null);
+      const mine = await masterKey();
+      if (remote && (!mine || fingerprint(mine) !== remote.ring.fp)) {
+        repo.setSetting('cloud.keyring', {at: remote.ring.at, fp: remote.ring.fp});
+        if (mine) await secrets.remove('cloud.key');
+        onChange();
+        return {ok: true, email: r.email, needPassphrase: true};
+      }
+      if (remote) repo.setSetting('cloud.keyring', {at: remote.ring.at, fp: remote.ring.fp});
       onChange();
       try {
         await (await pusher()).status();
@@ -86,6 +106,31 @@ export function createCloud({
       }
       api.push().catch(() => {}); // 最初の送り出しは裏で
       return {ok: true, email: r.email};
+    },
+
+    /** 合言葉を決める・変える（鍵を合言葉で包んでドライブに置く。iPad は Google のログインと合言葉だけで使える） */
+    async setPassphrase(passphrase) {
+      if (!account()) throw new Error('Google と連携していません');
+      const master = await masterKey();
+      if (!master) throw new Error('暗号化の鍵がありません。合言葉を入れるか、連携し直してください');
+      const ring = await makeKeyring(master, passphrase, {device: os.hostname(), now: now()});
+      const old = await remoteKeyring().catch(() => null);
+      await drive.put(KEYRING, keyringBytes(ring), old?.id ?? null);
+      repo.setSetting('cloud.keyring', {at: ring.at, fp: ring.fp});
+      onChange();
+      return {ok: true};
+    },
+
+    /** 合言葉でドライブの鍵を開き、このパソコンで使う */
+    async unlock(passphrase) {
+      if (!account()) throw new Error('Google と連携していません');
+      const remote = await remoteKeyring();
+      if (!remote) throw new Error('ドライブに合言葉の鍵がありません');
+      const master = await openKeyring(remote.ring, passphrase);
+      await secrets.set('cloud.key', toB64(master));
+      onChange();
+      api.push().catch(() => {});
+      return {ok: true};
     },
 
     /** iPad に鍵を渡す QR の中身（連携していて、鍵があるときだけ） */
@@ -137,6 +182,7 @@ export function createCloud({
       for (const f of await drive.list()) await drive.remove(f.id);
       await secrets.set('cloud.key', toB64(newMasterKey()));
       repo.removeSetting('cloud.last');
+      repo.removeSetting('cloud.keyring'); // 合言葉の鍵も消えた（決め直す）
       onChange();
       return {ok: true};
     },

@@ -269,7 +269,17 @@ test('連携：クライアント ID がなければ準備中。連携してい�
   const cloud = createCloud({repo, secrets, config: {clientId: '', clientSecret: ''}});
   assert.deepEqual(
     {...(await cloud.status())},
-    {ready: false, linked: false, email: null, linkedAt: null, last: null, busy: false, fingerprint: null}
+    {
+      ready: false,
+      linked: false,
+      locked: false,
+      passphrase: false,
+      email: null,
+      linkedAt: null,
+      last: null,
+      busy: false,
+      fingerprint: null
+    }
   );
   await assert.rejects(cloud.link(), /準備中/);
   await assert.rejects(cloud.push(), /連携していません/);
@@ -317,4 +327,60 @@ test('送り出し：資料を授業ごとにまとめた形（repo.listMaterial
 test('つなぎ方：main.js は資料を授業ごとの形から並びにして送り出しに渡す', () => {
   const main = readFileSync(new URL('../src/main/main.js', import.meta.url), 'utf8');
   assert.match(main, /materials: \(\) => Object\.values\(repo\.listMaterialsAll\(\)\)\.flat\(\)/);
+});
+
+test('合言葉：鍵を合言葉で包んでドライブに置き、ほかの端末は合言葉で同じ鍵を開く。送っても合言葉の鍵は消さない', async () => {
+  const {toB64, fromB64} = await import('../src/shared/mobile-wire.js');
+  const fake = fakeDrive();
+  const fetch = async (url, init) =>
+    String(url).startsWith('https://oauth2.googleapis.com/token')
+      ? Response.json({access_token: 'A', expires_in: 3600})
+      : fake.fetch(url, init);
+  const userData = mkdtempSync(path.join(tmpdir(), 'dn-cloud-pass-'));
+  const device = (key) => {
+    const settings = new Map([['cloud.account', {email: 'a@example.com'}]]);
+    const store = new Map([['cloud.google', {refreshToken: 'R'}]]);
+    if (key) store.set('cloud.key', toB64(key));
+    const repo = {
+      getSetting: (k, d) => settings.get(k) ?? d,
+      setSetting: (k, v) => settings.set(k, v),
+      removeSetting: (k) => settings.delete(k)
+    };
+    const secrets = {
+      get: async (k) => store.get(k) ?? null,
+      set: async (k, v) => void store.set(k, v),
+      remove: async (k) => void store.delete(k)
+    };
+    const cloud = createCloud({
+      repo,
+      secrets,
+      fetch,
+      config: {clientId: 'c', clientSecret: 's'},
+      exportDb: (f) => writeFileSync(f, 'DB'),
+      materials: () => [],
+      readMaterial: async () => new Uint8Array(),
+      userData,
+      openExternal: () => {}
+    });
+    return {cloud, store};
+  };
+  const master = newMasterKey();
+  const pc = device(master);
+  await assert.rejects(pc.cloud.setPassphrase('short'), /8 文字以上/);
+  await pc.cloud.setPassphrase('ながいあいことば');
+  assert.equal((await pc.cloud.status()).passphrase, true);
+  const names = () => [...fake.files.values()].map((f) => f.name);
+  assert.ok(names().includes('keyring'));
+  // ドライブにあるのは包んだ鍵だけ（鍵そのものは置かない）
+  const ring = [...fake.files.values()].find((f) => f.name === 'keyring');
+  assert.ok(!Buffer.from(ring.bytes).toString().includes(toB64(master)));
+  await pc.cloud.push();
+  assert.ok(names().includes('keyring'), '送っても消さない');
+  // 鍵のない端末：合言葉で開く
+  const other = device(null);
+  assert.equal((await other.cloud.status()).locked, true);
+  await assert.rejects(other.cloud.unlock('ちがうあいことば'), /合言葉が違います/);
+  await other.cloud.unlock('ながいあいことば');
+  assert.deepEqual(fromB64(other.store.get('cloud.key')), master);
+  assert.equal((await other.cloud.status()).fingerprint, fingerprint(master));
 });

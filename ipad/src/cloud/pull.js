@@ -5,6 +5,8 @@ import {deriveKeys} from '../shared/vault-keys.js';
 
 export const MANIFEST = 'manifest';
 export const LOCAL_MANIFEST = 'manifest'; // この iPad に置いた目録（暗号化したまま）
+/** iPad が自分で作ったもの（iPad で変えたデータベース・iPad で書いたファイル）。ドライブから読み込むときに消さない */
+export const ownName = (name) => name.startsWith('local-') || name.startsWith('w-');
 
 /** 目録が指すもの：[{name, kind}]（データベース・資料・アプリのファイル。同じ名前は 1 つ） */
 export function wanted(manifest) {
@@ -67,7 +69,7 @@ export async function pull({drive, store, master, onProgress = () => {}}) {
   const keep = new Set([LOCAL_MANIFEST, ...list.map((x) => x.name)]);
   let removed = 0;
   for (const name of have)
-    if (!keep.has(name)) {
+    if (!keep.has(name) && !ownName(name)) {
       await store.remove(name);
       removed++;
     }

@@ -32,7 +32,15 @@ const addDirs = (p) => {
   for (const d of parentsOf(p)) dirs.add(d);
 };
 
+// 書いた・消したことを知らせる先（client.js が iPad に残す。テストでは使わない）
+const hooks = {write: null, remove: null};
+
 export const vfs = {
+  /** 書いた・消したことを知らせる先：{write(道, bytes), remove(道)} */
+  setHooks(h) {
+    hooks.write = h?.write ?? null;
+    hooks.remove = h?.remove ?? null;
+  },
   /** 読むだけのものを置く（ドライブから読み込んだ資料など） */
   mount(p, read, size = 0) {
     const n = norm(p);
@@ -57,10 +65,11 @@ export const vfs = {
     const f = files.get(norm(p));
     return f ? f.bytes : null;
   },
-  write(p, bytes) {
+  write(p, bytes, {quiet = false} = {}) {
     const n = norm(p);
     files.set(n, {bytes, mtimeMs: Date.now()});
     addDirs(n);
+    if (!quiet) hooks.write?.(n, bytes);
   },
   stat(p) {
     const n = norm(p);
@@ -85,9 +94,16 @@ export const vfs = {
   },
   remove(p, recursive = false) {
     const n = norm(p);
+    if (files.has(n) || lazy.has(n)) hooks.remove?.(n);
     files.delete(n);
     lazy.delete(n);
-    if (recursive) for (const m of [files, lazy]) for (const k of [...m.keys()]) if (k.startsWith(`${n}/`)) m.delete(k);
+    if (recursive)
+      for (const m of [files, lazy])
+        for (const k of [...m.keys()])
+          if (k.startsWith(`${n}/`)) {
+            hooks.remove?.(k);
+            m.delete(k);
+          }
     if (recursive) for (const d of [...dirs]) if (d === n || d.startsWith(`${n}/`)) dirs.delete(d);
   },
   rename(a, b) {
@@ -96,6 +112,8 @@ export const vfs = {
     if (files.has(x)) {
       files.set(y, files.get(x));
       files.delete(x);
+      hooks.remove?.(x);
+      hooks.write?.(y, files.get(y).bytes);
     } else if (lazy.has(x)) {
       lazy.set(y, lazy.get(x));
       lazy.delete(x);
@@ -104,6 +122,7 @@ export const vfs = {
   },
   /** テスト用：全部消す */
   reset() {
+    hooks.write = hooks.remove = null;
     files.clear();
     lazy.clear();
     dirs.clear();

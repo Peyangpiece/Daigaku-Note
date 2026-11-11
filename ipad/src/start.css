@@ -78,3 +78,31 @@ body {
   opacity: 0;
   font-size: 100px;
 }
+/* パソコンなしで使う：手順・合言葉を入れる欄 */
+.s-steps {
+  padding-left: 1.4em;
+}
+.s-steps .s-done {
+  color: var(--weak);
+}
+.s-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.s-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 360px;
+}
+.s-input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgb(127 127 127 / 40%);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}

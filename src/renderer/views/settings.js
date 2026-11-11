@@ -1,6 +1,6 @@
 // 設定（SPEC §12.2）。学期・授業・保存先・クイズ・見た目、下に LMS との連携（任意）と同期。変更はすぐ保存する。
 import {AI_CONSENT_VERSION, AI_NOT_SENDS, AI_SENDS} from '../../shared/policy.js';
-import {confirmDialog, esc, toast} from '../ui-kit.js';
+import {confirmDialog, esc, promptDialog, toast} from '../ui-kit.js';
 import {reload} from '../store.js';
 import {ROLES, USES, features, importFor, isChukyo} from '../../shared/profile.js';
 import {sharedHost} from '../../shared/import-sites.js';
@@ -465,7 +465,14 @@ async function renderCloud(box, st = null) {
     ? `${intro}
       <p><strong>${esc(s.email ?? 'Google アカウント')}</strong> と連携しています。<span class="muted">${last}${s.busy ? '（送っています…）' : ''}</span></p>
       ${s.fingerprint ? `<p class="muted">鍵の印：<code>${esc(s.fingerprint)}</code>（iPad と同じ鍵か確かめるときに使います）</p>` : ''}
-      <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button><button type="button" class="btn btn--small" data-cloud="keyQr">iPad に鍵を渡す…</button><button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button></div>`
+      ${
+        s.locked
+          ? '<p class="error-text">このアカウントのドライブには、合言葉で守った鍵があります（iPad などで決めたもの）。合言葉を入れると、このパソコンでも使えます。</p><div class="about__row"><button type="button" class="btn btn--small" data-cloud="unlock">合言葉を入れる…</button></div>'
+          : s.passphrase
+            ? '<p class="muted">合言葉を決めてあります。iPad は Google にログインして合言葉を入れると使えます。</p>'
+            : '<p class="muted">合言葉を決めると、iPad は Google にログインして合言葉を入れるだけで使えます（「iPad に鍵を渡す」の QR は要りません）。</p>'
+      }
+      <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button>${s.locked ? '' : `<button type="button" class="btn btn--small" data-cloud="passphrase">${s.passphrase ? '合言葉を変える…' : '合言葉を決める…'}</button><button type="button" class="btn btn--small" data-cloud="keyQr">iPad に鍵を渡す…</button>`}<button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button></div>`
     : `${intro}<div class="about__row"><button type="button" class="btn btn--small" data-cloud="link">Google と連携する…</button></div>`;
   if (s.busy) setTimeout(() => renderCloud(box), 2000); // 送り終わるまで見直す
   for (const b of box.querySelectorAll('[data-cloud]'))
@@ -488,6 +495,8 @@ async function renderCloud(box, st = null) {
       )
         return;
       if (what === 'keyQr') return showKeyQr(box);
+      if (what === 'passphrase') return setPassphrase(box);
+      if (what === 'unlock') return unlockCloud(box);
       b.disabled = true;
       if (what === 'link') toast('ブラウザで Google にログインしてください');
       const r = await api[`cloud.${what}`]();
@@ -496,6 +505,7 @@ async function renderCloud(box, st = null) {
         toast(r.error, {error: true});
         return renderCloud(box);
       }
+      if (what === 'link' && r.needPassphrase) return unlockCloud(box);
       if (what === 'link' && r.conflict) {
         const wipe = await confirmDialog(
           'Google ドライブに、別の鍵で暗号化したこのアプリのデータがあります（前に別のパソコンで連携したなど）。消して作り直しますか？ 消さないと、このパソコンからは送れません。',
@@ -510,6 +520,39 @@ async function renderCloud(box, st = null) {
       if (what === 'push') toast(r.skipped ? '変わったものはありませんでした' : `送りました（${r.uploaded} 件）`);
       renderCloud(box, r.status);
     };
+}
+
+/** 合言葉を決める・変える（2 回入れる）。忘れるとドライブのデータを開けないことを先に知らせる */
+async function setPassphrase(box) {
+  const ok = await confirmDialog(
+    '合言葉を決めると、iPad は Google にログインして合言葉を入れるだけで使えます。合言葉はどこにも保存しません。忘れると、ドライブのデータは誰にも開けなくなります（このパソコンのデータはそのまま使えます）。',
+    {ok: '決める'}
+  );
+  if (!ok) return;
+  const p1 = await promptDialog('合言葉（8 文字以上）', {type: 'password', maxlength: 200});
+  if (p1 == null) return;
+  const p2 = await promptDialog('もう一度入れてください', {type: 'password', maxlength: 200});
+  if (p2 == null) return;
+  if (p1 !== p2) return toast('2 回入れた合言葉が違います', {error: true});
+  toast('合言葉で鍵を包んでいます…');
+  const r = await api['cloud.setPassphrase']({passphrase: p1});
+  if (r?.error) return toast(r.error, {error: true});
+  toast('合言葉を決めました。iPad で Google にログインして、同じ合言葉を入れてください');
+  renderCloud(box, r.status);
+}
+
+/** 合言葉を入れて、ドライブの鍵をこのパソコンで使う */
+async function unlockCloud(box) {
+  const p = await promptDialog('合言葉を入れてください（iPad などで決めたもの）', {type: 'password', maxlength: 200});
+  if (p == null) return renderCloud(box);
+  toast('合言葉を確かめています…');
+  const r = await api['cloud.unlock']({passphrase: p});
+  if (r?.error) {
+    toast(r.error, {error: true});
+    return renderCloud(box);
+  }
+  toast('合言葉が合いました。このパソコンからも送ります');
+  renderCloud(box, r.status);
 }
 
 /** iPad に鍵を渡す QR：iPad のパレットノートで「パソコンなしで使う」を選び、この QR を読む。閉じるまで出す */

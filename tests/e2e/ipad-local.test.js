@@ -256,3 +256,130 @@ test(
     }
   }
 );
+
+test(
+  'iPad だけで始める：空のドライブで合言葉を決め、新しいデータで使う。取り込んだ PDF は開き直しても残る',
+  {skip: !chromium && 'Playwright がない', timeout: 240000},
+  async () => {
+    const built = spawnSync(process.execPath, ['ipad/build-www.mjs'], {cwd: ROOT, encoding: 'utf8'});
+    assert.equal(built.status, 0, built.stderr);
+    const files = new Map(); // ドライブ（空から）
+    let n = 0;
+    const www = path.join(ROOT, 'ipad', 'www');
+    const TYPES = {
+      '.js': 'text/javascript',
+      '.mjs': 'text/javascript',
+      '.css': 'text/css',
+      '.html': 'text/html',
+      '.json': 'application/json',
+      '.wasm': 'application/wasm',
+      '.svg': 'image/svg+xml',
+      '.png': 'image/png'
+    };
+    const srv = http
+      .createServer((q, r) => {
+        let u = decodeURIComponent(q.url.split('?')[0]);
+        if (u === '/') u = '/index.html';
+        const p = path.join(www, u);
+        if (!p.startsWith(www)) return r.writeHead(404).end();
+        fs.readFile(p, (e, b) => {
+          if (e) return r.writeHead(404).end();
+          r.setHeader('content-type', TYPES[path.extname(p)] ?? 'application/octet-stream');
+          r.end(b);
+        });
+      })
+      .listen(0);
+    const browser = await chromium.launch(process.env.PW_CHROMIUM ? {executablePath: process.env.PW_CHROMIUM} : {});
+    try {
+      const ctx = await browser.newContext({viewport: {width: 1180, height: 820}, hasTouch: true});
+      await ctx.addInitScript(capacitorStub);
+      const pg = await ctx.newPage();
+      const errors = [];
+      pg.on('pageerror', (e) => errors.push(e.message));
+      const h = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': '*',
+        'access-control-allow-methods': '*'
+      };
+      await pg.route('https://oauth2.googleapis.com/token', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          headers: h,
+          body: JSON.stringify({refresh_token: 'R', access_token: 'A', expires_in: 3600})
+        })
+      );
+      await pg.route('https://www.googleapis.com/**', async (r) => {
+        const req = r.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return r.fulfill({status: 204, headers: h});
+        if (u.pathname.startsWith('/upload/')) {
+          const boundary = req.headers()['content-type'].split('boundary=')[1];
+          const parts = req.postData().split(`--${boundary}`);
+          const meta = JSON.parse(parts[1].split('\r\n\r\n')[1]);
+          const text = parts[2].split('\r\n\r\n').slice(1).join('\r\n\r\n').replace(/\r\n$/, '');
+          const id = `id${++n}`;
+          files.set(id, {name: meta.name, bytes: Buffer.from(text)});
+          return r.fulfill({status: 200, contentType: 'application/json', headers: h, body: JSON.stringify({id})});
+        }
+        if (u.pathname === '/drive/v3/files') {
+          const list = [...files].map(([id, f]) => ({id, name: f.name, size: String(f.bytes.length)}));
+          return r.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            headers: h,
+            body: JSON.stringify({files: list})
+          });
+        }
+        return r.fulfill({status: 200, headers: h, body: files.get(u.pathname.split('/').pop()).bytes});
+      });
+      await pg.goto(`http://127.0.0.1:${srv.address().port}/`);
+      await pg.click('[data-v="cloud"]');
+      await pg.click('[data-v="login"]');
+      // 初めてのアカウント：合言葉を決める（ドライブには合言葉で包んだ鍵だけを置く）
+      await pg.waitForSelector('[data-v="create"]', {timeout: 30000});
+      await pg.fill('[data-v="pass"]', 'はじめてのあいことば');
+      await pg.fill('[data-v="pass2"]', 'はじめてのあいことば');
+      await pg.click('[data-v="create"]');
+      await pg.waitForSelector('[data-v="open"]', {timeout: 60000});
+      assert.deepEqual(
+        [...files.values()].map((f) => f.name),
+        ['keyring']
+      );
+      // 新しいデータで開く：学期・フォルダを作り、PDF を取り込む
+      await pg.click('[data-v="open"]');
+      await pg.waitForFunction(() => !!window.daigaku && document.body.textContent.includes('自分のフォルダ'), null, {
+        timeout: 60000
+      });
+      const {PDFDocument, StandardFonts} = require('pdf-lib');
+      const doc = await PDFDocument.create();
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      doc.addPage([595, 842]).drawText('iPad only', {x: 56, y: 780, size: 24, font});
+      const pdf = Buffer.from(await doc.save());
+      const made = await pg.evaluate(async (b64) => {
+        const d = window.daigaku;
+        await d['term.save']({
+          term: {label: '秋学期', year: 2026, start_date: '2026-10-01', end_date: '2027-03-31', rounds: 15}
+        });
+        const f = await d['folder.create']({name: '自分の授業', scope: 'always', mode: 'new'});
+        const data = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const up = await d['material.uploadData']({courseId: f.courseId, files: [{name: 'mine.pdf', data}]});
+        const st = await d['state.get']();
+        return {up, id: Object.values(st.materials ?? {}).flat()[0]?.id};
+      }, pdf.toString('base64'));
+      assert.equal(made.up.added, 1);
+      await pg.waitForTimeout(3000); // 残すのは少し待ってから
+      await pg.reload();
+      await pg.waitForFunction(() => !!window.daigaku, null, {timeout: 60000});
+      const opened = await pg.evaluate(
+        async (id) => (await window.daigaku['pdf.open']({materialId: id})).bytes?.length ?? 0,
+        made.id
+      );
+      assert.equal(opened, pdf.length);
+      assert.deepEqual(errors, []);
+    } finally {
+      await browser.close();
+      srv.close();
+    }
+  }
+);

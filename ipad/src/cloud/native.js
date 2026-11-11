@@ -47,6 +47,17 @@ export const http = {
       };
     }
   },
+  /** 中身を送る（ドライブに置く）。戻り：{status, json} */
+  async send(method, url, headers, body) {
+    try {
+      const r = await fetch(url, {method, headers, body});
+      return {status: r.status, json: await r.json().catch(() => null)};
+    } catch (e) {
+      if (!(e instanceof TypeError)) throw e;
+      const r = await native({url, method, headers, data: body});
+      return {status: r.status, json: typeof r.data === 'string' ? JSON.parse(r.data || 'null') : r.data};
+    }
+  },
   async post(url, body) {
     const headers = {'Content-Type': 'application/x-www-form-urlencoded'};
     try {

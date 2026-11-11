@@ -43,7 +43,7 @@ export function confirmDialog(message, {ok = 'OK', cancel = 'やめる', danger 
  */
 export function promptDialog(
   message,
-  {value = '', ok = 'OK', cancel = 'やめる', placeholder = '', maxlength = 60} = {}
+  {value = '', ok = 'OK', cancel = 'やめる', placeholder = '', maxlength = 60, type = 'text'} = {}
 ) {
   return new Promise((resolve) => {
     const d = document.createElement('dialog');
@@ -54,6 +54,7 @@ export function promptDialog(
     input.value = value;
     input.placeholder = placeholder;
     input.maxLength = maxlength;
+    input.type = type; // 'password'：合言葉など（打った文字を見せない）
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.isComposing) {
         e.preventDefault();
