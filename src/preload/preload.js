@@ -114,6 +114,8 @@ const INVOKE = [
   'cloud.push',
   'cloud.wipe',
   'cloud.keyQr',
+  'cloud.setPassphrase',
+  'cloud.unlock',
   'annotation.list'
 ];
 const ON = [

@@ -19,5 +19,13 @@ export function register({handle, ctx}) {
       fingerprint: (await cloud().status()).fingerprint
     };
   });
+  handle('cloud.setPassphrase', async ({passphrase}) => ({
+    ...(await cloud().setPassphrase(passphrase)),
+    status: await cloud().status()
+  }));
+  handle('cloud.unlock', async ({passphrase}) => ({
+    ...(await cloud().unlock(passphrase)),
+    status: await cloud().status()
+  }));
   handle('cloud.wipe', async () => ({...(await cloud().wipe()), status: await cloud().status()}));
 }

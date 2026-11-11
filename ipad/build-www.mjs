@@ -14,7 +14,7 @@ const require = createRequire(path.join(here, '..', 'package.json'));
 cpSync(require.resolve('jsqr/dist/jsQR.js'), path.join(www, 'jsQR.js'));
 // パソコンと同じ部品（暗号化・鍵・Google のクライアント ID）：src/shared の中継を本体に置き換える
 const shared = path.join(here, '..', 'src', 'shared');
-for (const f of ['vault.js', 'vault-keys.js', 'google-client.js'])
+for (const f of ['vault.js', 'vault-keys.js', 'google-client.js', 'keyring.js'])
   cpSync(path.join(shared, f), path.join(www, 'shared', f));
 // 暗号化・ハッシュの部品（@noble）。index.html の importmap で名前から引く
 const pkgDir = (name) => path.join(here, '..', 'node_modules', name); // 名前の出口（exports）に package.json がないので、置き場から引く

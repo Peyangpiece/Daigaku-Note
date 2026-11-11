@@ -2,6 +2,14 @@
 // 1. Google にログインする（パソコンと同じアカウント） 2. パソコンの「iPad に鍵を渡す」の QR を読む 3. ドライブから読み込む
 // 覚えるもの（この iPad のアプリの中）：更新用のトークン・メールアドレス・鍵・鍵の印・最後に読み込んだ結果
 import {fingerprint, readKeyQr} from '../shared/vault-keys.js';
+import {
+  KEYRING,
+  keyringBytes,
+  makeKeyring,
+  openKeyring,
+  passphraseProblem,
+  readKeyringBytes
+} from '../shared/keyring.js';
 import {bindPhoto, photoButton, scan, stopCamera} from '../scanner.js';
 import {codeOf, createDriveReader, exchange, refresh, revoke, startLogin} from './google.js';
 import {pull} from './pull.js';
@@ -56,16 +64,16 @@ export function openCloud(app, back) {
     const step = !s.refreshToken ? 1 : !s.key ? 2 : 3;
     app.innerHTML = `
       <h1>パソコンなしで使う</h1>
-      <p class="s-muted">パソコンが Google ドライブに置いたデータ（暗号化したもの）を、この iPad に読み込みます。パソコンで、設定 → データ の「Google と連携する」を済ませておいてください。</p>
+      <p class="s-muted">Google にログインし、合言葉を入れると使えます。データは暗号化して、あなたの Google ドライブ（このアプリだけの見えない領域）に置きます。パソコンのパレットノートがあれば、同じデータを使えます（パソコンで 設定 → データ の「Google と連携する」と「合言葉を決める」を済ませておきます）。</p>
       ${message ? `<p class="${error ? 's-error' : ''}">${esc(message)}</p>` : ''}
       <ol class="s-steps">
         <li class="${step > 1 ? 's-done' : ''}">Google にログインする（パソコンと同じアカウント）${s.email ? `：<strong>${esc(s.email)}</strong>` : ''}</li>
-        <li class="${step > 2 ? 's-done' : ''}">パソコンの 設定 → データ の「iPad に鍵を渡す」の QR を読む${s.fp ? `：鍵の印 <code>${esc(s.fp)}</code>` : ''}</li>
+        <li class="${step > 2 ? 's-done' : ''}">合言葉を入れる（初めてなら決める）${s.fp ? `：鍵の印 <code>${esc(s.fp)}</code>` : ''}</li>
         <li>ドライブから読み込む${s.last ? `：${esc(when(s.last.at))} に読み込みました（資料 ${s.last.materials} 件）` : ''}</li>
       </ol>
       <div class="s-row" data-v="actions">
         ${step === 1 ? '<button type="button" class="s-btn s-btn--primary" data-v="login">Google にログイン</button>' : ''}
-        ${step === 2 ? `<button type="button" class="s-btn s-btn--primary" data-v="key">鍵の QR を読む</button>${photoButton()}` : ''}
+        ${step === 2 ? keyStep() : ''}
         ${step === 3 && s.last ? '<button type="button" class="s-btn s-btn--primary" data-v="open">ノートを開く</button>' : ''}
         ${step === 3 ? `<button type="button" class="s-btn ${s.last ? '' : 's-btn--primary'}" data-v="pull">ドライブから読み込む</button>` : ''}
         <button type="button" class="s-btn" data-v="back">戻る</button>
@@ -80,11 +88,86 @@ export function openCloud(app, back) {
     on('back', back);
     on('login', doLogin);
     on('key', () => scan(app, keyQr));
-    if (step === 2) bindPhoto(app, keyQr);
+    if (step === 2) {
+      bindPhoto(app, keyQr);
+      if (!remote) probe();
+    }
+    on('unlock', doUnlock);
+    on('create', doCreate);
+    on('recheck', () => {
+      remote = null;
+      render();
+    });
     on('pull', doPull);
     on('open', () => location.assign(LOCAL_APP));
     on('reset', doReset);
   };
+
+  // ---- 合言葉（docs/SYNC.md §9）----
+  let remote = null; // ドライブの様子：{kind: 'checking' | 'ring' | 'pc' | 'empty' | 'error', ring?, message?}
+  const drive = () => createDriveReader({http, getToken});
+  async function probe() {
+    remote = {kind: 'checking'};
+    try {
+      const list = await drive().list();
+      const ring = list.find((f) => f.name === KEYRING);
+      if (ring) remote = {kind: 'ring', ring: readKeyringBytes(await drive().get(ring.id)), id: ring.id};
+      else remote = {kind: list.some((f) => f.name === 'manifest') ? 'pc' : 'empty'};
+    } catch (e) {
+      remote = {kind: 'error', message: e.message};
+    }
+    render();
+  }
+  const qrButtons = () =>
+    `<button type="button" class="s-btn" data-v="key">パソコンの鍵の QR を読む</button>${photoButton()}`;
+  const pass = (v, label) =>
+    `<label class="s-field">${label}<input type="password" class="s-input" data-v="${v}" maxlength="200" autocomplete="off" /></label>`;
+  function keyStep() {
+    const k = remote?.kind;
+    if (!k || k === 'checking') return '<p class="s-muted">ドライブを確かめています…</p>';
+    if (k === 'error')
+      return `<p class="s-error">${esc(remote.message)}</p><button type="button" class="s-btn" data-v="recheck">もう一度確かめる</button>`;
+    if (k === 'ring')
+      return `<div class="s-col">${pass('pass', '合言葉')}<div class="s-row"><button type="button" class="s-btn s-btn--primary" data-v="unlock">鍵を受け取る</button>${qrButtons()}</div></div>`;
+    if (k === 'pc')
+      return `<p>このアカウントのドライブには、パソコンが送ったデータがあります。パソコンの 設定 → データ で「合言葉を決める…」を押してから、もう一度確かめてください（パソコンの「iPad に鍵を渡す」の QR を読んでもかまいません）。</p><div class="s-row"><button type="button" class="s-btn s-btn--primary" data-v="recheck">もう一度確かめる</button>${qrButtons()}</div>`;
+    return `<div class="s-col"><p>このアカウントでは初めてです。合言葉を決めてください（8 文字以上。パソコンを持っていなくても使えます）。<strong>合言葉を忘れると、ドライブのデータは誰にも開けません。</strong>パソコンのパレットノートをあとで使うときも、同じ合言葉を入れます。</p>${pass('pass', '合言葉')}${pass('pass2', 'もう一度')}<div class="s-row"><button type="button" class="s-btn s-btn--primary" data-v="create">合言葉を決める</button></div></div>`;
+  }
+  const passValue = (v) => app.querySelector(`[data-v="${v}"]`)?.value ?? '';
+  const busy = (text) => {
+    for (const b of app.querySelectorAll('button')) b.disabled = true;
+    const p = app.querySelector('[data-v="progress"]');
+    if (p) p.textContent = text;
+  };
+  async function doUnlock() {
+    const p = passValue('pass');
+    if (!p) return render('合言葉を入れてください。', true);
+    busy('合言葉を確かめています…（少しかかります）');
+    try {
+      const master = await openKeyring(remote.ring, p);
+      save({key: toB64(master), fp: fingerprint(master)});
+      render('鍵を受け取りました。');
+    } catch (e) {
+      render(e.message, true);
+    }
+  }
+  async function doCreate() {
+    const p = passValue('pass');
+    const problem = passphraseProblem(p);
+    if (problem) return render(problem, true);
+    if (p !== passValue('pass2')) return render('2 回入れた合言葉が違います。', true);
+    busy('合言葉で鍵を包んでいます…（少しかかります）');
+    try {
+      const master = globalThis.crypto.getRandomValues(new Uint8Array(32));
+      const ring = await makeKeyring(master, p, {device: 'iPad'});
+      await drive().putText(KEYRING, new TextDecoder().decode(keyringBytes(ring)));
+      save({key: toB64(master), fp: fingerprint(master), fresh: true});
+      remote = null;
+      render('合言葉を決めました。');
+    } catch (e) {
+      render(e.message, true);
+    }
+  }
 
   /** 鍵の QR の読み方 */
   const keyQr = {
@@ -111,6 +194,7 @@ export function openCloud(app, back) {
       const r = await exchange(http, {code, verifier});
       access = {accessToken: r.accessToken, expiresAt: r.expiresAt};
       save({refreshToken: r.refreshToken, email: r.email});
+      remote = null;
       render('ログインしました。');
     } catch (e) {
       render(e.message, true);

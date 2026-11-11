@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {openJson, sealBlob, sealJson} from '../../shared/vault.js';
 import {blobName, deriveKeys} from './keys.js';
+import {KEYRING} from '../../shared/keyring.js';
 
 export const MANIFEST = 'manifest';
 export const DB_NAME = 'db';
@@ -156,6 +157,7 @@ export function createPusher({
       const keep = new Set([
         MANIFEST,
         DB_NAME,
+        KEYRING, // 合言葉で包んだ鍵（docs/SYNC.md §9）は消さない
         ...Object.values(mats).map((x) => x.name),
         ...Object.values(files).map((x) => x.name)
       ]);

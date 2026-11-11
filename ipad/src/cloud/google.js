@@ -7,6 +7,7 @@ const AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN = 'https://oauth2.googleapis.com/token';
 const REVOKE = 'https://oauth2.googleapis.com/revoke';
 const DRIVE = 'https://www.googleapis.com/drive/v3';
+const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 
 export const b64url = (b) =>
   btoa(String.fromCharCode(...b))
@@ -104,10 +105,13 @@ export const revoke = (http, token) => http.post(`${REVOKE}?token=${encodeURICom
  * 401 は 1 度だけ取り直して送り直す。429・5xx は少し待って 3 回まで
  */
 export function createDriveReader({http, getToken, sleep = (ms) => new Promise((r) => setTimeout(r, ms))}) {
-  const call = async (url, binary) => {
+  const call = async (url, binary, send = null) => {
     for (let i = 0, fresh = false; ; i++) {
       const token = await getToken(fresh);
-      const r = await http.get(url, {Authorization: `Bearer ${token}`}, binary);
+      const auth = {Authorization: `Bearer ${token}`};
+      const r = send
+        ? await http.send(send.method, url, {...auth, 'Content-Type': send.type}, send.body)
+        : await http.get(url, auth, binary);
       if (r.status === 401 && !fresh) {
         fresh = true;
         continue;
@@ -138,6 +142,16 @@ export function createDriveReader({http, getToken, sleep = (ms) => new Promise((
       } while (page);
       return out;
     },
-    get: (id) => call(`${DRIVE}/files/${id}?alt=media`, true)
+    get: (id) => call(`${DRIVE}/files/${id}?alt=media`, true),
+    /** 文字の中身を置く（合言葉で包んだ鍵など。id があれば入れ替える）。戻り：{id} */
+    putText(name, text, id = null) {
+      const b = `palette${Math.random().toString(36).slice(2)}${Date.now()}`;
+      const meta = JSON.stringify(id ? {} : {name, parents: ['appDataFolder']});
+      const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${text}\r\n--${b}--`;
+      const url = id
+        ? `${UPLOAD}/files/${id}?uploadType=multipart&fields=id`
+        : `${UPLOAD}/files?uploadType=multipart&fields=id`;
+      return call(url, false, {method: id ? 'PATCH' : 'POST', type: `multipart/related; boundary=${b}`, body});
+    }
   };
 }
