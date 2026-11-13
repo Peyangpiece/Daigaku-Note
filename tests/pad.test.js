@@ -198,11 +198,18 @@ test('窓口：書き出し・学年暦・バックアップは、パソコン�
       backupImportData: async (a) => (seen.push(['bi', a]), {ok: true})
     }
   );
-  for (const ch of PAD_EXTRA.filter((c) => !['material.data', 'pdf.markStale', 'pad.touchLog'].includes(c)))
+  for (const ch of PAD_EXTRA.filter(
+    (c) => !['material.data', 'pdf.markStale', 'pad.touchLog', 'backup.importData'].includes(c)
+  ))
     assert.equal((await pad.call({ch, arg: {x: 1}, client: C1, frame: 'frame-top1'})).r.ok, true);
+  // バックアップの読み込み（データベースを丸ごと入れ替える）は、パソコンにつないだ iPad からは受けない
+  assert.match(
+    (await pad.call({ch: 'backup.importData', arg: {x: 1}, client: C1, frame: 'frame-top1'})).r.error,
+    /パソコンの画面で/
+  );
   assert.deepEqual(
     seen.map((s) => s[0]),
-    ['pdf', 'cal', 'bx', 'bi']
+    ['pdf', 'cal', 'bx']
   );
   // パソコンの側がまだ用意できていない
   const {pad: early} = padWith();

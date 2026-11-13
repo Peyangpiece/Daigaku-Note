@@ -366,8 +366,8 @@ test('合言葉：鍵を合言葉で包んでドライブに置き、ほかの�
   };
   const master = newMasterKey();
   const pc = device(master);
-  await assert.rejects(pc.cloud.setPassphrase('short'), /8 文字以上/);
-  await pc.cloud.setPassphrase('ながいあいことば');
+  await assert.rejects(pc.cloud.setPassphrase('short'), /10 文字以上/);
+  await pc.cloud.setPassphrase('ながいあいことばです');
   assert.equal((await pc.cloud.status()).passphrase, true);
   const names = () => [...fake.files.values()].map((f) => f.name);
   assert.ok(names().includes('keyring'));
@@ -379,8 +379,8 @@ test('合言葉：鍵を合言葉で包んでドライブに置き、ほかの�
   // 鍵のない端末：合言葉で開く
   const other = device(null);
   assert.equal((await other.cloud.status()).locked, true);
-  await assert.rejects(other.cloud.unlock('ちがうあいことば'), /合言葉が違います/);
-  await other.cloud.unlock('ながいあいことば');
+  await assert.rejects(other.cloud.unlock('ちがうあいことばです'), /合言葉が違います/);
+  await other.cloud.unlock('ながいあいことばです');
   assert.deepEqual(fromB64(other.store.get('cloud.key')), master);
   assert.equal((await other.cloud.status()).fingerprint, fingerprint(master));
 });

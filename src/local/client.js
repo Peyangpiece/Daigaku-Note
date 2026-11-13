@@ -115,7 +115,14 @@ async function boot() {
   // 画面への知らせ（パソコンと同じ画面の知らせの待ち）
   const hub = createPadHub();
   setPadTap((ch, payload, except) => hub.push(ch, payload, except));
-  const pad = createPadApi({handlers: local_.handlers, ctx: local_.ctx, repo, hub, log: (m) => console.info(m)});
+  const pad = createPadApi({
+    handlers: local_.handlers,
+    ctx: local_.ctx,
+    repo,
+    hub,
+    remote: false, // この iPad の中で動かす（バックアップの読み込みも、この iPad のデータに対して使える）
+    log: (m) => console.info(m)
+  });
   return {pad, local: local_, save, notice, manifest};
 }
 
@@ -131,6 +138,10 @@ const deviceName = () => {
   return `iPad-${id}`;
 };
 const LAST = 'palette.cloud.last'; // 最後に送った結果（設定の画面に出す）
+
+const PC_HELD =
+  'ドライブにはパソコンが送ったデータがあります。上書きしないように、iPad からは送りません。最初の画面の「ドライブから読み込む」で、パソコンのデータを読み込んでから続けてください';
+let warned = false;
 
 function iPadCloud({cloud, db, repo, onPushed}) {
   let access = null;
@@ -181,10 +192,7 @@ function iPadCloud({cloud, db, repo, onPushed}) {
             device: deviceName(),
             origin: 'ipad',
             // パソコンが送ったデータがあるときは、iPad からは送らない（上書きして消さない）
-            allow: (prev) =>
-              prev && prev.origin !== 'ipad'
-                ? 'ドライブにはパソコンが送ったデータがあります。上書きしないように、iPad からは送りません。最初の画面の「ドライブから読み込む」で、パソコンのデータを読み込んでから続けてください'
-                : null
+            allow: (prev) => (prev && prev.origin !== 'ipad' ? PC_HELD : null)
           });
           const r = await pusher.push();
           await onPushed(r.manifest);
@@ -203,7 +211,17 @@ function iPadCloud({cloud, db, repo, onPushed}) {
     later() {
       clearTimeout(timer);
       timer = setTimeout(
-        () => api.push().catch((e) => console.warn('ドライブへ送れませんでした', e.message)),
+        () =>
+          api.push().catch((e) => {
+            console.warn('ドライブへ送れませんでした', e.message);
+            // パソコンのデータがあって送れないまま書き続けると、次に読み込んだときに消える。気づけるよう、開いているあいだに 1 度だけ知らせる
+            if (e.message === PC_HELD && !warned) {
+              warned = true;
+              alert(
+                'この iPad で書いたものを、ドライブへ送れていません（ドライブにパソコンが送ったデータがあるため）。このまま書き続けると、次に「ドライブから読み込む」をしたときに消えます。最初の画面の「ドライブから読み込む」で、パソコンのデータを読み込んでから続けてください。'
+              );
+            }
+          }),
         PUSH_DELAY
       );
     },

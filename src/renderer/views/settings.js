@@ -575,7 +575,10 @@ async function setPassphrase(box) {
     {ok: '決める'}
   );
   if (!ok) return;
-  const p1 = await promptDialog('合言葉（8 文字以上）', {type: 'password', maxlength: 200});
+  const p1 = await promptDialog('合言葉（10 文字以上。長く、ほかで使っていないもの）', {
+    type: 'password',
+    maxlength: 200
+  });
   if (p1 == null) return;
   const p2 = await promptDialog('もう一度入れてください', {type: 'password', maxlength: 200});
   if (p2 == null) return;

@@ -9,7 +9,7 @@ import {fingerprint} from './vault-keys.js';
 
 export const KEYRING = 'keyring'; // ドライブの置き場の名前
 export const KEYRING_VERSION = 1;
-export const PASSPHRASE_MIN = 8;
+export const PASSPHRASE_MIN = 10;
 // scrypt の重さ：N=2^15・r=8（メモリ 32MB）。iPad（第 8 世代）で 1〜2 秒ほど。重くしたら版を上げて、開く側は書いてある条件で計算する
 export const SCRYPT = {N: 2 ** 15, r: 8, p: 1};
 
@@ -22,11 +22,21 @@ const norm = (p) =>
     .trim()
     .normalize('NFKC');
 
+/** よく使われる言葉だけ（数字・記号・空白を除いて見る。password123! も当たる） */
+const COMMON =
+  /^(password|passw0rd|pass|qwerty|qwertyuiop|asdfgh|asdfghjkl|zxcvbn|iloveyou|letmein|welcome|admin|abc|abcdef|abcdefgh|palettenote|daigakunote|パレットノート|大学ノート|あいことば|合言葉|パスワード)$/;
+
 /** 合言葉として使えるか（使えなければ、その理由） */
 export function passphraseProblem(p) {
   const s = norm(p);
   if (s.length < PASSPHRASE_MIN) return `合言葉は ${PASSPHRASE_MIN} 文字以上にしてください`;
   if (s.length > 200) return '合言葉が長すぎます';
+  // 当てられやすい合言葉は決められない（ドライブの「包んだ鍵」を手に入れた人は、合言葉を総当たりで試せる）。
+  // 前に決めた合言葉で開くとき（openKeyring）は、ここを通らない
+  if (/^\d+$/.test(s) && s.length < 16) return '数字だけの合言葉は当てられやすいので、文字も混ぜてください';
+  if (new Set(s.toLowerCase()).size < 5) return '同じ文字の繰り返しは当てられやすいので、ほかの合言葉にしてください';
+  if (COMMON.test(s.toLowerCase().replace(/[\s\d!@#$%^&*._-]+/g, '')))
+    return 'よく使われる言葉だけの合言葉は当てられやすいので、ほかの合言葉にしてください';
   return null;
 }
 
@@ -59,7 +69,9 @@ export async function openKeyring(ring, passphrase, {onProgress} = {}) {
   if (!ring || ring.v !== KEYRING_VERSION || ring.kdf?.name !== 'scrypt')
     throw new Error('合言葉の鍵の形が違います（アプリを新しくしてください）');
   const {N, r, p, salt} = ring.kdf;
-  if (![N, r, p].every((x) => Number.isInteger(x) && x > 0) || N > 2 ** 20) throw new Error('合言葉の鍵の形が違います');
+  // ドライブに置いた条件は、書き換えられているかもしれない。計算が終わらない・メモリを使い切る大きさは受けない
+  if (![N, r, p].every((x) => Number.isInteger(x) && x > 0) || N > 2 ** 20 || r > 32 || p > 4)
+    throw new Error('合言葉の鍵の形が違います');
   const k = await kek(passphrase, unb64(salt), {N, r, p}, onProgress);
   let master;
   try {

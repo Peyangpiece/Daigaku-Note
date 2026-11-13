@@ -112,7 +112,15 @@ export function applyStagedRestore({userData, dbFile, now = () => new Date()}) {
   const staged = path.join(userData, RESTORE_FILE);
   if (!existsSync(staged)) return false;
   const stamp = now().toISOString().replace(/[:.]/g, '-');
-  if (existsSync(dbFile)) renameSync(dbFile, `${dbFile}.before-restore-${stamp}`);
+  // 前のデータベースは、まだ本体に写していない変更（-wal）ごと残す。アプリは開き直すときにデータベースを閉じないので、
+  // 直前の変更は -wal にだけ入っていることがある（-wal を消すと、残した控えから直前の変更が欠ける）。
+  // SQLite は「<名前>-wal」を同じ組として読むので、本体と同じ名前に付け替える
+  const keep = `${dbFile}.before-restore-${stamp}`;
+  if (existsSync(dbFile)) {
+    renameSync(dbFile, keep);
+    for (const suffix of ['-wal', '-shm'])
+      if (existsSync(`${dbFile}${suffix}`)) renameSync(`${dbFile}${suffix}`, `${keep}${suffix}`);
+  }
   for (const suffix of ['-wal', '-shm']) rmSync(`${dbFile}${suffix}`, {force: true});
   renameSync(staged, dbFile);
   return true;

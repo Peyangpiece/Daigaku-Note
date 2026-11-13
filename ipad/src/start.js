@@ -4,7 +4,7 @@
 //   - アプリはパソコンが作った証明書の https を開けないので、QR の hp（http の入口の番号）で http を開く。中身は端末ごとの鍵で暗号化している
 //   - 鍵は開いた先（パソコンのページ）がアプリの中に覚える。ここでは QR の # をそのまま渡す（パソコンのページが鍵を入れ替える）
 // - パソコンなしで使う（Google ドライブ）：cloud/screen.js
-import {fromQr} from './qr.js';
+import {fromQr, lanBase} from './qr.js';
 import {bindPhoto, photoButton, scan, stopCamera} from './scanner.js';
 import {cloudReady, openCloud} from './cloud/screen.js';
 
@@ -16,9 +16,15 @@ const esc = (s) =>
     (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]
   );
 
+/** 覚えてあるパソコンの入口。LAN の番号でないもの（前の版で細工した QR から覚えたものなど）は使わず、忘れる */
 const saved = () => {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? 'null');
+    const s = JSON.parse(localStorage.getItem(KEY) ?? 'null');
+    if (s?.base && !lanBase(s.base)) {
+      localStorage.removeItem(KEY);
+      return null;
+    }
+    return s;
   } catch {
     return null;
   }

@@ -79,6 +79,7 @@ export function openCloud(app, back) {
         <button type="button" class="s-btn" data-v="back">戻る</button>
       </div>
       <p class="s-muted" data-v="progress"></p>
+      ${step === 3 && unsent() ? `<p class="s-error">この iPad で書いたものを、まだドライブへ送れていません：${esc(unsent())}</p>` : ''}
       ${
         step === 3
           ? s.fresh && !s.last
@@ -137,7 +138,7 @@ export function openCloud(app, back) {
       return `<div class="s-col">${pass('pass', '合言葉')}<div class="s-row"><button type="button" class="s-btn s-btn--primary" data-v="unlock">鍵を受け取る</button>${qrButtons()}</div></div>`;
     if (k === 'pc')
       return `<p>このアカウントのドライブには、パソコンが送ったデータがあります。パソコンの 設定 → データ で「合言葉を決める…」を押してから、もう一度確かめてください（パソコンの「iPad に鍵を渡す」の QR を読んでもかまいません）。</p><div class="s-row"><button type="button" class="s-btn s-btn--primary" data-v="recheck">もう一度確かめる</button>${qrButtons()}</div>`;
-    return `<div class="s-col"><p>このアカウントでは初めてです。合言葉を決めてください（8 文字以上。パソコンを持っていなくても使えます）。<strong>合言葉を忘れると、ドライブのデータは誰にも開けません。</strong>パソコンのパレットノートをあとで使うときも、同じ合言葉を入れます。</p>${pass('pass', '合言葉')}${pass('pass2', 'もう一度')}<div class="s-row"><button type="button" class="s-btn s-btn--primary" data-v="create">合言葉を決める</button></div></div>`;
+    return `<div class="s-col"><p>このアカウントでは初めてです。合言葉を決めてください（10 文字以上。長く、ほかで使っていないもの。パソコンを持っていなくても使えます）。<strong>合言葉を忘れると、ドライブのデータは誰にも開けません。</strong>パソコンのパレットノートをあとで使うときも、同じ合言葉を入れます。</p>${pass('pass', '合言葉')}${pass('pass2', 'もう一度')}<div class="s-row"><button type="button" class="s-btn s-btn--primary" data-v="create">合言葉を決める</button></div></div>`;
   }
   const passValue = (v) => app.querySelector(`[data-v="${v}"]`)?.value ?? '';
   const busy = (text) => {
@@ -207,10 +208,28 @@ export function openCloud(app, back) {
     }
   }
 
+  /** ノートの画面（src/local/client.js）が最後にドライブへ送れなかったときの理由。送れていれば・試していなければ null */
+  const unsent = () => {
+    try {
+      const last = JSON.parse(localStorage.getItem('palette.cloud.last') ?? 'null');
+      return last && last.ok === false ? String(last.message ?? '送れませんでした') : null;
+    } catch {
+      return null;
+    }
+  };
+
   async function doPull() {
     const s = load();
     const master = masterOf(s);
     if (!master) return render('鍵がありません。鍵の QR を読んでください。', true);
+    // この iPad で書いたものをドライブへ送れていない（パソコンのデータがあるので止めている）ときは、読み込むと消える。先に確かめる
+    if (
+      unsent() &&
+      !confirm(
+        'この iPad で書いたものの中に、まだドライブへ送れていないものがあります。ドライブから読み込むと、それらはドライブのデータに置き換わって消えます（控えは残りません）。読み込みますか？'
+      )
+    )
+      return;
     for (const b of app.querySelectorAll('[data-v="actions"] button')) b.disabled = true;
     const progress = app.querySelector('[data-v="progress"]');
     progress.textContent = 'ドライブを確かめています…';
@@ -238,7 +257,7 @@ export function openCloud(app, back) {
   async function doReset() {
     if (
       !confirm(
-        'この iPad から Google のログインと鍵、読み込んだデータを外しますか？ パソコンとドライブのデータは消えません。'
+        'この iPad から Google のログインと鍵、読み込んだデータを外しますか？ この iPad で書いて、まだドライブへ送っていないものは消えます。パソコンとドライブのデータは消えません。'
       )
     )
       return;
