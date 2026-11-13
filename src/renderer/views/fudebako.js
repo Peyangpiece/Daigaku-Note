@@ -19,7 +19,7 @@ import {NOTES, cardArt, formatSpec, noteEditor, notesPage} from './notebook-shel
 import {FORMATS, coverArt, cropOf, gapFixed, pageSvg} from '../../shared/notebooks.js';
 import {openNoteTry} from './notebook-try.js';
 import {POUCH_ART} from '../desk-tools.js';
-import {EARN, dayOf, pt} from '../../shared/points.js';
+import {DAILY, EARN, WEEK_DAYS, dayOf, pt, weekOf} from '../../shared/points.js';
 import {
   PAYMENT_METHODS,
   SLOTS,
@@ -700,6 +700,20 @@ function orderPage(s, id) {
     </div>`;
 }
 
+/** もらい方の横に出す、今日の進み（「今日はもらいました」「今日 2 / 6」） */
+function wayToday(kind, p) {
+  const today = dayOf();
+  if (kind === 'login') return p.lastLogin === today ? '・今日はもらいました' : '';
+  if (kind === 'week') {
+    const days = (p.writeDays ?? []).filter((d) => weekOf(d) === weekOf(today)).length;
+    return p.weekPaid === weekOf(today) ? '・今週はもらいました' : `・今週 ${days} / ${WEEK_DAYS} 日`;
+  }
+  const limit = DAILY[kind];
+  if (!limit) return '';
+  const n = p.usedDay === today ? (p.used?.[kind]?.length ?? 0) : 0;
+  return limit === 1 ? (n ? '・今日はもらいました' : '') : `・今日 ${n} / ${limit}`;
+}
+
 /** ポイントのページ：残高・もらい方（準備中のものも並べる）・履歴 */
 function pointsPage() {
   const p = state.data?.points ?? {balance: 0, history: []};
@@ -708,7 +722,7 @@ function pointsPage() {
       ([k, w]) => `<li class="pts-way${w.available ? '' : ' is-soon'}">
         <span class="pts-way__name">${esc(w.label)}</span>
         <span class="pts-way__amount">+${pt(w.amount)}</span>
-        <span class="muted pts-way__note">${esc(w.note)}${k === 'login' && p.lastLogin === dayOf() ? '・今日はもらいました' : ''}</span>
+        <span class="muted pts-way__note">${esc(w.note)}${wayToday(k, p)}</span>
         ${w.available ? '' : '<span class="pts-way__soon">準備中</span>'}
       </li>`
     )

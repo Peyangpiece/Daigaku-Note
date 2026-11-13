@@ -66,10 +66,8 @@ async function claimLoginBonus() {
   const r = await api['points.claimLogin']().catch(() => null);
   if (!r || r.error) return;
   state.data.points = r.points;
-  if (r.gained > 0)
-    toast(`ログインボーナス +${r.gained} pt（いま ${r.points.balance.toLocaleString('ja-JP')} pt）`, {
-      action: {label: 'ポイントを見る', run: () => navigate('/fudebako/points')}
-    });
+  // 知らせは出さない（ノートを開いた瞬間は静かに。v0.26.1）。上のポイントの数だけを新しくする
+  if (r.gained > 0) head();
 }
 
 // 状態を読み直したあと（store.js の reload）：テーマ → 描き直し → ログインボーナス → 着せ替えの知らせ
@@ -124,7 +122,7 @@ function head() {
   chip.hidden = !(route === '/' || route.startsWith('/review') || route.startsWith('/quizzes'));
   chip.innerHTML = `${COIN}<b>${balance.toLocaleString('ja-JP')}</b> pt`;
   chip.setAttribute('aria-label', `ポイント（${pt(balance)}）。押すと、もらい方と履歴を見られます`);
-  chip.title = 'ポイント：復習のクイズに正解したり、毎日開いたりするとたまります。持ち物のショップで使えます';
+  chip.title = 'ポイント：書き込む・資料を読む・復習するとたまります。持ち物のショップで使えます';
 }
 // 上の固定ボタンの実際の幅を、上余白の右の空き（--topnav-w）にする。文字の大きさ・数の札で幅が変わっても重ならない
 // 窓が狭くてアプリ名・ポイントと 1 行に収まらないときは、上のボタンをアプリ名の下の段に下ろす（head-stacked。v0.17.5）
