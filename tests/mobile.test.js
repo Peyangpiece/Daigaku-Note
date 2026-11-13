@@ -317,7 +317,7 @@ async function startServer({slow = null} = {}) {
     const body = new Uint8Array(await res.arrayBuffer());
     return {status: res.status, body};
   };
-  return {server, devices, base, post};
+  return {server, devices, base, post, port: Number(new URL(base).port)};
 }
 
 test('サーバー：QR の鍵であいさつ → 新しい鍵。古い鍵はもう通らない。知らない端末は 403', async () => {
@@ -434,6 +434,22 @@ test('サーバー：大きすぎる本文は読まずに 413。知らない端�
     // 長さを言わない（chunked）・短すぎる
     assert.equal((await rawPost(port, {length: null, chunk: Buffer.from('abc'), end: true})).status, 400);
     assert.equal((await rawPost(port, {length: 10, chunk: Buffer.from('0123456789'), end: true})).status, 400);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('サーバー：鍵のない人が、本文を送らない接続を並べても、つないだ端末の要求は受ける', async () => {
+  const {server, devices, post, port} = await startServer();
+  try {
+    const {id, key} = await devices.create();
+    const hi = await post(id, key, {ch: 'hello', t: Date.now()});
+    const fresh = open(key, hi.body).value.key;
+    // 大きさだけ名乗って、端末の番号（先頭 26 バイト）を送り切らない接続を 8 本
+    for (let i = 0; i < 8; i++) rawPost(port, {length: 1000, chunk: Buffer.from('x')});
+    await new Promise((r) => setTimeout(r, 200));
+    const r = await post(id, fresh, {ch: 'echo', arg: {a: 1}, t: Date.now()});
+    assert.equal(r.status, 200);
   } finally {
     await server.stop();
   }

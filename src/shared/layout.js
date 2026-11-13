@@ -24,10 +24,11 @@ export function layoutBase(name) {
 }
 
 /** 同じ資料の形式違いがあるときは 1up（印なしを含む）だけを残す。1up がない組はそのまま */
-export function preferLayout(entries, nameOf = (e) => e.name) {
+export function preferLayout(entries, nameOf = (e) => e.name, groupOf = () => '') {
   const groups = new Map();
   for (const e of entries) {
-    const k = layoutBase(nameOf(e));
+    // groupOf：比べる範囲（回）。別の回にある同じ名前の 1up を理由に、この回の資料を落とさない
+    const k = `${groupOf(e)}\u0000${layoutBase(nameOf(e))}`;
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(e);
   }

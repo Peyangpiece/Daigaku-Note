@@ -19,7 +19,8 @@ const PAD_BODY_MAX = 128 * 1024 * 1024; // パソコンと同じ画面の iPad�
 const POLL_MAX = 8; // 知らせを待っている要求（iPad の画面ごとに 1 つ）。窓口の同時の数（INFLIGHT_MAX）には数えない
 const HEAD = 26; // 本文の頭：端末の番号（ULID）
 const PENDING_MAX = 4096; // QR を読んだだけの端末のあいさつの大きさの上限
-const INFLIGHT_MAX = 4; // 同時に受ける窓口の要求
+const INFLIGHT_MAX = 4; // 同時に受ける窓口の要求（端末を確かめたものだけ数える）
+const HEAD_TIMEOUT_MS = 10_000; // 先頭（端末の番号）を待つ時間。過ぎたら切る
 const CONNECTIONS_MAX = 32; // 同時につなげる数（画面のファイルも含む）
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'); // src
 const require = createRequire(import.meta.url);
@@ -227,27 +228,38 @@ export function createMobileServer({
     const len = Number(req.headers['content-length']);
     if (!Number.isSafeInteger(len) || len < HEAD + 40) return refuse(req, res, 400, 'bad request');
     if (len > PAD_BODY_MAX) return refuse(req, res, 413, 'too large');
-    if (inflight >= INFLIGHT_MAX) return refuse(req, res, 503, 'busy');
-    inflight++;
-    let held = true;
+    let held = false;
+    // 同時の数に入れるのは、端末を確かめたあと（鍵のない人が、本文を送らない接続を並べて窓口をふさげないように）
+    const hold = () => {
+      if (inflight >= INFLIGHT_MAX) return false;
+      inflight++;
+      held = true;
+      return true;
+    };
     // 知らせを待つ要求（pad.poll）は長く居座るので、窓口の同時の数から外す
     const release = () => {
       if (held) inflight--;
       held = false;
     };
+    // 先頭（端末の番号）をいつまでも送ってこない接続は切る
+    const slow = setTimeout(() => req.destroy(), HEAD_TIMEOUT_MS);
+    slow.unref?.();
     try {
-      await api1(req, res, len, release);
+      await api1(req, res, len, release, hold, () => clearTimeout(slow));
     } finally {
+      clearTimeout(slow);
       release();
     }
   }
 
-  async function api1(req, res, len, release = () => {}) {
+  async function api1(req, res, len, release = () => {}, hold = () => true, gotHead = () => {}) {
     const head = await readHead(req, HEAD);
+    gotHead();
     if (!head) return refuse(req, res, 400, 'bad request');
     const deviceId = head.subarray(0, HEAD).toString('ascii');
     const key = await devices.keyOf(deviceId);
     if (!key) return refuse(req, res, 403, 'unknown device'); // スマホは「つなぎ直してください」を出す
+    if (!hold()) return refuse(req, res, 503, 'busy');
     if (len > BODY_MAX && !devices.isFull?.(deviceId)) return refuse(req, res, 413, 'too large');
     // QR を読んだだけの端末が送れるのはあいさつ（小さい）だけ
     if (devices.isPending(deviceId) && len > PENDING_MAX) return refuse(req, res, 413, 'too large');

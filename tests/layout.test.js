@@ -34,3 +34,19 @@ test('1up があれば 1up だけ残し、なければ全部残す', () => {
     ['第3回 資料.pdf', '練習問題 4up.pdf', '練習問題 2up.pdf', '別の資料.pdf']
   );
 });
+
+test('preferLayout：比べるのは同じ回の中だけ（別の回の 1up を理由に、この回の資料を落とさない）', () => {
+  const files = [
+    {name: 'スライド.pdf', round: 1},
+    {name: 'スライド 4up.pdf', round: 1},
+    {name: 'スライド 4up.pdf', round: 2}
+  ];
+  assert.deepEqual(
+    preferLayout(
+      files,
+      (f) => f.name,
+      (f) => f.round
+    ).map((f) => `${f.round}:${f.name}`),
+    ['1:スライド.pdf', '2:スライド 4up.pdf']
+  );
+});

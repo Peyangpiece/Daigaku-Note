@@ -3,6 +3,15 @@ import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 import {str, id, httpsUrl, bad} from './common.js';
 import {noteAutoLogin, clearAutoLoginStrikes} from '../login-strikes.js';
 
+/** 2 つの URL が同じホスト（番号も含む）か。読めない URL は違うものとして扱う */
+export function sameHost(a, b) {
+  try {
+    return new URL(a).host === new URL(b).host;
+  } catch {
+    return false;
+  }
+}
+
 export function register({handle, ctx, repo, registry, secrets, log}) {
   handle('setup.detect', async ({url}) => {
     const u = httpsUrl(url) ?? bad('URL は https:// で始まる形で入れてください');
@@ -119,8 +128,11 @@ export function register({handle, ctx, repo, registry, secrets, log}) {
             isLoggedIn: () => false,
             capture: {
               urlPattern: /\/admin\/tool\/mobile\/launch\.php/,
-              extract: ({headers, body}) =>
-                connector.parseLaunchToken(headers?.location ?? '') ?? connector.parseLaunchToken(body)
+              // トークンは、つないだ LMS のホストの launch.php からだけ受け取る（窓の中でほかのサイトへ誘導されても、そのトークンは使わない）
+              extract: ({headers, body, url}) =>
+                sameHost(url, connector.launchUrl(c, passport))
+                  ? (connector.parseLaunchToken(headers?.location ?? '') ?? connector.parseLaunchToken(body))
+                  : null
             }
           });
           await connector.login(c, 'visible', {tokenFromBrowser: captured});

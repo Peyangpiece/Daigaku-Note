@@ -144,7 +144,7 @@ main {
 .btn:focus-visible,
 summary:focus-visible,
 a:focus-visible {
-  outline: 3px solid var(--c4);
+  outline: 3px solid var(--paper-ink); /* 枠は背景との差 3:1 以上（水色は紙の上で 2:1 しかなかった） */
   outline-offset: 2px;
 }
 

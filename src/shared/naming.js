@@ -53,13 +53,21 @@ export function roundFolderName(number, title, existing = []) {
   return uniqueName(base, (candidate) => existing.includes(candidate));
 }
 
+/** ファイル名の長さの上限（UTF-8 のバイト数）。255 から、番号「 (9999)」を足す分を引いた */
+export const NAME_BYTES = 240;
+const utf8Bytes = (s) => new TextEncoder().encode(s).length;
+
 /** ファイル名：拡張子を保ち、幹を整える */
 export function sanitizeFileName(name) {
   const raw = String(name ?? '').replace(/^.*[\\/]/, '');
   const m = raw.match(/^(.*?)(\.[A-Za-z0-9]{1,8})?$/);
-  const stem = sanitizeSegment(m?.[1] ?? raw, {max: 150}) || 'file';
-  const ext = (m?.[2] ?? '').toLowerCase() === m?.[2] ? (m?.[2] ?? '') : (m?.[2] ?? '');
-  return stem + ext;
+  const ext = m?.[2] ?? '';
+  // 1 つの名前は、Mac・Linux では UTF-8 で 255 バイトまで（Windows は 255 文字）。日本語は 1 文字 3 バイトなので、文字数だけで切ると 85 文字ほどで超える。
+  // 「 (2)」などを足す分を残して、バイト数でも切る（文字の途中では切らない）
+  let stem = sanitizeSegment(m?.[1] ?? raw, {max: 150}) || 'file';
+  const room = NAME_BYTES - utf8Bytes(ext);
+  while (utf8Bytes(stem) > room) stem = [...stem].slice(0, -1).join('');
+  return (stem.replace(/[. ]+$/, '') || 'file') + ext;
 }
 
 /** 同名があれば「名前 (2).ext」の形で番号を足す。taken(candidate) が true の間は番号を増やす */

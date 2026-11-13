@@ -1,10 +1,10 @@
 // IPC の窓口：アプリとバックアップ（app.*・backup.*）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
 import {dialog, shell, app} from 'electron';
-import {promises as fsp} from 'node:fs';
+import {promises as fsp, writeFileSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {todayJst} from '../../shared/schedule.js';
-import {exportBackup, stageRestore} from '../backup.js';
+import {exportBackup, stageRestore, RESTORE_FROM_FILE} from '../backup.js';
 import {latestVersion} from '../db/db.js';
 
 export function register({handle, ctx, log}) {
@@ -42,6 +42,7 @@ export function register({handle, ctx, log}) {
       open: (f) => new DatabaseSync(f, {readOnly: true}),
       maxVersion: latestVersion()
     });
+    writeFileSync(path.join(app.getPath('userData'), RESTORE_FROM_FILE), '');
     log.info(`バックアップの読み込みを予約しました: ${label}（版 ${staged.version}）。次の起動で入れ替えます`);
     return {ok: true, version: staged.version};
   };

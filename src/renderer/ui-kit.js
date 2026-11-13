@@ -94,6 +94,7 @@ export function toast(message, {error = false, action = null, detail = '', until
   // 同じ知らせが重ならないように、前の同じ文の知らせは消してから出す（ログインの必要などが続けて来たとき 3 つ並んでいた）
   for (const old of box.querySelectorAll('.toast'))
     if (old.querySelector('.toast__text')?.textContent === message) old.remove();
+  let timer = null; // 自動で消すまでの待ち
   const el = document.createElement('div');
   el.className = `toast${error ? ' toast--error' : ''}`;
   if (untilNavigate) el.dataset.untilNavigate = '1';
@@ -139,7 +140,19 @@ export function toast(message, {error = false, action = null, detail = '', until
   if (detail) el.append(el.querySelector('.toast__detail')); // 本文は × より後ろ（2 段目いっぱい）に置く
   box.append(el);
   while (box.children.length > 3) box.firstElementChild.remove();
-  const timer = setTimeout(() => el.remove(), error || action || detail ? 8000 : 4000);
+  const life = error || action || detail ? 8000 : 4000;
+  timer = setTimeout(() => el.remove(), life);
+  // 読んでいる・押そうとしている間（マウスを乗せた・キーボードで入った）は消さない。離れたら数え直す
+  const hold = () => clearTimeout(timer);
+  const resume = () => {
+    clearTimeout(timer);
+    if (el.querySelector('.toast__detail:not([hidden])')) return; // くわしくを開いたままなら消さない
+    timer = setTimeout(() => el.remove(), life);
+  };
+  el.addEventListener('mouseenter', hold);
+  el.addEventListener('focusin', hold);
+  el.addEventListener('mouseleave', resume);
+  el.addEventListener('focusout', resume);
 }
 /** 画面を移ったときに、untilNavigate の知らせを消す */
 export function dismissNavigateToasts() {

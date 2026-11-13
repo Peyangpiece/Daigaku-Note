@@ -170,7 +170,7 @@ export function createImporter({
   async function put({file, name, from}, courseId, roundId, sub = '') {
     const place = placeOf(courseId, roundId, sub);
     const data = await fsp.readFile(file);
-    const r = await files.addOwn({...place, name, data});
+    const r = await files.addOwn({...place, name, data, quarantine: true});
     if (from === 'folder') await fsp.rm(file, {force: true}).catch(() => {});
     // 自分のフォルダ：中のフォルダ（第3回など）を付箋として出すため読み直す
     if (place.course.kind === 'folder') await folders.scan?.(courseId).catch(() => {});

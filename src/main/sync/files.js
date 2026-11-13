@@ -238,17 +238,24 @@ export class FileManager {
    * 自分のファイルを授業に入れる（授業画面の「ファイルを追加」・ドラッグ）。元のファイルは残してコピーする。
    * round が null なら「自分の付箋」に置く。戻り: {result: 'saved'|'dup', material}
    */
-  async addOwn({term, course, round = null, name, data, source = 'upload'}) {
+  async addOwn({term, course, round = null, name, data, source = 'upload', quarantine = false}) {
     const body = Buffer.isBuffer(data) ? data : Buffer.from(data);
     const h = sha256(body);
     const same = this.repo.findMaterialByHash(course.id, h);
-    if (same && same.status !== 'trashed') return {result: 'dup', material: same};
-    if (same) this.repo.remove('material', same.id); // 前にゴミ箱へ入れたもの：記録を消して入れ直す
+    // 記録はあるがファイルがない（見つからない・ゴミ箱へ入れた）ものは、複製ではない：記録を消して入れ直す。
+    // （「もうあります」と答えると、消してしまった資料を入れ直そうとしても戻らず、取り込みフォルダの元のファイルだけが消える）
+    const gone = same && (same.status === 'trashed' || same.status === 'missing');
+    if (same && !gone) return {result: 'dup', material: same};
+    if (same) this.repo.remove('material', same.id);
     const dir = this.placeDir(term, course, round);
     await fsp.mkdir(dir, {recursive: true});
     const clean = sanitizeFileName(name);
     const {path: file, existed} = await this.uniquePath(dir, clean, h);
-    if (!existed) await this.writeAtomic(file, body);
+    if (!existed) {
+      await this.writeAtomic(file, body);
+      // ダウンロードフォルダなどから取り込んだもの：ブラウザが付けた「インターネットから来た」印は写しに付かないので、付け直す
+      if (quarantine) await this.quarantine(file).catch(() => {});
+    }
     const material = this.repo.createMaterial({
       course_id: course.id,
       round_id: round?.id ?? null,

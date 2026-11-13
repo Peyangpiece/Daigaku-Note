@@ -15,6 +15,8 @@ files:
   # 正式に公開する前に、許しを得られなければ '!src/renderer/assets/stationery/<名前>.glb' で除く（stationery.js の MAKER_ITEMS_LISTED）
   # three.js（文房具の 3D モデル）は本体の ESM だけ（addons は src/renderer/vendor/three-addons に写してある。
   # node_modules の examples は electron-builder が自動で外すため）
+  # 配布物に要らないもの：ソースマップ（pdfjs-dist だけで約 19MB）
+  - '!node_modules/**/*.map'
   - '!node_modules/three/src/**'
   - '!node_modules/three/build/three.{cjs,module.min.js,webgpu.js,webgpu.min.js,webgpu.nodes.js,webgpu.nodes.min.js}'
 asarUnpack:
