@@ -5,7 +5,14 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
-import {FileManager, OWN_FOLDER, filenameFromDisposition, filenameFromUrl, sha256} from '../src/main/sync/files.js';
+import {
+  FileManager,
+  OWN_FOLDER,
+  REFETCH,
+  filenameFromDisposition,
+  filenameFromUrl,
+  sha256
+} from '../src/main/sync/files.js';
 
 async function setup(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'dn-files-'));
@@ -476,4 +483,42 @@ test('保存先を変えたあとの付け替え：上書き保存した資料�
   assert.equal(m.sha256, sha256(orig), '記録の中身が新しい場所のファイルと合う（次の上書き保存が衝突にならない）');
   assert.equal(m.base_sha256, null);
   assert.deepEqual(await readFile(m.path), orig);
+});
+
+test('取り直し：見つからなくなった LMS の資料は、取り直すと決めたものだけ、もう一度取って置き直す', async (t) => {
+  const {repo, term, course, r2, files} = await setup(t);
+  const table = {
+    'https://lms/file/a': {body: 'AAA'},
+    'https://lms/file/b': {body: 'BBB'}
+  };
+  const ingest = (url, name) =>
+    files.ingest({term, course, round: r2, fileRef: {url, name}, fetchFile: fetchOf(table)});
+  const a = (await ingest('https://lms/file/a', 'a.pdf')).material;
+  const b = (await ingest('https://lms/file/b', 'b.pdf')).material;
+  // 本人が Finder で 2 つとも消した（見つからない印が付く）
+  await unlink(a.path);
+  await unlink(b.path);
+  repo.updateMaterial(a.id, {status: 'missing'});
+  repo.updateMaterial(b.id, {status: 'missing'});
+  // 何も決めていなければ、同期しても取り直さない（わざと消したものを勝手に戻さない）
+  assert.equal((await ingest('https://lms/file/a', 'a.pdf')).result, 'skip');
+  // a だけ取り直すと決めた
+  repo.setSetting(REFETCH, [a.id]);
+  const back = await ingest('https://lms/file/a', 'a.pdf');
+  assert.equal(back.result, 'saved');
+  assert.equal(back.material.id, a.id, '同じ記録のまま（書き込みは中身に結び付いているので、そのまま戻る）');
+  assert.equal(back.material.status, 'ok');
+  assert.equal(await readFile(back.material.path, 'utf8'), 'AAA');
+  assert.equal(path.basename(back.material.path), 'a.pdf', '版の番号は付けない');
+  assert.deepEqual(repo.getSetting(REFETCH), [], '取り直したら印を外す');
+  assert.equal((await ingest('https://lms/file/b', 'b.pdf')).result, 'skip', 'b はそのまま');
+  // LMS で中身が変わっていた資料を取り直す：新しい中身で入れ直し、古い記録は消す
+  table['https://lms/file/b'] = {body: 'BBB-2'};
+  repo.setSetting(REFETCH, [b.id]);
+  const b2 = await ingest('https://lms/file/b', 'b.pdf');
+  assert.equal(b2.result, 'saved');
+  assert.equal(await readFile(b2.material.path, 'utf8'), 'BBB-2');
+  assert.equal(repo.get('material', b.id), null);
+  assert.deepEqual(repo.getSetting(REFETCH), []);
+  assert.equal(repo.listMaterials(course.id).filter((m) => m.status === 'missing').length, 0);
 });

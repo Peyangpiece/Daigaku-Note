@@ -43,6 +43,7 @@ import {methods as notesMethods} from './viewer/notes.js';
 import {methods as exportMethods} from './viewer/export.js';
 import {methods as keysMethods} from './viewer/keys.js';
 import {methods as findMethods} from './viewer/find.js';
+import {methods as memorizeMethods} from './viewer/memorize.js';
 import {methods as splitMethods} from './viewer/split.js';
 import {
   api,
@@ -92,11 +93,13 @@ import {
 /** pdf.js が要る補助データ（CMap など）をメインから受け取る。file:// を直接読まない */
 
 class Viewer extends DeskTools {
-  constructor(root, {materialId, course, onBack}) {
+  constructor(root, {materialId, course, onBack, page = 0, find = '', backLabel = ''}) {
     super(root);
     this.materialId = materialId;
     this.course = course;
     this.onBack = onBack;
+    this.backLabel = backLabel;
+    this.openAt = {page, find}; // さがす画面から開いたとき：このページへ行き、この言葉に印を付ける
     this.tool = 'select';
     this.zoom = 1;
     this.pages = [];
@@ -292,6 +295,7 @@ class Viewer extends DeskTools {
       if (a.page >= 1 && a.page <= this.pages.length) this.addAnno({...a, key: `k${this.seq++}`});
     this.mountAddPage();
     this.restoreSpot(); // 並べる・並べるのをやめるなどで開き直したとき：見ていた場所から
+    this.openAtSpot();
     this.renderBookmarks();
     // 前の版のしおりは付箋に移す（v0.12.2）
     const old = (r.bookmarks ?? []).filter((b) => b.page >= 1 && b.page <= this.pages.length);
@@ -387,6 +391,7 @@ const MIXINS = [
   exportMethods,
   keysMethods,
   findMethods,
+  memorizeMethods,
   notebookMethods,
   splitMethods
 ];

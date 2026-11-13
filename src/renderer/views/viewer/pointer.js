@@ -44,6 +44,15 @@ const DOT_BIG = 83; // 点を書いた触れの大きさがこれ以上なら、
 
 export const methods = {
   onPointerDown(e) {
+    // 暗記モード：書き込みはしない。いまのマーカーを押すと、答えを見る・隠す
+    if (this.anki) {
+      const cur = this.ankiCurrent();
+      if (cur && e.target.closest?.('.anno-mask') === cur.el) {
+        e.preventDefault();
+        this.ankiToggle();
+      }
+      if (e.pointerType !== 'touch') return; // 指のスクロール・ピンチはそのまま
+    }
     this.inputAt = performance.now(); // ファイルへの上書き保存は、手を止めてから（export.js）
     this.stopGlide(); // 指で流したスクロールは、触れたら止める
     if (e.pointerType === 'pen') {

@@ -125,6 +125,17 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
     return {annotations: repo.listAnnotations(annoKey(m)).map(annotationToClient)};
   });
 
+  // 暗記モードの記録（覚えた・まだ）。ファイルの中身は変わらないので、上書き保存もほかの画面への知らせもしない
+  handle('annotation.memorize', ({materialId, marks}) => {
+    if (trial.isTrial(materialId)) return {ok: true};
+    const m = pdfMaterial(materialId);
+    for (const x of Array.isArray(marks) ? marks.slice(0, 500) : []) {
+      const aid = id(x?.id);
+      if (aid) repo.setMemorized(annoKey(m), aid, typeof x.memorized === 'boolean' ? x.memorized : null);
+    }
+    return {ok: true};
+  });
+
   handle('annotation.remove', ({materialId, annotationId}, e) => {
     if (trial.isTrial(materialId)) return (trial.removeTrialAnnotation(annotationId), {ok: true});
     const m = pdfMaterial(materialId);

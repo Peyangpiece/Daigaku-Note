@@ -133,7 +133,7 @@ function syncBox(data, progress, syncing) {
         .join('')}</ul></details>`
     : '';
   return `<div class="home-sync">
-      <span class="muted home-sync__status" id="sync-status" role="status">${esc(status)}</span>${fail}
+      <span class="muted home-sync__status" id="sync-status" role="status">${esc(status)}</span>${fail}${last && !progress ? '<button type="button" class="link home-sync__log" data-action="nav" data-route="/settings?tab=lms&amp;show=history">記録</button>' : ''}
       <button class="btn btn--small" data-action="sync" ${syncing ? 'disabled' : ''}>${syncing ? '同期中…' : '同期'}</button>
     </div>`;
 }
@@ -224,6 +224,11 @@ export function renderHome({data, progress}) {
   // 自分のフォルダ：マイフォルダと今学期のフォルダ。前の学期のフォルダは畳んで下に。
   // 足すのは並びの最後の「＋ フォルダを追加」のカードから（作る・パソコンのフォルダを登録を選ぶ）
   const mine = data.courses.filter((c) => c.kind === 'folder' && !c.hidden);
+  // まだ何もない（フォルダも授業もない）：最初の一歩を言葉で案内する
+  const starter =
+    !mine.length && !all.length
+      ? '<p class="home-start">まず「＋ フォルダを追加」でフォルダを作り、開いた画面に PDF をドラッグすると入ります。PDF に書き込んだり、資料からクイズを作ったりできます。</p>'
+      : '';
   const shown = applyOrder(
     mine.filter((c) => folderShown(c, data.currentTermId)),
     (c) => c.id,
@@ -233,6 +238,7 @@ export function renderHome({data, progress}) {
   const addCard = `<button type="button" class="folder folder--add" data-action="folder-add" aria-haspopup="menu"><span class="folder__add-plus" aria-hidden="true">＋</span><span class="folder__name">フォルダを追加</span></button>`;
   const myFolders = `<section class="my-folders" aria-labelledby="my-folders-title">
       <h2 class="home-sec" id="my-folders-title">自分のフォルダ</h2>
+      ${starter}
       <div class="folders" data-sort-scope="home:folders">${shown.map((c) => folderCard(c, {data})).join('')}${addCard}</div>
       ${past.length ? `<details class="my-folders__past" id="my-folders-past"><summary>前の学期のフォルダ ${past.length}</summary><div class="folders">${past.map((c) => folderCard(c, {data})).join('')}</div></details>` : ''}
     </section>`;
@@ -266,8 +272,9 @@ export function renderHome({data, progress}) {
     !(data.settings.calendarDismissed ?? []).includes(term.id)
       ? `<p class="home-tip"><span class="muted">学年暦を入れると、休講日と振替授業日が予定に反映されます。</span><span class="home-tip__acts"><button class="btn btn--small" data-action="nav" data-route="/settings/term?calendar=1">入れる</button><button class="btn btn--small btn--quiet" data-action="calendar-dismiss" data-term-id="${esc(term.id)}">今学期は入れない</button></span></p>`
       : '';
-  // 使い方に合わせた並び：LMS を使わない人・社会人は自分のフォルダを先に
-  const foldersFirst = features(data.settings).foldersFirst;
+  // 使い方に合わせた並び：LMS を使わない人・社会人は自分のフォルダを先に。LMS をまだつないでいない人も、
+  // まず自分のフォルダから始められるように先に出す（LMS とつなぐ案内は、その下に小さく）
+  const foldersFirst = features(data.settings).foldersFirst || !hasLms;
   const syncing = !!progress || (data.jobs ?? []).some((j) => j.kind === 'sync');
   // 上の行：今日の授業（なければ次の授業）と、同期
   const top =
@@ -279,13 +286,19 @@ export function renderHome({data, progress}) {
     : hasLms
       ? `<div class="empty"><p>まだ授業がありません</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
       : features(data.settings).lms
-        ? `<div class="empty"><p>manabo とつなぐと、授業の資料が自動で集まり、ここに授業のフォルダが貼られます。</p><button class="btn btn--primary" data-action="nav" data-route="/settings/lms">manabo とつなぐ</button></div>`
+        ? `<p class="home-tip home-lms-tip"><span class="muted">manabo とつなぐと、授業の資料が自動で集まり、授業のフォルダが貼られます（つながなくても使えます）。</span><span class="home-tip__acts"><button class="btn btn--small" data-action="nav" data-route="/settings/lms">manabo とつなぐ</button></span></p>`
         : ''; /* manabo を使わない人には授業の段を出さない（自分のフォルダだけ。授業資料はダウンロードから取り込む） */
+  // さがす：資料が 1 つでもあれば出す（資料の名前・本文・書き込み・回のメモを、授業をまたいで探す。views/search.js）
+  const anyMaterial = Object.values(data.materials ?? {}).some((list) => list.length);
+  const searchBar = anyMaterial
+    ? `<form class="home-search" role="search" data-search-form="home"><input class="input home-search__input" type="search" name="q" maxlength="200" autocomplete="off" placeholder="資料をさがす（名前・本文・書き込み）" aria-label="資料をさがす"><button type="submit" class="btn btn--small">さがす</button></form>`
+    : '';
   return `
     ${stickerLayer(skinOf(data).stickers, 'home', data)}
     <div class="home${attention.length ? ' home--attention' : ''}">
       ${attention.length ? `<aside class="sticky attention" style="--sticky-color: var(--c2)" aria-labelledby="attention-title"><strong id="attention-title">要確認</strong><ul>${attention.join('')}</ul></aside>` : ''}
       <div class="home__main">
+      ${searchBar}
       ${top}
       ${importsPanel(data)}
       ${reviewEntry(data)}

@@ -1,6 +1,7 @@
 // 表ごとの読み書き（DESIGN-M0 §5）。SQL はこのファイルの外に出さない。列名は表ごとの一覧で縛る。
 import {ulid} from '../../shared/ids.js';
 import {normalizeTemplate} from '../../shared/skin.js';
+import {normText} from '../../shared/search.js';
 
 /** 行を列の値ごとにまとめる（{値: [行…]}） */
 function groupBy(rows, key) {
@@ -220,9 +221,12 @@ export class Repo {
     return this.db.prepare('SELECT page, text FROM material_text WHERE sha256 = ? ORDER BY page').all(sha256);
   }
   saveMaterialText(sha256, method, pages) {
-    const st = this.db.prepare('INSERT OR REPLACE INTO material_text (sha256, page, text, method) VALUES (?, ?, ?, ?)');
+    // norm：探すときに比べる形（shared/search.js。資料をまたぐ検索で LIKE に使う）
+    const st = this.db.prepare(
+      'INSERT OR REPLACE INTO material_text (sha256, page, text, method, norm) VALUES (?, ?, ?, ?, ?)'
+    );
     this.transaction(() => {
-      for (const p of pages) st.run(sha256, p.page, p.text, method);
+      for (const p of pages) st.run(sha256, p.page, p.text, method, normText(p.text));
     });
   }
   roundNote(roundId) {
@@ -625,6 +629,12 @@ export class Repo {
     this.update('annotation', id, {...row, updated_at: t});
     return this.get('annotation', id);
   }
+  /** 暗記モードの記録（覚えた 1・まだ 0・なし null）。中身は変えないので updated_at は進めない */
+  setMemorized(sha256, id, value) {
+    this.db
+      .prepare('UPDATE annotation SET memorized = ? WHERE id = ? AND sha256 = ?')
+      .run(value == null ? null : value ? 1 : 0, id, sha256);
+  }
   removeAnnotation(sha256, id) {
     this.db.prepare('DELETE FROM annotation WHERE id = ? AND sha256 = ?').run(id, sha256);
   }
@@ -701,6 +711,34 @@ export class Repo {
       )
       .all(runId, max)
       .map((r) => ({...r}));
+  }
+  /**
+   * 最近の同期（終わったもの）。それぞれ、そのあいだに入った資料（LMS・お知らせから。50 件まで）と、失敗・知らせ（30 件まで）を付ける
+   */
+  syncHistory(limit = 10) {
+    const runs = this.db
+      .prepare('SELECT * FROM sync_run WHERE finished_at IS NOT NULL ORDER BY started_at DESC LIMIT ?')
+      .all(limit);
+    const saved = this.db.prepare(
+      `SELECT m.name, c.name AS course, r.number AS round FROM material m
+       JOIN course c ON c.id = m.course_id LEFT JOIN round r ON r.id = m.round_id
+       WHERE m.source IN ('lms', 'notice') AND m.downloaded_at >= ? AND m.downloaded_at <= ?
+       ORDER BY m.downloaded_at LIMIT 50`
+    );
+    const events = this.db.prepare(
+      `SELECT e.level, e.message, c.name AS course FROM sync_event e LEFT JOIN course c ON c.id = e.course_id
+       WHERE e.run_id = ? AND e.level IN ('error', 'warn') ORDER BY e.at LIMIT 30`
+    );
+    return runs.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      started_at: r.started_at,
+      finished_at: r.finished_at,
+      materials: r.materials ?? 0,
+      failures: r.failures ?? 0,
+      saved: saved.all(r.started_at, r.finished_at).map((x) => ({...x})),
+      events: events.all(r.id).map((x) => ({...x}))
+    }));
   }
   lastSyncRun(connectionId = null) {
     return connectionId

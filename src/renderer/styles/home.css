@@ -500,3 +500,139 @@
   width: 14em;
   max-width: 100%;
 }
+
+/* ホームの検索欄：資料をさがす（views/search.js） */
+.home-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 560px;
+  margin-bottom: var(--space-3);
+}
+.home-search__input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* さがす画面（#/search） */
+.search {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 860px;
+}
+.search__input {
+  font-size: var(--fs-h3);
+  padding: 8px 2px;
+}
+.search__results {
+  display: grid;
+  gap: var(--space-3);
+}
+.search__sec {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-small);
+  color: var(--paper-ink-weak);
+}
+.search__chips,
+.search__list,
+.search__hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.search__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.search__list {
+  display: grid;
+  gap: var(--space-2);
+}
+.search__item {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+}
+.search__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.search__name strong {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+}
+.search__name:hover strong {
+  text-decoration-color: currentColor;
+}
+.search__hits {
+  display: grid;
+  gap: 2px;
+}
+.search__hit {
+  display: grid;
+  grid-template-columns: 7.5em 1fr;
+  gap: var(--space-2);
+  align-items: baseline;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.search__hit {
+  cursor: pointer;
+}
+button.search__hit:hover {
+  background: color-mix(in srgb, var(--paper-ink) 7%, transparent);
+}
+.search__name:focus-visible,
+.search__hit:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.search__page {
+  font-size: var(--fs-small);
+  color: var(--paper-ink-weak);
+  white-space: nowrap;
+}
+.search__snip {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.search__snip--note {
+  margin: 0;
+}
+.search mark {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--c1) 70%, transparent);
+  color: inherit;
+}
+.search__rest,
+.search__none,
+.search__reading {
+  margin: 0;
+}
+
+/* まだフォルダも授業もないときの、最初の一歩の案内 */
+.home-start {
+  max-width: 44em;
+  margin: 0 0 var(--space-2);
+}
+.home-lms-tip {
+  margin-top: var(--space-4);
+}

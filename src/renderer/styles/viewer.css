@@ -1675,3 +1675,61 @@ svg[data-flat] > ellipse {
 .anno-stamp--scan .anno-stamp__photo {
   box-shadow: none;
 }
+
+/* 暗記モード（SPEC §9.3.3。viewer/memorize.js）：マーカーを全部黒く隠し、いまの 1 つに枠を付ける。答えを見ると元のマーカーに戻る */
+.viewer-pages.is-anki .anno-mask {
+  mix-blend-mode: normal;
+  background: #1f1f1f;
+  cursor: default;
+}
+.viewer-pages.is-anki .anno-mask .anno-mask__cover {
+  display: none !important;
+}
+.viewer-pages.is-anki .anno-mask.is-anki-current {
+  outline: 3px solid var(--pop5);
+  outline-offset: 2px;
+  cursor: pointer;
+}
+.viewer-pages.is-anki .anno-mask.is-anki-open {
+  mix-blend-mode: multiply;
+  background: var(--mask, #00d2ff);
+}
+.viewer-anki {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.viewer-anki__run,
+.viewer-anki__done {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.viewer-anki__run[hidden],
+.viewer-anki__done[hidden] {
+  display: none;
+}
+.viewer-anki__count {
+  min-width: 4.5em;
+  font-variant-numeric: tabular-nums;
+}
+:is(.viewer-bar, .viewer-sub) button.viewer-anki__ok {
+  border-color: color-mix(in srgb, var(--c3) 80%, var(--paper-ink));
+}
+:is(.viewer-bar, .viewer-sub) button.viewer-anki__ng {
+  border-color: color-mix(in srgb, var(--c2) 80%, var(--paper-ink));
+}
+/* 「暗記」のボタンが出ている（マーカーがある）ときは、その分だけ早めに「書き出す」「操作」を記号にする（ツールバーを 1 段に収める） */
+@media (max-width: 1400px) {
+  .viewer-bar:has([data-v='anki']:not([hidden])) :is(button[data-v='export'], button[data-v='help']) {
+    font-size: 0;
+  }
+  .viewer-bar:has([data-v='anki']:not([hidden])) button[data-v='export']::after {
+    content: '⤓';
+    font-size: 16px;
+  }
+  .viewer-bar:has([data-v='anki']:not([hidden])) button[data-v='help']::after {
+    content: '?';
+    font-size: var(--fs-small);
+  }
+}

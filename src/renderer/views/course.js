@@ -58,6 +58,12 @@ export function fileCard(m, course) {
       ${ok ? '' : '<span class="file__tag">見つかりません</span>'}
     </button>
     ${ok && !m.copyOf ? `<button type="button" class="file__more" data-action="material-menu" data-id="${esc(m.id)}" aria-label="${esc(m.name)} のメニュー" title="メニュー" aria-haspopup="menu">⋯</button>` : ''}
+    ${
+      // 見つからなくなった LMS の資料：ここから取り直せる（右クリックのメニューにもある）
+      m.status === 'missing' && m.url && course.kind !== 'folder' && course.connection_id
+        ? `<button type="button" class="btn btn--small file__refetch" data-action="refetch-material" data-id="${esc(m.id)}" data-name="${esc(m.name)}" title="LMS からもう一度ダウンロードして、同じ場所に戻します">取り直す</button>`
+        : ''
+    }
   </div>`;
 }
 /** 資料の名前：区切り（_ - 空白・拡張子の前）で折り返せるようにする（言葉の途中で切れにくく） */

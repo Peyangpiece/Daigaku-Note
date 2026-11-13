@@ -2,7 +2,7 @@
 import {dialog, shell} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
-import {isOpenable} from '../sync/files.js';
+import {isOpenable, REFETCH} from '../sync/files.js';
 import {str, id, bad} from './common.js';
 
 export function register({handle, ctx, repo, jobs, files, log, folders, getWindow}) {
@@ -16,6 +16,21 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
     payload.kind = courseId ? 'course' : 'manual';
     return {jobId: jobs.enqueue('sync', payload).id};
   });
+
+  // 見つからなくなった LMS の資料を取り直す（SPEC §7.3）：印を付けて、その授業の全部の回を確かめ直す
+  handle('material.refetch', ({materialId}) => {
+    const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
+    const course = repo.get('course', m.course_id);
+    if (m.status !== 'missing') bad('このファイルはパソコンにあります');
+    if (!m.url || !course?.connection_id || course.kind === 'folder')
+      bad('LMS から取った資料ではないので、取り直せません');
+    const list = repo.getSetting(REFETCH, []) ?? [];
+    if (!list.includes(m.id)) repo.setSetting(REFETCH, [...list, m.id].slice(-200));
+    return {jobId: jobs.enqueue('sync', {courseId: course.id, full: true, kind: 'course'}).id};
+  });
+
+  // 同期の記録（設定 → 授業と資料）：最近の同期ごとに、入った資料と、失敗・知らせ
+  handle('sync.history', () => ({runs: repo.syncHistory(10)}));
 
   handle('material.open', async ({materialId}) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');

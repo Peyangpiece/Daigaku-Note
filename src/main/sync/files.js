@@ -11,6 +11,8 @@ export const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
 /** 自分で入れた資料（回に振り分ける前）を置くフォルダ。授業フォルダの中。回のフォルダ名（第NN回…・その他）とは重ならない */
 export const OWN_FOLDER = '自分の資料';
+/** 取り直すと決めた資料の id を置く設定（[資料の id]） */
+export const REFETCH = 'sync.refetch';
 
 const OPENABLE = /\.(pdf|docx?|pptx?|xlsx?|csv|txt|md|rtf|od[tps]|png|jpe?g|gif|webp|heic|mp4|mov|m4a|mp3|wav)$/i;
 export const isOpenable = (p) => OPENABLE.test(String(p));
@@ -124,6 +126,8 @@ export class FileManager {
   async ingest({term, course, round, roundFrom = 'lms', fileRef, fetchFile, source = 'lms'}) {
     const root = this.rootOf();
     const here = (m) => inside(m.path, root);
+    // 取り直すと決めた資料（ファイルが見つからなくなったもの。画面の「LMS から取り直す」）：同じ URL・同じ中身でも、もう一度取って置き直す
+    const want = (m) => !!m && m.status === 'missing' && this.refetching().includes(m.id);
 
     // 1. 同じ URL の記録（この保存先の中）
     let prev = null;
@@ -131,7 +135,7 @@ export class FileManager {
       prev = this.repo.findMaterialsByUrl(fileRef.url).find((m) => m.course_id === course.id && here(m)) ?? null;
       if (prev) {
         const newer = fileRef.modified && (!prev.lms_modified || String(fileRef.modified) > String(prev.lms_modified));
-        if (!newer) return {result: 'skip', material: prev};
+        if (!newer && !want(prev)) return {result: 'skip', material: prev};
       }
     }
 
@@ -149,14 +153,16 @@ export class FileManager {
     // 3. ハッシュ
     const h = sha256(body);
     const same = this.repo.findMaterialByHash(course.id, h);
-    if (same && here(same)) {
+    if (same && here(same) && !want(same)) {
       // 更新日時だけ進んで中身は同じだった：その日時を覚える（覚えないと、次の同期のたびに取り直す）
       if (prev && fileRef.modified != null) this.repo.updateMaterial(prev.id, {lms_modified: String(fileRef.modified)});
       return {result: 'dup', material: same};
     }
-    // 同じ中身の記録が別の保存先（保存先を変える前の場所）にある：記録を新しい保存先へ付け替える（授業ごとに同じ中身の記録は 1 つ）。
-    // 回は LMS が言うとおりにし、本人が動かした回（round_from = 'user'）は保つ
+    // 同じ中身の記録が別の保存先（保存先を変える前の場所）にある・取り直すと決めた資料：ファイルを置き直して、記録を付け替える
+    // （授業ごとに同じ中身の記録は 1 つ）。回は LMS が言うとおりにし、本人が動かした回（round_from = 'user'）は保つ
     const relink = same ?? null;
+    // 取り直す資料の中身が LMS で変わっていた：新しい中身で入れ直し、見つからない古い記録は消す
+    const replaced = !same && want(prev) ? prev : null;
 
     // 4. 回フォルダ
     const dir = this.roundDir(term, course, round);
@@ -166,7 +172,7 @@ export class FileManager {
     let name = fileRef.name || filenameFromDisposition(res.disposition) || filenameFromUrl(fileRef.url);
     if (!name) return {result: 'failed', reason: 'download', detail: 'ファイル名が分かりません'};
     name = sanitizeFileName(name);
-    if (prev) name = name.replace(/(\.[^.]+)?$/, (ext) => ` (v${prev.version + 1})${ext}`);
+    if (prev && !want(prev)) name = name.replace(/(\.[^.]+)?$/, (ext) => ` (v${prev.version + 1})${ext}`);
     const {path: file, existed} = await this.uniquePath(dir, name, h);
 
     // 6. 書き込み
@@ -194,7 +200,8 @@ export class FileManager {
         lms_modified: fileRef.modified != null ? String(fileRef.modified) : relink.lms_modified,
         status: 'ok'
       });
-      this.log(`[files] 別の保存先にあった記録を付け替えました: ${material.name}`);
+      this.refetchDone(relink.id);
+      this.log(`[files] ファイルを置き直して、記録を付け替えました: ${material.name}`);
       return {result: 'saved', material};
     }
     // 同じ中身を同時に取り込んでいた（別の同期が先に記録した）ときは、先の記録を使う（UNIQUE(course_id, sha256)）
@@ -212,7 +219,27 @@ export class FileManager {
       if (!existed && won.material.path !== file) await fsp.rm(file, {force: true}).catch(() => {});
       return won;
     }
+    if (replaced) {
+      this.repo.remove('material', replaced.id);
+      this.refetchDone(replaced.id);
+      return {result: 'saved', material};
+    }
     return {result: prev ? 'updated' : 'saved', material};
+  }
+
+  /** 取り直すと決めた資料の id（設定 sync.refetch。ipc/materials.js の material.refetch が足す） */
+  refetching() {
+    const list = this.repo.getSetting?.(REFETCH, []) ?? [];
+    return Array.isArray(list) ? list : [];
+  }
+  /** 取り直した・あきらめた：印を外す */
+  refetchDone(id) {
+    const list = this.refetching();
+    if (list.includes(id))
+      this.repo.setSetting(
+        REFETCH,
+        list.filter((x) => x !== id)
+      );
   }
 
   createLmsMaterial({course, round, roundFrom, fileRef, file, h, body, res, name, prev, source}) {

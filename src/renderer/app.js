@@ -15,6 +15,7 @@ import {applySkin, setStickerReload, skinOf, stickerLayer, watchTheme} from './s
 import {placesOf, renderCourse} from './views/course.js';
 import {eachText, renderFolder, renderFolderNew} from './views/folder.js';
 import {renderSettings} from './views/settings.js';
+import {leaveSearch, mountSearch, renderSearch, searchFor} from './views/search.js';
 import {renderSetup, resetSetup} from './views/setup.js';
 import {renderTerm, resetTerm} from './views/term.js';
 import {
@@ -264,7 +265,9 @@ function render() {
   unmountSplit();
   // PDF ビューアは状態が変わっても描き直さない（開いたまま。閉じるときだけ unmount）
   if (route.startsWith('/viewer/')) {
-    const materialId = route.slice('/viewer/'.length);
+    // #/viewer/<資料>?page=<ページ>&find=<言葉>&from=search：さがす画面から、見つけたページを開いて言葉に印を付ける
+    const [materialId, query = ''] = route.slice('/viewer/'.length).split('?');
+    const jump = new URLSearchParams(query);
     lastRoute = route;
     const material = Object.values(state.data.materials)
       .flat()
@@ -282,12 +285,17 @@ function render() {
       viewer = viewerMod.mountViewer(view, {
         materialId,
         course,
+        page: Number(jump.get('page')) || 0,
+        find: jump.get('find') ?? '',
+        backLabel: jump.get('from') === 'search' ? '← さがすへ' : '',
         onBack:
           materialId === TRIAL_ID
             ? closeNoteTry // ノートの試し書き：開いてきた画面（ショップ・マイノート）へ戻る
             : EMBED
               ? () => window.parent.postMessage({type: 'split-close', id: materialId}, '*')
-              : () => navigate(course ? `/course/${course.id}` : '/')
+              : jump.get('from') === 'search'
+                ? () => navigate('/search') // さがす画面から開いた：結果へ戻る
+                : () => navigate(course ? `/course/${course.id}` : '/')
       });
     }
     // PDF のまわりの紙に貼るシール（窓に固定。PDF の下に置く）。着せ替えやシールの画像が変わったら貼り直す
@@ -324,6 +332,7 @@ function render() {
   if (/^\/settings\/term(\?|$)/.test(route) && !same) resetTerm();
   if (!same && !route.startsWith('/quiz') && !route.startsWith('/review')) leaveQuiz();
   if (!same && !route.startsWith('/quiz-edit/')) leaveQuizEdit();
+  if (!same && route !== '/search') leaveSearch();
   if (route === '/setup' || route === '/settings/lms' || route === '/settings/lms-terms')
     view.innerHTML = renderSetup(state);
   else if (route.startsWith('/course/')) {
@@ -338,6 +347,7 @@ function render() {
   else if (route === '/settings' || route.startsWith('/settings?')) view.innerHTML = renderSettings(state, route);
   else if (/^\/kisekae(\/edit)?(\?|$)/.test(route)) view.innerHTML = renderKisekae(state, route);
   else if (/^\/fudebako(\/|\?|$)/.test(route)) view.innerHTML = renderFudebako(state, route);
+  else if (route === '/search') view.innerHTML = renderSearch();
   else view.innerHTML = renderHome(state);
   if (!same && lastRoute === '/' && route !== '/') swipeHint();
   lastRoute = route;
@@ -349,8 +359,27 @@ function render() {
     view.querySelector('h2')?.focus({preventScroll: true});
     view.querySelector('[data-scroll-into-view]')?.scrollIntoView({block: 'center'});
   }
+  if (route === '/search') mountSearch(view, {fresh: !same});
   view.dispatchEvent(new CustomEvent('rendered', {bubbles: true, detail: {route, fresh: !same}}));
 }
+
+// ホームの検索欄：Enter で、さがす画面へ（言葉を持っていく）
+document.addEventListener('submit', (e) => {
+  const form = e.target.closest?.('[data-search-form="home"]');
+  if (!form) return;
+  e.preventDefault();
+  searchFor(form.querySelector('input').value);
+  navigate('/search');
+});
+// ⌘K・Ctrl+K：どの画面からでも、さがす画面へ（PDF の編集画面では、その PDF の中を探す ⌘F がある）
+document.addEventListener('keydown', (e) => {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'k') return;
+  const route = location.hash.replace(/^#/, '') || '/';
+  if (route.startsWith('/viewer/') || route.startsWith('/split/') || route.startsWith('/setup')) return;
+  e.preventDefault();
+  if (route === '/search') document.getElementById('search-q')?.focus();
+  else navigate('/search');
+});
 
 /** 初めてホームから別の画面へ行ったとき 1 回だけ、2 本指のスワイプで戻れることを知らせる（手がかりが画面にないため） */
 function swipeHint() {
@@ -675,6 +704,8 @@ document.addEventListener('click', async (e) => {
       const r = await api['material.open']({materialId: el.dataset.id});
       if (r?.error) toast(r.error, {error: true});
       else reload();
+    } else if (action === 'refetch-material') {
+      await refetchMaterial(el.dataset.id, el.dataset.name);
     } else if (action === 'reveal-material') {
       const r = await api['material.reveal']({materialId: el.dataset.id});
       if (r?.error) toast(r.error, {error: true});
@@ -1156,6 +1187,12 @@ const materialOf = (id) => {
   }
   return {};
 };
+/** 見つからなくなった LMS の資料を取り直す：その授業の全部の回を確かめ直し、見つかれば同じ場所に戻す */
+async function refetchMaterial(id, name) {
+  const r = await api['material.refetch']({materialId: id});
+  if (r?.error) return toast(r.error, {error: true});
+  toast(`「${name}」を LMS から取り直します（この授業の全部の回を確かめます）`);
+}
 /** 資料のメニュー（右クリック・資料の「⋯」）：開く・フォルダで表示・別の付箋へ移す・ゴミ箱へ（自分で入れたもの） */
 function openMaterialMenu(id, x, y) {
   const {m, course} = materialOf(id);
@@ -1180,7 +1217,10 @@ function openMaterialMenu(id, x, y) {
       : placesOf(state.data, course)
           .filter((p) => p.value !== here)
           .map((p) => [`move:${p.value}`, `${p.label}へ移す`]);
+  // 見つからなくなった LMS の資料：LMS から取り直せる（自分で入れたファイルは取り直せない）
+  const canRefetch = m.status === 'missing' && !!m.url && course.kind !== 'folder' && !!course.connection_id;
   const items = [
+    ...(canRefetch ? [['refetch', 'LMS から取り直す']] : []),
     ['open', '開く'],
     ['reveal', 'フォルダで表示'],
     ...(moves.length ? [['move', '別の付箋へ移す…']] : []),
@@ -1191,6 +1231,7 @@ function openMaterialMenu(id, x, y) {
   ];
   openMenu(m.name, items, x, y, (what) => {
     if (what === 'open') fire(pdf ? 'open-pdf' : 'open-material', {id});
+    else if (what === 'refetch') refetchMaterial(id, m.name);
     else if (what === 'reveal') fire('reveal-material', {id});
     else if (what === 'trash') fire('remove-material', {id, name: m.name});
     else if (what === 'trash-note') removeNote(id, m.name).catch((err) => toast(err.message, {error: true}));
