@@ -4,6 +4,7 @@ import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {isOpenable, REFETCH} from '../sync/files.js';
 import {str, id, bad} from './common.js';
+import {createLedger} from '../points-ledger.js';
 
 export function register({handle, ctx, repo, jobs, files, log, folders, getWindow}) {
   handle('sync.run', async ({connectionId, courseId, full}) => {
@@ -35,6 +36,8 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
   handle('material.open', async ({materialId}) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
     if (!isOpenable(m.path)) bad('この種類のファイルはアプリから開きません');
+    // ポイント：資料を初めて開いた
+    if (!m.read_at) (ctx.ledger ??= createLedger({repo, log: (x) => log.info(x)})).claim('read', m.id);
     repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
     const err = await shell.openPath(m.path);
     return err ? {error: err} : {ok: true};

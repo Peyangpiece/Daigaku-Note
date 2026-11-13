@@ -12,6 +12,7 @@ import {cleanAlign} from '../../shared/text-runs.js';
 import {str, id, PDFJS_DIR, PDFJS_ASSET, bad} from './common.js';
 import {sendMain} from '../frames.js';
 import * as trial from '../trial-note.js';
+import {createLedger} from '../points-ledger.js';
 
 export function register({handle, ctx, repo, log, getWindow, notifyOthers = () => {}}) {
   // アプリ内の PDF ビューア（SPEC §9）。編集できるのは PDF だけ。中身はバイト列で渡し、パスはレンダラに出さない
@@ -24,6 +25,8 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
 
   // 上書き保存した PDF の元の写し（注釈はいつもこの写しの上に描く）
   const originalsDir = () => path.join(app.getPath('userData'), 'originals');
+  // ポイントの台帳（ノートを使ったときのポイント。ほかの窓口と 1 つを使う）
+  const ledger = () => (ctx.ledger ??= createLedger({repo, log: (m) => log.info(m)}));
 
   // 試し書き（trial-note.js）：資料の id のかわりに TRIAL_ID で開く。メモリの中だけで扱い、ファイル・DB には残さない
   handle('note.trial', async ({design, name}) => trial.startTrial(design, str(name, 100) || '試し書き'));
@@ -47,6 +50,7 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
       rebased = true;
     }
     const bytes = base.bytes;
+    if (!m.read_at) ledger().claim('read', m.id); // ポイント：資料を初めて開いた
     repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
     return {
       material: {id: m.id, name: m.name, course_id: m.course_id, round_id: m.round_id, source: m.source},
@@ -131,7 +135,10 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
     const m = pdfMaterial(materialId);
     for (const x of Array.isArray(marks) ? marks.slice(0, 500) : []) {
       const aid = id(x?.id);
-      if (aid) repo.setMemorized(annoKey(m), aid, typeof x.memorized === 'boolean' ? x.memorized : null);
+      if (!aid) continue;
+      repo.setMemorized(annoKey(m), aid, typeof x.memorized === 'boolean' ? x.memorized : null);
+      // ポイント：暗記モードで確かめた（覚えた・まだのどちらでも。同じマーカーは 1 日 1 回）
+      if (typeof x.memorized === 'boolean') ledger().claim('recall', aid);
     }
     return {ok: true};
   });
@@ -170,7 +177,8 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
   });
   const save = async (materialId, texts) => {
     const m = pdfMaterial(materialId);
-    const rows = repo.listAnnotations(annoKey(m)).map(annotationToClient);
+    const raw = repo.listAnnotations(annoKey(m));
+    const rows = raw.map(annotationToClient);
     const r = await overwritePdf({
       repo,
       material: m,
@@ -178,7 +186,9 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
       images: textImages(rows, texts),
       originalsDir: originalsDir()
     });
-    if (r.changed) sendMain(getWindow()?.webContents, 'state.changed', {});
+    // ポイント：今日書き込んで、残っているページ（shared/points.js。その日に初めて書き込んだ・書き込んだページ）
+    const gained = ledger().wrote(annoKey(m), raw);
+    if (r.changed || gained) sendMain(getWindow()?.webContents, 'state.changed', {});
     const stale = repo.getSetting('pdf.stale', []);
     if (stale.includes(m.id))
       repo.setSetting(

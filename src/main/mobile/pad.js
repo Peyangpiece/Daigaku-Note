@@ -17,6 +17,7 @@ import {
   PAD_QUIET
 } from '../../shared/pad-channels.js';
 import {isOpenable} from '../sync/files.js';
+import {createLedger} from '../points-ledger.js';
 
 const QUEUE_MAX = 300; // 1 つの画面に貯める知らせ（それより多ければ古いものを捨て、画面に全部を読み直させる）
 const IDLE_MS = 60_000; // これだけ待ちに来ない画面は閉じたとみなす
@@ -150,6 +151,7 @@ export function createPadApi({
       const st = await fsp.stat(m.path).catch(() => bad('このファイルは見つかりません'));
       if (st.size > PAD_FILE_MAX) bad('90MB を超えるファイルは、パソコンで開いてください');
       const bytes = new Uint8Array(await fsp.readFile(m.path));
+      if (!m.read_at) (ctx.ledger ??= createLedger({repo, log})).claim('read', m.id); // ポイント：資料を初めて開いた
       repo.updateMaterial(m.id, {read_at: new Date().toISOString()});
       return {ok: true, name: path.basename(m.path), mime: m.mime ?? null, bytes};
     },
