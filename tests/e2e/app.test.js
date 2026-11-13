@@ -94,6 +94,66 @@ test(
         true,
         '横スクロールが出ない'
       );
+      // フォルダの付箋：長押しで持ち上げて、そのまま動かすと並べ替え（✓ で覚える）。動かさずに離すと付箋のメニュー
+      await win.evaluate(async (id) => {
+        for (const name of ['あ回', 'い回']) await window.daigaku['folder.addSub']({courseId: id, name});
+        location.hash = `#/course/${id}`;
+        location.reload(); // IPC で足した付箋を読み直す
+      }, ids.course);
+      await win.waitForFunction(
+        () => document.querySelectorAll('.round-notes--folder > .round-note').length >= 3,
+        null,
+        {
+          timeout: 30000
+        }
+      );
+      const notes = () =>
+        win.evaluate(() =>
+          [...document.querySelectorAll('.round-notes--folder > .round-note')].map((n) => n.dataset.sortKey)
+        );
+      const before = await notes();
+      // 付箋の何もない所（ボタン・ファイルの外）：付箋の右下の端
+      const spot = async (i) =>
+        win.evaluate((i) => {
+          const r = document.querySelectorAll('.round-notes--folder > .round-note')[i].getBoundingClientRect();
+          return {x: r.right - 6, y: r.bottom - 6, cx: r.left + r.width / 2, cy: r.top + r.height / 2};
+        }, i);
+      // 動かさずに離す → メニュー
+      const a = await spot(1);
+      await win.mouse.move(a.x, a.y);
+      await win.mouse.down();
+      await win.waitForTimeout(700);
+      await win.mouse.up();
+      await win.waitForSelector('.card-menu [data-card-menu="color"]', {timeout: 5000});
+      assert.equal(
+        await win.evaluate(() => document.body.classList.contains('reordering')),
+        false,
+        '並べ替えにはならない'
+      );
+      await win.keyboard.press('Escape');
+      // 持ち上げて隣の付箋の上へ動かす → 並べ替え
+      const b = await spot(2);
+      await win.mouse.move(a.x, a.y);
+      await win.mouse.down();
+      await win.waitForTimeout(700);
+      assert.equal(
+        await win.evaluate(() => document.body.classList.contains('reordering')),
+        true,
+        '長押しで並べ替えになる'
+      );
+      await win.mouse.move((a.x + b.cx) / 2, (a.y + b.cy) / 2, {steps: 5});
+      await win.mouse.move(b.cx, b.cy, {steps: 10});
+      await win.waitForTimeout(400);
+      await win.mouse.up();
+      const moved = await notes();
+      assert.deepEqual(moved, [before[0], before[2], before[1], ...before.slice(3)], '持ち上げた付箋が入れ替わる');
+      await win.click('.reorder-done');
+      await win.waitForFunction(() => !document.body.classList.contains('reordering'));
+      const saved = await win.evaluate(
+        async (id) => (await window.daigaku['state.get']()).settings.order[`course:${id}`],
+        ids.course
+      );
+      assert.deepEqual(saved, moved, '並びを覚える');
       // PDF の編集画面：pdf.js が描く
       await win.evaluate((id) => (location.hash = `#/viewer/${id}`), ids.material);
       await win.waitForSelector('canvas', {timeout: 60000});

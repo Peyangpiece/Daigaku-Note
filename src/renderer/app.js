@@ -1023,15 +1023,17 @@ async function deleteFolder(course) {
 }
 
 /**
- * 並べ替えを始める（右クリック →「並べ替え」）：container の中の [data-sort-key] が揺れ、ドラッグで入れ替える。
+ * 並べ替えを始める（右クリック →「並べ替え」・付箋の長押し）：container の中の [data-sort-key] が揺れ、ドラッグで入れ替える。
  * 右上の ✓ で並びを覚える（範囲は container の data-sort-scope）。Esc でやめると元の並びに戻す
  */
-function beginSort(container) {
+function beginSort(container, grab = null) {
   const scope = container?.dataset.sortScope;
   if (!scope) return;
   closeCardMenu();
   const ok = startReorder(container, {
     itemSelector: '[data-sort-key]',
+    grab,
+    hint: grab ? 'そのまま動かして並べ替えます。終わったら右上の ✓ を押します' : undefined,
     onDone: async (keys, changed) => {
       if (changed) {
         const r = await api['settings.update']({patch: {order: {scope, keys}}});
@@ -1275,6 +1277,47 @@ document.addEventListener('contextmenu', (e) => {
   openCardMenu(card, at ? e.clientX : r.left + 16, at ? e.clientY : r.top + 16);
 });
 document.addEventListener('pointerdown', (e) => cardMenu && !cardMenu.contains(e.target) && closeCardMenu());
+
+// ---- 付箋の長押し：そのまま並べ替えを始め、押している付箋を持ち上げる（授業の回の付箋・フォルダの付箋）----
+// 持ち上げたまま動かすと並べ替え（✓ で覚える）、動かさずに離すと付箋のメニュー（色を変える・並べ替え・消す）。
+// ボタン・ファイル（ドラッグでほかの付箋へ移す）・入力欄の上では始めない。押してすぐ動かしたら（画面を流した）やめる
+const HOLD_MS = 450;
+const HOLD_SLOP = 8;
+let hold = null;
+const endHold = () => {
+  clearTimeout(hold?.timer);
+  hold = null;
+};
+document.addEventListener('pointerdown', (e) => {
+  endHold();
+  if (isReordering() || !e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const note = e.target.closest?.('.round-note[data-sort-key]');
+  if (
+    !note ||
+    e.target.closest('button, a, input, textarea, select, [contenteditable="true"], .file, [draggable="true"]')
+  )
+    return;
+  const box = sortable(note);
+  if (!box || note.parentElement !== box) return;
+  const h = {id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY};
+  h.timer = setTimeout(() => {
+    hold = null;
+    if (!note.isConnected || isReordering()) return;
+    window.getSelection()?.removeAllRanges(); // 長押しで選ばれた文字を外す
+    navigator.vibrate?.(10);
+    // 動かさずに離したら、これまでの長押し（右クリック）と同じく付箋のメニューを出す
+    beginSort(box, {el: note, pointerId: h.id, x: h.x, y: h.y, onStill: () => openStickyMenu(note, h.x, h.y)});
+  }, HOLD_MS);
+  hold = h;
+});
+document.addEventListener('pointermove', (e) => {
+  if (!hold || e.pointerId !== hold.id) return;
+  hold.x = e.clientX;
+  hold.y = e.clientY;
+  if (Math.hypot(e.clientX - hold.x0, e.clientY - hold.y0) > HOLD_SLOP) endHold();
+});
+for (const ev of ['pointerup', 'pointercancel', 'dragstart']) document.addEventListener(ev, endHold, true);
+window.addEventListener('scroll', endHold, {passive: true});
 document.addEventListener('keydown', (e) => e.key === 'Escape' && closeCardMenu());
 // スクロールしたら閉じる。ただし開いた直後は閉じない（トラックパッドの慣性で動いている最中に押すと、出たとたんに消えていた）
 window.addEventListener('scroll', () => cardMenu && Date.now() - menuOpenedAt > 250 && closeCardMenu(), {

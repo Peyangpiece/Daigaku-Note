@@ -12,9 +12,14 @@ const SWAP_MS = 220; // 入れ替えの動きの長さ
 
 /**
  * container の中の itemSelector を並べ替える。keyOf(要素) が並びの鍵。
- * 終わる（✓）と onDone(鍵の並び)、やめる（Esc・画面を移る）と onCancel()
+ * 終わる（✓）と onDone(鍵の並び)、やめる（Esc・画面を移る）と onCancel()。
+ * grab：長押しで始めたとき、押している要素をそのまま持ち上げる {el, pointerId, x, y, onStill?}（指を離さずに動かせる）。
+ *   動かさずに離したら並べ替えをやめて onStill()（長押しのメニューを出すなど）
  */
-export function startReorder(container, {itemSelector, keyOf = (el) => el.dataset.sortKey, onDone, onCancel, hint}) {
+export function startReorder(
+  container,
+  {itemSelector, keyOf = (el) => el.dataset.sortKey, onDone, onCancel, hint, grab = null}
+) {
   stopReorder();
   const items = () => [...container.querySelectorAll(`:scope > ${itemSelector}`)];
   if (items().length < 2) return false;
@@ -100,6 +105,20 @@ export function startReorder(container, {itemSelector, keyOf = (el) => el.datase
     follow(x, y);
   }
 
+  /** 持ち上げる（ドラッグの始まり） */
+  function lift(el, pointerId) {
+    drag.moving = true;
+    el.classList.add('reorder__item--drag');
+    el.style.transition = 'none';
+    try {
+      container.setPointerCapture?.(pointerId);
+    } catch {
+      /* 捕まえられなくても動く */
+    }
+  }
+  // タッチで動かしている間は、画面が流れないようにする（長押しのあとの動きは、touch-action では止まらない）
+  const noScroll = (e) => drag?.moving && e.cancelable && e.preventDefault();
+
   const onDown = (e) => {
     if (e.button !== 0) return;
     const el = e.target.closest?.(itemSelector);
@@ -112,15 +131,10 @@ export function startReorder(container, {itemSelector, keyOf = (el) => el.datase
     if (!drag || e.pointerId !== drag.id) return;
     if (!drag.moving) {
       if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < DRAG_START) return;
-      drag.moving = true;
-      drag.el.classList.add('reorder__item--drag');
-      drag.el.style.transition = 'none';
-      try {
-        container.setPointerCapture?.(e.pointerId);
-      } catch {
-        /* 捕まえられなくても動く */
-      }
+      lift(drag.el, e.pointerId);
     }
+    if (drag.held && !drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) >= DRAG_START)
+      drag.moved = true;
     follow(e.clientX, e.clientY);
     swapAt(e.clientX, e.clientY);
     // 端に来たら画面を送る
@@ -132,8 +146,15 @@ export function startReorder(container, {itemSelector, keyOf = (el) => el.datase
     if (!drag || e.pointerId !== drag.id) return;
     const el = drag.el;
     const moving = drag.moving;
+    const still = drag.held && !drag.moved;
     drag = null;
     if (!moving) return;
+    // 長押しして動かさずに離した：並べ替えはやめて、長押しのいつもの動き（付箋のメニュー）にする
+    if (still && grab?.onStill) {
+      finish(null);
+      grab.onStill();
+      return;
+    }
     // 指を離したら、並びの中の場所へ滑って戻る
     el.classList.remove('reorder__item--drag');
     el.style.transition = reduce ? 'none' : `translate ${SWAP_MS}ms cubic-bezier(.2,.8,.2,1)`;
@@ -156,6 +177,7 @@ export function startReorder(container, {itemSelector, keyOf = (el) => el.datase
   };
   const onLeave = () => finish(false);
 
+  /** save：true で覚える（onDone）、false でやめる（onCancel）、null は何も呼ばない（並びは変わっていない） */
   function finish(save) {
     if (active !== stop) return;
     active = null;
@@ -163,6 +185,7 @@ export function startReorder(container, {itemSelector, keyOf = (el) => el.datase
     container.removeEventListener('pointermove', onMove);
     container.removeEventListener('pointerup', onUp);
     container.removeEventListener('pointercancel', onUp);
+    document.removeEventListener('touchmove', noScroll);
     document.removeEventListener('click', block, true);
     document.removeEventListener('dblclick', block, true);
     document.removeEventListener('contextmenu', block, true);
@@ -183,7 +206,7 @@ export function startReorder(container, {itemSelector, keyOf = (el) => el.datase
     tip.remove();
     const after = keys();
     if (save) onDone?.(after, after.join('\n') !== before.join('\n'));
-    else onCancel?.();
+    else if (save === false) onCancel?.();
   }
   const stop = () => finish(false);
   active = stop;
@@ -192,13 +215,28 @@ export function startReorder(container, {itemSelector, keyOf = (el) => el.datase
   container.addEventListener('pointermove', onMove);
   container.addEventListener('pointerup', onUp);
   container.addEventListener('pointercancel', onUp);
+  document.addEventListener('touchmove', noScroll, {passive: false});
   document.addEventListener('click', block, true);
   document.addEventListener('dblclick', block, true);
   document.addEventListener('contextmenu', block, true);
   document.addEventListener('dragstart', block, true);
   document.addEventListener('keydown', onKey, true);
   window.addEventListener('hashchange', onLeave);
-  done.focus();
+  // 長押しで始めた：押している要素を、指の下でそのまま持ち上げる
+  if (grab?.el && grab.el.parentElement === container) {
+    const r = grab.el.getBoundingClientRect();
+    drag = {
+      el: grab.el,
+      id: grab.pointerId,
+      x0: grab.x,
+      y0: grab.y,
+      grabX: grab.x - r.left,
+      grabY: grab.y - r.top,
+      held: true
+    };
+    lift(grab.el, grab.pointerId);
+    follow(grab.x, grab.y);
+  } else done.focus();
   return true;
 }
 
