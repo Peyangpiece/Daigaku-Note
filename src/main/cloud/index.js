@@ -6,7 +6,7 @@ import {fromB64, toB64} from '../../shared/mobile-wire.js';
 import {createDrive, loginLoopback, refreshAccess, revoke} from './google.js';
 import {fingerprint, keyQr, newMasterKey} from './keys.js';
 import {createPusher} from './sync.js';
-import {ADOPTED, adoptIpad} from './adopt.js';
+import {ADOPTED, adoptDrive} from './adopt.js';
 import {loadClientSecret} from './client-secret.js';
 import {KEYRING, keyringBytes, makeKeyring, openKeyring, readKeyringBytes} from '../../shared/keyring.js';
 
@@ -21,6 +21,15 @@ export const PUSH_EVERY_MS = 30 * 60 * 1000;
 /** ドライブに iPad が送ったデータがあって、まだ取り込んでいないので送らない（画面で「取り込む」を出す） */
 export const IPAD_HELD =
   'ドライブには iPad で書いたデータがあります。上書きしないように、このパソコンからは送りません。「iPad のデータを取り込む」で、このパソコンに取り込めます';
+
+/**
+ * ドライブに、このパソコンが送ったのではないデータ（ほかのパソコン・入れ直す前のこのパソコン）があるので送らない。
+ * 入れ直したばかりの空のパソコンが、合言葉を入れた直後にドライブのデータを空で上書きして消さないため（画面で「取り込む」「置き換える」を出す）
+ */
+export const OTHER_HELD =
+  'ドライブには、このパソコンが送ったのではないデータがあります（ほかのパソコン・入れ直す前のデータ）。上書きしないように、このパソコンからは送りません。「ドライブのデータを取り込む」でこのパソコンに取り込むか、「このパソコンのデータで置き換える」を選んでください';
+/** このパソコンが最後に送った（確かめた）目録の時刻。ドライブの目録がこれと違えば、ほかの端末が送ったもの */
+export const BASE = 'cloud.base';
 
 export function createCloud({
   repo,
@@ -56,7 +65,14 @@ export function createCloud({
     return access.accessToken;
   };
   const drive = createDrive({getToken, fetch});
-  const pusher = async () => {
+  /** ドライブの今の目録（prev）は、このパソコンが送ったもの・取り込んだものか */
+  const mine = (prev) => {
+    const base = repo.getSetting(BASE, null);
+    if (prev.at === base || prev.at === repo.getSetting(ADOPTED, null)) return true;
+    // 前の版（印を残していなかった）で送ったことのあるパソコンは、最初の 1 回だけ自分のものと見なす
+    return base === null && repo.getSetting('cloud.last', null)?.ok === true;
+  };
+  const pusher = async ({force = false} = {}) => {
     const master = await masterKey();
     if (!master) throw new Error('暗号化の鍵がありません。連携し直してください');
     return createPusher({
@@ -67,10 +83,16 @@ export function createCloud({
       readMaterial,
       userData,
       device: os.hostname(),
+      root: rootDir,
       log,
       now,
-      // iPad が送ったデータ（iPad だけで始めたなど）があるときは、取り込むまでパソコンからは送らない（上書きして消さない。docs/SYNC.md §12）
-      allow: (prev) => (prev?.origin === 'ipad' && repo.getSetting(ADOPTED, null) !== prev.at ? IPAD_HELD : null)
+      // iPad が送ったデータ（iPad だけで始めたなど）があるときは、取り込むまでパソコンからは送らない（上書きして消さない。docs/SYNC.md §12）。
+      // ほかのパソコンが送ったデータも、取り込むか、置き換えると決める（force）まで送らない（docs/SYNC.md §13）
+      allow: (prev) => {
+        if (!prev) return null;
+        if (prev.origin === 'ipad') return repo.getSetting(ADOPTED, null) !== prev.at ? IPAD_HELD : null;
+        return force || mine(prev) ? null : OTHER_HELD;
+      }
     });
   };
   /** ドライブの合言葉で包んだ鍵（なければ null）：{id, ring} */
@@ -175,18 +197,25 @@ export function createCloud({
     },
 
     /** 送る（送っている最中なら、それが終わるのを待つ） */
-    push() {
+    push({force = false} = {}) {
       if (!account()) return Promise.reject(new Error('Google と連携していません'));
       busy ??= (async () => {
         onChange();
         const at = now().toISOString();
         try {
-          const r = await (await pusher()).push();
+          const r = await (await pusher({force})).push();
+          repo.setSetting(BASE, r.at);
           record({at, ok: true, uploaded: r.uploaded, bytes: r.bytes, removed: r.removed});
           if (r.uploaded) log(`cloud: ${r.uploaded} 件を送りました（${r.bytes} バイト）`);
           return r;
         } catch (e) {
-          record({at, ok: false, message: e.message, ...(e.message === IPAD_HELD ? {ipad: true} : {})});
+          record({
+            at,
+            ok: false,
+            message: e.message,
+            ...(e.message === IPAD_HELD ? {ipad: true} : {}),
+            ...(e.message === OTHER_HELD ? {other: true} : {})
+          });
           log(`cloud: 送れませんでした：${e.message}`);
           throw e;
         } finally {
@@ -197,15 +226,25 @@ export function createCloud({
       return busy;
     },
 
-    /** ドライブの iPad のデータを、このパソコンに取り込む準備をする（データベースは次の起動で入れ替わる。docs/SYNC.md §12） */
+    /** ドライブのほかのパソコンのデータを、このパソコンのデータで置き換える（本人が画面で決めたときだけ。docs/SYNC.md §13） */
+    async replace() {
+      await busy?.catch(() => {});
+      return api.push({force: true});
+    },
+
+    /**
+     * ドライブのデータ（iPad・ほかのパソコンが送ったもの）を、このパソコンに取り込む準備をする
+     * （データベースは次の起動で入れ替わる。docs/SYNC.md §12・§13）
+     */
     async adoptIpad() {
       if (!account()) throw new Error('Google と連携していません');
-      if (!openDb) throw new Error('iPad のデータを取り込めません');
+      if (!openDb) throw new Error('ドライブのデータを取り込めません');
       const master = await masterKey();
       if (!master) throw new Error('暗号化の鍵がありません。合言葉を入れてください');
       await busy?.catch(() => {});
-      const r = await adoptIpad({
+      const r = await adoptDrive({
         drive,
+        origins: ['ipad', 'pc'],
         master,
         userData,
         root: rootDir(),
@@ -214,7 +253,9 @@ export function createCloud({
         maxVersion,
         log
       });
-      log(`cloud: iPad（${r.device ?? '?'}・${r.at}）のデータを取り込みます。資料 ${r.materials}・ファイル ${r.files}`);
+      log(
+        `cloud: ドライブ（${r.origin}・${r.device ?? '?'}・${r.at}）のデータを取り込みます。資料 ${r.materials}・ファイル ${r.files}`
+      );
       return {ok: true, ...r};
     },
 
@@ -225,6 +266,7 @@ export function createCloud({
       for (const f of await drive.list()) await drive.remove(f.id);
       await secrets.set('cloud.key', toB64(newMasterKey()));
       repo.removeSetting('cloud.last');
+      repo.removeSetting(BASE);
       repo.removeSetting('cloud.keyring'); // 合言葉の鍵も消えた（決め直す）
       onChange();
       return {ok: true};

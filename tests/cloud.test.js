@@ -464,3 +464,73 @@ test('パソコン：iPad が送ったデータは、取り込むまで上書き
   assert.equal(r.manifest.origin, 'pc');
   assert.equal((await cloud.status()).last.ok, true);
 });
+
+test('パソコン：ほかのパソコンが送ったデータは上書きしない（入れ直した空のパソコンでドライブの資料を消さない）。置き換えると決めたら送る', async () => {
+  const {toB64} = await import('../src/shared/mobile-wire.js');
+  const {OTHER_HELD, BASE} = await import('../src/main/cloud/index.js');
+  const fake = fakeDrive();
+  const fetch = async (url, init) =>
+    String(url).startsWith('https://oauth2.googleapis.com/token')
+      ? Response.json({access_token: 'A', expires_in: 3600})
+      : fake.fetch(url, init);
+  const master = newMasterKey();
+  /** 1 台のパソコン（同じアカウント・同じ鍵）。mats：そのパソコンにある資料 */
+  const pc = (name, mats, legacy = null) => {
+    const settings = new Map([['cloud.account', {email: 'a@example.com'}]]);
+    if (legacy) settings.set('cloud.last', legacy);
+    const store = new Map([
+      ['cloud.google', {refreshToken: 'R'}],
+      ['cloud.key', toB64(master)]
+    ]);
+    const cloud = createCloud({
+      repo: {
+        getSetting: (k, d) => settings.get(k) ?? d,
+        setSetting: (k, v) => settings.set(k, v),
+        removeSetting: (k) => settings.delete(k)
+      },
+      secrets: {
+        get: async (k) => store.get(k) ?? null,
+        set: async (k, v) => void store.set(k, v),
+        remove: async (k) => void store.delete(k)
+      },
+      fetch,
+      config: {clientId: 'c', clientSecret: 's'},
+      exportDb: (f) => writeFileSync(f, `DB-${name}`),
+      materials: () => mats,
+      readMaterial: async (m) => new Uint8Array(Buffer.from(`中身-${m.id}`)),
+      userData: mkdtempSync(path.join(tmpdir(), `dn-cloud-${name}-`)),
+      openExternal: () => {}
+    });
+    return {cloud, settings};
+  };
+  const names = () => [...fake.files.values()].map((f) => f.name).sort();
+
+  // 1 台目が資料を送る。同じパソコンは、そのあとも送れる
+  const pc1 = pc('pc1', [{id: 'M1', status: 'ok', path: 'a.pdf', sha256: 'h1'}]);
+  await pc1.cloud.push();
+  assert.ok(pc1.settings.get(BASE), '送った目録の時刻を覚える');
+  assert.equal((await pc1.cloud.push()).skipped, true);
+  const before = names();
+  assert.equal(before.length, 3, '資料・データベース・目録');
+
+  // 入れ直した空のパソコン（同じ鍵）：送らない。ドライブはそのまま
+  const pc2 = pc('pc2', []);
+  await assert.rejects(pc2.cloud.push(), (e) => e.message === OTHER_HELD);
+  assert.deepEqual(names(), before, 'ドライブの資料は消えない');
+  assert.equal((await pc2.cloud.status()).last.other, true, '画面に「取り込む」「置き換える」を出す');
+  // 1 台目は続けて送れる
+  await pc1.cloud.push();
+
+  // 前の版（送った印を残していなかった）で送ったことのあるパソコンは、そのまま送れる
+  const old = pc('pc1', [{id: 'M1', status: 'ok', path: 'a.pdf', sha256: 'h1'}], {ok: true, at: '2026-11-01'});
+  await old.cloud.push();
+  assert.ok(old.settings.get(BASE));
+
+  // 置き換えると決めたときだけ、空のパソコンのデータで置き換わる
+  const r = await pc2.cloud.replace();
+  assert.equal(r.removed, 1);
+  assert.equal(names().length, 2);
+  assert.equal((await pc2.cloud.status()).last.ok, true);
+  // 置き換えられた 1 台目は、もう黙っては送らない
+  await assert.rejects(pc1.cloud.push(), (e) => e.message === OTHER_HELD);
+});

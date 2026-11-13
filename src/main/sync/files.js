@@ -40,6 +40,15 @@ export function filenameFromUrl(url) {
   }
 }
 
+/** 名前の比べ方：Mac・Windows は大文字と小文字、文字の合成（NFC・NFD）を区別しない */
+const fold = (name) => String(name).normalize('NFC').toLowerCase();
+
+/** 2 つの場所が同じもの（同じフォルダ）を指しているか。番号（ino）が取れないファイルシステムでは名前で比べる */
+function sameEntry(a, b, pathA, pathB) {
+  if (a.ino && b.ino) return a.ino === b.ino && a.dev === b.dev;
+  return fold(pathA) === fold(pathB);
+}
+
 export class FileManager {
   /**
    * @param {object} deps
@@ -72,15 +81,18 @@ export class FileManager {
 
   /** 同名があれば中身を比べ、同じならそのパス、違えば (2) (3) を足したパス。{path, existed} */
   async uniquePath(dir, name, hash) {
-    const taken = new Set(await fsp.readdir(dir).catch(() => []));
-    if (taken.has(name)) {
-      const existing = await fsp.readFile(path.join(dir, name)).catch(() => null);
-      if (existing && sha256(existing) === hash) return {path: path.join(dir, name), existed: true};
+    // 大文字と小文字だけ違う名前（Report.pdf と report.pdf）は、Mac・Windows では同じファイル。同じ名前として扱う（上書きしない）
+    const entries = await fsp.readdir(dir).catch(() => []);
+    const taken = new Set(entries.map(fold));
+    const hit = entries.find((e) => fold(e) === fold(name));
+    if (hit) {
+      const existing = await fsp.readFile(path.join(dir, hit)).catch(() => null);
+      if (existing && sha256(existing) === hash) return {path: path.join(dir, hit), existed: true};
     }
     return {
       path: path.join(
         dir,
-        uniqueName(name, (c) => taken.has(c))
+        uniqueName(name, (c) => taken.has(fold(c)))
       ),
       existed: false
     };
@@ -280,9 +292,11 @@ export class FileManager {
     } catch {
       return; // 元がなければ何もしない
     }
-    try {
-      await fsp.access(to);
-    } catch {
+    const src = await fsp.stat(from);
+    const dst = await fsp.stat(to).catch(() => null);
+    // 移動先がない。または、大文字・小文字（や全角・半角の合成）だけの違いで、Mac・Windows では同じフォルダを指している：
+    // 名前だけを変える（合流に入ると、自分自身を「移動先にもう同じ中身がある」と見て、中身を全部消してしまう）
+    if (!dst || sameEntry(src, dst, from, to)) {
       await fsp.rename(from, to);
       return;
     }
@@ -359,7 +373,10 @@ export class FileManager {
     return changes;
   }
 
-  /** 「名前 (2).pdf」の複製で、中身が記録どおり・元の名前が残っているものをゴミ箱へ（SPEC §7.4） */
+  /**
+   * 「名前 (2).pdf」の複製で、中身が記録どおり・元の名前のファイルが残っていて同じ中身のものをゴミ箱へ（SPEC §7.4）。
+   * 元の名前のファイルと中身が違うもの（同じ名前の別の資料・差し替えられた版・先生が付けた「過去問 (2024).pdf」）は複製ではないので触らない
+   */
   async trashDuplicates(course) {
     const trashed = [];
     for (const m of this.repo.listMaterials(course.id)) {
@@ -367,14 +384,11 @@ export class FileManager {
       const num = parseNumbered(m.name);
       if (!num) continue;
       const original = path.join(path.dirname(m.path), num.base);
-      const [data, origExists] = await Promise.all([
+      const [data, orig] = await Promise.all([
         fsp.readFile(m.path).catch(() => null),
-        fsp.access(original).then(
-          () => true,
-          () => false
-        )
+        fsp.readFile(original).catch(() => null)
       ]);
-      if (!data || !origExists || sha256(data) !== m.sha256) continue;
+      if (!data || !orig || sha256(data) !== m.sha256 || sha256(orig) !== m.sha256) continue;
       await this.trash(m.path);
       this.repo.updateMaterial(m.id, {status: 'trashed'});
       trashed.push(m);

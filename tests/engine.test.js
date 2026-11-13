@@ -259,6 +259,34 @@ test('授業の改名でフォルダも改名。消えた授業は sync_enabled=
   assert.equal(repo.findCourseByLms(connection.id, '3') !== null, true, '一覧の突き合わせは常に行う');
 });
 
+test('LMS の一覧から外れた授業は、戻ってきたら同期を戻す。本人が止めた授業は戻さない', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  const d = data();
+  await engine.run({connection, connector: fakeConnector(d), term, kind: 'initial'});
+  const gone = d.courses.pop();
+  const run = () =>
+    engine.run({
+      connection: repo.get('connection', connection.id),
+      connector: fakeConnector(d),
+      term,
+      kind: 'full',
+      full: true
+    });
+  await run();
+  const c2 = repo.findCourseByLms(connection.id, '2');
+  assert.equal(c2.sync_enabled, 0);
+  assert.equal(c2.lms_missing, 1);
+  // 先生が授業を出し直した
+  d.courses.push(gone);
+  await run();
+  assert.equal(repo.findCourseByLms(connection.id, '2').sync_enabled, 1);
+  assert.equal(repo.findCourseByLms(connection.id, '2').lms_missing, 0);
+  // 本人が止めた授業（lms_missing が 0）は、一覧にあっても戻さない
+  repo.updateCourse(c2.id, {sync_enabled: 0});
+  await run();
+  assert.equal(repo.findCourseByLms(connection.id, '2').sync_enabled, 0);
+});
+
 test('セットアップで外した授業は非表示で作られ、同期しない', async (t) => {
   const {repo, term, connection, engine} = await setup(t);
   repo.setSetting(`courses.exclude.${connection.id}`, ['2']);
