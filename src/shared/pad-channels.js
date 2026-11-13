@@ -19,7 +19,8 @@ export const PAD_DENY = {
   'cloud.keyQr': 'iPad に鍵を渡す QR は、パソコンの画面で出してください',
   'cloud.setPassphrase': '合言葉は、パソコンの画面で決めてください',
   'cloud.unlock': '合言葉は、パソコンの画面で入れてください',
-  'cloud.adoptIpad': 'iPad のデータの取り込みは、パソコンの画面でしてください'
+  'cloud.adoptIpad': 'ドライブのデータの取り込みは、パソコンの画面でしてください',
+  'cloud.replace': 'ドライブのデータの置き換えは、パソコンの画面でしてください'
 };
 
 /** パソコンのフォルダを選んで登録する（パソコンの選ぶ窓が要る） */

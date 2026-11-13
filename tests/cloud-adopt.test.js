@@ -11,7 +11,7 @@ import {openDatabase} from '../src/main/db/db.js';
 import {exportBackup, RESTORE_FILE} from '../src/main/backup.js';
 import {createPusher} from '../src/main/cloud/sync.js';
 import {newMasterKey} from '../src/main/cloud/keys.js';
-import {ADOPTED, IPAD_ROOT, adoptIpad, mapPath} from '../src/main/cloud/adopt.js';
+import {ADOPTED, IPAD_ROOT, adoptDrive, adoptIpad, mapPath} from '../src/main/cloud/adopt.js';
 
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 
@@ -154,4 +154,76 @@ test('取り込み：パソコンが送ったデータ・鍵が違うときは�
   }).push();
   await assert.rejects(adoptIpad({drive: pcDrive, master, ...deps}), /iPad が送ったものではありません/);
   assert.ok(!existsSync(path.join(pc, RESTORE_FILE)));
+});
+
+test('取り込み：ほかのパソコンが送ったデータも取り込める（入れ直したパソコンで、ドライブから戻す）。場所はこのパソコンの保存先に直す', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dn-adopt-old-'));
+  const {db} = await openDatabase(path.join(dir, 'old.sqlite'));
+  db.exec('PRAGMA foreign_keys = OFF');
+  const oldRoot = 'C:\\Users\\me\\Desktop\\パレットノート'; // 前のパソコンは Windows
+  const pdf = Buffer.from('%PDF-前のパソコン');
+  const doc = Buffer.from('DOC');
+  const ins = db.prepare(
+    `INSERT INTO material (id, course_id, name, path, sha256, size, source, downloaded_at)
+     VALUES (?, 'C1', ?, ?, ?, ?, 'lms', '2026-11-01')`
+  );
+  ins.run('M1', 'a.pdf', `${oldRoot}\\2026_秋学期\\会計\\第01回\\a.pdf`, sha(pdf), pdf.length);
+  ins.run('M2', 'b.docx', 'D:\\授業\\b.docx', sha(doc), doc.length); // 保存先の外（登録したフォルダ）
+  const course = db.prepare(
+    `INSERT INTO course (id, term_id, name, folder_name, kind, dir, created_at, updated_at)
+     VALUES (?, 'T1', ?, ?, 'folder', ?, '2026-11-01', '2026-11-01')`
+  );
+  course.run('F1', '自分の', '自分の', `${oldRoot}\\マイフォルダ\\自分の`);
+  course.run('F2', '外の', '外の', 'D:\\授業');
+  const userData0 = path.join(dir, 'userData');
+  mkdirSync(userData0, {recursive: true});
+  const drive = memDrive();
+  const master = newMasterKey();
+  const pushed = await createPusher({
+    drive,
+    master,
+    exportDb: (file) => exportBackup(db, file),
+    materials: () => [
+      {id: 'M1', status: 'ok', path: 'a.pdf', sha256: sha(pdf)},
+      {id: 'M2', status: 'ok', path: 'b.docx', sha256: sha(doc)}
+    ],
+    readMaterial: async (m) => (m.id === 'M1' ? pdf : doc),
+    userData: userData0,
+    device: 'old-pc',
+    root: () => oldRoot
+  }).push();
+  db.close();
+  assert.equal(pushed.manifest.root, oldRoot, '保存先を目録に書く');
+
+  const pc = mkdtempSync(path.join(tmpdir(), 'dn-adopt-new-'));
+  const userData = path.join(pc, 'userData');
+  const root = path.join(pc, 'Desktop', 'パレットノート');
+  mkdirSync(userData, {recursive: true});
+  const deps = {drive, master, userData, root, settings: [['storage.root', root]], open: (f) => new DatabaseSync(f)};
+  await assert.rejects(adoptIpad(deps), /iPad が送ったものではありません/, 'iPad の取り込みでは受けない');
+  const r = await adoptDrive({...deps, origins: ['ipad', 'pc']});
+  assert.deepEqual([r.materials, r.origin, r.device], [2, 'pc', 'old-pc']);
+  const a = path.join(root, '2026_秋学期', '会計', '第01回', 'a.pdf');
+  const b = path.join(root, 'ほかのパソコン', 'b.docx');
+  assert.deepEqual(readFileSync(a), pdf);
+  assert.deepEqual(readFileSync(b), doc);
+  const staged = new DatabaseSync(path.join(userData, RESTORE_FILE), {readOnly: true});
+  const paths = Object.fromEntries(
+    staged
+      .prepare('SELECT id, path FROM material')
+      .all()
+      .map((x) => [x.id, x.path])
+  );
+  const dirs = Object.fromEntries(
+    staged
+      .prepare('SELECT id, dir FROM course')
+      .all()
+      .map((x) => [x.id, x.dir])
+  );
+  const adopted = JSON.parse(staged.prepare('SELECT value FROM settings WHERE key = ?').get(ADOPTED).value);
+  staged.close();
+  assert.deepEqual(paths, {M1: a, M2: b});
+  assert.equal(dirs.F1, path.join(root, 'マイフォルダ', '自分の'), '保存先の下のフォルダは、このパソコンの保存先へ');
+  assert.equal(dirs.F2, 'D:\\授業', '保存先の外のフォルダはそのまま');
+  assert.equal(adopted, pushed.manifest.at, '取り込んだ目録の時刻（このあとは、このパソコンから送ってよい）');
 });

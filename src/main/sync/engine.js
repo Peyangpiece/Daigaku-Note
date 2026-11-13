@@ -297,7 +297,12 @@ export class SyncEngine {
           patch.period = c.period ?? null;
           patch.weekday_from = 'lms';
         }
-        if (row.sync_enabled === 0 && row.lms_missing) patch.sync_enabled = 1;
+        // LMS の一覧から外れて止めていた授業が戻ってきた：同期を戻す（本人が止めた授業は lms_missing が 0 なので戻さない）
+        if (row.lms_missing) {
+          patch.lms_missing = 0;
+          if (row.sync_enabled === 0) patch.sync_enabled = 1;
+          this.log(`[sync] LMS に戻った授業: ${row.name}`);
+        }
         if (Object.keys(patch).length) row = this.repo.updateCourse(row.id, patch);
       }
       result.push(row);
@@ -305,7 +310,7 @@ export class SyncEngine {
     if (markMissing) {
       for (const row of this.repo.listCourses({connectionId: connection.id})) {
         if (!seen.has(row.lms_id) && row.sync_enabled !== 0) {
-          this.repo.updateCourse(row.id, {sync_enabled: 0});
+          this.repo.updateCourse(row.id, {sync_enabled: 0, lms_missing: 1});
           this.log(`[sync] LMS から消えた授業: ${row.name}`);
         }
       }

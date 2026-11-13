@@ -78,7 +78,10 @@ export function register({handle, ctx, repo, files, getWindow}) {
     if (Number.isInteger(patch.color) && patch.color >= 1 && patch.color <= 8) allowed.color = patch.color;
     if (['plain', 'stripe', 'dot'].includes(patch.tape_pattern)) allowed.tape_pattern = patch.tape_pattern;
     if (typeof patch.hidden === 'boolean') allowed.hidden = patch.hidden ? 1 : 0;
-    if (typeof patch.sync_enabled === 'boolean') allowed.sync_enabled = patch.sync_enabled ? 1 : 0;
+    if (typeof patch.sync_enabled === 'boolean') {
+      allowed.sync_enabled = patch.sync_enabled ? 1 : 0;
+      allowed.lms_missing = 0; // 本人が決めた（LMS に戻ってきても、勝手に同期を戻さない）
+    }
     if (Number.isInteger(patch.sort_order)) allowed.sort_order = patch.sort_order;
     if (patch.weekday !== undefined) {
       if (patch.weekday && !'月火水木金土日'.includes(patch.weekday)) bad('曜日が不正です');

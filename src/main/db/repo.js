@@ -56,6 +56,7 @@ export const COLUMNS = {
     'sort_order',
     'hidden',
     'sync_enabled',
+    'lms_missing',
     'generic_json',
     'font_json',
     'quiz_json',

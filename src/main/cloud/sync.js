@@ -31,6 +31,7 @@ export function createPusher({
   userData,
   device,
   origin = 'pc', // 送った端末の種類（'pc'・'ipad'）。目録に書く
+  root = null, // 資料の保存先（目録に書く。ほかのパソコンが取り込むときに、同じ並びで置き直すため）
   log = () => {},
   now = () => new Date(),
   // 送ってよいか：ドライブの今の目録（なければ null）を見て、だめなら理由の文字を返す（ほかの端末のデータを上書きしない。docs/SYNC.md §11）
@@ -143,6 +144,7 @@ export function createPusher({
         at: now().toISOString(),
         device,
         origin,
+        ...(root ? {root: typeof root === 'function' ? root() : root} : {}),
         db: {name: DB_NAME, sha256: dbHash},
         materials: mats,
         files
@@ -173,7 +175,8 @@ export function createPusher({
           await drive.remove(f.id).catch((e) => log(`cloud: 消せませんでした（${f.name}）：${e.message}`));
           removed++;
         }
-      return {uploaded, removed, bytes, skipped: same, manifest};
+      // at：いまドライブにある目録の時刻（変わっていなければ前のまま。この端末が送った・確かめた目録の印に使う）
+      return {uploaded, removed, bytes, skipped: same, manifest, at: same ? prev.at : manifest.at};
     },
 
     /** ドライブのこのアプリの中身を全部消す（作り直す・連携をやめるとき） */

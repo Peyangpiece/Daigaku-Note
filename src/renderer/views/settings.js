@@ -477,6 +477,11 @@ async function renderCloud(box, st = null) {
           ? '<p>ドライブには、iPad で書いたデータがあります。このパソコンに取り込むと、このパソコンでも続きから使えます（このパソコンのいまのデータは、iPad のデータに置き換わります）。</p><div class="about__row"><button type="button" class="btn btn--small" data-cloud="adoptIpad">iPad のデータを取り込む…</button></div>'
           : ''
       }
+      ${
+        s.last?.other && !s.ipad
+          ? '<p>ドライブには、このパソコンが送ったのではないデータがあります（ほかのパソコン・入れ直す前のデータ）。上書きして消さないように、このパソコンからは送っていません。どちらかを選んでください。</p><div class="about__row"><button type="button" class="btn btn--small" data-cloud="adoptDrive">ドライブのデータを取り込む…</button><button type="button" class="btn btn--small btn--quiet" data-cloud="replace">このパソコンのデータで置き換える…</button></div>'
+          : ''
+      }
       <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button>${s.locked || s.ipad ? '' : `<button type="button" class="btn btn--small" data-cloud="passphrase">${s.passphrase ? '合言葉を変える…' : '合言葉を決める…'}</button><button type="button" class="btn btn--small" data-cloud="keyQr">iPad に鍵を渡す…</button>`}${s.ipad ? '' : '<button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button>'}</div>${s.ipad ? '<p class="muted">この iPad のデータを暗号化してドライブへ送ります（変えてから 1 分ほどで自動でも送ります）。ほかの iPad で同じ Google アカウントと合言葉を入れると、同じデータを使えます。</p>' : ''}`
     : `${intro}<div class="about__row"><button type="button" class="btn btn--small" data-cloud="link">Google と連携する…</button></div>`;
   if (s.busy) setTimeout(() => renderCloud(box), 2000); // 送り終わるまで見直す
@@ -503,6 +508,15 @@ async function renderCloud(box, st = null) {
       if (what === 'passphrase') return setPassphrase(box);
       if (what === 'unlock') return unlockCloud(box);
       if (what === 'adoptIpad') return adoptIpad(box);
+      if (what === 'adoptDrive') return adoptIpad(box, {pc: true});
+      if (
+        what === 'replace' &&
+        !(await confirmDialog(
+          'ドライブのデータを、このパソコンのいまのデータで置き換えますか？ ドライブにあって、このパソコンにない資料・書き込みは消えます（元に戻せません）。ドライブのデータを残したいときは、先に「ドライブのデータを取り込む」を選んでください。',
+          {ok: '置き換える', danger: true}
+        ))
+      )
+        return;
       b.disabled = true;
       if (what === 'link') toast('ブラウザで Google にログインしてください');
       const r = await api[`cloud.${what}`]();
@@ -523,19 +537,22 @@ async function renderCloud(box, st = null) {
           else api['cloud.push']().then(() => renderCloud(box));
         }
       }
-      if (what === 'push') toast(r.skipped ? '変わったものはありませんでした' : `送りました（${r.uploaded} 件）`);
+      if (what === 'push' || what === 'replace')
+        toast(r.skipped ? '変わったものはありませんでした' : `送りました（${r.uploaded} 件）`);
       renderCloud(box, r.status);
     };
 }
 
 /** iPad のデータを、このパソコンに取り込む（docs/SYNC.md §12）。データベースは開き直したときに入れ替わる */
-async function adoptIpad(box) {
+async function adoptIpad(box, {pc = false} = {}) {
   const ok = await confirmDialog(
-    'iPad で書いたデータ（授業・ノート・資料・書き込み）を、このパソコンに取り込みます。このパソコンのいまのデータは iPad のデータに置き換わります（いまのものは before-restore として残します）。資料は「資料の保存先」に置きます。保存先・Google との連携・フォルダの見張りなど、このパソコンの設定はそのまま残します。続けますか？',
+    pc
+      ? 'ドライブのデータ（授業・ノート・資料・書き込み）を、このパソコンに取り込みます。このパソコンのいまのデータはドライブのデータに置き換わります（いまのものは before-restore として残します）。資料は「資料の保存先」に置きます。LMS のログインは、このパソコンでやり直してください。続けますか？'
+      : 'iPad で書いたデータ（授業・ノート・資料・書き込み）を、このパソコンに取り込みます。このパソコンのいまのデータは iPad のデータに置き換わります（いまのものは before-restore として残します）。資料は「資料の保存先」に置きます。保存先・Google との連携・フォルダの見張りなど、このパソコンの設定はそのまま残します。続けますか？',
     {ok: '取り込む', danger: true}
   );
   if (!ok) return;
-  toast('ドライブから iPad のデータを読み込んでいます…');
+  toast(pc ? 'ドライブからデータを読み込んでいます…' : 'ドライブから iPad のデータを読み込んでいます…');
   const r = await api['cloud.adoptIpad']();
   if (r?.error) {
     toast(r.error, {error: true});

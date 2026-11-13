@@ -29,5 +29,7 @@ export function register({handle, ctx}) {
   }));
   // iPad のデータを取り込む（次の起動で入れ替わる。画面で開き直すかを聞く）
   handle('cloud.adoptIpad', async () => cloud().adoptIpad());
+  // ドライブのほかのパソコンのデータを、このパソコンのデータで置き換える（画面で確かめてから。iPad からは PAD_DENY で断る）
+  handle('cloud.replace', async () => ({...(await cloud().replace()), status: await cloud().status()}));
   handle('cloud.wipe', async () => ({...(await cloud().wipe()), status: await cloud().status()}));
 }

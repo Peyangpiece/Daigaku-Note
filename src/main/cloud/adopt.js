@@ -39,26 +39,39 @@ const safePart = (s) =>
     .replace(/[<>:"|?*\u0000-\u001f]/g, '_')
     .replace(/[. ]+$/, '') || '_';
 
+const partsOf = (p) =>
+  path.posix
+    .normalize(`/${String(p ?? '').replace(/\\/g, '/')}`)
+    .split('/')
+    .filter((x) => x && x !== '.' && x !== '..');
+/** p が base の下なら、その先の並び（base そのものは []）。下でなければ null */
+function relUnder(p, base) {
+  const a = partsOf(p),
+    b = partsOf(base);
+  return b.length <= a.length && b.every((x, i) => a[i] === x) ? a.slice(b.length) : null;
+}
+
 /** iPad の場所 → このパソコンの場所。iPad の保存先の下なら同じ並びで、それ以外は 保存先/iPad/ の下に置く */
-export function mapPath(ipadPath, {ipadRoot = IPAD_ROOT, root}) {
+export function mapPath(ipadPath, {ipadRoot = IPAD_ROOT, root, outside = 'iPad'}) {
   // .. は先に解いてから見る（iPad の保存先の外を指すものは 保存先/iPad/ へ）
   const parts = path.posix
     .normalize(`/${String(ipadPath ?? '').replace(/\\/g, '/')}`)
     .split('/')
     .filter((x) => x && x !== '.' && x !== '..');
-  const base = ipadRoot.split('/').filter(Boolean);
+  // 元の保存先は Windows の形（C:\\Users\\…）のこともある
+  const base = String(ipadRoot).replace(/\\/g, '/').split('/').filter(Boolean);
   const under = base.length < parts.length && base.every((x, i) => parts[i] === x);
-  const rel = under ? parts.slice(base.length) : ['iPad', parts.at(-1) ?? 'file'];
+  const rel = under ? parts.slice(base.length) : [outside, parts.at(-1) ?? 'file'];
   return path.join(root, ...rel.map(safePart));
 }
 
 /** 同じ名前に違う中身があれば「名前 (iPad).拡張子」にする。同じ中身ならそのまま使う */
-async function freePath(file, bytes) {
+async function freePath(file, bytes, tag = 'iPad') {
   const hash = sha(bytes);
   const ext = path.extname(file);
   const stem = file.slice(0, file.length - ext.length);
   for (let i = 0; i < 100; i++) {
-    const p = i === 0 ? file : `${stem} (iPad${i === 1 ? '' : ` ${i}`})${ext}`;
+    const p = i === 0 ? file : `${stem} (${tag}${i === 1 ? '' : ` ${i}`})${ext}`;
     const cur = await fsp.readFile(p).catch(() => null);
     if (!cur) return {file: p, write: true};
     if (sha(cur) === hash) return {file: p, write: false};
@@ -73,8 +86,9 @@ async function freePath(file, bytes) {
  *   root：このパソコンの資料の保存先。settings：このパソコンのいまの設定 [[名前, 値]]
  * 戻り：{materials, files, version, at, device}
  */
-export async function adoptIpad({
+export async function adoptDrive({
   drive,
+  origins = ['ipad'], // 取り込んでよい、送った端末の種類。'pc' はほかのパソコン・入れ直す前のこのパソコン（docs/SYNC.md §13）
   master,
   userData,
   root,
@@ -90,12 +104,16 @@ export async function adoptIpad({
   const mf = byName.get(MANIFEST);
   if (!mf) throw new Error('Google ドライブにデータがありません');
   const manifest = openJson(keys.enc, await drive.get(mf.id), MANIFEST);
-  if (manifest.origin !== 'ipad') throw new Error('ドライブのデータは iPad が送ったものではありません');
+  const origin = manifest.origin === 'ipad' ? 'ipad' : 'pc'; // 前の版のパソコンは種類を書いていない
+  if (!origins.includes(origin)) throw new Error('ドライブのデータは iPad が送ったものではありません');
+  // 置き場所が保存先の外だった資料の置き先と、同じ名前に違う中身があるときに足す言葉
+  const outside = origin === 'ipad' ? 'iPad' : 'ほかのパソコン';
+  const tag = origin === 'ipad' ? 'iPad' : 'ドライブ';
   const read = async (name) => {
     const f = byName.get(name);
     if (!f)
       throw new Error(
-        'Google ドライブのデータが欠けています。iPad で「いま送る」を押してから、もう一度取り込んでください'
+        `Google ドライブのデータが欠けています。${origin === 'ipad' ? 'iPad' : '送ったパソコン'}で「いま送る」を押してから、もう一度取り込んでください`
       );
     return openBlob(keys.enc, await drive.get(f.id), name);
   };
@@ -112,7 +130,8 @@ export async function adoptIpad({
     let materials = 0;
     try {
       const ipadRoot = db.prepare("SELECT value FROM settings WHERE key = 'storage.root'").get()?.value;
-      const rootOf = ipadRoot ? JSON.parse(ipadRoot) || IPAD_ROOT : IPAD_ROOT;
+      // 送った端末の保存先：目録に書いてあればそれ（パソコン）。なければ設定、それもなければ iPad の既定
+      const rootOf = manifest.root || (ipadRoot ? JSON.parse(ipadRoot) : null) || IPAD_ROOT;
       const row = db.prepare('SELECT id, path, base_sha256 FROM material WHERE id = ?');
       const setPath = db.prepare('UPDATE material SET path = ?, sha256 = ? WHERE id = ?');
       for (const [id, f] of Object.entries(manifest.materials ?? {})) {
@@ -122,9 +141,9 @@ export async function adoptIpad({
           continue;
         }
         const bytes = await read(f.name);
-        const want = mapPath(m.path, {ipadRoot: rootOf, root});
+        const want = mapPath(m.path, {ipadRoot: rootOf, root, outside});
         await fsp.mkdir(path.dirname(want), {recursive: true});
-        const {file, write} = await freePath(want, bytes);
+        const {file, write} = await freePath(want, bytes, tag);
         if (write) await fsp.writeFile(file, bytes);
         // 送ったのは書き込みを描き込む前の元の PDF。上書き保存のための写しも置く（pdf-save.js）
         if (m.base_sha256 && sha(bytes) === m.base_sha256) {
@@ -137,6 +156,12 @@ export async function adoptIpad({
         setPath.run(file, sha(bytes), id);
         materials++;
         step();
+      }
+      // 自分のフォルダ（保存先の下に作ったもの）の場所も、このパソコンの保存先の下に直す。保存先の外のフォルダ（送った端末で登録したもの）はそのまま
+      const setDir = db.prepare('UPDATE course SET dir = ? WHERE id = ?');
+      for (const c of db.prepare("SELECT id, dir FROM course WHERE dir IS NOT NULL AND dir <> ''").all()) {
+        const rel = relUnder(c.dir, rootOf);
+        if (rel) setDir.run(path.join(root, ...rel.map(safePart)), c.id);
       }
       // このパソコンだけの設定は、パソコンのものを残す
       const keys_ = db
@@ -168,9 +193,14 @@ export async function adoptIpad({
       step();
     }
     const staged = stageRestore({userData, src: tmp, open, maxVersion});
-    log(`cloud: iPad のデータを取り込む準備をしました（資料 ${materials}・ファイル ${files}）。次の起動で入れ替えます`);
-    return {materials, files, version: staged.version, at: manifest.at, device: manifest.device ?? null};
+    log(
+      `cloud: ドライブ（${origin}）のデータを取り込む準備をしました（資料 ${materials}・ファイル ${files}）。次の起動で入れ替えます`
+    );
+    return {materials, files, version: staged.version, at: manifest.at, device: manifest.device ?? null, origin};
   } finally {
     await fsp.rm(tmp, {force: true}).catch(() => {});
   }
 }
+
+/** iPad が送ったデータだけを取り込む（前からの名前） */
+export const adoptIpad = (deps) => adoptDrive({...deps, origins: ['ipad']});

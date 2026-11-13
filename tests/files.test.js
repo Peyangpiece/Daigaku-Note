@@ -278,18 +278,33 @@ test('回の移動・名前変更の追跡・複製の整理', async (t) => {
     size: 1,
     source: 'lms'
   });
+  // 元の名前のファイルと中身が違う「w (2).pdf」は複製ではない（同じ名前の別の資料・差し替えられた版）。触らない
+  await writeFile(path.join(r3dir, 'w.pdf'), 'W1');
+  await writeFile(path.join(r3dir, 'w (2).pdf'), 'W2');
+  repo.createMaterial({
+    course_id: course.id,
+    round_id: r3.id,
+    url: 'https://lms/file/w2',
+    name: 'w (2).pdf',
+    path: path.join(r3dir, 'w (2).pdf'),
+    sha256: sha256(Buffer.from('W2')),
+    size: 2,
+    source: 'lms'
+  });
   const trashedNow = await files.trashDuplicates(course);
   assert.deepEqual(
     trashedNow.map((m) => m.name),
     ['z (2).pdf']
   );
+  assert.equal(repo.findMaterialsByUrl('https://lms/file/w2')[0].status, 'ok');
+  assert.equal(await readFile(path.join(r3dir, 'w (2).pdf'), 'utf8'), 'W2');
   assert.deepEqual(
     trashed.map((f) => path.basename(f)),
     ['z (2).pdf']
   );
   assert.equal(repo.findMaterialsByUrl('https://lms/file/z')[0].status, 'trashed');
   assert.equal(repo.findMaterialsByUrl('https://lms/file/y')[0].status, 'ok');
-  assert.deepEqual((await readdir(r3dir)).sort(), ['renamed.pdf', 'y (2).pdf', 'y.pdf', 'z.pdf']);
+  assert.deepEqual((await readdir(r3dir)).sort(), ['renamed.pdf', 'w (2).pdf', 'w.pdf', 'y (2).pdf', 'y.pdf', 'z.pdf']);
 });
 
 test('フォルダの改名と合流', async (t) => {
@@ -308,6 +323,34 @@ test('フォルダの改名と合流', async (t) => {
   assert.equal(await readFile(path.join(to, 'diff (2).pdf'), 'utf8'), 'X');
   await assert.rejects(readdir(from));
   await files.renameDir(path.join(root, 'nothing'), path.join(root, 'nowhere')); // 元がなければ何もしない
+});
+
+test('フォルダの改名：大文字・小文字だけの違いでも中身は消えない（Mac・Windows では同じフォルダを指す）', async (t) => {
+  const {root, files} = await setup(t);
+  const from = path.join(root, '第03回_python入門'),
+    to = path.join(root, '第03回_Python入門');
+  await mkdir(path.join(from, 'sub'), {recursive: true});
+  await writeFile(path.join(from, 'a.pdf'), 'A');
+  await writeFile(path.join(from, 'sub', 'b.pdf'), 'B');
+  await files.renameDir(from, to);
+  assert.equal((await readdir(root)).includes('第03回_Python入門'), true);
+  assert.equal(await readFile(path.join(to, 'a.pdf'), 'utf8'), 'A');
+  assert.equal(await readFile(path.join(to, 'sub', 'b.pdf'), 'utf8'), 'B');
+});
+
+test('同じ名前：大文字・小文字だけ違う名前は同じ名前として扱い、違う中身を上書きしない', async (t) => {
+  const {root, files} = await setup(t);
+  const dir = path.join(root, 'case');
+  await mkdir(dir, {recursive: true});
+  await writeFile(path.join(dir, 'Report.pdf'), 'R1');
+  assert.deepEqual(await files.uniquePath(dir, 'report.pdf', sha256(Buffer.from('R1'))), {
+    path: path.join(dir, 'Report.pdf'),
+    existed: true
+  });
+  assert.deepEqual(await files.uniquePath(dir, 'report.pdf', sha256(Buffer.from('R2'))), {
+    path: path.join(dir, 'report (2).pdf'),
+    existed: false
+  });
 });
 
 test('自分のファイル：自分の付箋に置く・回へ移す・戻す・同じ中身・Finder での移動・外したあとに入れ直す', async (t) => {
