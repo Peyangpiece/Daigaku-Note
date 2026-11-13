@@ -370,10 +370,20 @@ test(
         const data = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
         const up = await d['material.uploadData']({courseId: f.courseId, files: [{name: 'mine.pdf', data}]});
         const st = await d['state.get']();
-        return {up, id: Object.values(st.materials ?? {}).flat()[0]?.id};
+        return {up, id: Object.values(st.materials ?? {}).flat()[0]?.id, at: new Date().toISOString()};
       }, pdf.toString('base64'));
       assert.equal(made.up.added, 1);
-      await pg.waitForTimeout(3000); // 残すのは少し待ってから
+      // iPad に残し終わるのを待ってから開き直す（データベースは変えてから少しして残す。決まった時間だけ待つと、遅い CI で間に合わない）：
+      // 取り込んだあとにデータベースを残した・書いたファイル（w-）とその一覧を置いた
+      await pg.waitForFunction(
+        (at) => {
+          const meta = JSON.parse(localStorage.getItem('palette.localdb') ?? 'null');
+          const fs = Object.keys(JSON.parse(sessionStorage.getItem('__fs') ?? '{}'));
+          return meta?.at > at && fs.includes('drive/local-files') && fs.some((k) => k.startsWith('drive/w-'));
+        },
+        made.at,
+        {timeout: 30000}
+      );
       await pg.reload();
       await pg.waitForFunction(() => !!window.daigaku, null, {timeout: 60000});
       const opened = await pg.evaluate(
