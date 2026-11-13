@@ -527,6 +527,9 @@ export function mount(el, id, {zoom = false, item = null} = {}) {
     cancelAnimationFrame(raf);
     io.disconnect();
     ro.disconnect();
+    // OrbitControls は keydown を「canvas の根」に付ける。canvas が画面から外れたあとは根が document でなくなり、
+    // dispose() では外れない（document → controls → canvas → 外した画面の DOM 全体が残り続ける）。document から直に外す
+    document.removeEventListener('keydown', controls._interceptControlDown, {capture: true});
     controls.dispose();
   };
   const tick = (t = 0) => {

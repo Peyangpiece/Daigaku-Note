@@ -30,7 +30,7 @@ import {createUpdater} from './updater.js';
 import {createFolders} from './folders.js';
 import {createQuizService} from './quiz/service.js';
 import {runSelfTest, selfTestPath} from './self-check.js';
-import {applyStagedRestore, exportBackup, runBackup} from './backup.js';
+import {applyStagedRestore, dropUntrustedSettings, exportBackup, runBackup} from './backup.js';
 import {readBase} from './pdf-save.js';
 import {createCloud} from './cloud/index.js';
 import {createNotifier} from './notify.js';
@@ -320,6 +320,8 @@ app.whenReady().then(async () => {
     ctx.db = db;
     const repo = new Repo(db);
     ctx.repo = repo;
+    // ファイルから読み込んだバックアップに入っていた「コマンドの場所」は使わない（設定 → クイズ で探し直す）
+    if (dropUntrustedSettings({userData, repo})) log.info('読み込んだバックアップの、コマンドの場所の設定を消しました');
     // 回の日付を学期の設定（学年暦の授業回・休講日・振替授業日）にそろえる（前の版の計算で入った日付を直す）
     const redated = syncRoundDates(repo);
     if (redated) log.info(`回の日付を ${redated} 件、学年暦に合わせました`);

@@ -54,6 +54,23 @@ export function exportBackup(db, file) {
   return {file, size: statSync(file).size};
 }
 
+/**
+ * 自分で選んだファイルから読み込んだ印（userData に置く）。入れ替えたあとの最初の起動で、ファイルに入っていた
+ * 「このパソコンのコマンドの場所」（quiz.cli）を使わずに消す：ほかの人から受け取ったファイルに、好きなコマンドの場所を書けるため
+ */
+export const RESTORE_FROM_FILE = 'daigaku-note.restore.from-file';
+/** 読み込んだファイルの値を信用しない設定（このパソコンで探し直す） */
+export const UNTRUSTED_SETTINGS = ['quiz.cli'];
+
+/** 入れ替えたあと：ファイルから読み込んだものなら、信用しない設定を消す。消したら true */
+export function dropUntrustedSettings({userData, repo}) {
+  const mark = path.join(userData, RESTORE_FROM_FILE);
+  if (!existsSync(mark)) return false;
+  for (const key of UNTRUSTED_SETTINGS) repo.removeSetting(key);
+  rmSync(mark, {force: true});
+  return true;
+}
+
 /** 読み込み待ちのファイル名（userData に置き、次の起動で入れ替える） */
 export const RESTORE_FILE = 'daigaku-note.restore.sqlite';
 
@@ -96,8 +113,20 @@ export function stageRestore({userData, src, open, maxVersion = Infinity}) {
       throw new Error(
         '新しい版のパレットノートで作ったバックアップです。パレットノートを最新の版にしてから読み込んでください'
       );
+    // 壊れたファイルを入れ替えると、次の起動で開けなくなる。中身を確かめてから予約する
+    let sound = false;
+    try {
+      sound = db.prepare('PRAGMA quick_check').get()?.quick_check === 'ok';
+    } catch {
+      sound = false;
+    }
+    if (!sound) throw new Error('バックアップのファイルが壊れています');
+    // 写している途中で落ちても、半端なファイルが予約として残らないよう、別の名前に写してから付け替える
     const staged = path.join(userData, RESTORE_FILE);
-    copyFileSync(src, staged);
+    const tmp = `${staged}.tmp`;
+    rmSync(tmp, {force: true});
+    copyFileSync(src, tmp);
+    renameSync(tmp, staged);
     return {staged, version};
   } finally {
     db.close?.();

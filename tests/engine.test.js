@@ -724,3 +724,36 @@ test('接続を消してつなぎ直すと、前の授業を使い直す（2 つ
   assert.equal(trashed.length, 2, '作り直したほうのフォルダはゴミ箱へ');
   assert.deepEqual(await engine.adoptOrphanCourses(), {adopted: 0, removedCourses: 0}, '2 回目は何もしない');
 });
+
+test('同じ番号になる回が 2 つあっても、同期のたびに回フォルダを改名し合わない（題に番号のある回の題を使う）', async (t) => {
+  const {root, repo, term, connection, engine} = await setup(t);
+  const d = data();
+  // 題に番号のない回（セクション番号で第 1 回になる）と、題に「第1回」とある回
+  d.courses[0].rounds = [
+    {number: 1, title: 'オリエンテーション', lmsRef: 's1', files: [{url: 'https://lms/f/o', name: 'o.pdf', body: 'O'}]},
+    {number: 1, title: '第1回 会計とは', lmsRef: 's2', files: [{url: 'https://lms/f/k', name: 'k.pdf', body: 'K'}]}
+  ];
+  d.courses.length = 1;
+  const renames = [];
+  const orig = engine.files.renameDir.bind(engine.files);
+  engine.files.renameDir = async (from, to) => (renames.push([path.basename(from), path.basename(to)]), orig(from, to));
+  const run = (kind) =>
+    engine.run({
+      connection: repo.get('connection', connection.id),
+      connector: fakeConnector(d),
+      term,
+      kind,
+      full: true
+    });
+  await run('initial');
+  const c = repo.findCourseByLms(connection.id, '1');
+  const first = repo.listRounds(c.id).find((r) => r.number === 1);
+  assert.equal(first.title, '会計とは');
+  assert.equal(first.folder_name, '第01回_会計とは');
+  const dir = path.join(root, '2026_秋学期', c.folder_name, first.folder_name);
+  assert.deepEqual((await readdir(dir)).sort(), ['k.pdf', 'o.pdf'], '2 つの回の資料は同じ回のフォルダに入る');
+  renames.length = 0;
+  await run('full');
+  await run('full');
+  assert.deepEqual(renames, [], '2 回目からは改名しない');
+});

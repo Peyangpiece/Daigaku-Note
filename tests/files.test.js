@@ -371,6 +371,15 @@ test('自分のファイル：自分の付箋に置く・回へ移す・戻す�
   assert.equal(dup.result, 'dup');
   assert.equal(dup.material.id, a.material.id);
 
+  // 記録はあるがファイルが見つからない（消してしまった）ものは複製ではない：入れ直すと戻る
+  const lost = await files.addOwn({term, course, name: '消した.pdf', data: Buffer.from('LOST')});
+  await rm(lost.material.path);
+  repo.updateMaterial(lost.material.id, {status: 'missing'});
+  const relost = await files.addOwn({term, course, name: '消した.pdf', data: Buffer.from('LOST')});
+  assert.equal(relost.result, 'saved');
+  assert.equal(relost.material.status, 'ok');
+  assert.equal(await readFile(relost.material.path, 'utf8'), 'LOST');
+
   // 回を指定して入れる
   const b = await files.addOwn({term, course, round: r3, name: 'b.txt', data: Buffer.from('B')});
   assert.equal(b.material.round_id, r3.id);

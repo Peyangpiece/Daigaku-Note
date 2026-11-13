@@ -521,12 +521,22 @@ export class SyncEngine {
       }
       return row;
     };
-    const mapped = [];
-    for (const r of lmsRounds) {
-      const number = Number.isInteger(r.number) && r.number >= 1 ? r.number : parseRound(r.title);
-      const row = await ensure(number, r.title, r.lmsRef, r.date);
-      mapped.push({lms: r, row});
+    // LMS の 2 つの回が同じ番号になることがある（Moodle：題に番号のないセクション 1「オリエンテーション」と、セクション 2「第1回 会計とは」）。
+    // 順に題を当てると、同期のたびに回フォルダを 2 回改名して行き来する。番号ごとに、題と LMS の番号を決める回を 1 つ選ぶ：
+    // 題に番号が書いてある回を先に、なければ最初の回。ほかの回は同じ回の行にまとめる（題・フォルダ名は変えない）
+    const numbered = lmsRounds.map((r) => ({
+      r,
+      number: Number.isInteger(r.number) && r.number >= 1 ? r.number : parseRound(r.title)
+    }));
+    const lead = new Map();
+    for (const x of numbered) {
+      const cur = lead.get(x.number);
+      const explicit = parseRound(x.r.title) === x.number;
+      if (!cur || (explicit && !cur.explicit)) lead.set(x.number, {r: x.r, explicit});
     }
+    const rows = new Map();
+    for (const [number, {r}] of lead) rows.set(number, await ensure(number, r.title, r.lmsRef, r.date));
+    const mapped = numbered.map(({r, number}) => ({lms: r, row: rows.get(number)}));
     if (!byNumber.has(0)) await ensure(0, '', null, null);
     return {mapped, byNumber, ensure};
   }
@@ -561,7 +571,11 @@ export class SyncEngine {
 
     let saved = 0;
     let failed = 0;
-    for (const ref of preferLayout(refs, (r) => r.name ?? '')) {
+    for (const ref of preferLayout(
+      refs,
+      (r) => r.name ?? '',
+      (r) => r.round?.id ?? ''
+    )) {
       touch(); // 時間切れのあとなら、ここで止まる（取りかけない）
       const r = await this.files.ingest({
         term,

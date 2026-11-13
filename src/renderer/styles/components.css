@@ -50,11 +50,11 @@
 }
 .input:focus {
   outline: none;
-  border-bottom-color: var(--accent, var(--c4));
+  border-bottom-color: var(--focus);
 }
 /* キーボードで来たときは下線の色だけでなく枠も出す（どこにいるか分かるように） */
 .input:focus-visible {
-  outline: 2px solid var(--accent, var(--c4));
+  outline: 2px solid var(--focus); /* 枠は背景との差 3:1 以上（--c4 の水色は紙の上で 2:1 しかなかった） */
   outline-offset: 2px;
   border-radius: 4px;
 }

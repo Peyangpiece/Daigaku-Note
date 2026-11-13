@@ -207,7 +207,8 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--paper-ink) 38%, transparent);
+  /* このボタンの唯一の名前なので、読める濃さにする（38% では付箋の上で 2:1 ほどしかなかった） */
+  color: color-mix(in srgb, var(--paper-ink) 72%, transparent);
   font: inherit;
   font-weight: 700;
   cursor: text;

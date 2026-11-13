@@ -69,3 +69,17 @@ test('同名の番号付け', () => {
   assert.deepEqual(parseNumbered('a (2).pdf'), {base: 'a.pdf', n: 2});
   assert.equal(parseNumbered('a.pdf'), null);
 });
+
+test('ファイル名：日本語の長い名前は、バイト数でも切る（1 つの名前は 255 バイトまで。番号を足す分を残す）', () => {
+  const long = `${'講'.repeat(120)}.pdf`; // 120 文字 = 360 バイト
+  const name = sanitizeFileName(long);
+  assert.ok(Buffer.byteLength(name) <= 240, String(Buffer.byteLength(name)));
+  assert.ok(name.endsWith('.pdf'));
+  assert.ok(Buffer.byteLength(uniqueName(name, (c) => c === name)) <= 255, '番号を足しても収まる');
+  assert.equal(sanitizeFileName('短い名前.pdf'), '短い名前.pdf');
+  // 絵文字（4 バイト）の途中では切らない
+  const emoji = sanitizeFileName(`${'😀'.repeat(100)}.pdf`);
+  assert.ok(Buffer.byteLength(emoji) <= 240);
+  assert.ok(!emoji.includes('\ufffd'));
+  assert.equal(Buffer.from(emoji).toString('utf8'), emoji);
+});

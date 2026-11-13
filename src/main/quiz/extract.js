@@ -80,6 +80,10 @@ const decodeXml = (s) =>
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
     .replace(/&amp;/g, '&');
 
+/** zip の中の 1 つ・全部を広げた大きさの上限（スライドの本文は XML で、ふつうは数 MB まで） */
+export const ZIP_ENTRY_MAX = 32 * 1024 * 1024;
+export const ZIP_TOTAL_MAX = 128 * 1024 * 1024;
+
 /** 最小の zip 読み取り（格納・deflate だけ）。want(name) が true のものを {name: utf8 文字列} で返す */
 export function unzip(buf, want) {
   let eocd = -1;
@@ -93,6 +97,7 @@ export function unzip(buf, want) {
   const count = buf.readUInt16LE(eocd + 10);
   let p = buf.readUInt32LE(eocd + 16);
   const out = {};
+  let total = 0;
   for (let i = 0; i < count; i++) {
     if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('zip の目次が壊れています');
     const method = buf.readUInt16LE(p + 10);
@@ -106,7 +111,12 @@ export function unzip(buf, want) {
     if (!want(name)) continue;
     const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
     const raw = buf.subarray(start, start + size);
-    out[name] = (method === 0 ? raw : inflateRawSync(raw)).toString('utf8');
+    // 小さく畳んだ巨大な中身（zip 爆弾）でアプリが固まらないよう、広げる大きさに上限を付ける
+    total += method === 0 ? raw.length : 0;
+    const data = method === 0 ? raw : inflateRawSync(raw, {maxOutputLength: ZIP_ENTRY_MAX});
+    total += method === 0 ? 0 : data.length;
+    if (total > ZIP_TOTAL_MAX) throw new Error('ファイルの中身が大きすぎます');
+    out[name] = data.toString('utf8');
   }
   return out;
 }

@@ -75,18 +75,29 @@ async function boot() {
   const db = new SqlJsDatabase(SQL, bytes);
   await migrateLocal(db); // 新しく始める・アプリがデータより新しいときに、データベースの作りをそろえる
   const local_ = startLocal({db, log: console});
+  const write = async () => {
+    clearTimeout(timer);
+    timer = null;
+    try {
+      await store.put(LOCAL_DB, sealBlob(keys.enc, local_.db.export(), LOCAL_DB));
+      localStorage.setItem(LOCAL_META, JSON.stringify({base, at: new Date().toISOString()}));
+      cloudApi.later(); // しばらくしたらドライブへ送る
+    } catch (e) {
+      console.warn('iPad のデータを保存できませんでした', e);
+    }
+  };
   const save = () => {
     clearTimeout(timer);
-    timer = setTimeout(async () => {
-      try {
-        await store.put(LOCAL_DB, sealBlob(keys.enc, local_.db.export(), LOCAL_DB));
-        localStorage.setItem(LOCAL_META, JSON.stringify({base, at: new Date().toISOString()}));
-        cloudApi.later(); // しばらくしたらドライブへ送る
-      } catch (e) {
-        console.warn('iPad のデータを保存できませんでした', e);
-      }
-    }, SAVE_DELAY);
+    timer = setTimeout(write, SAVE_DELAY);
   };
+  // アプリを閉じる・ほかのアプリへ移るとき：待っている保存をすぐ書く（待ち時間のあいだに閉じると、直前の変更が残らなかった）
+  const flush = () => {
+    if (timer) write();
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flush();
+  });
+  window.addEventListener('pagehide', flush);
   // ---- ドライブへ送る（docs/SYNC.md §11）：パソコンの送り出し（main/cloud/sync.js）をそのまま、この iPad の中で動かす ----
   const cloudApi = iPadCloud({
     cloud,

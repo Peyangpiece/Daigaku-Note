@@ -1,12 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {copyFileSync, mkdtempSync, writeFileSync, existsSync, readdirSync} from 'node:fs';
+import {copyFileSync, mkdtempSync, readFileSync, writeFileSync, existsSync, readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {openDatabase, migrate} from '../src/main/db/db.js';
 import {COLUMNS} from '../src/main/db/repo.js';
-import {applyStagedRestore, exportBackup, stageRestore, RESTORE_FILE} from '../src/main/backup.js';
+import {
+  applyStagedRestore,
+  dropUntrustedSettings,
+  exportBackup,
+  stageRestore,
+  RESTORE_FILE,
+  RESTORE_FROM_FILE
+} from '../src/main/backup.js';
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), 'dn-restore-'));
 
@@ -138,4 +145,36 @@ test('読み込みの準備：この版より新しい版のアプリで作っ�
     () => stageRestore({userData: dir, src: path.join(dir, 'future.sqlite'), open, maxVersion}),
     /新しい版/
   );
+});
+
+test('読み込みの準備：壊れたファイルは予約しない。ファイルから読み込んだあとは、コマンドの場所の設定を使わない', async () => {
+  const dir = tmp();
+  const {db} = await openDatabase(path.join(dir, 'a.sqlite'));
+  db.prepare("INSERT INTO settings (key, value) VALUES ('quiz.cli', ?)").run(
+    JSON.stringify({claude: {path: '/tmp/evil'}})
+  );
+  db.prepare("INSERT INTO settings (key, value) VALUES ('ui.theme', ?)").run(JSON.stringify('dark'));
+  const snap = path.join(dir, 'snap.sqlite');
+  exportBackup(db, snap);
+  db.close();
+  // 途中のページを書きつぶした（壊れた）バックアップ
+  const bytes = readFileSync(snap);
+  const broken = path.join(dir, 'broken.sqlite');
+  bytes.fill(0xff, 4096 * 2, 4096 * 6);
+  writeFileSync(broken, bytes);
+  const open = (f) => new DatabaseSync(f, {readOnly: true});
+  assert.throws(() => stageRestore({userData: dir, src: broken, open}), /壊れています|ではありません/);
+  assert.ok(!existsSync(path.join(dir, RESTORE_FILE)));
+  // ファイルから読み込んだ印があれば、入れ替えたあとに quiz.cli を消す（ほかの設定はそのまま）。印がなければ何もしない
+  const settings = new Map([
+    ['quiz.cli', {claude: {path: '/tmp/evil'}}],
+    ['ui.theme', 'dark']
+  ]);
+  const repo = {removeSetting: (k) => settings.delete(k)};
+  assert.equal(dropUntrustedSettings({userData: dir, repo}), false);
+  assert.ok(settings.has('quiz.cli'));
+  writeFileSync(path.join(dir, RESTORE_FROM_FILE), '');
+  assert.equal(dropUntrustedSettings({userData: dir, repo}), true);
+  assert.deepEqual([...settings.keys()], ['ui.theme']);
+  assert.ok(!existsSync(path.join(dir, RESTORE_FROM_FILE)), '印は 1 度だけ');
 });

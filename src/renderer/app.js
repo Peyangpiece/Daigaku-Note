@@ -971,14 +971,21 @@ function renameFrom(el) {
 
 let cardMenu = null;
 let menuOpenedAt = 0;
+let menuOpener = null; // メニューを開いたときにいた所（閉じたら戻る）
 const closeCardMenu = () => {
-  cardMenu?.remove();
+  if (!cardMenu) return;
+  // メニューの中にいたまま閉じたら、開いた所へ戻る（戻さないと、キーボードでは画面の先頭からたどり直しになる）
+  const back = cardMenu.contains(document.activeElement) ? menuOpener : null;
+  cardMenu.remove();
   cardMenu = null;
+  menuOpener = null;
+  if (back?.isConnected) back.focus();
 };
 /** 小さなメニューを x・y に出す。items は [鍵, 名前]。選ぶと onPick(鍵) */
 function openMenu(label, items, x, y, onPick) {
   closeCardMenu();
   closeSkinPicker();
+  menuOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   cardMenu = document.createElement('div');
   menuOpenedAt = Date.now();
   cardMenu.className = 'card-menu';
@@ -996,6 +1003,20 @@ function openMenu(label, items, x, y, onPick) {
   cardMenu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - width - 8))}px`;
   cardMenu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - height - 8))}px`;
   cardMenu.querySelector('button').focus();
+  // メニューの決まった動き：↑↓ で動く・Home と End で端へ・Esc で閉じる
+  cardMenu.onkeydown = (ev) => {
+    const list = [...cardMenu.querySelectorAll('button')];
+    const i = list.indexOf(document.activeElement);
+    const to = {ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: list.length - 1}[ev.key];
+    if (to !== undefined) {
+      ev.preventDefault();
+      list[(to + list.length) % list.length].focus();
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeCardMenu();
+    }
+  };
   cardMenu.onclick = (ev) => {
     const what = ev.target.closest('[data-card-menu]')?.dataset.cardMenu;
     if (!what) return;
