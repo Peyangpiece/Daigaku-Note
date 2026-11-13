@@ -23,6 +23,13 @@ export const PAD_DENY = {
   'cloud.replace': 'ドライブのデータの置き換えは、パソコンの画面でしてください'
 };
 
+/**
+ * パソコンにつないだ iPad（LAN）からは受けない窓口。iPad のアプリが自分の中で動かすとき（パソコンなしで使う）は使える。
+ * バックアップの読み込みはデータベースを丸ごと入れ替えるので、パソコンの画面でだけ受ける
+ */
+export const PAD_REMOTE_DENY = ['backup.importData'];
+export const PAD_REMOTE_DENY_MESSAGE = 'バックアップの読み込みは、パソコンの画面でしてください';
+
 /** パソコンのフォルダを選んで登録する（パソコンの選ぶ窓が要る） */
 export const PAD_LINK_FOLDER =
   'パソコンのフォルダを登録するのは、パソコンの画面でしてください（新しいフォルダは iPad でも作れます）';

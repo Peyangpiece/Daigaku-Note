@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, writeFileSync, existsSync, readdirSync} from 'node:fs';
+import {copyFileSync, mkdtempSync, writeFileSync, existsSync, readdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
@@ -63,6 +63,37 @@ test('起動時の入れ替え：予約があれば、いまのデータベー�
   const {db: db2} = await openDatabase(dbFile);
   assert.equal(db2.prepare("SELECT label FROM term WHERE id = 'old'").get().label, '古');
   db2.close();
+});
+
+test('起動時の入れ替え：残した before-restore に、閉じる前の直前の変更（-wal の中）も入っている', async () => {
+  const live = tmp();
+  const liveFile = path.join(live, 'daigaku-note.sqlite');
+  const {db} = await openDatabase(liveFile);
+  exportBackup(db, path.join(live, 'snap.sqlite'));
+  // 開き直す直前の変更。アプリはデータベースを閉じずに終わるので、-wal にだけ入っている
+  db.prepare(
+    "INSERT INTO term (id, label, year, folder, start_date, end_date) VALUES ('last', '直前', 2026, '2026直前', '2026-04-01', '2026-09-30')"
+  ).run();
+  assert.ok(existsSync(`${liveFile}-wal`), 'WAL で動いている');
+  // 閉じないまま終わったあとの形：本体と -wal をそのまま別の場所へ写す
+  const dir = tmp();
+  const dbFile = path.join(dir, 'daigaku-note.sqlite');
+  for (const suffix of ['', '-wal']) copyFileSync(`${liveFile}${suffix}`, `${dbFile}${suffix}`);
+  db.close();
+  stageRestore({
+    userData: dir,
+    src: path.join(live, 'snap.sqlite'),
+    open: (f) => new DatabaseSync(f, {readOnly: true})
+  });
+  assert.equal(applyStagedRestore({userData: dir, dbFile, now: () => new Date('2026-11-14T00:00:00Z')}), true);
+  const kept = path.join(
+    dir,
+    readdirSync(dir).find((f) => /before-restore-[^.]*Z$/.test(f))
+  );
+  const old = new DatabaseSync(kept);
+  assert.equal(old.prepare("SELECT label FROM term WHERE id = 'last'").get()?.label, '直前');
+  old.close();
+  assert.ok(!existsSync(`${dbFile}-wal`), '新しい本体に、前の -wal を混ぜない');
 });
 
 test('古い版のデータベースを上げられる：0001 だけのデータベースに全部のマイグレーションが当たり、repo が使う列がそろう', async () => {

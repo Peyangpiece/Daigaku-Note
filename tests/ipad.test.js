@@ -2,7 +2,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {fromQr} from '../ipad/src/qr.js';
+import {fromQr, lanBase, lanHost} from '../ipad/src/qr.js';
 import {pairUrl, randomBytes} from '../src/shared/mobile-wire.js';
 
 const ULID = '01JABCDEFGHJKMNPQRSTVWXYZ0';
@@ -31,6 +31,24 @@ test('QR：https の入口の QR から、http の入口（hp）と # をその�
   );
   for (const bad of ['', 'hello', 'https://example.com/', 'http://10.0.0.2:47390/m/#d=x'])
     assert.equal(fromQr(bad), null, bad);
+});
+
+test('QR・設定：アプリの中で開くのは LAN の番号のパソコンだけ（外の先・名前の先は開かない）', () => {
+  const hash = `#d=${ULID}&k=abc&hp=47390`;
+  for (const ok of ['10.0.0.2', '192.168.1.5', '172.16.0.9', '172.31.255.1'])
+    assert.equal(fromQr(`https://${ok}:47391/m/${hash}`)?.base, `http://${ok}:47390`, ok);
+  for (const bad of ['evil.example.com', '8.8.8.8', '172.32.0.1', '192.169.1.1', '127.0.0.1', '10.0.0.999', '[::1]'])
+    assert.equal(fromQr(`https://${bad}:47391/m/${hash}`), null, bad);
+  assert.equal(lanHost('192.168.1.5'), true);
+  assert.equal(lanBase('http://192.168.1.5:47390'), true);
+  for (const bad of ['http://evil.example.com:47390', 'https://192.168.1.5:47391', 'http://192.168.1.5:47390/x', ''])
+    assert.equal(lanBase(bad), false, bad);
+  assert.match(read('ipad/src/start.js'), /lanBase\(s\.base\)/, '覚えた入口も確かめる');
+  // アプリの設定も同じ範囲だけ（どこへでも移れる "*" にしない）。Capacitor は . で区切った段ごとに * を見る
+  const nav = JSON.parse(read('ipad/capacitor.config.json')).server.allowNavigation;
+  assert.ok(!nav.includes('*'));
+  assert.equal(nav.length, 18);
+  for (const pat of nav) assert.match(pat, /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))(\.\*){2,3}$/, pat);
 });
 
 test('アプリの設定：バンドル ID・iPad 専用・カメラと LAN の説明・LAN の http を許す', () => {

@@ -11,6 +11,8 @@ import {
   PAD_FILE_MAX,
   PAD_LINK_FOLDER,
   PAD_LOCAL,
+  PAD_REMOTE_DENY,
+  PAD_REMOTE_DENY_MESSAGE,
   PAD_POLL_MS,
   PAD_QUIET
 } from '../../shared/pad-channels.js';
@@ -125,6 +127,8 @@ export function createPadApi({
   repo,
   hub,
   log = () => {},
+  // remote：ほかの端末（LAN の iPad）から呼ばれる。false は、iPad のアプリが自分の中で動かすとき（src/local）
+  remote = true,
   notify = (from, ch, payload) => (ctx.notifyOthers ? ctx.notifyOthers(from, ch, payload) : hub.push(ch, payload, from))
 }) {
   // iPad の画面を、パソコンの画面（WebFrameMain）に見立てる。send はその画面にだけ知らせる
@@ -190,6 +194,9 @@ export function createPadApi({
       try {
         if (typeof ch !== 'string') bad('窓口が不正です');
         if (Object.hasOwn(PAD_DENY, ch)) return {r: {error: PAD_DENY[ch]}};
+        // バックアップの読み込みはデータベースを丸ごと入れ替える。LAN の iPad（鍵 1 本）からは受けない：
+        // 中の場所（資料・フォルダ・コマンド）を細工したデータベースを入れ、パソコンのファイルに届く道になるため
+        if (remote && PAD_REMOTE_DENY.includes(ch)) return {r: {error: PAD_REMOTE_DENY_MESSAGE}};
         if (PAD_LOCAL.includes(ch)) return {r: {error: 'この操作は iPad の画面で受けます'}};
         if (ch === 'folder.create' && a.mode === 'link') return {r: {error: PAD_LINK_FOLDER}};
         if (PAD_EXTRA.includes(ch)) return {r: (await extra[ch](a)) ?? null};
