@@ -427,3 +427,9 @@
 .round-note--folder .round-note__files {
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
 }
+
+/* 見つからなくなった LMS の資料の「取り直す」（views/course.js の fileCard） */
+.file__refetch {
+  display: block;
+  margin: 4px auto 0;
+}

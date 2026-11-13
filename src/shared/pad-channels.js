@@ -81,6 +81,9 @@ export const PAD_POLL_MS = 25_000;
  */
 export const PAD_QUIET = new Set([
   'state.get',
+  'search.query',
+  'sync.history',
+  'annotation.memorize',
   'setup.detect',
   'import.list',
   'import.scan',

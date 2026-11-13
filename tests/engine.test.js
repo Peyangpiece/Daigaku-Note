@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, readdir, rm} from 'node:fs/promises';
+import {mkdtemp, readdir, rm, unlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {openDatabase} from '../src/main/db/db.js';
 import {Repo} from '../src/main/db/repo.js';
-import {FileManager} from '../src/main/sync/files.js';
+import {FileManager, REFETCH} from '../src/main/sync/files.js';
 import {SyncEngine, classify, parallel} from '../src/main/sync/engine.js';
 
 /** 偽のコネクタ：data = {courses: [{lmsId, name, weekday, period, rounds: [{number?, title, files: [{url, name, body}]}], notices: [...]}]} */
@@ -756,4 +756,35 @@ test('同じ番号になる回が 2 つあっても、同期のたびに回フ�
   await run('full');
   await run('full');
   assert.deepEqual(renames, [], '2 回目からは改名しない');
+});
+
+test('同期の記録：入った資料と知らせを同期ごとに返す。取り直すと決めた資料が LMS になければ、印を外して知らせる', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  const d = data();
+  await engine.run({connection, connector: fakeConnector(d), term, kind: 'initial'});
+  const first = repo.syncHistory(10);
+  assert.equal(first.length, 1);
+  assert.ok(first[0].saved.length >= 1, '入った資料');
+  assert.ok(first[0].saved.every((s) => s.name && s.course));
+  assert.equal(first[0].materials, first[0].saved.length);
+  // 1 つ消して取り直すと決めたが、LMS からもなくなっていた
+  const c1 = repo.findCourseByLms(connection.id, '1');
+  const lost = repo.listMaterials(c1.id)[0];
+  await unlink(lost.path);
+  repo.updateMaterial(lost.id, {status: 'missing'});
+  repo.setSetting(REFETCH, [lost.id]);
+  for (const c of d.courses) for (const r of c.rounds) r.files = r.files.filter((f) => f.url !== lost.url);
+  await engine.run({
+    connection: repo.get('connection', connection.id),
+    connector: fakeConnector(d),
+    term,
+    kind: 'course',
+    courseIds: [c1.id],
+    full: true
+  });
+  assert.deepEqual(repo.getSetting(REFETCH), []);
+  assert.equal(repo.get('material', lost.id).status, 'missing', '記録は残す');
+  const runs = repo.syncHistory(10);
+  assert.equal(runs.length, 2);
+  assert.match(runs[0].events.map((e) => e.message).join('\n'), /LMS に見つからず、取り直せませんでした/);
 });

@@ -228,6 +228,8 @@ export function annotationToClient(row) {
     rect: JSON.parse(row.rect_json),
     body: row.body ?? '',
     style: row.style_json ? JSON.parse(row.style_json) : {},
-    z: row.z
+    z: row.z,
+    // 暗記モードの記録（文字隠しのマーカー）：覚えた true・まだ false・まだ確かめていない null
+    memorized: row.memorized == null ? null : !!row.memorized
   };
 }

@@ -18,6 +18,7 @@ export const methods = {
       }
       return;
     }
+    if (this.ankiKey(e)) return; // 暗記モード：Space・→・←・Esc
     const k = e.key.toLowerCase();
     // ⌘／Ctrl ＋ キー。Mac では Ctrl、Windows では Win キーの組み合わせは使わない
     const mod = IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;

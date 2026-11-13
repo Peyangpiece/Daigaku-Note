@@ -68,6 +68,7 @@ export const methods = {
     }
     // ノートの試し書き（views/notebook-try.js）：戻るボタンは開いてきた画面へ
     if (material.trial) this.$('back').textContent = '← 戻る';
+    else if (this.backLabel) this.$('back').textContent = this.backLabel; // さがす画面から開いた
     const from = this.isNote && !side && !material.trial ? noteFrom(this.materialId) : null;
     const back = this.$('note-back');
     back.hidden = !from;

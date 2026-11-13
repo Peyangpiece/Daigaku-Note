@@ -159,6 +159,7 @@ export const BAR = `
     <button type="button" class="btn btn--small" data-v="delete" hidden title="選んだ注釈を消す（Delete）">削除</button>
     <button type="button" class="btn btn--small" data-v="rotate" hidden title="選んだ写真を右へ 90° 回す" aria-label="写真を右へ回す">↻ 回す</button>
     <button type="button" class="viewer-bar__find" data-v="find" title="PDF の中の文字と、書き込んだ文字（文字入れ・コメント・メモ）を探す（${key(MOD, 'F')}）">検索</button>
+    <button type="button" class="viewer-bar__find" data-v="anki" aria-pressed="false" hidden>暗記</button>
     <button type="button" class="viewer-bar__find" data-v="photo" title="写真を貼る（${key(MOD, 'V')}・ドラッグでも）">写真</button>
     <button type="button" class="viewer-bar__find" data-v="spread" aria-pressed="false" title="片開き（1 ページずつ）と見開き（2 ページずつ横に並べる）を切り替える">▯ 片開き</button>
     <button type="button" class="btn btn--small" data-v="notebook" hidden title="この回のノートを開く（なければ作る）"><span class="ico ico--notebook" aria-hidden="true"></span> ノート</button>
@@ -195,6 +196,7 @@ export const BAR = `
           <dt>Delete</dt><dd>選んだ注釈を消す</dd>
           <dt>Esc</dt><dd>選択をやめて選択ツールへ</dd>
           <dt>${key(MOD, 'F')}</dt><dd>PDF の中の文字を探す（Enter で次、Shift＋Enter で前）</dd>
+          <dt>暗記モード</dt><dd>Space で答えを見る、→ で「覚えた」、← で「まだ」、Esc でおわる</dd>
           <dt>${key(MOD, 'Z')}・${key(SHIFT, MOD, 'Z')}</dt><dd>取り消す・やり直す</dd>
           <dt>${key(MOD, 'S')}・${key(SHIFT, MOD, 'E')}</dt><dd>すぐに保存（ふだんは自動）・書き出す</dd>
           <dt>${key(MOD, '/')}</dt><dd>この一覧を出す・しまう</dd>
@@ -228,6 +230,20 @@ export const BAR = `
       <button type="button" data-v="find-prev" title="前（Shift＋Enter）" aria-label="前の場所">↑</button>
       <button type="button" data-v="find-next" title="次（Enter）" aria-label="次の場所">↓</button>
       <button type="button" data-v="find-close" title="検索を閉じる（Esc）" aria-label="検索を閉じる">×</button>
+    </div>
+    <div class="viewer-bar__group viewer-sub__group viewer-anki" data-group="anki" role="group" aria-label="暗記モード" hidden>
+      <strong>暗記</strong>
+      <span class="viewer-anki__run" data-v="anki-run">
+        <span class="muted viewer-anki__count" data-v="anki-count" aria-live="polite"></span>
+        <button type="button" data-v="anki-show" aria-pressed="false" title="答えを見る・隠す（Space）">答えを見る</button>
+        <button type="button" class="viewer-anki__ok" data-v="anki-ok" title="覚えた（→・Enter・1）">覚えた</button>
+        <button type="button" class="viewer-anki__ng" data-v="anki-ng" title="まだ（←・2）">まだ</button>
+      </span>
+      <span class="viewer-anki__done" data-v="anki-done" hidden>
+        <span data-v="anki-result" aria-live="polite"></span>
+        <button type="button" class="btn btn--small btn--primary" data-v="anki-again"></button>
+      </span>
+      <button type="button" data-v="anki-end" title="暗記モードをやめる（Esc）">おわる</button>
     </div>
   </div>
   <dialog class="export-dialog" data-v="export-dialog">

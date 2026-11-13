@@ -73,6 +73,22 @@ export const methods = {
     }
   },
 
+  /** さがす画面から開いた：見つけたページへ行き、探した言葉をこの PDF の中でも探して印を付ける */
+  openAtSpot() {
+    const {page, find} = this.openAt ?? {};
+    this.openAt = null;
+    if (page >= 1 && page <= this.pages.length) this.jumpTo({page, y: 0});
+    // 言葉が 2 つ以上のときは、最初の言葉に印を付ける（この画面の検索は 1 続きの言葉を探す）
+    const word = String(find ?? '')
+      .trim()
+      .split(/\s+/)[0];
+    if (!word) return;
+    this.openFind();
+    this.$('find-q').value = word;
+    this.$('find-q').blur(); // 開いてすぐは PDF を読む（矢印キーなどで動けるように）
+    this.runFind(word).catch(() => {});
+  },
+
   closeFind() {
     this.root.querySelector('[data-group="find"]').hidden = true;
     this.find = null;

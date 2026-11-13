@@ -298,6 +298,7 @@ export const methods = {
           .join('');
       if (rg.innerHTML !== html) rg.innerHTML = html;
     }
+    this.updateAnkiButton();
     this.$('delete').hidden = !a; // 選んでいるときだけ出す（ツールバーを 1 行に収める）
     this.$('rotate').hidden = !(a?.kind === 'stamp' && a.style?.type === 'photo'); // 写真を選んでいるとき
     // ペンを持っているとき：太さ（0.3・0.5・0.7）
@@ -383,6 +384,12 @@ export const methods = {
       else if (t.dataset.v === 'delete' && this.selected) this.removeAnno(this.selected);
       else if (t.dataset.v === 'held') this.setTool('select');
       else if (t.dataset.v === 'find') this.openFind();
+      else if (t.dataset.v === 'anki') this.anki ? this.endAnki() : this.startAnki();
+      else if (t.dataset.v === 'anki-show') this.ankiToggle();
+      else if (t.dataset.v === 'anki-ok') this.ankiAnswer(true);
+      else if (t.dataset.v === 'anki-ng') this.ankiAnswer(false);
+      else if (t.dataset.v === 'anki-again') this.ankiAgain();
+      else if (t.dataset.v === 'anki-end') this.endAnki();
       else if (t.dataset.v === 'find-next') this.findStep(1);
       else if (t.dataset.v === 'find-prev') this.findStep(-1);
       else if (t.dataset.v === 'find-close') this.closeFind();

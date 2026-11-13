@@ -598,6 +598,14 @@ export class SyncEngine {
         );
       }
     }
+    // 取り直すと決めた資料が、全部の回を見ても LMS になかった：印を外して知らせる（次の同期のたびに探し続けない）
+    if (crawlAll)
+      for (const mid of this.files.refetching()) {
+        const m = this.repo.get('material', mid);
+        if (m && m.course_id !== course.id) continue;
+        this.files.refetchDone(mid);
+        if (m) event('warn', course, 'refetch', `${m.name} は LMS に見つからず、取り直せませんでした`);
+      }
     await this.files.trashDuplicates(course);
     // ここまで来れば全部の回の一覧は読めている（読めなければ上で例外になる）。
     // ダウンロードの失敗があれば「全部の回を確かめ終えた」にはしない（ふだんの同期は前後 7 日の回しか見ないので、古い回の失敗分が二度と拾われないため）。

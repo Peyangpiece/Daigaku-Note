@@ -286,7 +286,8 @@ export function renderSettings({data}, route = '/settings') {
           <label>途中の確認<select class="input" id="st-every">${[0, 1, 3, 6].map((h) => `<option value="${h}" ${s.everyHours === h ? 'selected' : ''}>${h ? `${h} 時間ごと` : 'しない'}</option>`).join('')}</select></label>
         </div>
         <label style="display:block; margin-top: var(--space-2)"><input type="checkbox" id="st-class" ${s.classStart ? 'checked' : ''}> 授業の始まる時刻にも同期する</label>
-      </section>`
+      </section>
+      <section class="card" id="st-history"><h3>同期の記録</h3><div data-v="sync-history">読み込み中…</div></section>`
           : ''
       }`,
     quiz: data.quiz ? quizSection({...data.quiz, consent: data.settings.aiConsent}) : '',
@@ -440,6 +441,35 @@ async function renderMobile(box, st = null, pair = null) {
       li.querySelector('button').onclick = done;
       input.onkeydown = (e) => e.key === 'Enter' && done();
     };
+}
+
+/** 同期の記録：最近の同期ごとに、入った資料と、失敗・知らせ（何が取れて、何が取れなかったかを見られるように） */
+async function renderSyncHistory(box) {
+  if (!box?.isConnected) return;
+  const r = await api['sync.history']();
+  if (!box.isConnected) return;
+  if (r?.error) return void (box.textContent = r.error);
+  if (!r.runs.length) return void (box.innerHTML = '<p class="muted">まだ同期していません。</p>');
+  const when = (iso) => new Date(iso).toLocaleString('ja-JP', {dateStyle: 'short', timeStyle: 'short'});
+  const KIND = {initial: '初回', manual: '手動', course: '授業ごと', full: '自動', 'class-start': '授業の前'};
+  box.innerHTML = `<p class="muted">最近 ${r.runs.length} 回分です。押すと、入った資料と、取れなかったものが出ます。</p><ul class="sync-log">${r.runs
+    .map((run, i) => {
+      const bad = run.events.filter((e) => e.level === 'error').length;
+      const warn = run.events.length - bad;
+      const sum = [
+        `資料 ${run.materials} 件`,
+        ...(bad ? [`<span class="error-text">失敗 ${bad} 件</span>`] : []),
+        ...(warn ? [`知らせ ${warn} 件`] : [])
+      ].join('・');
+      const saved = run.saved.length
+        ? `<h4>入った資料</h4><ul>${run.saved.map((s) => `<li>${esc(s.name)} <span class="muted">${esc(s.course)}${s.round ? `・第${s.round}回` : ''}</span></li>`).join('')}</ul>${run.materials > run.saved.length ? `<p class="muted">ほか ${run.materials - run.saved.length} 件</p>` : ''}`
+        : '<p class="muted">新しい資料はありませんでした。</p>';
+      const events = run.events.length
+        ? `<h4>取れなかったもの・知らせ</h4><ul>${run.events.map((e) => `<li class="${e.level === 'error' ? 'error-text' : ''}">${e.course ? `<strong>${esc(e.course)}</strong>：` : ''}${esc(e.message)}</li>`).join('')}</ul>`
+        : '';
+      return `<li><details ${i === 0 && (bad || warn) ? 'open' : ''}><summary><span class="sync-log__when">${esc(when(run.finished_at))}</span><span class="muted">${esc(KIND[run.kind] ?? run.kind)}</span><span>${sum}</span></summary><div class="sync-log__body">${saved}${events}</div></details></li>`;
+    })
+    .join('')}</ul>`;
 }
 
 /**
@@ -620,6 +650,9 @@ function bind() {
   const $ = (id) => document.getElementById(id);
   renderMobile(document.querySelector('[data-v="mobile"]'));
   renderCloud(document.querySelector('[data-v="cloud"]'));
+  renderSyncHistory(document.querySelector('[data-v="sync-history"]'));
+  // ホームの「記録」から来た：同期の記録まで送る
+  if (/[?&]show=history/.test(location.hash)) $('st-history')?.scrollIntoView({block: 'start'});
   for (const b of document.querySelectorAll('[data-backup]'))
     b.onclick = async () => {
       const what = b.dataset.backup;
