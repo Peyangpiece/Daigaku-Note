@@ -35,7 +35,9 @@ import {
   PEN_SIZES,
   POUCH_INFO,
   caseArt,
+  PAID_ON_SALE,
   isGear,
+  isPaid,
   itemOf,
   feelLabel,
   listed,
@@ -51,7 +53,8 @@ import {
 const api = window.daigaku;
 const ui = {
   slot: 0, // わたしの筆箱：入れ替える場所（何本目か）
-  shop: {q: '', type: 'all', pay: 'all', unowned: false, sort: 'rec', pick: {}} // ショップ：検索・絞り込み・並び替え・シリーズごとに選んだ色
+  // ショップ：棚（points：ポイントで交換・paid：購入する品）・検索・絞り込み・並び替え・シリーズごとに選んだ色
+  shop: {shelf: 'points', q: '', type: 'all', unowned: false, sort: 'rec', pick: {}}
 };
 const SORTS = {rec: 'おすすめ順', cheap: '安い順', dear: '高い順', name: '名前順'};
 
@@ -268,9 +271,14 @@ function mine(s) {
 /** 値段の札（持っていれば「持っています」） */
 function priceTag(item, owned) {
   if (owned) return '<span class="shop-tag shop-tag--own">✓ 持っています</span>';
+  // 有料の品：売り始めるまでは値段を出さず、「有料」「発売前」の札だけ（買えるように見せない）
+  if (isPaid(item) && !PAID_ON_SALE)
+    return '<span class="shop-tag shop-tag--paid">有料</span><span class="shop-tag shop-tag--soon">発売前</span>';
   const t = tierOf(item.price);
-  return `<span class="shop-tag shop-tag--${t.id}">${priceLabel(item)}</span>`;
+  return `${isPaid(item) ? '<span class="shop-tag shop-tag--paid">有料</span>' : ''}<span class="shop-tag shop-tag--${t.id}">${priceLabel(item)}</span>`;
 }
+/** まだ買えない品か（有料の品で、売り始めていない） */
+const notOnSale = (it) => isPaid(it) && !PAID_ON_SALE;
 /** 色の丸：外が軸の色、中がインクの色（ペンケースは外が本体、中が飾り） */
 const dotStyle = (it) =>
   it.base
@@ -296,6 +304,7 @@ function pickedOf(series) {
 /** 札の下のボタン：持っている・カートに入っている・カートへ入れる */
 function cartAction(it, s) {
   if (s.owned.includes(it.id)) return '';
+  if (notOnSale(it)) return '<span class="muted shop-card__state">まだ購入できません</span>';
   if (cart.has(it.id))
     return `<span class="muted shop-card__state">カートに入っています</span><button type="button" class="btn btn--small" data-action="nav" data-route="/fudebako/cart">カートを見る</button>`;
   return `<button type="button" class="btn btn--small${it.price ? ' btn--primary' : ''}" data-shop="cart" data-id="${esc(it.id)}">${ICON.cart} カートへ入れる</button>`;
@@ -359,14 +368,15 @@ function matches(series, q) {
     .toLowerCase();
   return words.every((w) => hay.includes(w));
 }
+/** シリーズの棚：有料の品のシリーズは「購入する品」、ほかは「ポイントで交換」 */
+const shelfOf = (se) => (se.items.every(isPaid) ? 'paid' : 'points');
 /** 絞り込みと並び替えをかけたシリーズの一覧 */
 function filtered(s) {
   const f = ui.shop;
   const has = new Set(s.owned);
   let list = shopSeries().filter((se) => {
+    if (shelfOf(se) !== f.shelf) return false;
     if (f.type !== 'all' && se.type !== f.type) return false;
-    if (f.pay === 'points' && !se.items.some((it) => it.points > 0)) return false;
-    if (f.pay === 'yen' && !se.items.some((it) => it.price > 0)) return false;
     if (f.unowned && se.items.every((it) => has.has(it.id))) return false;
     return matches(se, f.q);
   });
@@ -386,25 +396,49 @@ function results(s) {
   const list = filtered(s);
   if (!list.length)
     return `<p class="muted shop-empty">当てはまる文房具がありません。<button type="button" class="btn btn--small" data-shop="reset">絞り込みを外す</button></p>`;
-  const all = shopSeries().reduce((k, se) => k + se.items.length, 0);
+  const all = shopSeries()
+    .filter((se) => shelfOf(se) === ui.shop.shelf)
+    .reduce((k, se) => k + se.items.length, 0);
   const n = list.reduce((k, se) => k + se.items.length, 0);
   return `<p class="muted shop-count">${n === all ? `全 ${all} 点` : `${n} 点（全 ${all} 点）`}</p>
     <div class="shop-grid">${list.map((se) => seriesCard(se, s)).join('')}</div>`;
 }
 const chip = (what, v, label, on) =>
   `<button type="button" class="shop-chip${on ? ' is-on' : ''}" data-shop="${what}" data-v="${v}" aria-pressed="${on}">${label}</button>`;
-/** 上の「新しく入りました」の帯（featured の品）。検索・絞り込み中は出さない */
+/**
+ * 上の帯。検索・絞り込み中は出さない。
+ * ポイントの棚：次に交換できる品までの距離（いちばん近い、まだ持っていない品）。購入する品の棚：新しく入る品（featured）
+ */
 function hero(s) {
   const f = ui.shop;
-  if (f.q || f.type !== 'all' || f.pay !== 'all' || f.unowned) return '';
-  const it = shopSeries()
-    .flatMap((se) => se.items)
-    .find((x) => x.featured);
+  if (f.q || f.type !== 'all' || f.unowned) return '';
+  const items = shopSeries()
+    .filter((se) => shelfOf(se) === f.shelf)
+    .flatMap((se) => se.items);
+  if (f.shelf === 'points') {
+    const have = balance();
+    const rest = items.filter((x) => x.points > 0 && !s.owned.includes(x.id) && !cart.has(x.id));
+    if (!rest.length) return '';
+    // いま交換できる品があれば、その中でいちばん高い品。なければ、いちばん近い品
+    const can = rest.filter((x) => x.points <= have).sort((a, b) => b.points - a.points)[0];
+    const it = can ?? [...rest].sort((a, b) => a.points - b.points)[0];
+    const lead = can ? 'いまのポイントで交換できます' : `あと ${pt(it.points - have)} で交換できます`;
+    return `<section class="shop-hero shop-hero--points" aria-label="つぎの 1 つ">
+    <div class="shop-hero__text">
+      <span class="shop-hero__pill">${esc(lead)}</span>
+      <h3>${esc(it.name)}</h3>
+      <p>書く・読む・確かめるとポイントがたまります。<button type="button" class="link" data-action="nav" data-route="/fudebako/points">もらい方を見る</button></p>
+      <div class="shop-hero__act">${priceTag(it, false)}${can ? cartAction(it, s) : ''}<button type="button" class="btn btn--small" data-action="nav" data-route="${detailRoute(it)}">くわしく見る</button></div>
+    </div>
+    <div class="shop-hero__art">${art(it, {foot: false})}</div>
+  </section>`;
+  }
+  const it = items.find((x) => x.featured);
   if (!it) return '';
   const owned = s.owned.includes(it.id);
-  return `<section class="shop-hero shop-hero--${tierOf(it.price).id}" aria-label="新しく入りました">
+  return `<section class="shop-hero shop-hero--${tierOf(it.price).id}" aria-label="${PAID_ON_SALE ? '新しく入りました' : '発売前の品'}">
     <div class="shop-hero__text">
-      <span class="shop-hero__pill">新しく入りました</span>
+      <span class="shop-hero__pill">${PAID_ON_SALE ? '新しく入りました' : '発売前'}</span>
       <h3>${esc(it.name)}</h3>
       <p>${esc(it.maker)}。${it.refills ? '黒・赤のボールペンと 0.5 のシャープが 1 本に。' : ''}</p>
       <div class="shop-hero__act">${priceTag(it, owned)}${owned ? '' : cartAction(it, s)}<button type="button" class="btn btn--small" data-action="nav" data-route="${detailRoute(it)}">くわしく見る</button></div>
@@ -415,7 +449,17 @@ function hero(s) {
 /** ショップ：帯・検索・絞り込み・シリーズの札 */
 function shop(s) {
   const f = ui.shop;
+  // 種類の絞り込みは、開いている棚にある種類だけ出す
+  const inShelf = new Set(
+    shopSeries()
+      .filter((se) => shelfOf(se) === f.shelf)
+      .map((se) => se.type)
+  );
+  const types = TYPES.filter((t) => inShelf.has(t));
+  const tab = (k, label) =>
+    `<button type="button" role="tab" class="shop-shelf__tab" aria-selected="${f.shelf === k}" data-shop="shelf" data-v="${k}">${label}</button>`;
   return `<div class="shop">
+    <div class="shop-shelf" role="tablist" aria-label="棚">${tab('points', 'ポイントで交換')}${tab('paid', '購入する品<span class="shop-tag shop-tag--paid">有料</span>')}</div>
     ${hero(s)}
     <div class="shop-toolbar" role="search">
       <div class="shop-toolbar__row">
@@ -427,18 +471,19 @@ function shop(s) {
           .join('')}</select></label>
       </div>
       <div class="shop-chips">
-        <span class="muted shop-chips__label">種類</span>${chip('type', 'all', 'すべて', f.type === 'all')}${TYPES.map((t) => chip('type', t, TYPE_LABEL[t], f.type === t)).join('')}
-        <span class="shop-chips__sep"></span><span class="muted shop-chips__label">値段</span>${chip('price', 'all', 'すべて', f.pay === 'all')}${chip('price', 'points', 'ポイント', f.pay === 'points')}${chip('price', 'yen', '円', f.pay === 'yen')}
+        <span class="muted shop-chips__label">種類</span>${chip('type', 'all', 'すべて', f.type === 'all')}${types.map((t) => chip('type', t, TYPE_LABEL[t], f.type === t)).join('')}
         <span class="shop-chips__sep"></span>${chip('unowned', f.unowned ? '0' : '1', 'まだ持っていないものだけ', f.unowned)}
       </div>
     </div>
-    <p class="muted shop-note">円の支払いは α 版のあいだはデモです（実際の請求はありません）。</p>
+    ${f.shelf === 'paid' && !PAID_ON_SALE ? '<p class="muted shop-note">有料の品は発売前です。まだ購入できません（請求は発生しません）。買い切りで販売する予定です。</p>' : ''}
     <div id="shop-results">${results(s)}</div>
   </div>`;
 }
 
 /** 入手のボタン（詳細ページ）：持っていなければ「カートへ入れる」、持っていれば筆箱に入れる・入っている場所 */
 function buyButtons(s, it) {
+  if (!s.owned.includes(it.id) && notOnSale(it))
+    return '<span class="muted">発売前の品です。まだ購入できません。</span>';
   if (!s.owned.includes(it.id))
     return cart.has(it.id)
       ? `<span class="muted">カートに入っています</span><button type="button" class="btn btn--primary" data-action="nav" data-route="/fudebako/cart">カートを見る</button>`
@@ -536,11 +581,13 @@ function detail(s, id) {
         <p class="fb-detail__price">${priceTag(it, s.owned.includes(it.id))}${
           s.owned.includes(it.id)
             ? ''
-            : it.price
-              ? '<span class="muted">メーカーの参考価格（税込）</span>'
-              : it.points
-                ? `<span class="muted">いま ${pt(balance())} 持っています</span>`
-                : ''
+            : notOnSale(it)
+              ? '<span class="muted">買い切りで販売する予定です</span>'
+              : it.price
+                ? '<span class="muted">税込・買い切り</span>'
+                : it.points
+                  ? `<span class="muted">いま ${pt(balance())} 持っています</span>`
+                  : ''
         }</p>
         <dl class="fb-spec">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
         ${colors}
@@ -573,7 +620,8 @@ document.addEventListener('click', (e) => {
 
 /** カートの中身（持っている品・ない品は外す） */
 function cartItems(s) {
-  cart.prune((id) => itemOf(id) && listed(itemOf(id)) && !s.owned.includes(id));
+  // 発売前の有料の品は、カートに残っていても外す（前の版で入れたもの）
+  cart.prune((id) => itemOf(id) && listed(itemOf(id)) && !s.owned.includes(id) && !notOnSale(itemOf(id)));
   return cart.ids().map(itemOf);
 }
 /** カート・注文の行の説明（メーカー・字幅など。既製品の見た目の品は spec にメーカーが入るので重ねない） */
@@ -617,7 +665,6 @@ function cartPage(s) {
       <aside class="shop-side">
         ${totals(items)}
         ${pointsNote(items)}
-        ${cartTotal(items.map((it) => it.id)) ? '<p class="muted shop-side__note">円の支払いは α 版のあいだはデモです。実際の請求はありません。</p>' : ''}
         <button type="button" class="btn btn--primary shop-side__go" data-action="nav" data-route="/fudebako/checkout">レジへ進む</button>
         <button type="button" class="btn" data-action="nav" data-route="${SHOP}">買い物を続ける</button>
       </aside>
@@ -856,14 +903,18 @@ document.addEventListener('click', (e) => {
   const sb = e.target.closest('.fudebako [data-shop]');
   if (sb) {
     const what = sb.dataset.shop;
-    if (what === 'type' || what === 'price') {
-      ui.shop[what === 'price' ? 'pay' : 'type'] = sb.dataset.v;
+    if (what === 'type') {
+      ui.shop.type = sb.dataset.v;
+      refresh();
+    } else if (what === 'shelf') {
+      // 棚を替える：種類の絞り込みは外す（有料の棚にない種類を選んだままにしない）
+      ui.shop = {...ui.shop, shelf: sb.dataset.v === 'paid' ? 'paid' : 'points', type: 'all'};
       refresh();
     } else if (what === 'unowned') {
       ui.shop.unowned = sb.dataset.v === '1';
       refresh();
     } else if (what === 'reset') {
-      ui.shop = {...ui.shop, q: '', type: 'all', pay: 'all', unowned: false};
+      ui.shop = {...ui.shop, q: '', type: 'all', unowned: false};
       refresh();
     } else if (what === 'pick') {
       ui.shop.pick[sb.dataset.series] = sb.dataset.id;
@@ -875,6 +926,7 @@ document.addEventListener('click', (e) => {
       const it = itemOf(sb.dataset.id);
       if (!it) return;
       if (st().owned.includes(it.id)) return toast(`${it.name} はもう持っています`);
+      if (notOnSale(it)) return toast('発売前の品です。まだ購入できません');
       cart.add(it.id);
       refresh();
       toast(`${it.name} をカートに入れました`, {

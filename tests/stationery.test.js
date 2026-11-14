@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  PAID_ON_SALE,
+  isPaid,
   CASE_INFO,
   CATALOG,
   EXTRA_MODELS,
@@ -119,7 +121,7 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
   assert.equal(series[0].id, 'pen-05');
 });
 
-test('カートとレジ：合計は品の値段の和。無料だけなら支払いなし、有料があればデモ決済が要る。注文の記録が残る', () => {
+test('カートとレジ：合計は品の値段の和。ポイントの品は支払いなしで交換できる。有料の品は発売前で買えない。注文の記録が残る', () => {
   assert.equal(cartTotal(['maker-sarasa-red', 'pen-wood-07', 'nope']), 110);
   assert.equal(cartTotal([]), 0);
   assert.equal(cartPoints(['maker-sarasa-red', 'pen-wood-07', 'case-tin-silver', 'nope']), 800);
@@ -134,37 +136,25 @@ test('カートとレジ：合計は品の値段の和。無料だけなら支�
   assert.deepEqual(free.order.payment, {method: 'points'});
   assert.equal(free.order.id, 'o1');
   assert.equal(free.order.at, '2026-10-23T12:00:00.000Z');
-  // 円の品は支払いの方法が要る（α 版はデモだけ。カードの情報は受け取らない・残さない）
-  assert.throws(() => purchase(null, ['maker-craftlab-004']), /支払い/);
-  assert.throws(() => purchase(null, ['maker-craftlab-004'], {method: 'card'}), /支払い/);
-  const paid = purchase(null, ['maker-craftlab-004', 'maker-sarasa-red'], {
-    method: 'demo',
-    last4: '4242 4242 4242 4242'
-  });
-  assert.equal(paid.order.total, 8910);
-  assert.equal(paid.order.points, 0);
-  assert.deepEqual(paid.order.payment, {method: 'demo'}, 'カードの番号は残さない');
-  assert.deepEqual(
-    paid.order.items.map((x) => [x.id, x.price]),
-    [
-      ['maker-craftlab-004', 8800],
-      ['maker-sarasa-red', 110]
-    ]
-  );
-  assert.ok(paid.stationery.owned.includes('maker-craftlab-004'));
+  // 有料の品（円の値段の品）は発売前：デモ決済でも買えない（v0.26.2。前は請求のないまま手に入った）。何も手に入らない
+  assert.equal(PAID_ON_SALE, false);
+  assert.equal(isPaid(itemOf('maker-craftlab-004')), true);
+  assert.equal(isPaid(itemOf('pen-wood-07')), false);
+  assert.throws(() => purchase(null, ['maker-craftlab-004']), /発売前/);
+  assert.throws(() => purchase(null, ['maker-craftlab-004', 'maker-sarasa-red'], {method: 'demo'}), /発売前/);
+  // 前の版で手に入れた有料の品は、そのまま持っている
+  const kept = stationeryState({owned: ['maker-craftlab-004']});
+  assert.ok(kept.owned.includes('maker-craftlab-004'));
   // 同じ品を 2 回は買えない。空のカート・ない品は断る
-  assert.throws(() => purchase(paid.stationery, ['maker-sarasa-red'], {method: 'demo'}), /持っています/);
+  assert.throws(() => purchase(kept, ['maker-craftlab-004'], {method: 'demo'}), /持っています/);
   assert.throws(() => purchase(free.stationery, ['pen-wood-07']), /持っています/);
   assert.throws(() => purchase(null, []), /空/);
   assert.throws(() => purchase(null, ['gold-pen']), /ありません/);
   // 近道（acquire）は円の品もポイントの品も断る（カートからレジへ）
   assert.throws(() => acquire(null, 'maker-craftlab-004'), /カート/);
   assert.throws(() => acquire(null, 'pen-wood-07'), /カート/);
-  // 円とポイントの品をいっしょに買える
-  const both = purchase(null, ['maker-sarasa-red', 'pen-green-05'], {method: 'demo'});
-  assert.equal(both.order.total, 110);
-  assert.equal(both.order.points, itemOf('pen-green-05').points);
-  assert.equal(both.order.payment.method, 'demo');
+  // 有料の品がカートに混ざっていれば、ポイントの品も含めて何も買えない（ポイントも引かない）
+  assert.throws(() => purchase(null, ['maker-sarasa-red', 'pen-green-05'], {method: 'demo'}), /発売前/);
   // ポイントの品をまとめて買える
   const mixed = purchase(null, ['pen-green-05', 'marker-blue'], null);
   assert.equal(mixed.order.total, 0);
@@ -294,14 +284,18 @@ test('ペンケースは 3D モデル（形の種類ごとの GLB。色は base�
   }
 });
 
-test('既製品の見た目のペン：α 版のあいだはショップに出て入手できる（正式な公開の前に見直す目印 experimental）。持っている人の筆箱には残る', async () => {
+test('既製品の見た目のペン：α 版のあいだはショップに「発売前」として出す（正式な公開の前に見直す目印 experimental）。持っている人の筆箱には残る', async () => {
   const {MAKER_ITEMS_LISTED, listed} = await import('../src/shared/stationery.js');
   const js = itemOf('maker-jetstream-black');
   assert.equal(js.experimental, true);
   assert.equal(MAKER_ITEMS_LISTED, true);
   assert.equal(listed(js), true);
   assert.equal(listed(itemOf('pen-black-05')), true);
-  assert.ok(purchase(null, ['maker-sarasa-red'], {method: 'demo'}).stationery.owned.includes('maker-sarasa-red'));
+  assert.throws(
+    () => purchase(null, ['maker-sarasa-red'], {method: 'demo'}),
+    /発売前/,
+    '有料の品は、売り始めるまで買えない'
+  );
   assert.throws(() => acquire(null, 'gold-pen'), /ありません/);
   // 前の版で買った人の持ち物と筆箱の場所はそのまま
   const st = stationeryState({owned: ['maker-sarasa-red'], slots: ['maker-sarasa-red', null, null, null, null, null]});

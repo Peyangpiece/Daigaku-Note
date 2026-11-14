@@ -1382,3 +1382,64 @@ button.fb-card {
 .fb-detail__stage > .nb-cover {
   margin: var(--space-3) auto;
 }
+
+/* ショップの棚（v0.26.2）：ポイントで交換・購入する品（有料）。設定のタブと同じ形 */
+.shop-shelf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: var(--space-3);
+  padding: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper-ink) 6%, transparent);
+}
+.shop-shelf__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--paper-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.shop-shelf__tab:hover {
+  background: color-mix(in srgb, var(--paper-ink) 8%, transparent);
+}
+.shop-shelf__tab[aria-selected='true'] {
+  background: var(--card);
+  font-weight: 700;
+  box-shadow: var(--card-shadow);
+}
+.shop-shelf__tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+/* 有料の札（文字で示す。色だけで区別しない）と、発売前の札 */
+.shop-tag--paid {
+  background: #2b2b2b;
+  color: #fff;
+}
+.shop-tag--soon {
+  background: transparent;
+  color: #55595f;
+  box-shadow: inset 0 0 0 1.5px #8a8f96;
+}
+.shop-tag--paid + .shop-tag {
+  margin-left: 6px;
+}
+.shop-hero--premium .shop-tag--soon {
+  color: var(--cream);
+  box-shadow: inset 0 0 0 1.5px #cfc6ad;
+}
+.shop-hero--premium .shop-tag--paid {
+  background: var(--cream);
+  color: #2b2b2b;
+}
+.shop-hero--premium .shop-card__state {
+  color: #cfc6ad;
+}
