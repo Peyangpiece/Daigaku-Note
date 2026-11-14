@@ -1,7 +1,7 @@
 import {esc} from './html.js';
 import {NOTEBOOKS, STARTER_NOTEBOOKS, MY_NOTES_MAX, cleanDesign, cleanMyNotes} from './notebooks.js';
 // 文房具（SPEC §9.8・§15）：ボールペン・シャープペンシル・マーカー（アンダーライン用）・文字隠しペン・ペンケース。副作用なし。
-// 品ぞろえはアプリに入っている（公式の品はアプリ内のポイントで買う〔POINTS。はじめから持っている品は 0〕。既製品の見た目の品は定価）。
+// 品ぞろえはアプリに入っている（公式の品はアプリ内のポイントで買う〔POINTS。はじめから持っている品は 0〕。有料の棚の品〔アトリエ〕は円。発売前）。
 // 持ち物と筆箱の中身は設定（stationery）に保存する。ポイントの残高は shared/points.js。
 // ショップはシリーズ（series：同じ品の色ちがい）ごとに 1 枚の札で出し、色は札の右下の丸で選ぶ（SERIES・shopSeries）。
 // 買うときはカートに入れてレジへ。α 版の決済はデモ（purchase：実際の請求はなく、注文の記録だけ残す）
@@ -202,27 +202,28 @@ export const CASE_INFO = {
   }
 };
 /**
- * 既製品の見た目のペン（実験）。実物の寸法で作った 3D モデル（scripts/pens3d/makers.py）で描く。art は形の種類
- * （jetstream・sarasa は前の絵の名前。3D モデルの名前に読み替える）。ゲルインク（サラサ）は少し太く濃い線。
- * price はその品の定価（税込）。mm は字幅（既定 0.5）
+ * 有料の棚のペン「アトリエ」（パレットノートのオリジナル。v0.27.0 で、既製品の見た目の試作から入れ替えた）。
+ * 見た目は 3D モデル（scripts/pens3d/atelier.py。model は GLB の名前）。gel はゲルインク（少し太く濃い線）。
+ * price は円（税込。発売前の仮の値段）。mm は字幅（既定 0.5）。note は軸の作りの短い説明
  */
-const MAKER_MODEL = {jetstream: 'jetstream', sarasa: 'sarasa-clip'};
-const maker = (id, name, makerName, art, color, body, accent, price, series, {mm = '0.5', line = null} = {}) => ({
+const ATELIER = 'パレットノート アトリエ';
+const atelier = (id, name, model, color, body, accent, price, note, {mm = '0.5', line = null, gel = false} = {}) => ({
   id,
   type: 'pen',
   name,
   color,
-  width: art === 'sarasa' ? 1.25 : (PEN_WIDTH[mm] ?? 1.1),
+  width: gel ? 1.25 : (PEN_WIDTH[mm] ?? 1.1),
   mm,
   body,
   accent,
   price,
-  maker: makerName,
+  maker: ATELIER,
   art: 'model',
-  model: MAKER_MODEL[art] ?? art,
+  model,
   line, // ショップの説明の書く線（なければ「0.5 mm」のように字幅）
-  series,
-  experimental: true
+  note,
+  series: model,
+  atelier: true
 });
 
 // ボールペンの字幅（mm）→ 線の太さ（pt。1pt ≒ 0.35mm）。紙に書いた線の太さに近づける
@@ -233,10 +234,10 @@ const SHARP = {color: '#4a4a4a', width: 1.3};
 const PENCIL_WIDTH = {0.3: 0.9, 0.5: 1.3, 0.7: 1.7};
 
 /**
- * 実験：既製品の多機能ペン（3D モデルの見た目）。refills の最初の芯で書き始める。
+ * アトリエの多機能ペン。refills の最初の芯で書き始める。
  * 各芯：{id, name, color, mm, width, sharp?}。item の color・width・mm は最初の芯のもの（筆箱の一覧の色などに使う）
  */
-const multi = (id, name, makerName, {model, body, accent, refills, refill, price, featured = false}) => ({
+const multi = (id, name, {model, body, accent, refills, refill, price, note, featured = false}) => ({
   id,
   type: 'pen',
   name,
@@ -246,13 +247,14 @@ const multi = (id, name, makerName, {model, body, accent, refills, refill, price
   body,
   accent,
   price,
-  featured, // ショップの上の「新しく入りました」の帯に出す
-  maker: makerName,
+  featured, // ショップの上の帯に出す
+  maker: ATELIER,
   art: 'model',
   model,
   refills,
   refill,
-  experimental: true
+  note,
+  atelier: true
 });
 
 export const CATALOG = [
@@ -331,105 +333,113 @@ export const CATALOG = [
   gadget('calc-card', 'calc', 'カード電卓', 'tool-calc-card', '薄いパステル・丸いキー'),
   gadget('timer-stopwatch', 'timer', 'ストップウォッチ', 'tool-timer', '金属のケース・針'),
   gadget('timer-digital', 'timer', 'デジタルタイマー', 'tool-timer-digital', 'ミントの本体・液晶'),
-  // 既製品の見た目のペン（試作。メーカーの許しを得ていないので、正式な公開の前に見直す。
-  // α 版のあいだはショップに出す：MAKER_ITEMS_LISTED）
-  // 値段は各メーカーの参考価格・希望小売価格（税込。2026 年 10 月に確かめた）
-  maker(
-    'maker-jetstream-black',
-    'ジェットストリーム 黒',
-    '三菱鉛筆',
-    'jetstream',
+  // 有料の棚：アトリエ（オリジナルの形の、こだわりの軸。発売前。値段は仮）。書く線は、ふだん使いの 2 つは 0.5、
+  // ほかは黒・中字相当の 1.0 にそろえる。クリップにインクの色の小さな粒（シリーズの印）
+  atelier(
+    'atelier-line-black',
+    'アトリエ ライン 黒',
+    'atelier-line',
     '#1f1f22',
-    '#1d1e21',
-    '#121214',
-    165,
-    'jetstream'
+    '#26282c',
+    '#26282c',
+    300,
+    'アルミの細い軸・ノック式'
   ),
-  maker(
-    'maker-jetstream-red',
-    'ジェットストリーム 赤',
-    '三菱鉛筆',
-    'jetstream',
+  atelier(
+    'atelier-line-red',
+    'アトリエ ライン 赤',
+    'atelier-line',
     '#d0202e',
-    '#c8102e',
-    '#121214',
-    165,
-    'jetstream'
+    '#a8232b',
+    '#a8232b',
+    300,
+    'アルミの細い軸・ノック式'
   ),
-  maker('maker-sarasa-black', 'サラサクリップ 黒', 'ゼブラ', 'sarasa', '#141414', '#e8eef2', '#1b1b1b', 110, 'sarasa'),
-  maker('maker-sarasa-red', 'サラサクリップ 赤', 'ゼブラ', 'sarasa', '#e4002b', '#e8eef2', '#e4002b', 110, 'sarasa'),
-  // 輸入の筆記具（定価は各社・正規販売店の希望小売価格。2026 年 11 月に確かめた）。書く線は黒・中字（M）相当の 1.0 にそろえる
-  // （出荷時の替え芯は時期・店で違うことがあるため、アプリでは決めた 1 つにする）
-  // ピンクゴールドは 849 プレミアム（ブリュットロゼ）の形（ヘアラインのアルマイトの軸・つやのある金属のクリップとノックの頭）。
-  // id は 0.16.0 のレッドのまま（持っている人の持ち物と筆箱の場所を残すため）。値段は販売店の税込価格（定価の公表は見つからず）
-  maker(
-    'maker-caran-849-red',
-    'カランダッシュ 849 プレミアム ボールペン（ピンクゴールド）',
-    'カランダッシュ',
-    'caran-849-premium',
-    '#1f1f22',
-    '#d7b4a0',
-    '#d9a88c',
-    6490,
-    'caran-849',
-    {mm: '1.0', line: '黒・中字（M）相当'}
+  atelier(
+    'atelier-clear-black',
+    'アトリエ クリア 黒',
+    'atelier-clear',
+    '#141414',
+    '#e8eef2',
+    '#1b1b1b',
+    250,
+    '中の見える透明の軸・ノック式',
+    {gel: true}
   ),
-  maker(
-    'maker-caran-849-black',
-    'カランダッシュ 849 ボールペン（ブラック）',
-    'カランダッシュ',
-    'caran-849',
-    '#1f1f22',
-    '#1c1c1e',
-    '#1c1c1e',
-    5280,
-    'caran-849',
-    {mm: '1.0', line: '黒・中字（M）相当'}
+  atelier(
+    'atelier-clear-red',
+    'アトリエ クリア 赤',
+    'atelier-clear',
+    '#e4002b',
+    '#e8eef2',
+    '#b3162a',
+    250,
+    '中の見える透明の軸・ノック式',
+    {gel: true}
   ),
-  maker(
-    'maker-parker-jotter',
-    'パーカー ジョッター コアライン ボンドストリートブラック CT',
-    'パーカー',
-    'parker-jotter',
+  atelier(
+    'atelier-flute',
+    'アトリエ フルート（藍）',
+    'atelier-flute',
     '#1f1f22',
-    '#2a2a2c',
-    '#e8e8e8',
-    2750,
-    'parker-jotter',
-    {mm: '1.0', line: '黒・中字（M）相当'}
-  ),
-  maker(
-    'maker-lamy-2000',
-    'LAMY 2000 ボールペン',
-    'LAMY',
-    'lamy-2000',
-    '#1f1f22',
-    '#2a2a2b',
+    '#1e2a44',
     '#c9ccd1',
-    14300,
-    'lamy-2000',
-    {mm: '1.0', line: '黒・中字（M）相当'}
+    1800,
+    '縦の溝を彫ったつやのある軸・回転式',
+    {mm: '1.0', line: '黒・中字相当'}
   ),
-  maker(
-    'maker-kaweco-special',
-    'カヴェコ スペシャル ボールペン（ブラック）',
-    'カヴェコ',
-    'kaweco-special',
+  atelier(
+    'atelier-facet-brass',
+    'アトリエ ファセット（真ちゅう）',
+    'atelier-facet',
+    '#1f1f22',
+    '#c4a25a',
+    '#d0d1d4',
+    5800,
+    '12 角の金属の軸・綾目の握り',
+    {mm: '1.0', line: '黒・中字相当'}
+  ),
+  atelier(
+    'atelier-facet-black',
+    'アトリエ ファセット（ブラック）',
+    'atelier-facet',
     '#1f1f22',
     '#1e1e20',
-    '#1e1e20',
-    9900,
-    'kaweco-special',
-    {mm: '1.0', line: '黒・中字（M）相当'}
+    '#2a2a2c',
+    5200,
+    '12 角の金属の軸・綾目の握り',
+    {mm: '1.0', line: '黒・中字相当'}
   ),
-  // サクラクラフトラボ 004：回転式の 2&1（黒・赤のボールペンと 0.5 のシャープ）。替え芯は 4C 規格。定価 ¥8,800（税込）。
-  // 見た目は 3D モデル（assets/stationery/craftlab-004.glb。写真の質感をそのまま使う）
-  multi('maker-craftlab-004', 'サクラクラフトラボ 004', 'サクラクレパス', {
-    model: 'craftlab-004',
-    body: '#5c5d55',
-    accent: '#a99d80',
+  atelier(
+    'atelier-wood',
+    'アトリエ ウッド（くるみ）',
+    'atelier-wood',
+    '#1f1f22',
+    '#6b4a32',
+    '#c9ccd1',
+    6800,
+    'くるみの木の軸・ステンレスの握り',
+    {mm: '1.0', line: '黒・中字相当'}
+  ),
+  atelier(
+    'atelier-drop',
+    'アトリエ ドロップ（深紅）',
+    'atelier-drop',
+    '#1f1f22',
+    '#5a1220',
+    '#d9b45a',
+    9800,
+    '葉巻の形のつやのある軸・金の金具・回転式',
+    {mm: '1.0', line: '黒・中字相当'}
+  ),
+  // トリオ：回転式の 2&1（黒・赤のボールペンと 0.5 のシャープ）。替え芯は 4C 規格
+  multi('atelier-trio', 'アトリエ トリオ', {
+    model: 'atelier-trio',
+    body: '#22304a',
+    accent: '#c9b68f',
     refill: '4C',
     price: 8800,
+    note: '太めの軸・回して芯を選ぶ',
     featured: true,
     refills: [
       {id: 'black', name: '黒ボールペン', color: '#1f1f22', mm: '0.5', width: PEN_WIDTH[0.5]},
@@ -509,7 +519,24 @@ for (const it of CATALOG) it.points = POINTS[it.id] ?? 0;
 // ノート（docs/SPEC-NOTEBOOK.md。品と値段は shared/notebooks.js）。ポイントは notebooks.js で決めてあるので、上の POINTS のあとに足す
 CATALOG.push(...NOTEBOOKS);
 const ITEMS = new Map(CATALOG.map((it) => [it.id, it]));
-export const itemOf = (id) => ITEMS.get(id) ?? null;
+/**
+ * 前の版（〜0.26.2）の、既製品の見た目の品の id → いまの品。持ち物・筆箱の場所・選んだ芯と太さ・注文の記録を引き継ぐ
+ */
+export const RENAMED = {
+  'maker-jetstream-black': 'atelier-line-black',
+  'maker-jetstream-red': 'atelier-line-red',
+  'maker-sarasa-black': 'atelier-clear-black',
+  'maker-sarasa-red': 'atelier-clear-red',
+  'maker-caran-849-red': 'atelier-facet-brass',
+  'maker-caran-849-black': 'atelier-facet-black',
+  'maker-parker-jotter': 'atelier-flute',
+  'maker-lamy-2000': 'atelier-drop',
+  'maker-kaweco-special': 'atelier-wood',
+  'maker-craftlab-004': 'atelier-trio'
+};
+/** いまの id（前の版の id は読み替える） */
+export const currentId = (id) => RENAMED[id] ?? id;
+export const itemOf = (id) => ITEMS.get(currentId(id)) ?? null;
 export const isTool = (id) => TOOL_TYPES.includes(itemOf(id)?.type);
 
 /** 多機能ペンの芯（id が合わなければ最初の芯）。多機能ペンでなければ null */
@@ -547,16 +574,16 @@ export const FEELS = {
     w: 1.18
   },
   // 書き味は筆圧の効き（th）0.45・入り（ts）1.2・抜き（te）1.5 を超えない（shared/ink.js の strokeOptions が抑える。v0.16.29）
-  // 有料のペン（v0.16.24）：各品の書き味の特徴から決める。筆記抵抗が小さい（よく滑る）ほど手ぶれ補正（st）を強め、抜き（te）を長く。
+  // 有料のペン（アトリエ）：軸と芯の性格から決める。筆記抵抗が小さい（よく滑る）ほど手ぶれ補正（st）を強め、抜き（te）を長く。
   // 抵抗が大きい（紙をとらえる）ほど入り・抜きを短くくっきり。インクの出がよく均一なものは太さの変化（th）を控えめに、線を濃く（w）
-  // 低粘度油性：ヌルヌルとよく滑り、抜きが長くのびる
-  jetstream: {name: '低粘度の油性', note: '軽く、抜きがのびる', th: 0.28, ts: 0.9, te: 1.5, st: 0.5, w: 1},
-  sarasa: {name: 'ゲルインク', note: '濃く、入りから太い', th: 0.3, ts: 0.5, te: 0.8, st: 0.25, w: 1.14},
-  // カランダッシュ 849：伝統的な油性だがインクの出がとてもよく、なめらか。低粘度のような滑りすぎはなく、適度な筆記抵抗で
-  // 紙をしっかりとらえ、鉛筆のようなしっかりした線。芯の 5 本の溝でインクが均一に出て、ボタ落ち・カスレが起きにくい
-  // → 太さの変化は控えめ（均一）、入り・抜きは短め（紙をとらえる）、手ぶれ補正は中くらい、線は濃いめ。ゆらぎなし
-  'caran-849': {
-    name: '伝統の油性',
+  // ライン：低粘度の油性。よく滑り、抜きが長くのびる
+  'atelier-line': {name: '低粘度の油性', note: '軽く、抜きがのびる', th: 0.28, ts: 0.9, te: 1.5, st: 0.5, w: 1},
+  // クリア：ゲルインク。濃く、入りから太い
+  'atelier-clear': {name: 'ゲルインク', note: '濃く、入りから太い', th: 0.3, ts: 0.5, te: 0.8, st: 0.25, w: 1.14},
+  // ファセット：重い金属の軸。適度な筆記抵抗で紙をしっかりとらえ、均一でしっかりした線
+  // → 太さの変化は控えめ、入り・抜きは短め、手ぶれ補正は中くらい、線は濃いめ
+  'atelier-facet': {
+    name: 'しっかりした油性',
     note: 'インクの出がよく、適度な抵抗でしっかりした線',
     th: 0.24,
     ts: 0.7,
@@ -564,20 +591,18 @@ export const FEELS = {
     st: 0.3,
     w: 1.08
   },
-  // パーカー ジョッター：低粘度の油性インク（クインクフロー）。非常に滑らかで、ダマになりにくいサラサラした書き味
-  // → よく滑る（手ぶれ補正を強く、抜きを長く）。インクが均一なので太さの変化は中くらい、ゆらぎなし
-  'parker-jotter': {
-    name: 'クインクフロー',
-    note: '低粘度で非常に滑らか、ダマになりにくい',
+  // フルート：低粘度でとてもなめらか。よく滑る（手ぶれ補正を強く、抜きを長く）
+  'atelier-flute': {
+    name: 'なめらかな油性',
+    note: '低粘度でとてもなめらか、ダマになりにくい',
     th: 0.3,
     ts: 1.1,
     te: 1.5,
     st: 0.48,
     w: 1
   },
-  // LAMY 2000：なめらかでサラサラだが、特有のクセ（スイートスポット）がある
-  // → よく滑る（手ぶれ補正を強め、抜きを長め）。当たりのよい向き（縦の線）から外れると少し細くなる（sw）
-  'lamy-2000': {
+  // ドロップ：太い軸でなめらか。当たりのよい向き（縦の線）から外れると少し細くなるクセ（sw）
+  'atelier-drop': {
     name: 'スイートスポット',
     note: 'なめらかでサラサラ。向きで線の太さにクセ',
     th: 0.36,
@@ -587,11 +612,8 @@ export const FEELS = {
     w: 1.02,
     sw: 0.28
   },
-  // カヴェコ スペシャル：程よい軽さ（約 16g のアルミ軸）と安定感が両立した、滑らかで疲れにくい書き味。口金の O リングで
-  // ペン先のガタつきがなく、芯の引っかかりもない
-  // → 滑らか（手ぶれ補正を強め、抜きを長め）。ガタつきがないので太さは揺れず（ゆらぎなし）、筆圧の効きは控えめで安定。
-  // 軽いので入りは軽やか（中くらい）。線の濃さはふつう
-  'kaweco-special': {
+  // ウッド：軽い木の軸と金属の握りで重心が低い。滑らかで安定し、筆圧の効きは控えめ
+  'atelier-wood': {
     name: '軽く安定',
     note: '軽さと安定感、滑らかで疲れにくい',
     th: 0.28,
@@ -600,9 +622,8 @@ export const FEELS = {
     st: 0.44,
     w: 1
   },
-  // サクラクラフトラボ 004（4C の芯）：水性顔料ゲルインク。サラサラとスムーズで静か。0.4mm の細字で、ペン先が紙をとらえる
-  // 適度なカリカリ感（筆記抵抗）。インクの出がよく、にじみにくい
-  // → 入り・抜きは短くくっきり（紙をとらえる）、手ぶれ補正は控えめ（抵抗）、ゲルで線は濃い。細かな手ごたえ（gr）を少し
+  // トリオ（4C の芯）：顔料のゲルインクの細字。ペン先が紙をとらえる適度な手ごたえ（筆記抵抗）
+  // → 入り・抜きは短くくっきり、手ぶれ補正は控えめ、ゲルで線は濃い。細かな手ごたえ（gr）を少し
   '4C': {
     name: '顔料ゲル',
     note: 'サラサラ滑らかで、細字のカリカリした手ごたえ',
@@ -722,7 +743,17 @@ export function needsRedSheet(item) {
  * 戻り値：{owned: [id…], slots: [id|null × 6], caseId, refills: {多機能ペンの id: 選んだ芯の id}}
  */
 export function stationeryState(raw) {
-  const r = raw && typeof raw === 'object' ? raw : {};
+  const r0 = raw && typeof raw === 'object' ? raw : {};
+  // 前の版の id（既製品の見た目の品）は、いまの品に読み替える
+  const renameKeys = (o) =>
+    o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [currentId(k), v])) : o;
+  const r = {
+    ...r0,
+    owned: Array.isArray(r0.owned) ? r0.owned.map(currentId) : r0.owned,
+    slots: Array.isArray(r0.slots) ? r0.slots.map(currentId) : r0.slots,
+    refills: renameKeys(r0.refills),
+    sizes: renameKeys(r0.sizes)
+  };
   const owned = [...new Set([...STARTER, ...(Array.isArray(r.owned) ? r.owned : []).filter((id) => ITEMS.has(id))])];
   const has = new Set(owned);
   const want = Array.isArray(r.slots) ? r.slots : STARTER_SLOTS;
@@ -826,7 +857,7 @@ export function notePapers(raw) {
 export function acquire(raw, id) {
   const st = stationeryState(raw);
   const item = itemOf(id);
-  if (!item || !listed(item)) throw new Error('その文房具はありません');
+  if (!item) throw new Error('その文房具はありません');
   if (item.price !== 0 || item.points !== 0) throw new Error('この文房具はカートからレジへ進んでください');
   if (st.owned.includes(id)) return st;
   return stationeryState({...st, owned: [...st.owned, id]});
@@ -863,7 +894,7 @@ export function purchase(raw, ids, payment = null, {now = new Date(), orderId = 
   if (!list.length) throw new Error('カートが空です');
   for (const id of list) {
     const it = itemOf(id);
-    if (!it || !listed(it)) throw new Error('その文房具はありません');
+    if (!it) throw new Error('その文房具はありません');
     if (st.owned.includes(id)) throw new Error(`${it.name} はもう持っています`);
   }
   const items = list.map((id) => ({id, name: itemOf(id).name, price: itemOf(id).price, points: itemOf(id).points}));
@@ -924,15 +955,6 @@ export function arrange(raw, {slots, refills, sizes, ...picked} = {}) {
   });
 }
 
-// 既製品の見た目の品（experimental）：メーカー（三菱鉛筆・ゼブラ・サクラクレパス・カランダッシュ・パーカー・LAMY・カヴェコ）の
-// 許しを得ていない個人の試作。
-// α 版（正式な公開の前）のあいだは、ふつうの品と同じようにショップに出し、3D モデルも配布物に入れる（SPEC §9.8）。
-// 正式に公開する前に見直す：許しを得られなければ false にし、electron-builder.yml で GLB を除く。
-// false にしても、すでに持っている人の筆箱には残る（stationeryState は品ぞろえにある品を外さない）
-export const MAKER_ITEMS_LISTED = true;
-/** ショップに出す品か */
-export const listed = (item) => !item.experimental || MAKER_ITEMS_LISTED;
-
 /** 円の表示（¥8,800） */
 export const yen = (n) => `¥${Number(n).toLocaleString('ja-JP')}`;
 /** 値段の表示。円の品は ¥、ポイントの品は pt、どちらも 0 なら「無料」 */
@@ -957,12 +979,12 @@ const SERIES_INFO = {
   'pen-even': {name: 'ボールペン DN-1'}, // 書き味：硬い（筆圧なし。太さが変わらない）
   'pen-05': {name: 'ボールペン DN-2'}, // 書き味：普通（インクの色ちがい）
   'pen-art': {name: 'ボールペン DN-3'}, // 書き味：滑らか（軸の色・柄で選ぶ）
-  jetstream: {name: 'ジェットストリーム'},
-  sarasa: {name: 'サラサクリップ'},
-  'caran-849': {name: 'カランダッシュ 849 ボールペン'},
-  'parker-jotter': {name: 'パーカー ジョッター'},
-  'lamy-2000': {name: 'LAMY 2000 ボールペン'},
-  'kaweco-special': {name: 'カヴェコ スペシャル ボールペン'},
+  'atelier-line': {name: 'アトリエ ライン'},
+  'atelier-clear': {name: 'アトリエ クリア'},
+  'atelier-facet': {name: 'アトリエ ファセット'},
+  'atelier-flute': {name: 'アトリエ フルート'},
+  'atelier-drop': {name: 'アトリエ ドロップ'},
+  'atelier-wood': {name: 'アトリエ ウッド'},
   marker: {name: 'マーカー'},
   'marker-wide': {name: 'マーカー（太）'},
   hider: {name: '文字隠しペン'},
@@ -984,7 +1006,6 @@ export const seriesIdOf = (item) => item.series ?? item.id;
 export function shopSeries(items = CATALOG) {
   const map = new Map();
   for (const it of items) {
-    if (!listed(it)) continue;
     const sid = seriesIdOf(it);
     if (!map.has(sid))
       map.set(sid, {
@@ -1004,7 +1025,7 @@ export function shopSeries(items = CATALOG) {
   return [...map.values()];
 }
 /** 同じシリーズの品（色ちがい）。自分も含む */
-export const siblingsOf = (item) => CATALOG.filter((it) => listed(it) && seriesIdOf(it) === seriesIdOf(item));
+export const siblingsOf = (item) => CATALOG.filter((it) => seriesIdOf(it) === seriesIdOf(item));
 
 // ---- 見た目（SVG。画像ファイルを持たない）----
 

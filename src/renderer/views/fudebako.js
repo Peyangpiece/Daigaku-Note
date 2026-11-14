@@ -40,7 +40,6 @@ import {
   isPaid,
   itemOf,
   feelLabel,
-  listed,
   priceLabel,
   shopSeries,
   siblingsOf,
@@ -91,7 +90,7 @@ function sample(item) {
 function spec(item) {
   if (item.refills)
     return `${esc(item.maker)}・${item.refills.length - (item.refills.some((r) => r.sharp) ? 1 : 0)}&${item.refills.filter((r) => r.sharp).length}（${item.refills.map((r) => esc(r.name)).join('・')}）・替え芯は ${esc(item.refill)} 規格`;
-  if (item.experimental) return esc(item.maker);
+  if (item.atelier) return [item.maker, item.note].filter(Boolean).map(esc).join('・');
   if (item.type === 'case') return CASE_INFO[item.style]?.short ?? '';
   if (item.type === 'pouch') return POUCH_INFO[item.style]?.short ?? '';
   if (item.type === 'calc' || item.type === 'timer') return esc(item.note ?? '');
@@ -312,7 +311,7 @@ function cartAction(it, s) {
 function ribbons(it) {
   const r = [];
   if (it.featured) r.push('<span class="shop-ribbon shop-ribbon--new">新着</span>');
-  if (it.art === 'model' && it.maker) r.push('<span class="shop-ribbon shop-ribbon--3d">3D で見られる</span>'); // 公式の品はみな 3D なので、既製品の見た目の品だけに付ける
+  if (it.art === 'model' && it.maker) r.push('<span class="shop-ribbon shop-ribbon--3d">3D で見られる</span>'); // ポイントの品はみな 3D なので、有料の品（アトリエ）だけに付ける
   return r.length ? `<span class="shop-ribbons">${r.join('')}</span>` : '';
 }
 /** 持っている色を選んでいるときの札の下：ほかに持っていない色があれば、その数 */
@@ -520,7 +519,7 @@ function swapButtons(s, it) {
 /** 文房具の詳細ページ：大きな絵（3D モデルは拡大・回転）・説明・線の見本・色ちがい・入手・試し書き */
 function detail(s, id) {
   const it = itemOf(id);
-  if (!it || !listed(it))
+  if (!it)
     return `<p class="muted">その文房具はありません。</p><p><button type="button" class="btn" data-action="nav" data-route="${SHOP}">← ショップ</button></p>`;
   const rows = [];
   if (it.type !== 'notebook') rows.push(['種類', typeLabel(it)]); // ノートは名前と表紙でわかる
@@ -621,12 +620,12 @@ document.addEventListener('click', (e) => {
 /** カートの中身（持っている品・ない品は外す） */
 function cartItems(s) {
   // 発売前の有料の品は、カートに残っていても外す（前の版で入れたもの）
-  cart.prune((id) => itemOf(id) && listed(itemOf(id)) && !s.owned.includes(id) && !notOnSale(itemOf(id)));
+  cart.prune((id) => itemOf(id) && !s.owned.includes(id) && !notOnSale(itemOf(id)));
   return cart.ids().map(itemOf);
 }
-/** カート・注文の行の説明（メーカー・字幅など。既製品の見た目の品は spec にメーカーが入るので重ねない） */
+/** カート・注文の行の説明（シリーズ・軸の作り・字幅など。アトリエの品は spec にシリーズの名前が入るので重ねない） */
 const rowSpec = (it) =>
-  [it.experimental ? '' : (it.maker ?? 'パレットノート'), spec(it) || typeLabel(it)].filter(Boolean).join('・');
+  [it.atelier ? '' : (it.maker ?? 'パレットノート'), spec(it) || typeLabel(it)].filter(Boolean).join('・');
 const orderRow = (it, {remove = false} = {}) =>
   `<li class="shop-row">
     <button type="button" class="shop-row__art" data-action="nav" data-route="${detailRoute(it)}" aria-label="${esc(it.name)}をくわしく見る">${thumb(it)}</button>
