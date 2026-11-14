@@ -841,7 +841,14 @@ export function cartPoints(ids) {
   return (Array.isArray(ids) ? ids : []).reduce((sum, id) => sum + (itemOf(id)?.points ?? 0), 0);
 }
 
-/** α 版の決済：デモ（実際の請求はない）。カード番号は下 4 桁だけ記録する */
+/**
+ * 有料の品（円の値段の付いた品。買い切り）を売っているか。売り始めるまでは false：ショップでは「発売前」と出し、買えない
+ * （v0.26.2。それまでは「デモ決済」で、請求のないまま手に入った。前に手に入れた品は、そのまま持っている）
+ */
+export const PAID_ON_SALE = false;
+/** 有料の品か（お金で買う品。ポイントでは交換できない） */
+export const isPaid = (it) => (it?.price ?? 0) > 0;
+/** 前の版のデモ決済（注文の記録の表示に使う。いまは受け付けない） */
 export const PAYMENT_METHODS = {demo: 'デモ決済（実際の請求はありません）'};
 
 /**
@@ -864,6 +871,7 @@ export function purchase(raw, ids, payment = null, {now = new Date(), orderId = 
   const points = items.reduce((sum, it) => sum + it.points, 0);
   let pay = {method: points > 0 ? 'points' : 'free'}; // 円の支払いがない注文：ポイントだけ・無料だけ
   if (total > 0) {
+    if (!PAID_ON_SALE) throw new Error('有料の品は発売前です。まだ購入できません');
     if (!payment || !PAYMENT_METHODS[payment.method]) throw new Error('支払いの方法を選んでください');
     pay = {method: payment.method}; // デモ決済：カードの情報は受け取らない・残さない
   }
