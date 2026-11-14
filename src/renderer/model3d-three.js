@@ -78,7 +78,7 @@ function glassify(obj) {
     if (!m || !(m.transmission > 0) || m.name === 'CaseBase') return;
     m.transmission = 0;
     m.transparent = true;
-    // ClearBarrel・ClearGrip・ClearRefill：透明の軸のペン（サラサクリップ。中の替え芯のインクが見える）
+    // ClearBarrel・ClearGrip・ClearRefill：透明の軸のペン（アトリエ クリア。中の替え芯のインクが見える）
     m.opacity =
       {ClearRed: 0.82, ClearAcrylic: 0.45, ClearGlass: 0.12, ClearBarrel: 0.16, ClearGrip: 0.42, ClearRefill: 0.25}[
         m.name

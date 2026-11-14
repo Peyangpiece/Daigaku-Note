@@ -136,7 +136,7 @@ export function register({handle, ctx, repo}) {
         },
         lmsTerms: repo.getSetting('lms.terms', null), // 大学サービスとの連携の利用規約に同意した版と日時
         aiConsent: repo.getSetting('quiz.consent', null), // AI に送るものへの同意（版と日時。shared/policy.js）
-        experiments: repo.getSetting('experiments.makerPens', false), // 実験：既製品の見た目のペンをショップに出す（個人の試作）
+        experiments: repo.getSetting('experiments.makerPens', false), // 前の版の設定（いまは使わない。設定の形を変えないために残す）
         order: repo.getSetting('ui.order', {}) ?? {}, // 並べ替えた並び {範囲: [鍵]}（shared/arrange.js）
         stickyColors: repo.getSetting('ui.stickyColors', {}) ?? {}, // 付箋の色 {授業の id: {鍵: 1〜5}}
         fusenColor: repo.getSetting('pdf.fusenColor', null), // PDF の編集画面で次に貼る付箋の色（最後に選んだ色）
