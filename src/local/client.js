@@ -7,7 +7,7 @@ import {setPadTap} from '../main/frames.js';
 import {originalPath, readBase} from '../main/pdf-save.js';
 import {PAD_QUIET} from '../shared/pad-channels.js';
 import {openBlob, openJson, sealBlob, sealJson} from '../shared/vault.js';
-import {createPusher} from '../main/cloud/sync.js';
+import {canPush, createPusher} from '../main/cloud/sync.js';
 import {promises as fsp} from 'node:fs';
 import {createDriveReader, refresh} from '/cloud/google.js';
 import {deriveKeys} from '../shared/vault-keys.js';
@@ -99,13 +99,16 @@ async function boot() {
   });
   window.addEventListener('pagehide', flush);
   // ---- ドライブへ送る（docs/SYNC.md §11）：パソコンの送り出し（main/cloud/sync.js）をそのまま、この iPad の中で動かす ----
+  let from = manifest; // この iPad のデータが始まった目録（読み込んだもの・最後に送ったもの。docs/SYNC.md §14）
   const cloudApi = iPadCloud({
     cloud,
     db: local_.db,
     repo: local_.repo,
+    from: () => from,
     onPushed: async (m) => {
       // 送ったものが、この iPad の元になる（次に開くときも iPad で変えたデータベースを使い、読み込みで読み直さない）
       base = m.db?.sha256 ?? base;
+      from = m;
       await store.put('manifest', sealJson(keys.enc, m, 'manifest'));
       localStorage.setItem(LOCAL_META, JSON.stringify({base, at: new Date().toISOString()}));
     }
@@ -150,11 +153,15 @@ const deviceName = () => {
 };
 const LAST = 'palette.cloud.last'; // 最後に送った結果（設定の画面に出す）
 
-const PC_HELD =
-  'ドライブにはパソコンが送ったデータがあります。上書きしないように、iPad からは送りません。最初の画面の「ドライブから読み込む」で、パソコンのデータを読み込んでから続けてください';
+/**
+ * ドライブのデータが、この iPad が読み込んだ（送った）あとに変わった：パソコン・ほかの iPad で書いた（docs/SYNC.md §14）。
+ * 上書きして消さないように送らない。設定 → データ で、ドライブから読み込み直すか、この iPad のもので置き換えるかを選ぶ
+ */
+export const DRIVE_CHANGED =
+  'この iPad で読み込んだあとに、パソコン（またはほかの iPad）でドライブのデータが変わっています。上書きして消さないように、iPad からは送りません。設定 → データ で、どちらを残すか選んでください';
 let warned = false;
 
-function iPadCloud({cloud, db, repo, onPushed}) {
+function iPadCloud({cloud, db, repo, from, onPushed}) {
   let access = null;
   let busy = null;
   let timer = null;
@@ -187,7 +194,8 @@ function iPadCloud({cloud, db, repo, onPushed}) {
         ipad: true
       };
     },
-    push() {
+    /** 送る。force：ドライブで変わったものがあっても、この iPad のもので置き換える（設定 → データ で選んだとき） */
+    push({force = false} = {}) {
       busy ??= (async () => {
         const at = new Date().toISOString();
         try {
@@ -202,15 +210,21 @@ function iPadCloud({cloud, db, repo, onPushed}) {
             userData: '/app/userData',
             device: deviceName(),
             origin: 'ipad',
-            // パソコンが送ったデータがあるときは、iPad からは送らない（上書きして消さない）
-            allow: (prev) => (prev && prev.origin !== 'ipad' ? PC_HELD : null)
+            // この iPad が読み込んだあとにドライブが変わっていたら送らない（上書きして消さない）
+            allow: (prev) => (force || canPush(prev, from()) ? null : DRIVE_CHANGED),
+            // どの目録から始めたか：パソコンは、自分の中身の印がこれと同じなら何も消さずに取り込める（置き換えるときは今のドライブのもの）
+            baseOf: (prev) => {
+              const b = force ? prev : from();
+              return b ? {base: b.at, baseContent: b.content ?? null} : null;
+            }
           });
           const r = await pusher.push();
-          await onPushed(r.manifest);
+          // 変わったものがなく目録を書かなかったときは、ドライブの目録（時刻）はそのまま
+          await onPushed({...r.manifest, at: r.at});
           record({at, ok: true, uploaded: r.uploaded, bytes: r.bytes, removed: r.removed});
           return r;
         } catch (e) {
-          record({at, ok: false, message: e.message});
+          record({at, ok: false, message: e.message, ...(e.message === DRIVE_CHANGED ? {conflict: true} : {})});
           throw e;
         } finally {
           busy = null;
@@ -225,16 +239,21 @@ function iPadCloud({cloud, db, repo, onPushed}) {
         () =>
           api.push().catch((e) => {
             console.warn('ドライブへ送れませんでした', e.message);
-            // パソコンのデータがあって送れないまま書き続けると、次に読み込んだときに消える。気づけるよう、開いているあいだに 1 度だけ知らせる
-            if (e.message === PC_HELD && !warned) {
+            // 送れないまま書き続けると、どちらかを選ぶときに片方が消える。気づけるよう、開いているあいだに 1 度だけ知らせる
+            if (e.message === DRIVE_CHANGED && !warned) {
               warned = true;
               alert(
-                'この iPad で書いたものを、ドライブへ送れていません（ドライブにパソコンが送ったデータがあるため）。このまま書き続けると、次に「ドライブから読み込む」をしたときに消えます。最初の画面の「ドライブから読み込む」で、パソコンのデータを読み込んでから続けてください。'
+                'この iPad で書いたものを、ドライブへ送れていません。この iPad で読み込んだあとに、パソコン（またはほかの iPad）でも書いたためです。設定 → データ で、ドライブから読み込み直す（この iPad で書いたものは消える）か、この iPad のもので置き換える（パソコンで書いたものは消える）かを選んでください。'
               );
             }
           }),
         PUSH_DELAY
       );
+    },
+    /** ドライブのデータを、この iPad のもので置き換える（設定 → データ で選んだとき） */
+    async replace() {
+      await busy?.catch(() => {});
+      return api.push({force: true});
     },
     keyQr: async () => {
       throw new Error('iPad に鍵を渡す QR は、パソコンの画面で出してください');

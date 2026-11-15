@@ -227,3 +227,64 @@ test('取り込み：ほかのパソコンが送ったデータも取り込め�
   assert.equal(dirs.F2, 'D:\\授業', '保存先の外のフォルダはそのまま');
   assert.equal(adopted, pushed.manifest.at, '取り込んだ目録の時刻（このあとは、このパソコンから送ってよい）');
 });
+
+test('交代で戻す（§14）：このパソコンにもうある資料（パソコンが送ったものに iPad で書き足した）は、置き直さずにそのまま使う', async () => {
+  const pc = mkdtempSync(path.join(tmpdir(), 'dn-adopt-same-'));
+  const userData = path.join(pc, 'userData');
+  const root = path.join(pc, 'Desktop', 'パレットノート');
+  mkdirSync(userData, {recursive: true});
+  // パソコンの資料：PDF は書き込みを描き込んで保存してある（元の PDF とは中身が違う）。docx はそのまま
+  const orig = Buffer.from('%PDF-元の PDF');
+  const flat = Buffer.from('%PDF-描き込み済み');
+  const doc = Buffer.from('DOCX');
+  const pdfPath = path.join(root, '前期', 'a.pdf');
+  const docPath = path.join(root, '前期', 'b.docx');
+  mkdirSync(path.dirname(pdfPath), {recursive: true});
+  writeFileSync(pdfPath, flat);
+  writeFileSync(docPath, doc);
+  // iPad のデータベース（パソコンのものから始めたので、資料の場所はパソコンの場所）
+  const {db} = await openDatabase(path.join(pc, 'ipad.sqlite'));
+  db.exec('PRAGMA foreign_keys = OFF');
+  const ins = db.prepare(
+    `INSERT INTO material (id, course_id, name, path, sha256, size, source, downloaded_at, base_sha256)
+     VALUES (?, 'C1', ?, ?, ?, ?, 'lms', '2026-11-01', ?)`
+  );
+  ins.run('M1', 'a.pdf', pdfPath, sha(Buffer.from('iPad で描き込んだもの')), 9, sha(orig));
+  ins.run('M2', 'b.docx', docPath, sha(doc), 4, null);
+  const drive = memDrive();
+  const master = newMasterKey();
+  await createPusher({
+    drive,
+    master,
+    exportDb: (file) => exportBackup(db, file),
+    materials: () => [
+      {id: 'M1', status: 'ok', path: pdfPath, base_sha256: sha(orig)},
+      {id: 'M2', status: 'ok', path: docPath, sha256: sha(doc)}
+    ],
+    readMaterial: async (m) => (m.id === 'M1' ? orig : doc), // 送るのは元の PDF
+    userData: path.join(pc, 'ipad-userData'),
+    device: 'iPad-1',
+    origin: 'ipad'
+  }).push();
+  db.close();
+  const r = await adoptIpad({drive, master, userData, root, settings: [], open: (f) => new DatabaseSync(f)});
+  assert.equal(r.materials, 2);
+  assert.deepEqual(readFileSync(pdfPath), flat, 'パソコンの PDF はそのまま');
+  assert.deepEqual(
+    readFileSync(path.join(userData, 'originals', `${sha(orig)}.pdf`)),
+    orig,
+    '上書き保存の元の写しを置く'
+  );
+  assert.ok(!existsSync(path.join(root, 'iPad')), '「iPad」のフォルダに写さない');
+  const staged = new DatabaseSync(path.join(userData, RESTORE_FILE), {readOnly: true});
+  const rows = Object.fromEntries(
+    staged
+      .prepare('SELECT id, path, sha256 FROM material')
+      .all()
+      .map((x) => [x.id, x])
+  );
+  staged.close();
+  assert.equal(rows.M1.path, pdfPath);
+  assert.equal(rows.M1.sha256, sha(flat), '場所にあるファイルの中身の印にそろえる');
+  assert.equal(rows.M2.path, docPath);
+});

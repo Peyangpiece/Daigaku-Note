@@ -84,7 +84,7 @@ export function openCloud(app, back) {
         step === 3
           ? s.fresh && !s.last
             ? '<p class="s-muted">このアカウントでは初めてなので、iPad だけで新しく始めます（「ノートを開く」）。PDF などは iPad のファイルから取り込みます。manabo からの自動取得と、Claude Code での問題作成はパソコンだけでできます。</p>'
-            : '<p class="s-muted">iPad で書いたものは、まだパソコンには戻りません（次の版で戻せるようにします）。パソコンで新しく送ったものを読み込むと、iPad で書いたものはパソコンのものに置き換わります。</p>'
+            : '<p class="s-muted">iPad で書いたものは、ドライブへ送られ、パソコンが取り込みます（パソコンで何も書いていなければ、何も消えません。両方で書いたときは、どちらを残すか聞きます）。パソコンで書いたものは「ドライブから読み込む」で iPad に入ります。</p>'
           : ''
       }
       ${s.refreshToken ? '<div class="s-row"><button type="button" class="s-btn" data-v="reset">この iPad から外す</button></div>' : ''}`;
@@ -222,7 +222,7 @@ export function openCloud(app, back) {
     const s = load();
     const master = masterOf(s);
     if (!master) return render('鍵がありません。鍵の QR を読んでください。', true);
-    // この iPad で書いたものをドライブへ送れていない（パソコンのデータがあるので止めている）ときは、読み込むと消える。先に確かめる
+    // この iPad で書いたものをドライブへ送れていない（パソコンなどでもドライブのデータが変わったので止めている）ときは、読み込むと消える。先に確かめる
     if (
       unsent() &&
       !confirm(
