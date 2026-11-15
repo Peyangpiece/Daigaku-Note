@@ -534,3 +534,98 @@ test('パソコン：ほかのパソコンが送ったデータは上書きし�
   // 置き換えられた 1 台目は、もう黙っては送らない
   await assert.rejects(pc1.cloud.push(), (e) => e.message === OTHER_HELD);
 });
+
+test('交代で戻す（§14）：パソコンが送ったものに iPad で書き足したら、パソコンは何も消えないときだけ「取り込む」、両方で書いたら「どちらを残すか」', async () => {
+  const {toB64} = await import('../src/shared/mobile-wire.js');
+  const {IPAD_HELD} = await import('../src/main/cloud/index.js');
+  const {canPush} = await import('../src/main/cloud/sync.js');
+  const fake = fakeDrive();
+  const fetch = async (url, init) =>
+    String(url).startsWith('https://oauth2.googleapis.com/token')
+      ? Response.json({access_token: 'A', expires_in: 3600})
+      : fake.fetch(url, init);
+  const drive = createDrive({getToken: async () => 'A', fetch});
+  const userData = mkdtempSync(path.join(tmpdir(), 'dn-cloud-handoff-'));
+  const master = newMasterKey();
+  const keys = deriveKeys(master);
+  const readManifest = () =>
+    openJson(keys.enc, [...fake.files.values()].find((f) => f.name === MANIFEST).bytes, MANIFEST);
+  const settings = new Map([['cloud.account', {email: 'a@example.com'}]]);
+  const store = new Map([
+    ['cloud.google', {refreshToken: 'R'}],
+    ['cloud.key', toB64(master)]
+  ]);
+  let pcDb = 'PC-1';
+  let pcContent = 'C1'; // パソコンの中身の印（content.js）
+  const asked = [];
+  const pc = createCloud({
+    repo: {
+      getSetting: (k, d) => settings.get(k) ?? d,
+      setSetting: (k, v) => settings.set(k, v),
+      removeSetting: (k) => settings.delete(k)
+    },
+    secrets: {
+      get: async (k) => store.get(k) ?? null,
+      set: async (k, v) => void store.set(k, v),
+      remove: async (k) => void store.delete(k)
+    },
+    fetch,
+    config: {clientId: 'c', clientSecret: 's'},
+    exportDb: (f) => writeFileSync(f, pcDb),
+    materials: () => [],
+    readMaterial: async () => new Uint8Array(),
+    userData,
+    openExternal: () => {},
+    contentHash: () => pcContent,
+    onIpad: (h) => asked.push(h.kind)
+  });
+  await pc.push();
+  const fromPc = readManifest();
+  assert.equal(fromPc.content, 'C1', 'パソコンは中身の印を目録に書く');
+  // パソコンが使っただけ（同期の記録など）でデータベースが変わっても、中身の印が同じなら iPad は送ってよい
+  pcDb = 'PC-1+log';
+  await pc.push();
+  assert.notEqual(readManifest().at, fromPc.at);
+  assert.equal(canPush(readManifest(), fromPc), true);
+  // iPad：読み込んだもの（fromPc）から書き足して送る
+  const ipad = (from, force = false) =>
+    createPusher({
+      drive,
+      master,
+      exportDb: (f) => writeFileSync(f, 'IPAD-1'),
+      materials: () => [],
+      readMaterial: async () => new Uint8Array(),
+      userData,
+      device: 'iPad-1',
+      origin: 'ipad',
+      allow: (prev) => (force || canPush(prev, from) ? null : 'DRIVE_CHANGED'),
+      baseOf: (prev) => {
+        const b = force ? prev : from;
+        return b ? {base: b.at, baseContent: b.content ?? null} : null;
+      }
+    });
+  await ipad(fromPc).push();
+  assert.equal(readManifest().origin, 'ipad');
+  assert.equal(readManifest().baseContent, 'C1');
+  // パソコンではそのあと何も書いていない → 取り込める（1 度だけ聞く）
+  await assert.rejects(pc.push(), (e) => e.message === IPAD_HELD);
+  assert.equal((await pc.status()).last.kind, 'safe');
+  await assert.rejects(pc.push());
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(asked, ['safe'], '同じものは 1 度だけ聞く');
+  // パソコンでも書いた → どちらを残すか
+  pcContent = 'C2';
+  await assert.rejects(pc.push());
+  assert.equal((await pc.status()).last.kind, 'both');
+  // パソコンのもので置き換える（本人が選んだ）→ パソコンのものが送られ、iPad は古いものから送れない
+  pcDb = 'PC-2';
+  const r = await pc.replace();
+  assert.equal(r.manifest.origin, 'pc');
+  assert.equal(canPush(readManifest(), fromPc), false, 'パソコンで書いたものを上書きしない');
+  await assert.rejects(ipad(fromPc).push(), /DRIVE_CHANGED/);
+  // iPad が「この iPad のもので置き換える」を選んだ：置き換えたドライブの目録から始めたことにする
+  const over = await ipad(fromPc, true).push();
+  assert.equal(over.manifest.baseContent, 'C2');
+  await assert.rejects(pc.push());
+  assert.equal((await pc.status()).last.kind, 'safe', 'パソコンがそのあと書いていなければ、何も消えずに取り込める');
+});

@@ -11,7 +11,8 @@ import {spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {createPusher} from '../../src/main/cloud/sync.js';
-import {newMasterKey, keyQr} from '../../src/main/cloud/keys.js';
+import {deriveKeys, newMasterKey, keyQr} from '../../src/main/cloud/keys.js';
+import {openJson} from '../../src/shared/vault.js';
 import {openDatabase} from '../../src/main/db/db.js';
 import {Repo} from '../../src/main/db/repo.js';
 import {exportBackup} from '../../src/main/backup.js';
@@ -149,7 +150,8 @@ test(
       materials: () => Object.values(repo.listMaterialsAll()).flat(),
       readMaterial: async () => pdf,
       userData: tmp,
-      device: 'pc'
+      device: 'pc',
+      contentOf: () => 'C1' // パソコンの中身の印（docs/SYNC.md §14）
     }).push();
     // iPad のアプリの画面を配る
     const www = path.join(ROOT, 'ipad', 'www');
@@ -184,7 +186,11 @@ test(
       const errors = [];
       pg.on('pageerror', (e) => errors.push(e.message));
       if (process.env.DEBUG_LOCAL) pg.on('console', (m) => console.error('console', m.type(), m.text().slice(0, 300)));
-      const h = {'access-control-allow-origin': '*'};
+      const h = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': '*',
+        'access-control-allow-methods': '*'
+      };
       await pg.route('https://oauth2.googleapis.com/token', (r) =>
         r.fulfill({
           status: 200,
@@ -193,8 +199,25 @@ test(
           body: JSON.stringify({refresh_token: 'R', access_token: 'A', expires_in: 3600})
         })
       );
-      await pg.route('https://www.googleapis.com/drive/v3/files**', async (r) => {
-        const u = new URL(r.request().url());
+      await pg.route('https://www.googleapis.com/**', async (r) => {
+        const req = r.request();
+        const u = new URL(req.url());
+        if (req.method() === 'OPTIONS') return r.fulfill({status: 204, headers: h});
+        // iPad から送る（docs/SYNC.md §14）
+        if (u.pathname.startsWith('/upload/')) {
+          const boundary = req.headers()['content-type'].split('boundary=')[1];
+          const parts = req.postDataBuffer().toString('latin1').split(`--${boundary}`);
+          const meta = JSON.parse(parts[1].split('\r\n\r\n')[1]);
+          const raw = parts[2].split('\r\n\r\n').slice(1).join('\r\n\r\n').replace(/\r\n$/, '');
+          const patch = req.method() === 'PATCH';
+          const id = patch ? u.pathname.split('/').pop() : `id${++n}`;
+          files.set(id, {name: patch ? files.get(id).name : meta.name, bytes: Buffer.from(raw, 'latin1')});
+          return r.fulfill({status: 200, contentType: 'application/json', headers: h, body: JSON.stringify({id})});
+        }
+        if (req.method() === 'DELETE') {
+          files.delete(u.pathname.split('/').pop());
+          return r.fulfill({status: 204, headers: h});
+        }
         if (u.pathname === '/drive/v3/files') {
           const list = (await drive.list()).map((f) => ({...f, size: String(f.size)}));
           return r.fulfill({
@@ -248,6 +271,22 @@ test(
         mat.id
       );
       assert.deepEqual(again, {size: 20, bold: true, color: '#dd3333', align: 'left'});
+      // iPad で書いたものをドライブへ送れる（パソコンが送ったものから始めた。docs/SYNC.md §14）。パソコンが取り込めるように、始めた目録を書く
+      const pcManifest = openJson(
+        deriveKeys(master).enc,
+        [...files.values()].find((f) => f.name === 'manifest').bytes,
+        'manifest'
+      );
+      const pushed = await pg.evaluate(async () => window.daigaku['cloud.push']());
+      assert.ok(!pushed?.error, pushed?.error);
+      const sent = openJson(
+        deriveKeys(master).enc,
+        [...files.values()].find((f) => f.name === 'manifest').bytes,
+        'manifest'
+      );
+      assert.equal(sent.origin, 'ipad');
+      assert.equal(sent.base, pcManifest.at);
+      assert.equal(sent.baseContent, 'C1');
       assert.deepEqual(errors, []);
     } finally {
       await browser.close();

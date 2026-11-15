@@ -32,6 +32,10 @@ export function createPusher({
   device,
   origin = 'pc', // 送った端末の種類（'pc'・'ipad'）。目録に書く
   root = null, // 資料の保存先（目録に書く。ほかのパソコンが取り込むときに、同じ並びで置き直すため）
+  // このデータが、ドライブのどの目録から始めたものか：{base: 目録の時刻, baseContent: その目録の中身の印}（目録に書く。docs/SYNC.md §14）。
+  // 受け取る側は、自分の中身の印が baseContent と同じなら（そのあと自分では何も書いていない）、何も消さずに取り込める
+  baseOf = () => null,
+  contentOf = () => null, // このデータベースの中身の印（content.js。パソコンだけが書く）
   log = () => {},
   now = () => new Date(),
   // 送ってよいか：ドライブの今の目録（なければ null）を見て、だめなら理由の文字を返す（ほかの端末のデータを上書きしない。docs/SYNC.md §11）
@@ -139,12 +143,15 @@ export function createPusher({
       } finally {
         await fsp.rm(dir, {recursive: true, force: true}).catch(() => {});
       }
+      const content = contentOf();
       const manifest = {
         version: MANIFEST_VERSION,
         at: now().toISOString(),
         device,
         origin,
         ...(root ? {root: typeof root === 'function' ? root() : root} : {}),
+        ...(content ? {content} : {}),
+        ...Object.fromEntries(Object.entries(baseOf(prev) ?? {}).filter(([, v]) => v != null)),
         db: {name: DB_NAME, sha256: dbHash},
         materials: mats,
         files
@@ -184,4 +191,17 @@ export function createPusher({
       for (const f of await drive.list()) await drive.remove(f.id);
     }
   };
+}
+
+/**
+ * 送ってよいか（docs/SYNC.md §14）：ドライブの目録（prev）が、この iPad のデータが始まった目録（from）のままなら送る。
+ * 時刻が違っても、データベースがそのまま、またはパソコンが書いた中身の印（content）が同じなら（パソコンでは使っただけ：同期の記録など）送ってよい
+ */
+export function canPush(prev, from) {
+  if (!prev) return true;
+  if (!from) return false; // iPad だけで始めたのに、ドライブにほかの端末のデータがある
+  if (prev.at === from.at) return true;
+  // データベースがそのまま（前の版の iPad は、変わったものがなく目録を書かなかったときも、新しい時刻で覚えていた）
+  if (prev.db?.sha256 && prev.db.sha256 === from.db?.sha256) return true;
+  return !!prev.content && prev.content === from.content;
 }

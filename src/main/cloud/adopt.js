@@ -141,18 +141,29 @@ export async function adoptDrive({
           continue;
         }
         const bytes = await read(f.name);
+        const keepOriginal = async () => {
+          // 送ったのは書き込みを描き込む前の元の PDF。上書き保存のための写しも置く（pdf-save.js）
+          if (!m.base_sha256 || sha(bytes) !== m.base_sha256) return;
+          const orig = originalPath(path.join(userData, 'originals'), m.base_sha256);
+          if (existsSync(orig)) return;
+          await fsp.mkdir(path.dirname(orig), {recursive: true});
+          await fsp.writeFile(orig, bytes);
+        };
+        // このパソコンの場所にもうある資料（このパソコンが送ったものに iPad で書き足した：docs/SYNC.md §14）はそのまま使う。
+        // 同じ中身か、PDF の元が同じ（このパソコンで書き込みを描き込んで保存したもの）なら置き直さない
+        const here = String(m.path).startsWith('/app/') ? null : await fsp.readFile(m.path).catch(() => null);
+        if (here && (sha(here) === sha(bytes) || (m.base_sha256 && sha(bytes) === m.base_sha256))) {
+          await keepOriginal();
+          setPath.run(m.path, sha(here), id);
+          materials++;
+          step();
+          continue;
+        }
         const want = mapPath(m.path, {ipadRoot: rootOf, root, outside});
         await fsp.mkdir(path.dirname(want), {recursive: true});
         const {file, write} = await freePath(want, bytes, tag);
         if (write) await fsp.writeFile(file, bytes);
-        // 送ったのは書き込みを描き込む前の元の PDF。上書き保存のための写しも置く（pdf-save.js）
-        if (m.base_sha256 && sha(bytes) === m.base_sha256) {
-          const orig = originalPath(path.join(userData, 'originals'), m.base_sha256);
-          if (!existsSync(orig)) {
-            await fsp.mkdir(path.dirname(orig), {recursive: true});
-            await fsp.writeFile(orig, bytes);
-          }
-        }
+        await keepOriginal();
         setPath.run(file, sha(bytes), id);
         materials++;
         step();

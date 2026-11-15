@@ -19,16 +19,17 @@ export const PAD_DENY = {
   'cloud.keyQr': 'iPad に鍵を渡す QR は、パソコンの画面で出してください',
   'cloud.setPassphrase': '合言葉は、パソコンの画面で決めてください',
   'cloud.unlock': '合言葉は、パソコンの画面で入れてください',
-  'cloud.adoptIpad': 'ドライブのデータの取り込みは、パソコンの画面でしてください',
-  'cloud.replace': 'ドライブのデータの置き換えは、パソコンの画面でしてください'
+  'cloud.adoptIpad': 'ドライブのデータの取り込みは、パソコンの画面でしてください'
 };
 
 /**
  * パソコンにつないだ iPad（LAN）からは受けない窓口。iPad のアプリが自分の中で動かすとき（パソコンなしで使う）は使える。
  * バックアップの読み込みはデータベースを丸ごと入れ替えるので、パソコンの画面でだけ受ける
  */
-export const PAD_REMOTE_DENY = ['backup.importData'];
+export const PAD_REMOTE_DENY = ['backup.importData', 'cloud.replace'];
 export const PAD_REMOTE_DENY_MESSAGE = 'バックアップの読み込みは、パソコンの画面でしてください';
+/** LAN の iPad から受けない操作ごとの言葉（ない操作は PAD_REMOTE_DENY_MESSAGE）。ドライブの置き換えは、パソコンなしで使う iPad では使う（docs/SYNC.md §14） */
+export const PAD_REMOTE_DENY_MESSAGES = {'cloud.replace': 'ドライブのデータの置き換えは、パソコンの画面でしてください'};
 
 /** パソコンのフォルダを選んで登録する（パソコンの選ぶ窓が要る） */
 export const PAD_LINK_FOLDER =

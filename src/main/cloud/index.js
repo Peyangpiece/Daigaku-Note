@@ -17,6 +17,8 @@ export const PUSH_EVERY_MS = 30 * 60 * 1000;
  *   log?, fetch?, config?, onChange?}} deps
  *   onChange：状態が変わった（画面に出し直す）
  *   rootDir・openDb・maxVersion：iPad のデータを取り込むとき（adopt.js）の資料の保存先・データベースを開く関数・知っている版
+ *   contentHash：いまのデータベースの中身の印（content.js。iPad で書いたものを、パソコンの変更を消さずに取り込めるかを見る）
+ *   onIpad({kind, device, at})：ドライブに iPad で書いたものが届いた（kind：'safe' はそのまま取り込める、'both' はどちらを残すか聞く）
  */
 /** ドライブに iPad が送ったデータがあって、まだ取り込んでいないので送らない（画面で「取り込む」を出す） */
 export const IPAD_HELD =
@@ -30,6 +32,8 @@ export const OTHER_HELD =
   'ドライブには、このパソコンが送ったのではないデータがあります（ほかのパソコン・入れ直す前のデータ）。上書きしないように、このパソコンからは送りません。「ドライブのデータを取り込む」でこのパソコンに取り込むか、「このパソコンのデータで置き換える」を選んでください';
 /** このパソコンが最後に送った（確かめた）目録の時刻。ドライブの目録がこれと違えば、ほかの端末が送ったもの */
 export const BASE = 'cloud.base';
+/** 「どうしますか」を聞いた iPad の目録の時刻（同じものは 1 度だけ聞く。あとは 設定 → データ に出す） */
+export const ASKED = 'cloud.asked';
 
 export function createCloud({
   repo,
@@ -42,6 +46,8 @@ export function createCloud({
   rootDir = () => userData,
   openDb = null,
   maxVersion = Infinity,
+  contentHash = null,
+  onIpad = () => {},
   log = () => {},
   fetch = globalThis.fetch,
   config = {...GOOGLE_DESKTOP, clientSecret: GOOGLE_DESKTOP.clientSecret || loadClientSecret()},
@@ -51,6 +57,7 @@ export function createCloud({
   let access = null; // {accessToken, expiresAt}
   let busy = null; // 送っている最中の Promise
   let timer = null;
+  let first = null;
 
   const account = () => repo.getSetting('cloud.account', null);
   const masterKey = async () => {
@@ -72,6 +79,22 @@ export function createCloud({
     // 前の版（印を残していなかった）で送ったことのあるパソコンは、最初の 1 回だけ自分のものと見なす
     return base === null && repo.getSetting('cloud.last', null)?.ok === true;
   };
+  const content = () => {
+    try {
+      return contentHash?.() ?? null;
+    } catch (e) {
+      log(`cloud: データベースの印を作れませんでした：${e.message}`);
+      return null;
+    }
+  };
+  /**
+   * iPad が送ったもの（prev）を、どう扱うか（docs/SYNC.md §14）。
+   * 'safe'：iPad が始めたデータの中身の印（baseContent）が、このパソコンのいまの中身の印と同じ。このパソコンが送ったものに
+   *   iPad で書き足したもので、このパソコンではそのあと何も書いていない（取り込んでも何も消えない）。
+   * 'both'：それ以外（両方で書いた・iPad だけで始めた）。どちらを残すか聞く
+   */
+  const ipadKind = (prev) => (prev.baseContent && prev.baseContent === content() ? 'safe' : 'both');
+  let held = null; // 止めた iPad の目録 {kind, device, at}
   const pusher = async ({force = false} = {}) => {
     const master = await masterKey();
     if (!master) throw new Error('暗号化の鍵がありません。連携し直してください');
@@ -84,13 +107,19 @@ export function createCloud({
       userData,
       device: os.hostname(),
       root: rootDir,
+      contentOf: content, // 中身の印を目録に書く（iPad は、これが変わっていなければパソコンの変更を消さずに送れる）
       log,
       now,
       // iPad が送ったデータ（iPad だけで始めたなど）があるときは、取り込むまでパソコンからは送らない（上書きして消さない。docs/SYNC.md §12）。
       // ほかのパソコンが送ったデータも、取り込むか、置き換えると決める（force）まで送らない（docs/SYNC.md §13）
       allow: (prev) => {
+        held = null;
         if (!prev) return null;
-        if (prev.origin === 'ipad') return repo.getSetting(ADOPTED, null) !== prev.at ? IPAD_HELD : null;
+        if (prev.origin === 'ipad') {
+          if (force || repo.getSetting(ADOPTED, null) === prev.at) return null;
+          held = {kind: ipadKind(prev), device: prev.device ?? null, at: prev.at};
+          return IPAD_HELD;
+        }
         return force || mine(prev) ? null : OTHER_HELD;
       }
     });
@@ -213,10 +242,19 @@ export function createCloud({
             at,
             ok: false,
             message: e.message,
-            ...(e.message === IPAD_HELD ? {ipad: true} : {}),
+            ...(e.message === IPAD_HELD
+              ? {ipad: true, ...(held ? {kind: held.kind, device: held.device, ipadAt: held.at} : {})}
+              : {}),
             ...(e.message === OTHER_HELD ? {other: true} : {})
           });
           log(`cloud: 送れませんでした：${e.message}`);
+          // iPad で書いたものが届いた：同じものは 1 度だけ知らせる（main.js が「取り込みますか」を聞く）
+          if (e.message === IPAD_HELD && held && repo.getSetting(ASKED, null) !== held.at) {
+            repo.setSetting(ASKED, held.at);
+            Promise.resolve()
+              .then(() => onIpad({...held}))
+              .catch(() => {});
+          }
           throw e;
         } finally {
           busy = null;
@@ -272,15 +310,21 @@ export function createCloud({
       return {ok: true};
     },
 
-    /** 連携しているあいだ、30 分ごとに送る */
-    start(everyMs = PUSH_EVERY_MS) {
+    /** 連携しているあいだ、30 分ごとに送る（起動してすぐにも 1 度確かめる：iPad で書いたものが届いていれば知らせる） */
+    start(everyMs = PUSH_EVERY_MS, firstMs = 20_000) {
       clearInterval(timer);
+      clearTimeout(first);
+      first = setTimeout(() => {
+        if (account() && googleReady(config)) api.push().catch(() => {});
+      }, firstMs);
+      first.unref?.();
       timer = setInterval(() => {
         if (account() && googleReady(config)) api.push().catch(() => {});
       }, everyMs);
       timer.unref?.();
     },
     stop() {
+      clearTimeout(first);
       clearInterval(timer);
       timer = null;
     }

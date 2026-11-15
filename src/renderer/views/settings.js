@@ -504,7 +504,9 @@ async function renderCloud(box, st = null) {
       }
       ${
         s.last?.ipad && !s.ipad
-          ? '<p>ドライブには、iPad で書いたデータがあります。このパソコンに取り込むと、このパソコンでも続きから使えます（このパソコンのいまのデータは、iPad のデータに置き換わります）。</p><div class="about__row"><button type="button" class="btn btn--small" data-cloud="adoptIpad">iPad のデータを取り込む…</button></div>'
+          ? s.last.kind === 'safe'
+            ? '<p>iPad で書いたものが届いています。このパソコンが最後に送ったものに iPad で書き足したもので、このパソコンではそのあと何も書いていないので、取り込んでも消えるものはありません。</p><div class="about__row"><button type="button" class="btn btn--small" data-cloud="adoptIpad">iPad で書いたものを取り込む…</button></div>'
+            : '<p>ドライブには、iPad で書いたデータがあります。このパソコンでも書いていたら、どちらかを選んでください（iPad のものを取り込むと、このパソコンのいまのデータは iPad のデータに置き換わります。このパソコンのものを送ると、iPad で書いたものは消えます）。</p><div class="about__row"><button type="button" class="btn btn--small" data-cloud="adoptIpad">iPad のデータを取り込む…</button><button type="button" class="btn btn--small btn--quiet" data-cloud="replace">このパソコンのデータで置き換える…</button></div>'
           : ''
       }
       ${
@@ -512,7 +514,11 @@ async function renderCloud(box, st = null) {
           ? '<p>ドライブには、このパソコンが送ったのではないデータがあります（ほかのパソコン・入れ直す前のデータ）。上書きして消さないように、このパソコンからは送っていません。どちらかを選んでください。</p><div class="about__row"><button type="button" class="btn btn--small" data-cloud="adoptDrive">ドライブのデータを取り込む…</button><button type="button" class="btn btn--small btn--quiet" data-cloud="replace">このパソコンのデータで置き換える…</button></div>'
           : ''
       }
-      <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button>${s.locked || s.ipad ? '' : `<button type="button" class="btn btn--small" data-cloud="passphrase">${s.passphrase ? '合言葉を変える…' : '合言葉を決める…'}</button><button type="button" class="btn btn--small" data-cloud="keyQr">iPad に鍵を渡す…</button>`}${s.ipad ? '' : '<button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button>'}</div>${s.ipad ? '<p class="muted">この iPad のデータを暗号化してドライブへ送ります（変えてから 1 分ほどで自動でも送ります）。ほかの iPad で同じ Google アカウントと合言葉を入れると、同じデータを使えます。</p>' : ''}`
+      <div class="about__row"><button type="button" class="btn btn--small" data-cloud="push" ${s.busy ? 'disabled' : ''}>いま送る</button>${s.locked || s.ipad ? '' : `<button type="button" class="btn btn--small" data-cloud="passphrase">${s.passphrase ? '合言葉を変える…' : '合言葉を決める…'}</button><button type="button" class="btn btn--small" data-cloud="keyQr">iPad に鍵を渡す…</button>`}${s.ipad ? '' : '<button type="button" class="btn btn--small btn--quiet" data-cloud="unlink">連携を外す</button><button type="button" class="btn btn--small btn--quiet" data-cloud="wipe">ドライブのデータを消す…</button>'}</div>${s.ipad ? '<p class="muted">この iPad で書いたものを暗号化してドライブへ送ります（変えてから 1 分ほどで自動でも送ります）。パソコンでは、届いたものを取り込むか聞かれます（パソコンで何も書いていなければ、何も消えません）。ほかの iPad で同じ Google アカウントと合言葉を入れると、同じデータを使えます。</p>' : ''}${
+        s.ipad && s.last?.conflict
+          ? '<p>この iPad で読み込んだあとに、パソコン（またはほかの iPad）でもドライブのデータが変わっています。どちらを残すか選んでください。パソコンのものを残すときは、最初の画面の「ドライブから読み込む」を押します（この iPad で書いたものは消えます）。</p><div class="about__row"><button type="button" class="btn btn--small btn--quiet" data-cloud="replace" data-ipad="1">この iPad のもので置き換える…</button></div>'
+          : ''
+      }`
     : `${intro}<div class="about__row"><button type="button" class="btn btn--small" data-cloud="link">Google と連携する…</button></div>`;
   if (s.busy) setTimeout(() => renderCloud(box), 2000); // 送り終わるまで見直す
   for (const b of box.querySelectorAll('[data-cloud]'))
@@ -541,8 +547,18 @@ async function renderCloud(box, st = null) {
       if (what === 'adoptDrive') return adoptIpad(box, {pc: true});
       if (
         what === 'replace' &&
+        b.dataset.ipad &&
         !(await confirmDialog(
-          'ドライブのデータを、このパソコンのいまのデータで置き換えますか？ ドライブにあって、このパソコンにない資料・書き込みは消えます（元に戻せません）。ドライブのデータを残したいときは、先に「ドライブのデータを取り込む」を選んでください。',
+          'ドライブのデータを、この iPad のデータで置き換えますか？ この iPad で読み込んだあとにパソコン（またはほかの iPad）で書いたものは消えます（パソコンでは、いまのデータを before-restore として残します）。',
+          {ok: '置き換える', danger: true}
+        ))
+      )
+        return;
+      if (
+        what === 'replace' &&
+        !b.dataset.ipad &&
+        !(await confirmDialog(
+          'ドライブのデータを、このパソコンのいまのデータで置き換えますか？ ドライブにあって、このパソコンにない資料・書き込み（iPad で書いたものも）は消えます（元に戻せません）。ドライブのデータを残したいときは、先に「取り込む」を選んでください。',
           {ok: '置き換える', danger: true}
         ))
       )

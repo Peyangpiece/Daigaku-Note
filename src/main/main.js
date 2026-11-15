@@ -33,6 +33,7 @@ import {runSelfTest, selfTestPath} from './self-check.js';
 import {applyStagedRestore, dropUntrustedSettings, exportBackup, runBackup} from './backup.js';
 import {readBase} from './pdf-save.js';
 import {createCloud} from './cloud/index.js';
+import {contentHash} from './cloud/content.js';
 import {createNotifier} from './notify.js';
 import {createImporter} from './import-watch.js';
 import {asciiUserAgent} from './user-agent.js';
@@ -433,6 +434,41 @@ app.whenReady().then(async () => {
     registerIpc(ctx, {getWindow: () => win});
     // Google ドライブでそろえる（docs/SYNC.md）。連携しているあいだは 30 分ごとに変わったものを送る
     const {DatabaseSync} = await import('node:sqlite');
+    /**
+     * iPad で書いたものがドライブに届いた（docs/SYNC.md §14）。このパソコンで何も書いていなければ取り込むかだけ聞き、
+     * 両方で書いていればどちらを残すか聞く。取り込むと開き直す（データベースは開き直したときに入れ替わる）。
+     * 「あとで」なら何もしない（設定 → データ からも選べる。パソコンからは送らないので、iPad のものは消えない）
+     */
+    const askIpad = async ({kind, device}) => {
+      const who = device ? `iPad（${device}）` : 'iPad';
+      const safe = kind === 'safe';
+      const r = await dialog.showMessageBox(win && !win.isDestroyed() ? win : undefined, {
+        type: 'question',
+        title: 'iPad で書いたもの',
+        message: safe
+          ? `${who}で書いたものがあります。このパソコンに取り込みますか？`
+          : `${who}とこのパソコンの両方で書いたものがあります。どちらを残しますか？`,
+        detail: safe
+          ? 'このパソコンが最後に送ったものに、iPad で書き足したものです。このパソコンではそのあと何も書いていないので、取り込んでも消えるものはありません。取り込むと、アプリを開き直します。'
+          : 'iPad のものを取り込むと、このパソコンで書いたもの（iPad に送ったあとのもの）は消えます（いまのデータは before-restore として残します）。このパソコンのものを送ると、iPad で書いたものは消えます。',
+        buttons: safe
+          ? ['取り込んで開き直す', 'あとで']
+          : ['iPad のものを取り込む', 'このパソコンのものを送る', 'あとで'],
+        defaultId: 0,
+        cancelId: safe ? 1 : 2,
+        noLink: true
+      });
+      try {
+        if (r.response === 0) {
+          await ctx.cloud.adoptIpad();
+          app.relaunch();
+          app.exit(0);
+        } else if (!safe && r.response === 1) await ctx.cloud.replace();
+      } catch (e) {
+        log.warn(`iPad で書いたものを扱えませんでした: ${e.message}`);
+        dialog.showErrorBox('iPad で書いたもの', e.message);
+      }
+    };
     ctx.cloud = createCloud({
       repo,
       secrets: ctx.secrets,
@@ -447,6 +483,9 @@ app.whenReady().then(async () => {
       rootDir: () => ctx.rootDir(),
       openDb: (file) => new DatabaseSync(file),
       maxVersion: latestVersion(),
+      // iPad で書いたものを、交代で取り込む（docs/SYNC.md §14）：中身の印と、届いたときに聞く
+      contentHash: () => contentHash(ctx.db),
+      onIpad: (held) => askIpad(held),
       log: (m) => log.info(m)
     });
     ctx.cloud.start();
