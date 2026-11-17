@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {detectScore, validateRecipe} from '../../shared/recipe.js';
 import {createMoodleConnector} from './moodle.js';
+import {createCanvasConnector} from './canvas.js';
 
 const BUNDLED_RECIPES = fileURLToPath(new URL('../../../recipes/', import.meta.url));
 
@@ -61,13 +62,15 @@ export function createRegistry({
         const recipe = recipes.find((r) => r.id === connection.connector_id);
         if (!recipe) throw new Error(`レシピがありません: ${connection.connector_id}`);
         if (!recipeExecutorFactory) throw new Error('レシピ実行器が用意されていません');
+        // ログインは画面操作、一覧は LMS の窓口で読むレシピ（Canvas：慶應義塾大学の K-LMS など）
+        if (recipe.api === 'canvas') return createCanvasConnector(recipeExecutorFactory(recipe), {log});
         return recipeExecutorFactory(recipe);
       }
       throw new Error(`未対応の接続の種類: ${connection.kind}`);
     },
     /** URL（と取得した HTML）から候補を確からしさの順に返す */
     async detect(url, html = '') {
-      // 大学の LMS とつなぐのは manabo だけ（v0.17.0）。Moodle（API 型）は候補に出さない（前につないだ接続はそのまま使える）
+      // 大学の LMS とつなぐのはレシピ（manabo・Canvas）だけ。Moodle（API 型）は候補に出さない（前につないだ接続はそのまま使える）
       const out = [];
       for (const r of recipes) {
         const score = detectScore(r, url, html);

@@ -100,7 +100,9 @@ export function validateRecipe(r) {
     errors.push('login.form には user・password・submit が要ります');
   if (r.login?.sso !== undefined && (typeof r.login.sso !== 'string' || !r.login.sso.trim()))
     errors.push('login.sso はセレクタの文字列');
-  for (const [sec, fields] of Object.entries(SECTION_FIELDS)) {
+  // 一覧を LMS の窓口（API）から読むレシピ（r.api。connectors/canvas.js）は、画面の読み方（courses など）を持たない
+  if (r.api !== undefined && !['canvas'].includes(r.api)) errors.push(`api は canvas だけ: ${r.api}`);
+  for (const [sec, fields] of Object.entries(r.api ? {} : SECTION_FIELDS)) {
     if (!r[sec]) {
       errors.push(`${sec} がありません`);
       continue;

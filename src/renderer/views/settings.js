@@ -2,7 +2,7 @@
 import {AI_CONSENT_VERSION, AI_NOT_SENDS, AI_SENDS} from '../../shared/policy.js';
 import {confirmDialog, esc, promptDialog, toast} from '../ui-kit.js';
 import {reload} from '../store.js';
-import {ROLES, USES, features, importFor, isChukyo} from '../../shared/profile.js';
+import {ROLES, USES, features, importFor, lmsFor} from '../../shared/profile.js';
 import {sharedHost} from '../../shared/import-sites.js';
 
 const api = window.daigaku;
@@ -173,8 +173,10 @@ export function renderSettings({data}, route = '/settings') {
   const hasLms = lmsConns.length > 0;
   const tab = settingsTab(route);
   const f = features({role: s.role, uses: s.uses, university: s.university});
-  // manabo の欄：中京大学の学生だけ（前につないだ接続がある人には、その接続を出す。v0.17.0）
-  const showManabo = hasLms || (s.role === 'student' && isChukyo(s.university)) || !s.role;
+  // 大学の LMS の欄：つなげる大学（profile.js の LMS_SERVICES）の学生だけ（前につないだ接続がある人には、その接続を出す）
+  const svc = lmsFor(s.university);
+  const lmsName = svc?.name ?? (lmsConns.length === 1 ? lmsConns[0].label : 'LMS');
+  const showManabo = hasLms || (s.role === 'student' && !!svc) || !s.role;
   const imp = s.import ?? {enabled: false, mode: 'ask', sites: []};
   // Teams の資料の置き場所（大学ごとの SharePoint）と、ほかのサイト（v0.17.2）
   const teamsSites = imp.sites.filter((h) => /\.sharepoint\.com$/.test(h));
@@ -229,7 +231,7 @@ export function renderSettings({data}, route = '/settings') {
       }
       ${
         showManabo
-          ? `<section class="card" id="st-lms"><h3>manabo</h3>
+          ? `<section class="card" id="st-lms"><h3>${esc(lmsName)}</h3>
         ${
           lmsConns.length
             ? `<ul style="padding-left: 1.2em">${lmsConns
@@ -245,8 +247,8 @@ export function renderSettings({data}, route = '/settings') {
                 .join('')}</ul>`
             : ''
         }
-        ${lmsConns.length ? '' : '<button class="btn btn--primary" data-action="nav" data-route="/settings/lms">manabo とつなぐ</button>'}
-        ${data.browser?.state === 'failed' || data.browser?.state === 'pending' ? `<div class="muted" style="margin-top: var(--space-2)">manabo を読むブラウザ：${browserState(data.browser)} <button class="btn btn--small" data-action="install-browser" ${data.browser?.state === 'pending' ? 'disabled' : ''}>準備し直す</button></div>` : ''}
+        ${lmsConns.length ? '' : `<button class="btn btn--primary" data-action="nav" data-route="/settings/lms">${esc(lmsName)} とつなぐ</button>`}
+        ${data.browser?.state === 'failed' || data.browser?.state === 'pending' ? `<div class="muted" style="margin-top: var(--space-2)">${esc(lmsName)} を読むブラウザ：${browserState(data.browser)} <button class="btn btn--small" data-action="install-browser" ${data.browser?.state === 'pending' ? 'disabled' : ''}>準備し直す</button></div>` : ''}
       </section>`
           : ''
       }
