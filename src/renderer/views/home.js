@@ -4,7 +4,7 @@ import {esc, jaWrap, progressText} from '../ui-kit.js';
 import {tapeAngle} from '../../shared/hash.js';
 import {browserState} from './settings.js';
 import {folderShown, scopeLabel} from './folder.js';
-import {features} from '../../shared/profile.js';
+import {features, lmsFor} from '../../shared/profile.js';
 import {LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 import {folderLook, globalId, shapesOf, skinOf, stickerImg, stickerLayer} from '../skin.js';
 import {folderLookFor} from '../../shared/skin.js';
@@ -286,8 +286,8 @@ export function renderHome({data, progress}) {
     : hasLms
       ? `<div class="empty"><p>まだ授業がありません</p><button class="btn btn--primary" data-action="sync" ${syncing ? 'disabled' : ''}>同期する</button></div>`
       : features(data.settings).lms
-        ? `<p class="home-tip home-lms-tip"><span class="muted">manabo とつなぐと、授業の資料が自動で集まり、授業のフォルダが貼られます（つながなくても使えます）。</span><span class="home-tip__acts"><button class="btn btn--small" data-action="nav" data-route="/settings/lms">manabo とつなぐ</button></span></p>`
-        : ''; /* manabo を使わない人には授業の段を出さない（自分のフォルダだけ。授業資料はダウンロードから取り込む） */
+        ? `<p class="home-tip home-lms-tip"><span class="muted">${esc(lmsFor(data.settings.university)?.name ?? 'LMS')} とつなぐと、授業の資料が自動で集まり、授業のフォルダが貼られます（つながなくても使えます）。</span><span class="home-tip__acts"><button class="btn btn--small" data-action="nav" data-route="/settings/lms">${esc(lmsFor(data.settings.university)?.name ?? 'LMS')} とつなぐ</button></span></p>`
+        : ''; /* 大学の LMS とつながない人には授業の段を出さない（自分のフォルダだけ。授業資料はダウンロードから取り込む） */
   // さがす：資料が 1 つでもあれば出す（資料の名前・本文・書き込み・回のメモを、授業をまたいで探す。views/search.js）
   const anyMaterial = Object.values(data.materials ?? {}).some((list) => list.length);
   const searchBar = anyMaterial

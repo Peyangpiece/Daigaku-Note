@@ -50,3 +50,26 @@ test('授業資料の自動取り込みは社会人には出さない。中京�
   assert.ok(!importFor('worker'));
   assert.equal(new URL(MANABO_URL).hostname, 'manabo.cnc.chukyo-u.ac.jp');
 });
+
+test('つなげる LMS：中京大学は manabo、慶應義塾大学は K-LMS（Canvas）。ほかの大学・慶應の高校は出さない', async () => {
+  const {lmsFor} = await import('../src/shared/profile.js');
+  for (const u of [
+    '慶應義塾大学',
+    '慶応義塾大学',
+    '慶應大学',
+    '慶応大学',
+    '慶應',
+    ' 慶應義塾 ',
+    'Keio University',
+    'KEIO'
+  ])
+    assert.equal(lmsFor(u)?.id, 'canvas', u);
+  assert.equal(new URL(lmsFor('慶應義塾大学').url).hostname, 'lms.keio.jp');
+  assert.equal(lmsFor('慶應義塾大学').name, 'K-LMS');
+  assert.equal(lmsFor('中京大学')?.id, 'manabo');
+  for (const u of ['慶應義塾高校', '慶應義塾大学院大学X', '東京大学', '', null])
+    assert.equal(lmsFor(u), null, String(u));
+  // 慶應義塾大学の学生で「授業の資料を活用」を選ぶと、LMS とつなぐ機能が出る
+  assert.equal(features({role: 'student', uses: ['lms'], university: '慶應義塾大学'}).lms, true);
+  assert.equal(features({role: 'student', uses: ['lms'], university: '東京大学'}).lms, false);
+});

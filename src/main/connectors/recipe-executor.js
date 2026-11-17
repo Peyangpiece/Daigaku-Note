@@ -277,6 +277,11 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       if (ctx.context) await session.save(ctx.connection, ctx.context);
     },
 
+    /** この接続のブラウザの文脈（保存した Cookie を戻したもの）。API 型のレシピ（canvas.js）が窓口を呼ぶのに使う */
+    async _context(ctx) {
+      ctx.context ??= await session.open(ctx.connection, {allowedHosts: ctx.allowedHosts});
+      return ctx.context;
+    },
     async _page(ctx) {
       ctx.context ??= await session.open(ctx.connection, {allowedHosts: ctx.allowedHosts});
       const page = await ctx.context.newPage();

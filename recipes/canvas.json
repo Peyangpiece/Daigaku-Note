@@ -1,0 +1,24 @@
+{
+  "id": "canvas",
+  "name": "Canvas（慶應義塾大学 K-LMS など）",
+  "version": "2026.11.1",
+  "verified": false,
+  "api": "canvas",
+  "note": "一覧は画面ではなく Canvas の窓口（/api/v1）を、ログインしたブラウザの Cookie で読む（src/main/connectors/canvas.js）。ログインは K-LMS のログイン画面の「keio.jp でログイン」（/login/saml → keio.okta.com）。実物の K-LMS で確かめるまで verified は false",
+  "detect": {
+    "urlPatterns": ["lms\\.keio\\.jp", "\\.instructure\\.com", "/login/canvas", "/login/saml"],
+    "htmlMarkers": ["canvas_icon_class", "instructure", "K-LMS"]
+  },
+  "login": {
+    "loggedIn": {
+      "selector": "#global_nav_profile_link, #global_nav_dashboard_link, a[href='/logout'], form[action='/logout']"
+    },
+    "sso": "a[href*='/login/saml']",
+    "form": null
+  },
+  "allowedHosts": [],
+  "universities": {
+    "lms.keio.jp": {"allowedHosts": ["keio.okta.com"]}
+  },
+  "waits": {"afterClick": 800, "pageLoad": "domcontentloaded"}
+}

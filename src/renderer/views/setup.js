@@ -1,13 +1,14 @@
 // セットアップ（SPEC §6.3）。1 ページ 1 手順、付箋が順に貼られる表現。手順は多くても 6（SPEC §6.3）。
-// 初回（#/setup）は あなたと使い方（大学生は大学も）・授業の資料・（利用規約）・学期と保存先、manabo とつなぐ人（中京大学の学生だけ）は
-// そのまま manabo とつなぐ（URL とログイン）・授業の確認と同期（1 本の連番）。ほかの大学の学生は、授業の資料で「自動で取り込む」を選べる。
-// あとから manabo とつなぐ手順（#/settings/lms）は 設定 → 授業と manabo から入る（v0.17.0。大学の LMS とつなぐのは manabo だけ）
+// 初回（#/setup）は あなたと使い方（大学生は大学も）・授業の資料・（利用規約）・学期と保存先、大学の LMS とつなぐ人
+// （profile.js の LMS_SERVICES の大学の学生：中京大学は manabo、慶應義塾大学は K-LMS）は、そのまま LMS とつなぐ（URL とログイン）・
+// 授業の確認と同期（1 本の連番）。ほかの大学の学生は、授業の資料で「自動で取り込む」を選べる。
+// あとから LMS とつなぐ手順（#/settings/lms）は 設定 → 授業と資料 から入る
 // （利用規約に同意していなければ最初に同意。Moodle の ID・パスワードと画面操作型のブラウザ窓。学期がまだなければ学期の設定も挟む）
 import {esc, toast} from '../ui-kit.js';
 import {navigate, reload} from '../store.js';
 import {termForm, readTermForm} from './term.js';
 import {scanDownloads} from './settings.js';
-import {MANABO_URL, ROLES, USES, features, isChukyo} from '../../shared/profile.js';
+import {ROLES, USES, features, lmsFor} from '../../shared/profile.js';
 import {LMS_FEATURE, LMS_NOTICE, LMS_TERMS, LMS_TERMS_VERSION} from '../../shared/lms-terms.js';
 
 const api = window.daigaku;
@@ -18,14 +19,14 @@ const FLOWS = {
     ['授業の資料', stepMaterials],
     ['利用規約', stepLmsTerms],
     ['学期と保存先', stepTermRoot], // 学期を使わない人（社会人）には「保存先」と出す
-    ['manabo とつなぐ', stepLms],
+    ['LMS とつなぐ', stepLms],
     ['授業の確認と同期', stepCoursesSync]
   ],
   // 規約の版が上がったとき、今ある接続のために同意し直すだけの手順
   terms: [['利用規約', stepLmsTerms]],
   lms: [
     ['利用規約', stepLmsTerms],
-    ['manabo とつなぐ', stepLms],
+    ['LMS とつなぐ', stepLms],
     ['学期の設定', stepTerm],
     ['授業の確認と同期', stepCoursesSync]
   ]
@@ -71,13 +72,15 @@ export function resetSetup(kind = 'first', data = null) {
         : FLOWS.first;
 }
 const termsAccepted = (data) => data.settings.lmsTerms?.version === LMS_TERMS_VERSION;
-const LMS_STEPS = new Set(['manabo とつなぐ', '授業の確認と同期']);
-/** 初回の流れで、manabo とつなぐ手順まで進む人か：中京大学の学生が「授業の資料」で manabo を選んだときだけ（v0.17.0） */
+const LMS_STEPS = new Set(['LMS とつなぐ', '授業の確認と同期']);
+/** 初回の流れで、LMS とつなぐ手順まで進む人か：つなげる大学の学生が「授業の資料」で LMS を選んだときだけ */
 function wantsLms(data) {
   const role = draft.role ?? data.settings.role;
-  return role === 'student' && isChukyo(universityOf(data)) && draft.materials === 'service';
+  return role === 'student' && !!lmsFor(universityOf(data)) && draft.materials === 'service';
 }
 const universityOf = (data) => draft.university ?? data.settings.university ?? '';
+/** つなぐ LMS（名前と最初から入れておく URL）。大学がまだ分からないときは名前だけ「LMS」 */
+const serviceOf = (data) => lmsFor(universityOf(data)) ?? {name: 'LMS', url: ''};
 /** 選んだものに合わせた手順。授業の資料は大学生で「授業の資料を活用」を選んだときだけ、利用規約と LMS の手順は大学の LMS とつなぐときだけ（同意済みなら規約は出さない） */
 function stepsOf(data) {
   const role = draft.role ?? data.settings.role;
@@ -92,7 +95,14 @@ function stepsOf(data) {
       if (name === '授業の資料') return role === 'student' && uses.includes('lms');
       return true;
     })
-    .map(([name, fn]) => [name === '学期と保存先' && !features({role, uses: []}).terms ? '保存先' : name, fn]);
+    .map(([name, fn]) => [
+      name === '学期と保存先' && !features({role, uses: []}).terms
+        ? '保存先'
+        : name === 'LMS とつなぐ'
+          ? `${serviceOf(data).name} とつなぐ`
+          : name,
+      fn
+    ]);
 }
 const next = () => ((step = Math.min(step + 1, steps.length - 1)), reload());
 
@@ -109,24 +119,26 @@ export function renderSetup({data}) {
     .join('');
   const body = steps[step][1](data, step + 1);
   queueMicrotask(bind);
-  const title = flow === FLOWS.first ? 'はじめに' : flow === FLOWS.terms ? '利用規約への同意' : 'manabo とつなぐ';
+  const title =
+    flow === FLOWS.first ? 'はじめに' : flow === FLOWS.terms ? '利用規約への同意' : `${serviceOf(data).name} とつなぐ`;
   return `<div style="max-width: 720px"><p class="muted" style="margin: 0 0 var(--space-1)">${title}</p><ol class="steps" aria-label="${title}の手順">${list}</ol><section class="card">${body}</section></div>`;
 }
 
 // 大学の LMS とつなぐ：URL を入れて種類を判定し、接続ができたら同じ画面でログイン（2 つの画面を 1 つに。SPEC §6.3 の手順 1・2）
 function stepLms(data, n) {
+  const svc = serviceOf(data);
   const back =
     n > 1
       ? '<button class="btn" data-setup-back>戻る</button>'
       : '<button class="btn" data-action="nav" data-route="/settings?tab=lms">やめる</button>';
   if (!draft.connectionId)
-    return `<h2>${n}. manabo とつなぐ</h2>
-    <label class="sr-only" for="su-url">manabo の URL</label>
-    <input class="input" id="su-url" type="url" placeholder="${MANABO_URL}" value="${esc(draft.url || MANABO_URL)}">
+    return `<h2>${n}. ${esc(svc.name)} とつなぐ</h2>
+    <label class="sr-only" for="su-url">${esc(svc.name)} の URL</label>
+    <input class="input" id="su-url" type="url" placeholder="${esc(svc.url || 'https://')}" value="${esc(draft.url || svc.url)}">
     <div id="su-cands" style="margin: var(--space-2) 0">${draft.candidates.map((c) => `<label style="display:block"><input type="radio" name="cand" value="${esc(c.connectorId)}|${esc(c.kind)}" ${c.connectorId === draft.connectorId ? 'checked' : ''}> ${esc(c.name)}${c.kind === 'manual' ? ` <span class="muted">${esc(KIND_LABEL.manual)}</span>` : ''}</label>`).join('')}</div>
-    ${draft.connectorId ? `<label class="su-label">名前<input class="input" id="su-label" maxlength="60" placeholder="例：manabo" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
+    ${draft.connectorId ? `<label class="su-label">名前<input class="input" id="su-label" maxlength="60" placeholder="例：${esc(svc.name)}" value="${esc(draft.label ?? draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name ?? '')}"></label>` : ''}
     <div class="actions">${back}<button class="btn btn--primary" id="su-next1">次へ</button></div>
-    ${draft.connectorId ? '' : draft.detected ? '<p role="status">manabo の URL ではないようです。</p>' : ''}`;
+    ${draft.connectorId ? '' : draft.detected ? `<p role="status">${esc(svc.name)} の URL ではないようです。</p>` : ''}`;
   const body =
     draft.kind === 'api'
       ? `
@@ -140,8 +152,8 @@ function stepLms(data, n) {
            </div>`
         : '';
   const main = draft.kind === 'api' ? 'ログインして次へ' : draft.kind === 'recipe' ? 'ログイン窓を開く' : '次へ';
-  const name = draft.label || draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name || 'manabo';
-  return `<h2>${n}. manabo とつなぐ</h2>
+  const name = draft.label || draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name || svc.name;
+  return `<h2>${n}. ${esc(svc.name)} とつなぐ</h2>
     <p class="muted">${esc(name)}：<code>${esc(draft.base || draft.url)}</code> <button type="button" class="link" id="su-url-edit">URL を変える</button></p>
     <h3 class="su-sub">ログイン</h3>
     ${body}
@@ -194,18 +206,18 @@ function stepProfile(data, n) {
 }
 // 授業の資料の集め方を選ぶ。パソコンの授業フォルダはその場で登録する（ホームの「パソコンのフォルダを登録」で、中のフォルダを
 // 1 つずつ登録するのと同じ）。大学サービスとの連携は、次の手順で利用規約に同意してから
-// manabo とつなぐのは中京大学の学生だけ（v0.17.0）。ほかの大学の学生は「授業資料を自動で取り込む」をオンにできる
+// 大学の LMS とつなぐのは、つなげる大学（profile.js の LMS_SERVICES）の学生だけ。ほかの大学の学生は「授業資料を自動で取り込む」をオンにできる
 const MATERIALS = [
   [
     'folder',
     'パソコンのフォルダを登録',
     '授業ごとのフォルダが入ったフォルダを選ぶと、中のフォルダを 1 つずつ登録して、そのまま使えます（コピーしません）'
   ],
-  ['service', 'manabo とつなぐ', '試験中'],
+  ['service', '{lms} とつなぐ', '試験中'],
   ['later', 'あとで設定']
 ];
 function stepMaterials(data, n) {
-  const chukyo = isChukyo(universityOf(data));
+  const svc = lmsFor(universityOf(data));
   const m = draft.materials;
   const importOn = draft.importOn ?? data.settings.import?.enabled ?? false;
   const r = draft.imported;
@@ -214,16 +226,16 @@ function stepMaterials(data, n) {
     : '';
   return `<h2>${n}. 授業の資料をどうしますか</h2>
     <div class="use-pick use-pick--one" role="radiogroup" aria-label="授業の資料の集め方">${MATERIALS.filter(
-      ([k]) => k !== 'service' || chukyo
+      ([k]) => k !== 'service' || svc
     )
       .map(
         ([k, l, d]) =>
-          `<button type="button" class="use-pick__item" role="radio" data-materials="${k}" aria-checked="${m === k}"><strong>${esc(l)}</strong>${d ? `<span class="muted">${esc(d)}</span>` : ''}</button>`
+          `<button type="button" class="use-pick__item" role="radio" data-materials="${k}" aria-checked="${m === k}"><strong>${esc(l.replace('{lms}', svc?.name ?? ''))}</strong>${d ? `<span class="muted">${esc(d)}</span>` : ''}</button>`
       )
       .join('')}</div>
     ${m === 'folder' ? `<div class="actions"><button class="btn" id="su-import">フォルダを選ぶ…</button></div>${done}` : ''}
     ${
-      chukyo
+      svc
         ? ''
         : `<label class="su-import-on"><input type="checkbox" id="su-import-on" ${importOn ? 'checked' : ''}> <strong>授業資料を自動で取り込む</strong></label>
 `
@@ -233,7 +245,7 @@ function stepMaterials(data, n) {
 // 大学サービスとの連携の注意書きと利用規約。同意にチェックしないと先へ進めない
 function stepLmsTerms(data, n) {
   const ok = draft.agreed;
-  return `<h2>${n}. manabo とつなぐ機能の利用規約</h2>
+  return `<h2>${n}. ${esc(serviceOf(data).name)} とつなぐ機能の利用規約</h2>
     <aside class="sticky lms-notice" style="--sticky-color: var(--c2)"><strong>使う前に</strong><ul>${LMS_NOTICE.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></aside>
     <div class="lms-terms" tabindex="0" role="document" aria-label="利用規約">
       <h3>${esc(LMS_FEATURE)} 利用規約</h3>
@@ -284,7 +296,7 @@ function bind() {
     .forEach((b) => (b.onclick = () => ((step = Math.max(0, step - 1)), reload())));
   const detect = async () => {
     draft.url = $('su-url').value.trim();
-    if (!draft.url) return toast('manabo の URL を入れてください', {error: true});
+    if (!draft.url) return toast('LMS の URL を入れてください', {error: true});
     const r = await api['setup.detect']({url: draft.url});
     if (r.error) return toast(r.error, {error: true});
     draft.candidates = r.candidates;
@@ -324,8 +336,8 @@ function bind() {
       draft.uses = uses;
       draft.university = role === 'student' ? university : null;
       draft.universityUrl = role === 'student' ? universityUrl : null;
-      // 大学を変えて manabo が出なくなったら、選んでいた「manabo とつなぐ」を外す
-      if (draft.materials === 'service' && !isChukyo(university)) draft.materials = null;
+      // 大学を変えて LMS とつなげなくなったら、選んでいた「LMS とつなぐ」を外す
+      if (draft.materials === 'service' && !lmsFor(university)) draft.materials = null;
       next();
     };
   document.querySelectorAll('[data-use]').forEach(

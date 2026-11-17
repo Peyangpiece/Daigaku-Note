@@ -41,15 +41,36 @@ export const isChukyo = (university) =>
       .replace(/\s+/g, '')
   );
 
+/** 大学名を比べる形（前後と途中の空白・全角半角の違いは見ない） */
+const univKey = (university) =>
+  String(university ?? '')
+    .normalize('NFKC')
+    .replace(/\s+/g, '');
+/**
+ * 大学の LMS とつなげる大学（本人が入れた大学名で選ぶ）。name は画面に出す LMS の名前、url はつなぐ画面に最初から入れておく URL。
+ * manabo（中京大学。v0.17.0）・K-LMS（慶應義塾大学。Canvas。v0.27.2）
+ */
+export const LMS_SERVICES = [
+  {id: 'manabo', name: 'manabo', url: MANABO_URL, test: (u) => /^中京大(学)?$/.test(u)},
+  {
+    id: 'canvas',
+    name: 'K-LMS',
+    url: 'https://lms.keio.jp/',
+    test: (u) => /^慶[應応](義塾)?(大学?)?$/.test(u) || /^keio(university)?$/i.test(u)
+  }
+];
+/** その大学でつなげる LMS（なければ null） */
+export const lmsFor = (university) => LMS_SERVICES.find((s) => s.test(univKey(university))) ?? null;
+
 /**
  * 使い方から、出す機能を決める。
- * lms：manabo との連携と同期（中京大学の学生で「授業の資料を活用」を選んだときだけ。v0.17.0）。quiz：クイズと復習。
+ * lms：大学の LMS との連携と同期（LMS_SERVICES の大学の学生で「授業の資料を活用」を選んだときだけ）。quiz：クイズと復習。
  * terms：学期（社会人は使わない）。foldersFirst：ホームで自分のフォルダを先に出す
  */
 export function features({role = null, uses = [], university = ''} = {}) {
   if (!isRole(role)) return {lms: true, quiz: true, terms: true, foldersFirst: false};
   const has = (u) => uses.includes(u);
-  const lms = role === 'student' && has('lms') && isChukyo(university);
+  const lms = role === 'student' && has('lms') && !!lmsFor(university);
   return {
     lms,
     quiz: role === 'student' ? has('review') : has('cert'),
