@@ -246,3 +246,33 @@ a,
     grid-template-columns: 1fr;
   }
 }
+
+/* 2 段階認証（app.js の showChallenge）：LMS の画面の説明・認証コードの欄・選ぶボタン */
+.login-challenge form {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 30rem;
+}
+.login-challenge h3 {
+  margin: 0;
+}
+.login-challenge p {
+  margin: 0;
+}
+.login-challenge__text {
+  white-space: pre-wrap;
+  max-height: 10em;
+  overflow: auto;
+}
+.login-challenge__code .input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font-size: 1.3em;
+  letter-spacing: 0.15em;
+}
+.login-challenge__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

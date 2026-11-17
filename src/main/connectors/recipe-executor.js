@@ -12,7 +12,13 @@ import {
 } from '../../shared/recipe.js';
 import {parseRound} from '../../shared/rounds.js';
 import {parseSlot} from './slot.js';
-import {credentialUrlAllowed, loginFailedText, markLoginForm, noAutofillHost} from '../browser/login-form.js';
+import {
+  credentialUrlAllowed,
+  loginFailedText,
+  markChallenge,
+  markLoginForm,
+  noAutofillHost
+} from '../browser/login-form.js';
 import {isStale} from '../browser/session.js';
 
 const META = new Set(['url', 'items', 'openBeforeRead', 'files', 'container']);
@@ -216,7 +222,11 @@ function pageMarkItems(containerSel) {
   return n;
 }
 
-export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}, debug = null}) {
+/**
+ * challenge(info)：2 段階認証などの画面をパレットノートの画面に写して、本人の答えを待つ（main.js。なければ従来どおり窓を開いてもらう）。
+ *   info：{label, host, title, text, code, choices}。戻り：{code} | {choice: 番号} | {wait: true} | null（やめた・時間切れ）
+ */
+export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}, debug = null, challenge = null}) {
   const compileSection = (sec) => {
     if (!sec) return null;
     const fields = [];
@@ -386,7 +396,8 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
       let restarted = false;
       let resent = false;
       let sentField = null;
-      for (let step = 0; step < 12; step++) {
+      let asked = 0; // 2 段階認証の画面を本人に見せた回数
+      for (let step = 0; step < 12 + asked; step++) {
         const host = safeHost(page.url());
         if (host === baseHost && (await this._isLoggedIn(page, ctx))) return;
         // 統合認証の「過去のリクエスト」の画面：LMS の最初のページから 1 回だけやり直す（v0.16.31。アカウントの制限ではない）
@@ -468,11 +479,13 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
             const failed = loginFailedText(text);
             // パスワードを入れたのとちがう伏せ字の欄が出た（2 段階認証の画面など）：パスワード違いとは決めない。
             // 本人がログイン窓で続ける（自動ログインは止めない。v0.19.7）
-            if (!failed && (await fieldKey()) !== sentField)
+            if (!failed && (await fieldKey()) !== sentField) {
+              if (await this._challenge(page, ctx, baseHost, asked++)) continue;
               throw err(
                 'login-needs-user',
                 '2 段階認証など、本人の入力が要る画面になりました。設定 → 授業と資料 の「ログイン」で窓を開いてください（ID とパスワードは入れておきます）'
               );
+            }
             // 失敗と書いていないのに同じパスワードの画面に戻った（押すのが早すぎて出し直された）ときは、1 回だけ送り直す（v0.17.7）
             if (!failed && !resent) {
               sentPassword = false;
@@ -499,6 +512,8 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         } else if (sentPassword || sentUser) {
           // パスワードを送ったあと、ID・パスワード以外の画面（認証コード・同意など）。転送の途中なら少し待って見直す
           if (await this._settle(page, ctx, baseHost)) continue;
+          // 2 段階認証など：パレットノートの画面に写して、本人に入れてもらう
+          if (await this._challenge(page, ctx, baseHost, asked++)) continue;
           throw err(
             'login-needs-user',
             '認証コードなど、本人の入力が要る画面になりました。設定 → 授業と資料 の「ログイン」で窓を開いてください（ID とパスワードは入れておきます）'
@@ -513,6 +528,44 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
         await this._settle(page, ctx, baseHost, before);
       }
       throw err('login-needs-user', 'ログインが終わりませんでした。ブラウザ窓でログインしてください');
+    },
+
+    /**
+     * 2 段階認証などの画面（ID・パスワードのあと）を、パレットノートの画面に写して本人の答えを入れる。
+     * 認証コードは欄に入れて送る。選ぶボタン（「プッシュ通知を送信」など）は押す。「待つ」はスマホで承認するのを待つ。
+     * 写せない（challenge がない・欄もボタンもない・回数の上限）なら false（呼ぶ側が「窓でログイン」を知らせる）
+     */
+    async _challenge(page, ctx, baseHost, asked) {
+      if (!challenge || asked >= CHALLENGE_MAX) return false;
+      const info = await page.evaluate(markChallenge).catch(() => null);
+      if (!info || (!info.code && !info.choices.length)) return false;
+      const answer = await challenge({
+        label: ctx.connection.label ?? ctx.recipe.name,
+        host: safeHost(page.url()),
+        ...info
+      });
+      if (!answer)
+        throw Object.assign(
+          err(
+            'login-needs-user',
+            '2 段階認証をやめました。設定 → 授業と資料 の「ログイン」で、もう一度ログインしてください'
+          ),
+          {challengeCancelled: true}
+        );
+      const before = page.url();
+      if (answer.code != null && info.code) {
+        await page.locator('[data-dn-code]').first().fill(String(answer.code));
+        const send = page.locator('[data-dn-code-submit]').first();
+        const click = (await send.count()) > 0 ? send.click() : page.locator('[data-dn-code]').first().press('Enter');
+        await Promise.all([page.waitForLoadState(ctx.waits.pageLoad).catch(() => {}), click]);
+      } else if (Number.isInteger(answer.choice) && answer.choice >= 0 && answer.choice < info.choices.length) {
+        await Promise.all([
+          page.waitForLoadState(ctx.waits.pageLoad).catch(() => {}),
+          page.locator(`[data-dn-choice="${answer.choice}"]`).first().click()
+        ]);
+      } else await page.waitForTimeout(3000); // スマホで承認するのを待つ
+      await this._settle(page, ctx, baseHost, before);
+      return true;
     },
 
     /** 送信のあと、転送（SAML の自動送信など）が落ち着くまで待つ。URL が変わったかログインできたら true */
@@ -872,6 +925,8 @@ export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}
 
 /** LMS 自身のログイン画面から統合認証のリンクを押す回数の上限（ログインのあとに戻されたときも押す） */
 const SSO_CLICKS_MAX = 4;
+/** 1 回のログインで、2 段階認証などの画面を本人に見せる回数の上限（コードの打ち間違い・方法の選び直し・承認待ちを含む） */
+const CHALLENGE_MAX = 8;
 
 function safeHost(url) {
   try {

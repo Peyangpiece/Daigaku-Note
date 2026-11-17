@@ -111,11 +111,40 @@ export function register({handle, ctx, repo, registry, secrets, log}) {
     return {ok: true};
   });
 
+  // 2 段階認証などの画面への答え（画面のダイアログから。browser/challenge.js）と、答えを待っているもの（窓を開き直したとき）
+  handle('login.answer', (arg) => ({ok: !!ctx.challenges?.answer(arg)}));
+  handle('login.challenges', () => ctx.challenges?.list() ?? []);
+
   handle('connection.login', async ({connectionId, mode}) => {
     const cid = id(connectionId) ?? bad('接続が不正です');
     const conn = repo.get('connection', cid) ?? bad('接続がありません');
     const connector = registry.forConnection(conn);
     const c = await connector.createContext(conn);
+    // ID・パスワードを保存していて、レシピが「アプリの中でログイン」（login.inApp：K-LMS）なら、窓を開かずに入る。
+    // 2 段階認証などはパレットノートの画面に写す（browser/challenge.js）。自動で入れないページ（初めて通るホストなど）なら窓を開く
+    if (mode === 'visible' && conn.kind === 'recipe' && conn.save_password && connector.recipe?.login?.inApp) {
+      try {
+        await connector.login(c, 'headless');
+        repo.updateConnection(cid, {status: 'ok'});
+        noteAutoLogin(repo, cid, null);
+        await connector.releaseContext?.(c).catch(() => {});
+        return {ok: true};
+      } catch (e) {
+        log.warn(`login ${conn.label}（アプリの中）: ${e.code ?? ''} ${e.message}`);
+        await connector.releaseContext?.(c).catch(() => {});
+        // ID・パスワードの誤り・2 段階認証をやめたときは、窓を開かずに知らせる（窓を開いても同じことを聞くだけ）
+        if (e.code === 'login-bad-credentials' || e.code === 'login-credentials-unreadable' || e.challengeCancelled) {
+          if (e.code === 'login-bad-credentials' && noteAutoLogin(repo, cid, e).stopped)
+            e.message = `${e.message}（続けて 2 回通らなかったため、自動ログインは止めました）`;
+          return {ok: false, reason: e.code, message: e.message};
+        }
+        return loginWith(cid, conn, connector, await connector.createContext(conn), 'visible');
+      }
+    }
+    return loginWith(cid, conn, connector, c, mode);
+  });
+
+  async function loginWith(cid, conn, connector, c, mode) {
     const wantVisible = mode === 'visible' || !conn.save_password;
     try {
       if (conn.kind === 'api' && conn.connector_id === 'moodle') {
@@ -157,7 +186,7 @@ export function register({handle, ctx, repo, registry, secrets, log}) {
     } finally {
       await connector.releaseContext?.(c);
     }
-  });
+  }
 
   handle('connection.remove', async ({connectionId}) => {
     const cid = id(connectionId) ?? bad('接続が不正です');

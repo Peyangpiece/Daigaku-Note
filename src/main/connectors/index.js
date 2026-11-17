@@ -74,7 +74,8 @@ export function createRegistry({
       const out = [];
       for (const r of recipes) {
         const score = detectScore(r, url, html);
-        if (score > 0) out.push({connectorId: r.id, kind: 'recipe', name: r.name, score});
+        // inApp：ID・パスワードを保存すると、窓を開かずにアプリの中でログインする（2 段階認証はアプリの画面に出す）
+        if (score > 0) out.push({connectorId: r.id, kind: 'recipe', name: r.name, score, inApp: !!r.login?.inApp});
       }
       out.sort((a, b) => b.score - a.score);
       // 汎用型（授業ページの URL を登録）はまだ同期できないので、候補に出さない（SPEC §6.9）

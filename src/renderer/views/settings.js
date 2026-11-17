@@ -846,7 +846,7 @@ function bind() {
   document.querySelectorAll('[data-login]').forEach((b) =>
     b.addEventListener('click', async () => {
       b.disabled = true;
-      b.textContent = 'ログイン窓を開いています…';
+      b.textContent = 'ログインしています…';
       const r = await api['connection.login']({connectionId: b.dataset.login, mode: 'visible'});
       toast(r?.ok ? 'ログインしました' : r?.message || r?.error || 'ログインできませんでした', {error: !r?.ok});
       reload();

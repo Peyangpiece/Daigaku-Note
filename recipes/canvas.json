@@ -1,10 +1,10 @@
 {
   "id": "canvas",
   "name": "Canvas（慶應義塾大学 K-LMS など）",
-  "version": "2026.11.1",
+  "version": "2026.11.2",
   "verified": false,
   "api": "canvas",
-  "note": "一覧は画面ではなく Canvas の窓口（/api/v1）を、ログインしたブラウザの Cookie で読む（src/main/connectors/canvas.js）。ログインは K-LMS のログイン画面の「keio.jp でログイン」（/login/saml → keio.okta.com）。実物の K-LMS で確かめるまで verified は false",
+  "note": "一覧は画面ではなく Canvas の窓口（/api/v1）を、ログインしたブラウザの Cookie で読む（src/main/connectors/canvas.js）。ログインは K-LMS のログイン画面の「keio.jp でログイン」（/login/saml → keio.okta.com）。ID・パスワードを保存すると、窓を開かずにアプリの中でログインし（login.inApp）、2 段階認証はパレットノートの画面に出す（browser/challenge.js）。Okta の画面のスクリプトは oktacdn.com から読む。実物の K-LMS で確かめるまで verified は false",
   "detect": {
     "urlPatterns": ["lms\\.keio\\.jp", "\\.instructure\\.com", "/login/canvas", "/login/saml"],
     "htmlMarkers": ["canvas_icon_class", "instructure", "K-LMS"]
@@ -14,11 +14,17 @@
       "selector": "#global_nav_profile_link, #global_nav_dashboard_link, a[href='/logout'], form[action='/logout']"
     },
     "sso": "a[href*='/login/saml']",
-    "form": null
+    "form": null,
+    "inApp": true
   },
   "allowedHosts": [],
   "universities": {
-    "lms.keio.jp": {"allowedHosts": ["keio.okta.com"]}
+    "lms.keio.jp": {
+      "allowedHosts": ["keio.okta.com", "oktacdn.com"]
+    }
   },
-  "waits": {"afterClick": 800, "pageLoad": "domcontentloaded"}
+  "waits": {
+    "afterClick": 800,
+    "pageLoad": "domcontentloaded"
+  }
 }

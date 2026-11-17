@@ -151,7 +151,15 @@ function stepLms(data, n) {
              <label class="sr-only" for="su-pass">パスワード</label><input class="input" id="su-pass" type="password" placeholder="パスワード" autocomplete="current-password" style="margin-top: var(--space-1)">
            </div>`
         : '';
-  const main = draft.kind === 'api' ? 'ログインして次へ' : draft.kind === 'recipe' ? 'ログイン窓を開く' : '次へ';
+  const inApp = draft.candidates.find((c) => c.connectorId === draft.connectorId)?.inApp;
+  const main =
+    draft.kind === 'api'
+      ? 'ログインして次へ'
+      : draft.kind === 'recipe'
+        ? inApp
+          ? 'ログイン'
+          : 'ログイン窓を開く'
+        : '次へ';
   const name = draft.label || draft.candidates.find((c) => c.connectorId === draft.connectorId)?.name || svc.name;
   return `<h2>${n}. ${esc(svc.name)} とつなぐ</h2>
     <p class="muted">${esc(name)}：<code>${esc(draft.base || draft.url)}</code> <button type="button" class="link" id="su-url-edit">URL を変える</button></p>
@@ -494,7 +502,10 @@ function bind() {
           });
           if (r0.error) return toast(r0.error, {error: true});
         }
-        msg.textContent = 'ログインの窓を開いています。窓でログインしてください…';
+        const inApp = $('su-auto').checked && draft.candidates.find((c) => c.connectorId === draft.connectorId)?.inApp;
+        msg.textContent = inApp
+          ? 'ログインしています…（2 段階認証は、この画面に出ます）'
+          : 'ログインの窓を開いています。窓でログインしてください…';
         btn.disabled = true;
         const r = await api['connection.login']({connectionId: draft.connectionId, mode: 'visible'});
         btn.disabled = false;

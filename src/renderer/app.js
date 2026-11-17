@@ -468,6 +468,68 @@ api.on('login.required', ({label, message}) => {
     detail: message && message !== text ? message : ''
   });
 });
+// 2 段階認証などの画面（K-LMS の Okta など）：アプリの中でログインしている途中で、本人の入力が要る画面になった。
+// その画面の見出し・説明・認証コードの欄・ボタンを、パレットノートのダイアログに写す（main の browser/challenge.js）
+let challengeBox = null;
+function showChallenge(c) {
+  if (EMBED || !c?.id) return;
+  if (c.done) {
+    if (challengeBox?.dataset.id === c.id) challengeBox.close('done');
+    return;
+  }
+  challengeBox?.close('replaced');
+  const d = document.createElement('dialog');
+  d.className = 'confirm-dialog login-challenge';
+  d.dataset.id = c.id;
+  d.setAttribute('aria-label', `${c.label || 'LMS'} の 2 段階認証`);
+  d.innerHTML = `<form method="dialog">
+    <h3>${esc(c.label || 'LMS')} の 2 段階認証</h3>
+    ${c.title ? `<p><strong>${esc(c.title)}</strong></p>` : ''}
+    ${c.text ? `<p class="muted login-challenge__text">${esc(c.text)}</p>` : ''}
+    ${c.code ? '<label class="login-challenge__code">認証コード<input class="input" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" spellcheck="false"></label>' : ''}
+    ${c.choices?.length ? `<div class="login-challenge__choices">${c.choices.map((l, i) => `<button type="button" class="btn btn--small" data-choice="${i}">${esc(l)}</button>`).join('')}</div>` : ''}
+    <p class="muted login-challenge__hint">${c.code ? '認証アプリ・メール・SMS に届いたコードを入れて「送る」を押します。' : ''}スマホのアプリで承認する方法なら、承認してから「承認した」を押します。</p>
+    <div class="confirm-dialog__foot"><button type="button" class="btn" data-cancel>やめる</button><button type="button" class="btn" data-wait>承認した</button>${c.code ? '<button type="submit" class="btn btn--primary" data-send>送る</button>' : ''}</div>
+  </form>`;
+  let answered = false;
+  const reply = async (a) => {
+    if (answered) return;
+    answered = true;
+    d.close('answered');
+    const r = await api['login.answer']({id: c.id, ...a}).catch(() => null);
+    if (!r?.ok && !a.cancel)
+      toast('時間が過ぎたため、2 段階認証を受け付けませんでした。もう一度ログインしてください', {error: true});
+  };
+  const input = d.querySelector('input[name="code"]');
+  d.querySelector('form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = input?.value.normalize('NFKC').replace(/\s+/g, '') ?? '';
+    if (!/^[A-Za-z0-9-]{1,20}$/.test(code)) return toast('認証コードを入れてください', {error: true});
+    reply({code});
+  });
+  d.querySelectorAll('[data-choice]').forEach((b) => (b.onclick = () => reply({choice: Number(b.dataset.choice)})));
+  d.querySelector('[data-wait]').onclick = () => reply({wait: true});
+  d.querySelector('[data-cancel]').onclick = () => reply({cancel: true});
+  // Esc は「やめる」
+  d.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    reply({cancel: true});
+  });
+  d.addEventListener('close', () => {
+    if (challengeBox === d) challengeBox = null;
+    d.remove();
+  });
+  challengeBox = d;
+  document.body.append(d);
+  d.showModal();
+  (input ?? d.querySelector('[data-choice], [data-wait]'))?.focus();
+}
+api.on('login.challenge', showChallenge);
+// 窓を開き直したとき：答えを待っている 2 段階認証があれば出す
+if (!EMBED)
+  Promise.resolve(api['login.challenges']?.())
+    .then((list) => (Array.isArray(list) ? list.at(-1) && showChallenge(list.at(-1)) : null))
+    .catch(() => {});
 api.on('route', (r) => navigate(r));
 // メニューの拡大・縮小（⌘＋・⌘−・⌘0）。編集画面では PDF だけ、ほかの画面ではアプリ全体
 api.on('zoom', (dir) => (split ? zoomSplit(dir) : viewer ? viewer.zoomStep(dir) : api.appZoom(dir)));
