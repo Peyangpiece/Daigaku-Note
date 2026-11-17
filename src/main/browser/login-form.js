@@ -196,3 +196,63 @@ export function markLoginForm() {
     filledPassword: !!password?.value
   };
 }
+
+/**
+ * 2 段階認証などの画面を、パレットノートの画面に写すために読む（page.evaluate で動かす。外の変数を使わない）。
+ * 認証コードの欄に data-dn-code、それを送るボタンに data-dn-code-submit、選べるボタン（「プッシュ通知を送信」
+ * 「コードを入力」「選択」など）に data-dn-choice="番号" を付ける。
+ * 戻り：{title, text, code（コードの欄があるか）, choices（ボタンの文字の並び）}。本人にだけ見せる（パスワードの値は読まない）
+ */
+export function markChallenge() {
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    const s = window.getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !el.disabled;
+  };
+  for (const a of ['data-dn-code', 'data-dn-code-submit', 'data-dn-choice'])
+    for (const el of document.querySelectorAll(`[${a}]`)) el.removeAttribute(a);
+  const hints = (el) =>
+    `${el.name} ${el.id} ${el.getAttribute('autocomplete') ?? ''} ${el.getAttribute('placeholder') ?? ''} ${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('inputmode') ?? ''}`;
+  const codeHint = (el) =>
+    el.getAttribute('autocomplete') === 'one-time-code' ||
+    /code|otp|one-?time|token|passcode|\bpin\b|totp|mfa|2fa|verif|answer|numeric|認証|確認コード|ワンタイム|セキュリティ/i.test(
+      hints(el)
+    );
+  const inputs = [...document.querySelectorAll('input')].filter(
+    (el) =>
+      visible(el) && !el.readOnly && ['text', 'tel', 'number', 'password', ''].includes((el.type ?? '').toLowerCase())
+  );
+  // コードの欄：コードらしい名前の欄。なければ、画面に入れる欄が 1 つだけならそれ
+  const code = inputs.find(codeHint) ?? (inputs.length === 1 ? inputs[0] : null);
+  if (code) code.setAttribute('data-dn-code', '1');
+  const label = (b) =>
+    `${b.innerText ?? b.textContent ?? ''} ${b.value ?? ''}`.replace(/\s+/g, ' ').trim() ||
+    (b.getAttribute('aria-label') ?? '').trim();
+  const skip =
+    /言語|language|日本語|english|ヘルプ|help|忘れ|forgot|サインアウト|sign\s*out|ログアウト|log\s*out|プライバシー|privacy|利用規約|terms/i;
+  const buttons = [
+    ...document.querySelectorAll(
+      'button, input[type=submit], input[type=button], [role=button], a[data-se], a.button, a.link-button'
+    )
+  ].filter((b) => visible(b) && label(b) && label(b).length <= 40 && !skip.test(label(b)));
+  const go = /確認|送信|次へ|検証|ログイン|サインイン|verify|submit|next|continue|sign\s*in/i;
+  const send = code
+    ? ((code.form && buttons.find((b) => code.form.contains(b) && go.test(label(b)))) ??
+      buttons.find((b) => go.test(label(b))))
+    : null;
+  if (send) send.setAttribute('data-dn-code-submit', '1');
+  const choices = [];
+  for (const b of buttons) {
+    if (b === send || choices.length >= 8) continue;
+    b.setAttribute('data-dn-choice', String(choices.length));
+    choices.push(label(b));
+  }
+  const title = (document.querySelector('h1, h2')?.innerText ?? document.title ?? '').trim().slice(0, 80);
+  const text = (document.body?.innerText ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && l !== title && !choices.includes(l))
+    .join('\n')
+    .slice(0, 500);
+  return {title, text, code: !!code, choices};
+}

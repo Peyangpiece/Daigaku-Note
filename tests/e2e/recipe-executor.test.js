@@ -317,7 +317,16 @@ test(
  * 模擬の統合認証：LMS（127.0.0.1）に未ログインで来ると IdP（localhost。別のホスト）へ転送。
  * IdP は ID のページ → パスワードのページ →（code: true なら）認証コードのページ → LMS の /sso?ticket=… に戻して Cookie を付ける
  */
-async function mockSso({code = false, mfa = null, localLogin = false, stale = 0, again = 0, bounce = 0} = {}) {
+// codeOk：認証コードがこれなら通す（2 段階認証をパレットノートの画面で入れる試験。違えばエラーを書いて出し直す）
+async function mockSso({
+  code = false,
+  codeOk = null,
+  mfa = null,
+  localLogin = false,
+  stale = 0,
+  again = 0,
+  bounce = 0
+} = {}) {
   const page = (body) => `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
   const send = (res, b, status = 200, headers = {}) => {
     res.writeHead(status, {'Content-Type': 'text/html; charset=utf-8', ...headers});
@@ -387,7 +396,7 @@ async function mockSso({code = false, mfa = null, localLogin = false, stale = 0,
       if (code)
         return send(
           res,
-          `<form method="post" action="/idp/code"><p>メールに届いた認証コードを入れてください</p><input type="text" name="otp_code" autocomplete="one-time-code"><button type="submit">送信</button></form>`
+          `<h1>2 段階認証</h1><form method="post" action="/idp/code"><p>メールに届いた認証コードを入れてください</p><input type="text" name="otp_code" autocomplete="one-time-code"><button type="submit">送信</button><button type="button">別の方法を選ぶ</button></form>`
         );
       // SAML のように、自動で送信されるフォームで LMS へ戻る（統合認証はログインを覚える）
       return send(
@@ -400,6 +409,18 @@ async function mockSso({code = false, mfa = null, localLogin = false, stale = 0,
     if (url.pathname === '/idp/code') {
       const p = await form(req);
       seen.codes.push(p.get('otp_code'));
+      if (codeOk && p.get('otp_code') === codeOk)
+        return send(
+          res,
+          `<form id="f" method="get" action="${lmsBase}/sso"><input type="hidden" name="ticket" value="t1"></form><script>document.getElementById('f').submit()</script>`,
+          200,
+          {'Set-Cookie': 'idp=ok; Path=/'}
+        );
+      if (codeOk)
+        return send(
+          res,
+          `<h1>2 段階認証</h1><form method="post" action="/idp/code"><p>コードが正しくありません</p><input type="text" name="otp_code" autocomplete="one-time-code"><button type="submit">送信</button></form>`
+        );
       return send(res, 'ng');
     }
     send(res, 'not found', 404);
@@ -913,6 +934,66 @@ test(
       assert.equal(loop.seen.local, 0, '戻され続けても LMS 自身の欄には送らない');
     } finally {
       await connector.releaseContext(ctx2);
+    }
+  }
+);
+
+test(
+  '2 段階認証をパレットノートの画面で：ID → 次へ → パスワード → ログインのあと、コードの欄を写して本人の答えを入れる（違えば聞き直す）',
+  {skip: !playwright && 'Playwright が入っていません'},
+  async (t) => {
+    const secrets = memSecrets();
+    const session = createBrowserSession({secrets, playwright, executablePath});
+    t.after(() => session.shutdown());
+    const asked = [];
+    const answers = [{code: '000000'}, {code: '123456'}];
+    const connector = createRecipeExecutor(recipeBase, {
+      session,
+      secrets,
+      challenge: async (info) => (asked.push(info), answers.shift() ?? null)
+    });
+    const sso = await mockSso({code: true, codeOk: '123456'});
+    t.after(sso.close);
+    const c = await connector.createContext({
+      id: 'c2fa',
+      label: 'K-LMS',
+      base_url: sso.base,
+      university_host: '127.0.0.1',
+      allowed_hosts_json: '["localhost"]'
+    });
+    try {
+      assert.deepEqual(await connector.login(c, 'headless', {credentials: {user: 'stu', password: 'pw'}}), {ok: true});
+      assert.deepEqual(sso.seen.users, ['stu'], 'ID は 1 回');
+      assert.equal(sso.seen.passwords, 1, 'パスワードは 1 回');
+      assert.deepEqual(sso.seen.codes, ['000000', '123456'], '画面で入れたコードを送る。違えば聞き直す');
+      assert.equal(asked.length, 2);
+      assert.equal(asked[0].label, 'K-LMS');
+      assert.equal(asked[0].code, true);
+      assert.equal(asked[0].title, '2 段階認証');
+      assert.match(asked[0].text, /メールに届いた認証コード/);
+      assert.deepEqual(asked[0].choices, ['別の方法を選ぶ'], '送るボタンは選択肢に入れない');
+      assert.match(asked[1].text, /コードが正しくありません/);
+    } finally {
+      await connector.releaseContext(c);
+    }
+    // やめた（ダイアログの「やめる」・時間切れ）：本人がやめたと分かる形で止まる
+    const sso2 = await mockSso({code: true, codeOk: '123456'});
+    t.after(sso2.close);
+    const cancel = createRecipeExecutor(recipeBase, {session, secrets, challenge: async () => null});
+    const c2 = await cancel.createContext({
+      id: 'c2fb',
+      base_url: sso2.base,
+      university_host: '127.0.0.1',
+      allowed_hosts_json: '["localhost"]'
+    });
+    try {
+      await assert.rejects(
+        cancel.login(c2, 'headless', {credentials: {user: 'stu', password: 'pw'}}),
+        (e) => e.code === 'login-needs-user' && e.challengeCancelled === true
+      );
+      assert.deepEqual(sso2.seen.codes, []);
+    } finally {
+      await cancel.releaseContext(c2);
     }
   }
 );

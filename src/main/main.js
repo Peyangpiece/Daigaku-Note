@@ -23,6 +23,7 @@ import {SyncEngine} from './sync/engine.js';
 import {createRegistry, loadRecipes} from './connectors/index.js';
 import {createRecipeExecutor} from './connectors/recipe-executor.js';
 import {createBrowserSession} from './browser/session.js';
+import {createChallenges} from './browser/challenge.js';
 import {ensureChromium} from './browser/install.js';
 import {createQuarantine} from './sync/quarantine.js';
 import {LEGACY_NAME, defaultRoot} from '../shared/paths.js';
@@ -357,6 +358,11 @@ app.whenReady().then(async () => {
       log: (m) => log.info(m)
     });
     // Playwright：Chromium は userData/pw-browsers に初回起動時に取り込む（§8.5）。取り込みは M0 後半の browser/install.js
+    // 2 段階認証などの画面を、パレットノートの画面に写して本人の答えを待つ（browser/challenge.js。K-LMS の Okta など）
+    ctx.challenges = createChallenges({
+      send: (payload) => sendMain(win?.webContents, 'login.challenge', payload),
+      onAsk: () => openWindow()
+    });
     ctx.session = createBrowserSession({
       secrets: ctx.secrets,
       log: (m) => log.info(m),
@@ -372,7 +378,8 @@ app.whenReady().then(async () => {
           session: ctx.session,
           secrets: ctx.secrets,
           log: (m) => log.info(m),
-          debug: {dir: path.join(userData, 'debug')}
+          debug: {dir: path.join(userData, 'debug')},
+          challenge: (info) => ctx.challenges.ask(info)
         })
     });
     try {
