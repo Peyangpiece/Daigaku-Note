@@ -939,7 +939,7 @@ test(
 );
 
 test(
-  '2 段階認証をパレットノートの画面で：ID → 次へ → パスワード → ログインのあと、コードの欄を写して本人の答えを入れる（違えば聞き直す）',
+  '2 段階認証をパレットノートの画面で（K-LMS の login.inApp だけ）：ID → 次へ → パスワード → ログインのあと、コードの欄を写して本人の答えを入れる（違えば聞き直す）。manabo は従来どおり',
   {skip: !playwright && 'Playwright が入っていません'},
   async (t) => {
     const secrets = memSecrets();
@@ -947,7 +947,9 @@ test(
     t.after(() => session.shutdown());
     const asked = [];
     const answers = [{code: '000000'}, {code: '123456'}];
-    const connector = createRecipeExecutor(recipeBase, {
+    // アプリの中でログインするレシピ（K-LMS と同じ login.inApp）だけ、2 段階認証を画面に写す
+    const inApp = {...recipeBase, login: {...recipeBase.login, inApp: true}};
+    const connector = createRecipeExecutor(inApp, {
       session,
       secrets,
       challenge: async (info) => (asked.push(info), answers.shift() ?? null)
@@ -979,7 +981,7 @@ test(
     // やめた（ダイアログの「やめる」・時間切れ）：本人がやめたと分かる形で止まる
     const sso2 = await mockSso({code: true, codeOk: '123456'});
     t.after(sso2.close);
-    const cancel = createRecipeExecutor(recipeBase, {session, secrets, challenge: async () => null});
+    const cancel = createRecipeExecutor(inApp, {session, secrets, challenge: async () => null});
     const c2 = await cancel.createContext({
       id: 'c2fb',
       base_url: sso2.base,
@@ -994,6 +996,31 @@ test(
       assert.deepEqual(sso2.seen.codes, []);
     } finally {
       await cancel.releaseContext(c2);
+    }
+    // manabo（login.inApp のないレシピ）：画面に写す仕組みを渡しても使わず、従来どおり止めて窓でのログインを求める（v0.27.5）
+    const sso3 = await mockSso({code: true, codeOk: '123456'});
+    t.after(sso3.close);
+    let called = 0;
+    const manabo = createRecipeExecutor(recipeBase, {
+      session,
+      secrets,
+      challenge: async () => (called++, {code: '123456'})
+    });
+    const c3 = await manabo.createContext({
+      id: 'c2fc',
+      base_url: sso3.base,
+      university_host: '127.0.0.1',
+      allowed_hosts_json: '["localhost"]'
+    });
+    try {
+      await assert.rejects(
+        manabo.login(c3, 'headless', {credentials: {user: 'stu', password: 'pw'}}),
+        (e) => e.code === 'login-needs-user' && /認証コード/.test(e.message) && !e.challengeCancelled
+      );
+      assert.equal(called, 0, 'manabo では 2 段階認証のダイアログを出さない');
+      assert.deepEqual(sso3.seen.codes, [], '認証コードの欄には何も送らない');
+    } finally {
+      await manabo.releaseContext(c3);
     }
   }
 );
