@@ -166,6 +166,43 @@ test(
         null,
         {timeout: 30000}
       );
+      // 筆箱：画面の右の端から内側へなでると出るのは指だけ。ペンで右の端の近くから書いても出さない（v0.27.4）。
+      // ペンを使った直後の指（書いている手）も出さない
+      const swipe = (pointerType, {width = 1} = {}) =>
+        win.evaluate(
+          ({pointerType, width}) => {
+            const w = document.documentElement.clientWidth;
+            const y = Math.round(window.innerHeight / 4); // 右の上半分（筆箱）
+            const fire = (type, x) =>
+              (document.elementFromPoint(x, y) ?? document.body).dispatchEvent(
+                new PointerEvent(type, {
+                  bubbles: true,
+                  cancelable: true,
+                  pointerId: 7,
+                  pointerType,
+                  clientX: x,
+                  clientY: y,
+                  width,
+                  height: width,
+                  isPrimary: true,
+                  buttons: type === 'pointerup' ? 0 : 1
+                })
+              );
+            fire('pointerdown', w - 10);
+            for (let x = w - 20; x >= w - 80; x -= 10) fire('pointermove', x);
+            fire('pointerup', w - 80);
+            const side = document.querySelector('[data-corner="fude"]');
+            return !!side && !side.classList.contains('is-tucked');
+          },
+          {pointerType, width}
+        );
+      const tuck = () => win.evaluate(() => document.querySelector('[data-corner="fude"]')?.classList.add('is-tucked'));
+      assert.equal(await swipe('pen'), false, 'ペンで右の端から書いても筆箱は出ない');
+      assert.equal(await swipe('touch'), false, 'ペンを使った直後の指（書いている手）でも出ない');
+      await win.waitForTimeout(1600);
+      assert.equal(await swipe('touch', {width: 120}), false, '手のひらほど大きい触れ方では出ない');
+      assert.equal(await swipe('touch'), true, '指で右の端から内側へなでると出る');
+      await tuck();
       // 設定：情報の節と版
       await win.evaluate(() => (location.hash = '#/settings?tab=about')); // 設定の「情報」タブ
       await win.waitForSelector('#st-about', {timeout: 30000});

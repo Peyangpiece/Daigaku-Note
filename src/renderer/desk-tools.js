@@ -2,6 +2,7 @@
 // クイズ・ホームの机（desk.js）が同じものを使う。四隅の出し入れ、シール帳・素材の並び、運んで貼る動き、
 // ポーチの電卓・メモ帳・定規・タイマーをここに置く。貼る先（ページか画面か）と赤シートは、使う側が決める（下の「使う側が決めること」）
 import {esc, toast} from './ui-kit.js';
+import {PALM_SIZE, contactSize} from '../shared/pad-channels.js';
 import {state} from './store.js';
 import {MEMO_COLOR, MEMO_SIZE} from '../shared/annotation.js';
 import {BUILTIN_STICKERS, BUILTIN_STICKER_KIND, builtinStickerUrl, isBuiltinSticker} from '../shared/stickers.js';
@@ -138,6 +139,9 @@ function pouchGear() {
   };
   return {bag: itemOf(st.pouchId), calc: art('calc', st.calcId), timer: art('timer', st.timerId)};
 }
+
+/** ペンを使ったあと、端からなでて四隅を出せるようになるまでの時間（書いている手が端に触れても出さない） */
+const PEN_QUIET_MS = 1500;
 
 export const cornersHtml = () => {
   const gear = pouchGear();
@@ -282,6 +286,11 @@ export class DeskTools {
           ? 'seal'
           : 'sozai';
     const inCorner = (e) => !!e.target.closest?.('[data-corner]');
+    // 端からなでて出せる指か：指で、ペンを使っていない（ペンを離して PEN_QUIET_MS たった）・手のひらほど大きくない
+    const edgeFinger = (e) =>
+      e.pointerType === 'touch' &&
+      window.performance.now() - (this.penAt ?? -Infinity) > PEN_QUIET_MS &&
+      contactSize(e) < PALM_SIZE;
     // マウス：端へ寄せたら出し、出したものから離れたらしまう
     this.on(document, 'pointermove', (e) => {
       if (e.pointerType !== 'mouse' || this.busy() || this.corner) return;
@@ -306,7 +315,9 @@ export class DeskTools {
           this.cornerEntered = true;
       });
     }
-    // 指・ペン：画面の端から内側へなでたら出す。出したものの外を押したらしまう
+    // 指：画面の端から内側へなでたら出す。出したものの外を押したらしまう。
+    // ペンでは出さない（端の近くから書き始めた線で、書くたびに筆箱が出ていた。v0.27.4）。ペンを使っている間・使った直後と、
+    // 手のひららしい大きな触れ方の指も出さない（書いている手が画面の端に触れて出ないように）。ペンで出すときは端のつまみを押す
     this.on(
       document,
       'pointerdown',
@@ -315,15 +326,18 @@ export class DeskTools {
           if (this.corner && !inCorner(e)) this.openCorner(null);
           return;
         }
+        if (e.pointerType === 'pen') this.penAt = window.performance.now();
         const w = document.documentElement.clientWidth;
         let side = e.clientX >= w - 24 ? 'right' : e.clientX <= 24 ? 'left' : null;
         if (side && !this.edgeAllowed(side)) side = null;
+        if (side && !edgeFinger(e)) side = null;
         if (side && !inCorner(e)) this.edge = {pointer: e.pointerId, x: e.clientX, y: e.clientY, side};
         else if (this.corner && !inCorner(e)) this.openCorner(null);
       },
       {capture: true}
     );
     this.on(document, 'pointermove', (e) => {
+      if (e.pointerType === 'pen') this.penAt = window.performance.now();
       const g = this.edge;
       if (!g || g.pointer !== e.pointerId) return;
       const inward = g.side === 'right' ? g.x - e.clientX : e.clientX - g.x;
