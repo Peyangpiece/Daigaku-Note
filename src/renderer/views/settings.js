@@ -240,7 +240,7 @@ export function renderSettings({data}, route = '/settings') {
                     c
                   ) => `<li style="margin-bottom: 6px"><span data-rename-box><span data-rename-target>${esc(c.label)}</span> <button type="button" class="rename-btn" data-action="rename" data-what="conn" data-id="${esc(c.id)}" data-value="${esc(c.label)}" title="名前を変える" aria-label="${esc(c.label)}の名前を変える">✎</button></span> <span class="muted">前回の同期 ${esc(fmtDate(c.last_sync_at))}${c.status !== 'ok' ? ` ・ <strong>${c.status === 'login-required' ? 'ログインが必要' : esc(c.status)}</strong>` : ''}</span>
                     <span style="display:inline-flex; gap: 6px; margin-left: 8px">
-                      ${c.kind !== 'manual' ? `<button class="btn btn--small${c.status === 'login-required' ? ' btn--primary' : ''}" data-login="${esc(c.id)}">ログイン</button>` : ''}
+                      ${c.kind !== 'manual' ? `<button class="btn btn--small${c.status === 'login-required' ? ' btn--primary' : ''}" data-login="${esc(c.id)}"${c.connector_id === 'canvas' ? ' data-in-app="1"' : ''}>ログイン</button>` : ''}
                       <button class="btn btn--small btn--quiet" data-remove-conn="${esc(c.id)}">削除</button>
                     </span>${c.kind === 'recipe' ? autoLogin(c) : ''}</li>`
                 )
@@ -846,7 +846,8 @@ function bind() {
   document.querySelectorAll('[data-login]').forEach((b) =>
     b.addEventListener('click', async () => {
       b.disabled = true;
-      b.textContent = 'ログインしています…';
+      // アプリの中でログインする K-LMS（Canvas）だけ「ログインしています…」。manabo などは従来どおり窓を開く
+      b.textContent = b.dataset.inApp ? 'ログインしています…' : 'ログイン窓を開いています…';
       const r = await api['connection.login']({connectionId: b.dataset.login, mode: 'visible'});
       toast(r?.ok ? 'ログインしました' : r?.message || r?.error || 'ログインできませんでした', {error: !r?.ok});
       reload();

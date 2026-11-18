@@ -223,10 +223,17 @@ function pageMarkItems(containerSel) {
 }
 
 /**
- * challenge(info)：2 段階認証などの画面をパレットノートの画面に写して、本人の答えを待つ（main.js。なければ従来どおり窓を開いてもらう）。
+ * challenge(info)：2 段階認証などの画面をパレットノートの画面に写して、本人の答えを待つ（main.js。login.inApp のレシピだけで使う。
+ *   なければ・ほかのレシピでは従来どおり窓を開いてもらう）。
  *   info：{label, host, title, text, code, choices}。戻り：{code} | {choice: 番号} | {wait: true} | null（やめた・時間切れ）
  */
-export function createRecipeExecutor(recipeIn, {session, secrets, log = () => {}, debug = null, challenge = null}) {
+export function createRecipeExecutor(
+  recipeIn,
+  {session, secrets, log = () => {}, debug = null, challenge: ask = null}
+) {
+  // 2 段階認証をパレットノートの画面に写すのは、アプリの中でログインするレシピ（login.inApp：K-LMS）だけ。
+  // ほかのレシピ（manabo など）は従来どおり、本人の入力が要る画面になったら止めて、ログインの窓を開いてもらう（v0.27.5）
+  const challenge = recipeIn.login?.inApp ? ask : null;
   const compileSection = (sec) => {
     if (!sec) return null;
     const fields = [];
