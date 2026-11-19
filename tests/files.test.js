@@ -522,3 +522,35 @@ test('取り直し：見つからなくなった LMS の資料は、取り直す
   assert.deepEqual(repo.getSetting(REFETCH), []);
   assert.equal(repo.listMaterials(course.id).filter((m) => m.status === 'missing').length, 0);
 });
+
+test('消した資料（removed）：LMS で新しくなっても・同じ中身でも取り直さない。見つからない印も付けない。入れ直せば戻る', async (t) => {
+  const {repo, term, course, r2, files} = await setup(t);
+  let fetched = 0;
+  const fetchFile = async () => {
+    fetched++;
+    return {ok: true, status: 200, contentType: 'application/pdf', disposition: '', body: Buffer.from('lms pdf')};
+  };
+  const ref = (modified, url = 'https://lms/file/r') => ({url, name: 'r.pdf', modified});
+  const a = await files.ingest({term, course, round: r2, fileRef: ref('100'), fetchFile});
+  assert.equal(a.result, 'saved');
+  repo.updateMaterial(a.material.id, {status: 'removed'});
+  // 同じ URL：LMS で新しくなっていても取りに行かない
+  assert.equal((await files.ingest({term, course, round: r2, fileRef: ref('200'), fetchFile})).result, 'skip');
+  assert.equal(fetched, 1);
+  // 別の URL で同じ中身：記録を増やさない（画面に戻さない）
+  assert.equal(
+    (await files.ingest({term, course, round: r2, fileRef: ref('1', 'https://lms/file/r2'), fetchFile})).result,
+    'dup'
+  );
+  assert.equal(repo.listMaterials(course.id).length, 1);
+  assert.equal(repo.get('material', a.material.id).status, 'removed');
+  // パソコンのファイルは残っている。消えても「見つからない」にはしない
+  assert.equal(String(await readFile(a.material.path)), 'lms pdf');
+  await rm(a.material.path);
+  assert.deepEqual(await files.reconcileFiles({term, course, rounds: [r2]}), []);
+  assert.equal(repo.get('material', a.material.id).status, 'removed');
+  // 本人が同じ中身を入れ直したときは入れ直せる
+  const again = await files.addOwn({term, course, name: 'r.pdf', data: Buffer.from('lms pdf')});
+  assert.equal(again.result, 'saved');
+  assert.equal(repo.get('material', a.material.id), null);
+});

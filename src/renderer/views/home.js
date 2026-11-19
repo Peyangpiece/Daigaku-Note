@@ -97,7 +97,7 @@ export function folderCard(course, {today = false, data = null, skin = null, edi
     <span class="folder__badges">${badges}</span>`;
   if (edit)
     return `<div class="${cls} folder--preview" style="${look.style}"${edit.still ? ' aria-hidden="true"' : ' data-drop-place="folder" data-edit="folder" title="押すとフォルダの色を変えられます。シールをここへドラッグすると貼れます"'}>${inner}</div>`;
-  // 右上の「…」：右クリックと同じメニュー（名前を変える・着せ替え・ホームから外す）。右クリックに気づかなくても使えるように
+  // 右上の「…」：右クリックと同じメニュー（名前を変える・着せ替え・削除）。右クリックに気づかなくても使えるように
   return `<div class="folder-slot" data-sort-key="${esc(course.id)}"><button class="${cls}" style="${look.style}" data-action="open-course" data-id="${esc(course.id)}"${today ? ' aria-describedby="today-label"' : ''}>
     ${inner}
   </button><button type="button" class="folder__more" data-action="card-menu" data-id="${esc(course.id)}" aria-label="${esc(course.name)} のメニュー" title="メニュー（右クリックでも出ます）" aria-haspopup="menu">⋯</button></div>`;

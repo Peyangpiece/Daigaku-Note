@@ -297,6 +297,18 @@ test('セットアップで外した授業は非表示で作られ、同期し�
   assert.equal(repo.findCourseByLms(connection.id, '1').hidden, 0);
 });
 
+test('本人が消した授業（courses.deleted）は、同期で作り直さない。ほかの授業はいつもどおり', async (t) => {
+  const {repo, term, connection, engine} = await setup(t);
+  const {DELETED_COURSES, deletedKey} = await import('../src/main/sync/engine.js');
+  repo.setSetting(DELETED_COURSES, [deletedKey(connection, '2')]);
+  await engine.run({connection, connector: fakeConnector(data()), term, kind: 'initial'});
+  assert.equal(repo.findCourseByLms(connection.id, '2'), null);
+  assert.ok(repo.findCourseByLms(connection.id, '1'));
+  // 学校で覚える：接続の id が変わっても（つなぎ直しても）同じ鍵
+  assert.equal(deletedKey({id: 'x', university_host: 'LMS.Example.jp'}, 2), 'lms.example.jp|2');
+  assert.equal(deletedKey({id: 'y', university_host: 'lms.example.jp'}, '2'), 'lms.example.jp|2');
+});
+
 test('自動ログイン：パスワードが続けて 2 回通らなければ自動ログインを止め、理由を残す。認証コードなら止めない', async (t) => {
   const {repo, term, connection, engine} = await setup(t);
   repo.updateConnection(connection.id, {save_password: 1});

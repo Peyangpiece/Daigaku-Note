@@ -408,3 +408,33 @@ test('足した付箋は足した順を覚える・名前を変えても場所�
   assert.equal(repo.getSetting('folder.rootHidden', {})[c.id], true);
   assert.deepEqual((await readdir(c.dir)).sort(), ['アルファ', 'ベータ', '既存'].sort());
 });
+
+test('消したファイル（removed）は、パソコンに残っていても読み直しで出し直さない（名前を変えても・中身を変えても）', async (t) => {
+  const {base, folders, repo} = await setup(t);
+  const dir = path.join(base, 'ゼミ');
+  await mkdir(dir, {recursive: true});
+  await writeFile(path.join(dir, 'a.pdf'), 'A');
+  await writeFile(path.join(dir, 'b.pdf'), 'B');
+  const f = await folders.create({name: '', scope: 'term', mode: 'link', dir});
+  await folders.scan(f.id);
+  const shown = () =>
+    repo
+      .listMaterials(f.id)
+      .filter((m) => m.status === 'ok')
+      .map((m) => m.name)
+      .sort();
+  const a = repo.listMaterials(f.id).find((m) => m.name === 'a.pdf');
+  repo.updateMaterial(a.id, {status: 'removed'});
+  const s = await folders.scan(f.id);
+  assert.deepEqual(shown(), ['b.pdf']);
+  assert.deepEqual({added: s.added, removed: s.removed}, {added: 0, removed: 0});
+  // 中身を変えても（同じ場所）・名前を変えても（同じ中身）出さない
+  await writeFile(path.join(dir, 'a.pdf'), 'A2');
+  await utimes(path.join(dir, 'a.pdf'), new Date(), new Date(Date.now() + 5000));
+  await folders.scan(f.id);
+  assert.deepEqual(shown(), ['b.pdf']);
+  await rename(path.join(dir, 'a.pdf'), path.join(dir, 'a2.pdf'));
+  await folders.scan(f.id);
+  assert.deepEqual(shown(), ['b.pdf']);
+  assert.equal(repo.get('material', a.id).status, 'removed');
+});

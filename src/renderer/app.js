@@ -901,24 +901,18 @@ document.addEventListener('click', async (e) => {
             : '今学期のフォルダにしました'
         ),
           reload());
-    } else if (action === 'folder-hide') {
-      const r = await api['course.update']({courseId: el.dataset.courseId, patch: {hidden: true}});
-      if (r?.error) return toast(r.error, {error: true});
-      toast('ホームから外しました（パソコンのフォルダとファイルはそのまま。設定で戻せます）');
-      await reload();
-      navigate('/');
     } else if (action === 'remove-material') {
-      // 元に戻す仕組みはない（パソコンのゴミ箱へ移す）ので、先に確かめる
+      // パレットノートから消す（パソコンのファイルは残す）。アプリの中では元に戻せないので、先に確かめる
       if (
-        !(await confirmDialog(`「${el.dataset.name ?? 'このファイル'}」をパソコンのゴミ箱へ移しますか？`, {
-          ok: 'ゴミ箱へ',
-          danger: true
-        }))
+        !(await confirmDialog(
+          `「${el.dataset.name ?? 'このファイル'}」をパレットノートから削除しますか？\nパソコンのファイルはそのまま残ります。LMS の同期でも、もう取り込みません`,
+          {ok: '削除する', danger: true}
+        ))
       )
         return;
       const r = await api['material.remove']({materialId: el.dataset.id});
       if (r?.error) toast(r.error, {error: true});
-      else (toast('ゴミ箱へ移しました（パソコンのゴミ箱から戻せます）'), reload());
+      else (toast('削除しました（パソコンのファイルはそのまま残っています）'), reload());
     } else if (action === 'quiz-pick') {
       for (const x of document.querySelectorAll('input[name=quiz-make]'))
         x.checked = el.dataset.pick === 'new' ? !x.dataset.hasQuiz : false;
@@ -994,7 +988,7 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// ---- ホームの授業・フォルダのカード：右クリック（トラックパッドの 2 本指タップ・タッチの長押し）で「開く」「ホームから外す」など ----
+// ---- ホームの授業・フォルダのカード：右クリック（トラックパッドの 2 本指タップ・タッチの長押し）で「開く」「削除」など ----
 // ---- 名前を変える：名前の上に入力欄を重ねる。Enter・外を押すと決める、Esc でやめる ----
 function renameAt(target, value, save) {
   document.querySelector('.rename-pop')?.remove();
@@ -1115,21 +1109,27 @@ function openMenu(label, items, x, y, onPick) {
     onPick(what);
   };
 }
-/** 自分のフォルダを消す：確かめてから、パソコンのフォルダを中のファイルごとゴミ箱へ移し、アプリの記録も消す */
-async function deleteFolder(course) {
+/**
+ * 授業フォルダ・自分のフォルダを削除する（v0.27.9。それまでの「ホームから外す」＝非表示の代わり）：確かめてから、
+ * パレットノートの記録（資料の一覧・メモ・クイズ）を消してホームに出さない。パソコンのフォルダとファイルはそのまま残す。
+ * LMS の授業は、次の同期でも作り直さない
+ */
+async function deleteCourse(course) {
+  const folder = course.kind === 'folder';
+  const where = folder ? `パソコンのフォルダ（${course.dirName ?? course.name}）` : 'パソコンの授業フォルダ';
   if (
     !(await confirmDialog(
-      `「${course.name}」を削除しますか？\nパソコンのフォルダ（${course.dirName ?? ''}）を中のファイルごとゴミ箱へ移し、このフォルダのクイズの記録も消します。ゴミ箱から戻せばファイルは戻ります（パレットノートには登録し直します）`,
+      `「${course.name}」を削除しますか？\nパレットノートからは消え、ホームにも出なくなります（メモ・クイズの記録も消えます）。${where}とファイルはそのまま残ります。${folder ? '' : 'LMS の同期でも、もう取り込みません'}`,
       {ok: '削除する', danger: true}
     ))
   )
     return false;
-  const r = await api['folder.remove']({courseId: course.id});
+  const r = await api['course.remove']({courseId: course.id});
   if (r?.error) {
     toast(r.error, {error: true});
     return false;
   }
-  toast(`「${course.name}」を削除しました（パソコンのゴミ箱にあります）`);
+  toast(`「${course.name}」を削除しました（パソコンのファイルはそのまま残っています）`);
   await reload();
   return true;
 }
@@ -1207,7 +1207,7 @@ function openStickyMenu(note, x, y) {
   });
 }
 
-/** フォルダのメニュー（右クリック・カードの「⋯」）：開く・名前を変える・着せ替え・ホームから外す・（自分のフォルダは）削除 */
+/** フォルダのメニュー（右クリック・カードの「⋯」）：開く・名前を変える・着せ替え・並べ替え・削除 */
 function openCardMenu(card, x, y) {
   const course = state.data?.courses.find((c) => c.id === card.dataset.id);
   if (!course) return;
@@ -1216,8 +1216,7 @@ function openCardMenu(card, x, y) {
     ...(canRename(course) ? [['rename', '名前を変える…']] : []),
     ['skin', '着せ替え…'],
     ...(sortable(card) ? [['sort', '並べ替え']] : []),
-    ['remove', 'ホームから外す'],
-    ...(course.kind === 'folder' ? [['delete', 'フォルダを削除…']] : [])
+    ['delete', '削除…']
   ];
   openMenu(course.name, items, x, y, (what) => {
     if (what === 'open') navigate(`/course/${course.id}`);
@@ -1226,8 +1225,7 @@ function openCardMenu(card, x, y) {
     else if (what === 'skin') {
       const r = card.getBoundingClientRect();
       openSkinPicker(course, card, r.right + 8, r.top);
-    } else if (what === 'delete') deleteFolder(course).catch((err) => toast(err.message, {error: true}));
-    else removeCourse(course).catch((err) => toast(err.message, {error: true}));
+    } else if (what === 'delete') deleteCourse(course).catch((err) => toast(err.message, {error: true}));
   });
 }
 /** メニューの項目から、画面のボタンと同じ操作を動かす（data-action の処理をそのまま使う） */
@@ -1253,7 +1251,7 @@ async function refetchMaterial(id, name) {
   if (r?.error) return toast(r.error, {error: true});
   toast(`「${name}」を LMS から取り直します（この授業の全部の回を確かめます）`);
 }
-/** 資料のメニュー（右クリック・資料の「⋯」）：開く・フォルダで表示・別の付箋へ移す・ゴミ箱へ（自分で入れたもの） */
+/** 資料のメニュー（右クリック・資料の「⋯」）：開く・フォルダで表示・別の付箋へ移す・削除（パソコンのファイルは残す） */
 function openMaterialMenu(id, x, y) {
   const {m, course} = materialOf(id);
   if (!m || !course) return;
@@ -1284,7 +1282,8 @@ function openMaterialMenu(id, x, y) {
     ['open', '開く'],
     ['reveal', 'フォルダで表示'],
     ...(moves.length ? [['move', '別の付箋へ移す…']] : []),
-    ...(m.source === 'upload' ? [['trash', 'ゴミ箱へ…']] : []),
+    // 授業の PDF（LMS から取ったもの）・自分で入れたファイル・自分のフォルダのファイル。写し（copyOf）は元の資料のメニューから
+    ...(m.source !== 'note' && m.source !== 'export' && !m.copyOf ? [['trash', '削除…']] : []),
     ...(splitPdfs.length ? [['split-pdf', 'PDF と並べて開く…']] : []),
     ...(splitNote !== undefined ? [['split-note', 'ノートと並べて開く']] : []),
     ...(m.source === 'note' ? [['trash-note', 'ノートを削除…']] : [])
@@ -1338,7 +1337,6 @@ function openCourseMenu(id, x, y) {
       items.push(
         course.scope === 'always' ? ['scope:term', '今学期のフォルダにする'] : ['scope:always', 'マイフォルダにする']
       );
-    items.push(['hide', 'ホームから外す']);
     items.push(['delete', 'フォルダを削除…']);
   } else {
     const conn = state.data.connections.find((c) => c.id === course.connection_id);
@@ -1349,7 +1347,7 @@ function openCourseMenu(id, x, y) {
     if (course.lms_url) items.push(['lms', `${conn?.label || 'LMS'} で開く`]);
     const quizzes = state.data.quizzes?.[id] ?? [];
     if (!state.data.quiz?.key?.set && !quizzes.length) items.push(['quiz', 'クイズを作る…（AI を設定）']);
-    items.push(['hide', 'ホームから外す']);
+    items.push(['delete', '授業を削除…']);
   }
   openMenu(course.name, items, x, y, (what) => {
     if (what === 'scan') fire('folder-scan', {courseId: id});
@@ -1360,15 +1358,9 @@ function openCourseMenu(id, x, y) {
     else if (what === 'lms') fire('open-external', {url: course.lms_url});
     else if (what === 'quiz') navigate('/settings?focus=quiz');
     else if (what === 'delete')
-      deleteFolder(course)
+      deleteCourse(course)
         .then((done) => done && navigate('/'))
         .catch((err) => toast(err.message, {error: true}));
-    else if (what === 'hide')
-      course.kind === 'folder'
-        ? fire('folder-hide', {courseId: id})
-        : removeCourse(course)
-            .then(() => navigate('/'))
-            .catch((err) => toast(err.message, {error: true}));
   });
 }
 document.addEventListener('contextmenu', (e) => {
@@ -1446,33 +1438,6 @@ window.addEventListener('scroll', () => cardMenu && Date.now() - menuOpenedAt > 
   passive: true
 });
 window.addEventListener('hashchange', closeCardMenu);
-
-/** ホームから外す（非表示にして同期もやめる。保存した資料・メモ・パソコンのフォルダは残し、設定から戻せる） */
-async function removeCourse(course) {
-  // 消すのではなく、ホームに出さないだけ（同期もやめる。資料・メモ・パソコンのフォルダは残る）。すぐ「元に戻す」で戻せるので確認は出さない
-  const folder = course.kind === 'folder';
-  const r = await api['course.update']({
-    courseId: course.id,
-    patch: folder ? {hidden: true} : {hidden: true, sync_enabled: false}
-  });
-  if (r?.error) return toast(r.error, {error: true});
-  toast(
-    `「${course.name}」をホームから外しました（${folder ? 'パソコンのフォルダとファイルはそのまま' : '資料とメモは残ります'}。設定からも戻せます）`,
-    {
-      action: {
-        label: '元に戻す',
-        run: async () => {
-          await api['course.update']({
-            courseId: course.id,
-            patch: folder ? {hidden: false} : {hidden: false, sync_enabled: course.sync_enabled !== 0}
-          });
-          await reload();
-        }
-      }
-    }
-  );
-  await reload();
-}
 
 // ---- 授業画面：ファイルを入れる・付箋のあいだで移す ----
 function folderScanText(r) {
