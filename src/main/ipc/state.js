@@ -78,7 +78,10 @@ export function register({handle, ctx, repo}) {
     const unread = repo.countUnreadAll();
     const courses = repo.listCourses().map((c) => ({...c, unread: unread[c.id] ?? 0}));
     const roundsAll = repo.listRoundsAll();
-    const materialsAll = repo.listMaterialsAll();
+    // 消した資料（status = 'removed'。記録は同期で取り直さないために残す）は画面に出さない
+    const materialsAll = Object.fromEntries(
+      Object.entries(repo.listMaterialsAll()).map(([cid, list]) => [cid, list.filter((m) => m.status !== 'removed')])
+    );
     const quizzesAll = repo.listQuizzesAll();
     const rounds = Object.fromEntries(courses.map((c) => [c.id, roundsAll[c.id] ?? []]));
     // 自分のフォルダの資料は、フォルダの中のどの下のフォルダにあるか（sub）も渡す。パスそのものは渡さない

@@ -3,6 +3,7 @@ import {dialog, shell} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
 import {isOpenable, REFETCH} from '../sync/files.js';
+import {DELETED_COURSES, deletedKey} from '../sync/engine.js';
 import {str, id, bad} from './common.js';
 import {createLedger} from '../points-ledger.js';
 
@@ -162,14 +163,14 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
     return addAll(place, items);
   });
 
-  // 自分で入れた資料を外す（ファイルは OS のゴミ箱へ）。LMS から取った資料は外さない（次の同期でまた取ってくるため）
+  // 資料を消す（v0.27.9）：パレットノートから消して画面に出さない。パソコンのファイルはそのまま残す。
+  // 記録は「消した」印（status = 'removed'）にして残す。印があるので、LMS の同期・フォルダの読み直しで同じ資料をまた取り込まない
+  // （同期は同じ URL・同じ中身を、フォルダの読み直しは同じ場所・同じ中身を、この記録で見つけて飛ばす）。
+  // 授業の回のノート（アプリが作ったファイル）は、これまでどおり注釈などと一緒に片付ける
   handle('material.remove', async ({materialId}, e) => {
     const m = repo.get('material', id(materialId) ?? bad('資料が不正です')) ?? bad('資料がありません');
     if (m.source === 'note') return ctx.removeNote(m.id, e?.senderFrame); // ノートは注釈・元の写しなども片付ける（ipc/notes.js）
-    if (m.source === 'folder') bad('パソコンのフォルダにあるファイルは、Finder（エクスプローラー）で消してください');
-    if (m.source !== 'upload' && m.source !== 'note') bad('LMS から取った資料は外せません');
-    if (m.status === 'ok') await files.trash(m.path);
-    repo.remove('material', m.id);
+    repo.updateMaterial(m.id, {status: 'removed'});
     return {ok: true};
   });
 
@@ -237,21 +238,35 @@ export function register({handle, ctx, repo, jobs, files, log, folders, getWindo
     return {ok: true, ...(await folders.scan(c.id))};
   });
 
-  // 自分のフォルダを消す：パソコンのフォルダを中のファイルごと OS のゴミ箱へ移し、アプリの記録（資料・クイズ）も消す。
-  // ゴミ箱から戻せば、フォルダの中身は戻る（アプリには登録し直す）
-  handle('folder.remove', async ({courseId}) => {
-    const c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));
-    if ((await fsp.stat(c.dir).catch(() => null))?.isDirectory()) await files.trash(c.dir);
-    repo.removeCourseDeep(c.id);
-    for (const key of ['folder.copies', 'folder.subs', 'folder.added', 'folder.rootHidden']) {
-      const map = repo.getSetting(key, {}) ?? {};
-      if (map[c.id]) {
-        delete map[c.id];
-        repo.setSetting(key, map);
+  // 授業フォルダ・自分のフォルダを消す（v0.27.9。それまでは「ホームから外す」＝非表示）：アプリの記録（回・資料・メモ・クイズ）を消し、
+  // ホームにも設定にも出さない。パソコンのフォルダとファイルはそのまま残す（自分のフォルダは、登録し直せばまた使える）。
+  // LMS の授業は「消した」と覚え（courses.deleted。LMS の学校と授業の ID）、次の同期で作り直さない（engine.reconcileCourses）
+  const removeCourse = (courseId) => {
+    const c = repo.get('course', id(courseId) ?? bad('この授業は見つかりませんでした')) ?? bad('授業がありません');
+    if (c.kind === 'folder') {
+      for (const key of ['folder.copies', 'folder.subs', 'folder.added', 'folder.rootHidden']) {
+        const map = repo.getSetting(key, {}) ?? {};
+        if (map[c.id]) {
+          delete map[c.id];
+          repo.setSetting(key, map);
+        }
+      }
+    } else if (c.lms_id) {
+      const conn = c.connection_id ? repo.get('connection', c.connection_id) : null;
+      if (conn && conn.kind !== 'manual') {
+        const list = repo.getSetting(DELETED_COURSES, []) ?? [];
+        const key = deletedKey(conn, c.lms_id);
+        if (!list.includes(key)) repo.setSetting(DELETED_COURSES, [...list, key]);
       }
     }
+    repo.removeCourseDeep(c.id);
     return {ok: true};
-  });
+  };
+  handle('course.remove', ({courseId}) => removeCourse(courseId));
+  // 前の名前（自分のフォルダを消す）。同じく、パソコンのフォルダは残す
+  handle('folder.remove', ({courseId}) =>
+    removeCourse(folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした')).id)
+  );
 
   handle('folder.reveal', async ({courseId}) => {
     const c = folders.folderCourse(id(courseId) ?? bad('このフォルダは見つかりませんでした'));

@@ -200,6 +200,18 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
     let rebased = 0;
     for (const f of files) {
       const m = byPath.get(f.path);
+      // 本人が消したファイル（status = 'removed'）：パソコンには残っているが、パレットノートには出さない
+      if (m?.status === 'removed') {
+        keep.add(m.id);
+        // 中身が変わっていたら記録の中身も合わせる（あとで名前を変えられても、同じファイルと分かって出さないように）
+        if (m.size !== f.size || m.lms_modified !== f.mtime) {
+          const h = await hashFile(f.path).catch(() => null);
+          const other = h && repo.findMaterialByHash(course.id, h);
+          if (h && (!other || other.id === m.id))
+            repo.updateMaterial(m.id, {sha256: h, size: f.size, lms_modified: f.mtime});
+        }
+        continue;
+      }
       if (m && m.status === 'ok' && m.size === f.size && m.lms_modified === f.mtime) {
         keep.add(m.id);
         continue;
@@ -221,6 +233,12 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
         round_id: round.id
       };
       const same = repo.findMaterialByHash(course.id, h);
+      if (same?.status === 'removed') {
+        // 消したファイルと同じ中身（名前を変えた・別の下のフォルダへ移した・写し）：出さない
+        keep.add(same.id);
+        if (m && m.id !== same.id) repo.updateMaterial(m.id, {status: 'trashed'});
+        continue;
+      }
       if (m && (!same || same.id === m.id)) {
         // 中身が変わった（または消えたあとで戻った）
         if (m.base_sha256 && m.sha256 !== h) {
@@ -260,7 +278,7 @@ export function createFolders({repo, rootDir, today = () => todayJst(), log = ()
       repo.setSetting('folder.copies', map);
     let removed = 0;
     for (const m of known) {
-      if (keep.has(m.id) || m.status === 'trashed') continue;
+      if (keep.has(m.id) || m.status === 'trashed' || m.status === 'removed') continue;
       // 数が多くて打ち切ったときは、読まなかっただけのファイルを消したことにしない
       if (truncated && !present.has(m.path) && (await fsp.stat(m.path).catch(() => null))?.isFile()) continue;
       repo.updateMaterial(m.id, {status: 'trashed'});

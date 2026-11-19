@@ -149,7 +149,7 @@ export function renderFolder({data}, course) {
       ${stickerLayer(sk.stickers, 'heading', data)}
       <button class="btn" data-action="nav" data-route="/">← ホーム</button>
       <h2 class="ja-wrap">${jaWrap(course.name)} <span class="muted">${esc(scopeLabel(course))}</span></h2>
-      <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（フォルダを開く・読み直す・置き場所・ホームから外す・削除）" title="ほかの操作">⋯</button>
+      <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（フォルダを開く・読み直す・置き場所・削除）" title="ほかの操作">⋯</button>
     </nav>
     ${quizArea ? `<section class="test-panel test-panel--folder" aria-label="このフォルダのクイズ">${quizArea}</section>` : ''}
     <div class="round-notes round-notes--folder" data-sort-scope="course:${esc(course.id)}">${notes}<button type="button" class="round-note-add" data-action="sub-add" data-course-id="${esc(course.id)}" title="パソコンのフォルダの中にフォルダを作ります"><span aria-hidden="true">＋</span>付箋を足す</button></div>`;

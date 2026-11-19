@@ -28,7 +28,7 @@ const OWN_LABEL = '振り分け前'; // 回を決めていないファイルの�
 const placeName = (r) =>
   r ? (r.user_made ? r.title_user || '名前のない付箋' : r.number === 0 ? otherName(r) : `第${r.number}回`) : OWN_LABEL;
 
-// 資料の紙：押すと開く。ドラッグで別の付箋へ移せる。右上の「⋯」（右クリックでも）で、開く・フォルダで表示・移す・ゴミ箱へ
+// 資料の紙：押すと開く。ドラッグで別の付箋へ移せる。右上の「⋯」（右クリックでも）で、開く・フォルダで表示・移す・削除
 // （views/../app.js の material-menu。移せる先は placesOf）。copyOf は自分のフォルダの中の同じ中身の写し（開くと元の資料。注釈も同じ）
 export function fileCard(m, course) {
   const ok = m.status === 'ok';
@@ -321,7 +321,7 @@ export function renderCourse({data, progress}, courseId) {
       ${stickerLayer(skinOf(data, course).stickers, 'heading', data)}
       <button class="btn" data-action="nav" data-route="/">← ホーム</button>
       <h2 class="ja-wrap" data-rename-box><span data-rename-target>${jaWrap(course.name)}</span>${canRename(course) ? ` <button type="button" class="rename-btn" data-action="rename" data-what="course" data-id="${esc(course.id)}" title="名前を変える" aria-label="授業の名前を変える">✎</button>` : ''} <span class="muted">${esc(slot)}</span></h2>
-      <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（同期・LMS で開く・ホームから外す）" title="ほかの操作">⋯</button>
+      <button type="button" class="btn btn--quiet course-actions__more" data-action="course-menu" data-id="${esc(course.id)}" aria-haspopup="menu" aria-label="ほかの操作（同期・LMS で開く・削除）" title="ほかの操作">⋯</button>
     </nav>
     ${status ? `<p class="muted course-status" id="sync-status" role="status">${esc(status)}</p>` : '<p class="sr-only" id="sync-status" role="status"></p>'}
     ${testPanel(course, quizzes, makeable, quizInfo.byRound, quizInfo.hasKey)}

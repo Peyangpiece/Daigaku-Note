@@ -23,6 +23,7 @@ const INVOKE = [
   'term.remove',
   'courses.list',
   'course.update',
+  'course.remove',
   'sync.run',
   'material.open',
   'material.reveal',

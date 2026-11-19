@@ -133,6 +133,8 @@ export class FileManager {
     let prev = null;
     if (fileRef.url) {
       prev = this.repo.findMaterialsByUrl(fileRef.url).find((m) => m.course_id === course.id && here(m)) ?? null;
+      // 本人が消した資料（status = 'removed'）は、LMS で新しくなっても取り直さない
+      if (prev?.status === 'removed') return {result: 'skip', material: prev};
       if (prev) {
         const newer = fileRef.modified && (!prev.lms_modified || String(fileRef.modified) > String(prev.lms_modified));
         if (!newer && !want(prev)) return {result: 'skip', material: prev};
@@ -153,6 +155,7 @@ export class FileManager {
     // 3. ハッシュ
     const h = sha256(body);
     const same = this.repo.findMaterialByHash(course.id, h);
+    if (same?.status === 'removed') return {result: 'dup', material: same}; // 消した資料と同じ中身：取り込まない
     if (same && here(same) && !want(same)) {
       // 更新日時だけ進んで中身は同じだった：その日時を覚える（覚えないと、次の同期のたびに取り直す）
       if (prev && fileRef.modified != null) this.repo.updateMaterial(prev.id, {lms_modified: String(fileRef.modified)});
@@ -271,7 +274,8 @@ export class FileManager {
     const same = this.repo.findMaterialByHash(course.id, h);
     // 記録はあるがファイルがない（見つからない・ゴミ箱へ入れた）ものは、複製ではない：記録を消して入れ直す。
     // （「もうあります」と答えると、消してしまった資料を入れ直そうとしても戻らず、取り込みフォルダの元のファイルだけが消える）
-    const gone = same && (same.status === 'trashed' || same.status === 'missing');
+    // 消した資料（removed）を本人が入れ直したときも、記録を消して入れ直す
+    const gone = same && ['trashed', 'missing', 'removed'].includes(same.status);
     if (same && !gone) return {result: 'dup', material: same};
     if (same) this.repo.remove('material', same.id);
     const dir = this.placeDir(term, course, round);
@@ -352,7 +356,10 @@ export class FileManager {
   /** 記録のパスが指すファイルの有無を確かめ、動かされたものは探し直す（SPEC §7.3）。戻りは変更の一覧 */
   async reconcileFiles({term, course, rounds}) {
     const changes = [];
-    const materials = this.repo.listMaterials(course.id).filter((m) => m.status !== 'trashed');
+    // 消した資料（removed）は、ファイルがなくなっても「見つからない」として出し直さない
+    const materials = this.repo
+      .listMaterials(course.id)
+      .filter((m) => m.status !== 'trashed' && m.status !== 'removed');
     const courseDir = this.courseDir(term, course);
     let scanned = null; // {hash -> path} を必要になったときだけ作る
     const scan = async () => {

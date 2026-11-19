@@ -18,6 +18,14 @@ const safeHost = (u) => {
 
 /** 全部の回を確かめるとき、ダウンロードに失敗した資料があれば次の同期でも全部を確かめ直す回数の上限 */
 export const MAX_CRAWL_RETRIES = 3;
+/** 本人が消した LMS の授業（設定の名前。値は deletedKey の並び）。同期で作り直さない（v0.27.9） */
+export const DELETED_COURSES = 'courses.deleted';
+/**
+ * 消した授業の鍵：LMS の学校（university_host。なければ接続の id）と授業の ID。
+ * 接続を消してつなぎ直しても（接続の id が変わっても）同じ授業と分かるように、学校で覚える
+ */
+export const deletedKey = (connection, lmsId) =>
+  `${(connection?.university_host || connection?.id || '').toLowerCase()}|${String(lmsId)}`;
 
 export class SyncError extends Error {
   constructor(code, message, cause) {
@@ -237,10 +245,13 @@ export class SyncEngine {
     const seen = new Set();
     // セットアップの「授業の確認」で外した授業は、非表示で作る（同期しない。設定 → 授業 で戻せる）
     const excluded = new Set(this.repo.getSetting(`courses.exclude.${connection.id}`, []));
+    // 本人が消した授業は作り直さない（パソコンの授業フォルダとファイルは消したときのまま残っている）
+    const deleted = new Set(this.repo.getSetting(DELETED_COURSES, []) ?? []);
     const result = [];
     for (const c of courses) {
       const lmsId = String(c.lmsId ?? c.url ?? c.name);
       seen.add(lmsId);
+      if (deleted.has(deletedKey(connection, lmsId)) && !this.repo.findCourseByLms(connection.id, lmsId)) continue;
       let row = this.repo.findCourseByLms(connection.id, lmsId);
       // 接続を消してつなぎ直したとき：結び付きが外れた前の授業（資料・ノート・クイズが残っている）を使い直す（v0.18.10）
       if (!row) {
