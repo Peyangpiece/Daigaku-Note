@@ -64,7 +64,9 @@ export function pointsState(raw) {
     used: day(r.usedDay) ? Object.fromEntries(Object.keys(DAILY).map((k) => [k, keys(used[k])])) : {},
     // 週のボーナス：その週に書いた日（YYYY-MM-DD）と、もらった週（その週の月曜の日付）
     writeDays: keys(r.writeDays).filter((d) => day(d)),
-    weekPaid: day(r.weekPaid)
+    weekPaid: day(r.weekPaid),
+    // 使ったシークレットコードの id（shared/secret-codes.js。同じコードは 1 つのデータで 1 回だけ）
+    redeemed: keys(r.redeemed)
   };
 }
 
@@ -151,6 +153,20 @@ export function claimQuiz(raw, questionId, {now = new Date()} = {}) {
   if (!questionId || ids.includes(questionId)) return {points: st, gained: 0};
   const {points, gained} = earn(st, 'quiz', {now});
   return {points: {...points, quizDay: today, quizIds: [...ids, questionId]}, gained};
+}
+
+/**
+ * シークレットコード（shared/secret-codes.js の CODES の 1 つ。findCode で探したもの）でポイントをもらう。
+ * 使ったコード・期限の過ぎたコードは Error（状態は変えない）。戻り値：{points, gained}
+ */
+export function redeemCode(raw, entry, {now = new Date()} = {}) {
+  const st = pointsState(raw);
+  if (!entry || typeof entry.id !== 'string' || !Number.isInteger(entry.amount) || entry.amount <= 0)
+    throw new Error('コードが違います');
+  if (st.redeemed.includes(entry.id)) throw new Error('このコードは使用済みです');
+  if (entry.until && dayOf(now) > entry.until) throw new Error('このコードは期限が過ぎています');
+  const next = record(st, {kind: 'code', amount: entry.amount, note: entry.label ?? '', now});
+  return {points: {...next, redeemed: [...st.redeemed, entry.id]}, gained: entry.amount};
 }
 
 /** ポイントを使う。足りなければ Error（状態は変えない） */

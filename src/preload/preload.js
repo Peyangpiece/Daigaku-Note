@@ -3,6 +3,7 @@ const {contextBridge, ipcRenderer, webFrame} = require('electron');
 
 const INVOKE = [
   'state.get',
+  'points.redeem',
   'setup.detect',
   'import.list',
   'import.accept',

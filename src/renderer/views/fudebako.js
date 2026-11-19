@@ -773,7 +773,8 @@ function pointsPage() {
       </li>`
     )
     .join('');
-  const label = (h) => (h.kind === 'shop' ? 'ショップで買い物' : (EARN[h.kind]?.label ?? h.kind));
+  const label = (h) =>
+    h.kind === 'shop' ? 'ショップで買い物' : h.kind === 'code' ? 'シークレットコード' : (EARN[h.kind]?.label ?? h.kind);
   const history = p.history.length
     ? `<ul class="pts-history">${p.history
         .slice(0, 50)
@@ -789,6 +790,14 @@ function pointsPage() {
   return `<p><button type="button" class="btn btn--small" data-action="nav" data-route="${SHOP}">← ショップ</button></p>
     <div class="pts">
       <section class="pts-balance"><span class="muted">いまのポイント</span><b>${ICON.coin}${p.balance.toLocaleString('ja-JP')}<small> pt</small></b></section>
+      <section><h3 class="shop-h">シークレットコード</h3>
+        <form class="pts-code" data-pts-code>
+          <label class="sr-only" for="pts-code-input">シークレットコード</label>
+          <input class="input" id="pts-code-input" name="code" placeholder="PN-XXXX-XXXX-XXXX" maxlength="40" autocomplete="off" spellcheck="false">
+          <button type="submit" class="btn btn--primary">受け取る</button>
+        </form>
+        <p class="muted pts-code__note">配られたコードを入れると、ポイントがもらえます（1 つのコードは 1 回だけ）。</p>
+      </section>
       <section><h3 class="shop-h">ポイントのもらい方</h3><ul class="pts-ways">${ways}</ul></section>
       <section><h3 class="shop-h">履歴</h3>${history}</section>
     </div>`;
@@ -882,6 +891,25 @@ async function pay(button) {
 }
 
 // 検索欄：字を打つたびに結果だけ描き直す（画面全体を描き直すと入力の途中で手が止まるので）
+// シークレットコード（ポイントのページ）：入れたコードを本体で確かめて、合えばポイントを足す（main/ipc/state.js の points.redeem）
+document.addEventListener('submit', async (e) => {
+  const form = e.target.closest?.('[data-pts-code]');
+  if (!form) return;
+  e.preventDefault();
+  const input = form.querySelector('input[name="code"]');
+  const code = input.value.trim();
+  if (!code) return toast('コードを入れてください', {error: true});
+  const btn = form.querySelector('button');
+  btn.disabled = true;
+  const r = await window.daigaku['points.redeem']({code}).catch((err) => ({error: err.message}));
+  btn.disabled = false;
+  if (r?.error) return toast(r.error, {error: true});
+  input.value = '';
+  if (state.data && r.points) state.data.points = r.points; // 上の残高と、このページの残高・履歴に出す
+  toast(`${r.label ?? 'シークレットコード'}：${pt(r.gained)} もらいました`);
+  refresh();
+});
+
 document.addEventListener('input', (e) => {
   const q = e.target.closest('#shop-q');
   if (!q) return;

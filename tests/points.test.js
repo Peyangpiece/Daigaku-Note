@@ -29,7 +29,8 @@ test('ポイントの状態：保存した値を直す（負の残高・形の�
     usedDay: null,
     used: {},
     writeDays: [],
-    weekPaid: null
+    weekPaid: null,
+    redeemed: []
   });
   const st = pointsState({balance: -5, history: [{at: 'x', kind: 'login', amount: 30}, {kind: 1}], lastLogin: 'bad'});
   assert.equal(st.balance, 0);
