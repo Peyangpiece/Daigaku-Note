@@ -84,9 +84,11 @@ test('ショップの札：同じ品の色ちがいは 1 つのシリーズ。�
     ['pen-sakura-05', 'pen-mint-05', 'pen-wood-07', 'pen-navy-038', 'pen-black-038', 'pen-black-07']
   );
   assert.equal(
-    series.filter((s) => s.type === 'pen' && s.maker === 'パレットノート').length,
+    series.filter(
+      (s) => s.type === 'pen' && s.maker === 'パレットノート' && s.id.startsWith('pen-') && s.id !== 'pen-cute'
+    ).length,
     3,
-    '公式のボールペンは 3 つ'
+    '公式のボールペン（3D）は 3 つ'
   );
   // 名前に字幅・芯の太さは入れない（太さは 0.3・0.5・0.7 から選ぶ）
   for (const it of CATALOG.filter((x) => x.type === 'pen'))
@@ -250,7 +252,7 @@ test('ペンケース：帆布の筆箱の色ちがいは 1 枚の札（シリ�
   );
   // どの形のペンケース・ポーチも色ちがいが 3 色以上（1 枚の札にまとめる）。同じシリーズは同じ形・同じ値段
   for (const type of ['case', 'pouch']) {
-    const groups = shopSeries().filter((x) => x.type === type);
+    const groups = shopSeries().filter((x) => x.type === type && x.items[0].art === 'model');
     assert.equal(groups.length, 4, `${type} は 4 つの形`);
     for (const g of groups) {
       assert.ok(g.items.length >= 3, `${g.id} の色ちがい`);
@@ -271,7 +273,7 @@ test('ペンケース：帆布の筆箱の色ちがいは 1 枚の札（シリ�
 
 test('ペンケースは 3D モデル（形の種類ごとの GLB。色は base・trim で塗る）。描けないときはペンケースの絵', async () => {
   const {existsSync} = await import('node:fs');
-  for (const it of CATALOG.filter((x) => x.type === 'case')) {
+  for (const it of CATALOG.filter((x) => x.type === 'case' && x.art !== 'cute')) {
     assert.equal(it.art, 'model');
     assert.equal(it.model, `case-${it.style}`);
     assert.ok(existsSync(new URL(`../src/renderer/assets/stationery/${it.model}.glb`, import.meta.url)), it.model);
@@ -418,7 +420,7 @@ test('筆圧なしのペン：ショップに 1 枚の札（黒・赤・青）�
 test('ポーチと、ポーチの電卓・タイマー：はじめは 1 つずつ持っていて、ショップで別の形を買い、1 つを選んで使う', async () => {
   const {GEAR, POUCH_INFO, STARTER_GEAR, isGear, stationeryState: state} = await import('../src/shared/stationery.js');
   const {existsSync} = await import('node:fs');
-  const bags = CATALOG.filter((it) => it.type === 'pouch');
+  const bags = CATALOG.filter((it) => it.type === 'pouch' && it.art === 'model');
   assert.equal(new Set(bags.map((it) => it.model)).size, 4, 'ポーチは 4 つの形');
   for (const it of bags) {
     assert.ok(POUCH_INFO[it.style], `${it.id} の説明`);
@@ -426,11 +428,11 @@ test('ポーチと、ポーチの電卓・タイマー：はじめは 1 つず�
   }
   for (const type of ['calc', 'timer'])
     assert.equal(
-      new Set(CATALOG.filter((it) => it.type === type).map((it) => it.model)).size,
+      new Set(CATALOG.filter((it) => it.type === type && it.art === 'model').map((it) => it.model)).size,
       2,
       `${type} は 2 つの形`
     );
-  for (const it of CATALOG.filter(isGear))
+  for (const it of CATALOG.filter((x) => isGear(x) && x.art === 'model'))
     assert.ok(
       existsSync(new URL(`../src/renderer/assets/stationery/${it.model}.glb`, import.meta.url)),
       `${it.model}.glb`
@@ -570,4 +572,58 @@ test('ノート（v0.19.0）：はじめから 4 冊。マイノートの保存�
   const gone = removeMyNote(d, 'my-a');
   assert.deepEqual(gone.myNotes, []);
   assert.equal(gone.noteDefault, 'nb-b6', '消したマイノートが既定なら、はじめの紙に戻す');
+});
+
+test('パステルの品（2D の絵）：ペン・筆箱・ポーチ・タイマー。色はすべてパステル、ポイントで買え、絵は SVG で描く', async () => {
+  const {
+    CUTE_MOTIFS,
+    POUCH_INFO,
+    cuteTimerArt,
+    isGear,
+    stationeryState: state
+  } = await import('../src/shared/stationery.js');
+  const cute = CATALOG.filter((it) => it.art === 'cute');
+  const byType = (type) => cute.filter((it) => it.type === type);
+  for (const type of ['pen', 'case', 'pouch', 'timer']) assert.ok(byType(type).length >= 4, `${type} は 4 つ以上`);
+  // パステル：明るく（HSV の V ≥ 0.85）、鮮やかすぎない（S ≤ 0.5）。ペンのインクは紙で読めるよう少し濃くする（明るすぎない）
+  const hsv = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const v = Math.max(r, g, b);
+    return {v, s: v ? (v - Math.min(r, g, b)) / v : 0};
+  };
+  // WCAG の相対輝度で、白（紙）とのコントラスト比
+  const lum = (hex) =>
+    [1, 3, 5]
+      .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+      .reduce((a, c, i) => a + c * [0.2126, 0.7152, 0.0722][i], 0);
+  const contrast = (hex) => 1.05 / (lum(hex) + 0.05);
+  for (const it of cute) {
+    assert.ok(it.points > 0 && it.price === 0, `${it.id} はポイントの品`);
+    assert.ok(CUTE_MOTIFS.includes(it.motif), `${it.id} の飾り`);
+    assert.equal(it.model, undefined, `${it.id} は 3D モデルを持たない`);
+    for (const c of [it.body, it.accent, it.base, it.trim].filter(Boolean)) {
+      const {v, s} = hsv(c);
+      assert.ok(v >= 0.85 && s <= 0.5, `${it.id} の ${c} はパステル`);
+    }
+    if (it.type === 'pen') assert.ok(contrast(it.color) >= 3, `${it.id} のインクは白い紙とのコントラスト比 3 以上`);
+    const art = isGear(it) ? caseArt(it, {flat: true}) : toolArt(it, {flat: true});
+    assert.match(art, /^<svg /);
+    assert.doesNotMatch(art, /data-model/, `${it.id} は 3D 表示を使わない`);
+    assert.match(isGear(it) ? caseArt(it) : toolArt(it), /^<svg /);
+  }
+  for (const it of byType('case')) assert.ok(CASE_INFO[it.style]?.short, it.id);
+  for (const it of byType('pouch')) assert.ok(POUCH_INFO[it.style]?.short, it.id);
+  for (const it of byType('timer')) assert.match(cuteTimerArt(it), /viewBox="0 0 56 40"/);
+  // 種類ごとに 1 枚の札（シリーズ）
+  for (const id of ['pen-cute', 'case-cute', 'pouch-cute', 'timer-cute']) {
+    const s = shopSeries().find((x) => x.id === id);
+    assert.ok(s && s.items.length >= 4, id);
+    assert.equal(new Set(s.items.map((it) => it.points)).size, 1, `${id} は同じ値段`);
+  }
+  // 買えば筆箱に入れ・選んで使える
+  const st = state({owned: ['pen-cute-cat', 'case-cute-bear', 'pouch-cute-star', 'timer-cute-bunny']});
+  const next = arrange(st, {caseId: 'case-cute-bear', pouchId: 'pouch-cute-star', timerId: 'timer-cute-bunny'});
+  assert.equal(next.caseId, 'case-cute-bear');
+  assert.equal(next.timerId, 'timer-cute-bunny');
 });
