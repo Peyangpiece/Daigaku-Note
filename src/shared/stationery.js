@@ -1341,23 +1341,37 @@ export function motifSvg(motif, cx, cy, r, fill, line = shade(fill, -0.25)) {
   }
 }
 
-/** パステルペン（viewBox 0 0 200 28。左がペン先、右の頭に飾り） */
+/**
+ * パステルペン（viewBox 0 0 200 28。左がペン先）。ほかのボールペンの 2D の絵（3D モデル pen-ballpoint を真横から平らに塗り、
+ * 部品ごとに暗い輪郭線を引いたもの。renderer/model3d-three.js の withFlat）と同じ形・比率・部品・印字で描く。
+ * 部品：金属のペン先・円すいの先（accent）・溝のあるグリップ・白い輪・軸（body。「PALETTE NOTE」と字幅の印字）・
+ * 白いクリップ・クリップの付け根（accent）・金属の輪・ノック（accent）。飾り（motif）は軸の印字の左に小さく刷る。
+ * グリップは、ほかのペン（accent を暗くした色）とちがい、パステルのまま少しだけ濃くする
+ */
 function cutePenArt(item, {flat = false} = {}) {
-  const {body, accent, color} = item;
-  const edge = shade(body, -0.18);
-  const dots = Array.from(
-    {length: 6},
-    (_, i) => `<circle cx="${62 + i * 18}" cy="${i % 2 ? 17.2 : 11}" r="1.5" fill="${accent}" opacity="0.9"/>`
+  const {body, accent} = item;
+  const line = (c) => shade(c, -0.45); // 部品の輪郭（部品の色を暗くした色。3D の平らな絵の輪郭と同じ考え）
+  const sw = 'stroke-width="0.32" stroke-linejoin="round"';
+  const grip = shade(accent, -0.14);
+  const metal = '#e9eaec';
+  const ribs = Array.from(
+    {length: 22},
+    (_, i) => `<path d="M${n1(24.2 + i * 1.56)} 6.95 V21.05" stroke="${shade(grip, -0.22)}" stroke-width="0.22"/>`
   ).join('');
-  return `${flat ? '' : '<ellipse cx="100" cy="24.5" rx="88" ry="2" fill="#000" opacity="0.1"/>'}
-    <path d="M2 14 L12 11.4 L12 16.6 Z" fill="#e4e1ea" stroke="${shade('#e4e1ea', -0.25)}" stroke-width="0.4"/><circle cx="2.4" cy="14" r="1" fill="${color}"/>
-    <rect x="11" y="8.4" width="36" height="11.2" rx="5.6" fill="${accent}" stroke="${shade(accent, -0.18)}" stroke-width="0.5"/>
-    <g fill="#fff" opacity="0.7">${[17, 25, 33, 41].map((x) => `<circle cx="${x}" cy="14" r="1.3"/>`).join('')}</g>
-    <rect x="44" y="6.5" width="124" height="15" rx="7.5" fill="${body}" stroke="${edge}" stroke-width="0.6"/>
-    <rect x="52" y="8.6" width="104" height="1.8" rx="0.9" fill="#fff" opacity="0.7"/>${dots}
-    <path d="M118 6.8 H158 Q162 6.8 162 4.6 V3.6 Q162 2.2 160.6 2.2 H124 Q119.5 2.2 118 4.4 Z" fill="${accent}" stroke="${shade(accent, -0.2)}" stroke-width="0.5"/>
-    <rect x="166" y="7.6" width="6" height="12.8" rx="2" fill="${accent}"/>
-    ${motifSvg(item.motif, 184, 14, 10.5, body, edge)}`;
+  const font = `font-family="'Gill Sans','Gill Sans MT',Calibri,'Trebuchet MS',sans-serif" font-size="3" fill="#3a3438"`;
+  return `${flat ? '' : '<ellipse cx="104" cy="24.5" rx="92" ry="2" fill="#000" opacity="0.1"/>'}
+    <path d="M3.9 12.5 Q3.1 12.6 3.1 14 Q3.1 15.4 3.9 15.5 L8.5 16.1 V11.9 Z" fill="${metal}" stroke="${line(metal)}" ${sw}/>
+    <path d="M8.5 11.9 L22.9 6.75 V21.25 L8.5 16.1 Z" fill="${accent}" stroke="${line(accent)}" ${sw}/>
+    <rect x="22.9" y="6.75" width="35.85" height="14.5" fill="${grip}" stroke="${line(grip)}" ${sw}/>${ribs}
+    <rect x="58.75" y="6.3" width="2.3" height="15.4" rx="0.3" fill="#f6f6f6" stroke="${line('#f6f6f6')}" ${sw}/>
+    <rect x="61.05" y="6.5" width="112" height="14.8" fill="${body}" stroke="${line(body)}" ${sw}/>
+    ${motifSvg(item.motif, 98.5, 13.9, 1.7, accent, line(accent))}
+    <text x="115.4" y="15.05" text-anchor="middle" ${font}>PALETTE NOTE</text>
+    <text x="147.2" y="15.05" text-anchor="middle" ${font}>${esc(item.mm ?? '0.5')}</text>
+    <rect x="173.05" y="6.9" width="10" height="14.1" rx="0.6" fill="${accent}" stroke="${line(accent)}" ${sw}/>
+    <rect x="183.05" y="8.8" width="1.35" height="10.6" fill="#f2f2f2" stroke="${line('#f2f2f2')}" ${sw}/>
+    <rect x="184.4" y="9.4" width="12.1" height="9.4" rx="1.5" fill="${accent}" stroke="${line(accent)}" ${sw}/>
+    <path d="M122 6.6 V4.6 Q122 4.1 122.6 4.1 H124.9 Q125.6 4.1 125.6 4.8 V5.6 L178.8 5.7 Q181.2 5.9 181.9 7.7 L180.3 7.9 Q179.6 6.9 178.4 6.9 L125.6 6.9 Z" fill="#f7f7f7" stroke="${line('#f7f7f7')}" ${sw}/>`;
 }
 
 /** どうぶつの筆箱（viewBox 0 0 200 80。上に耳、正面に顔） */
