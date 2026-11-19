@@ -77,10 +77,70 @@ export const POUCH_INFO = {
     material: 'ナイロン',
     build: '横に寝かせた円筒。上のファスナー、両端の縁取り、手首のひも',
     size: '約 170 × 72 × 72 mm'
+  },
+  cute: {
+    short: 'パステル・ふっくら',
+    material: 'やわらかいキルティング',
+    build: '丸みのある袋。上のファスナーに飾りのチャーム、正面にワッペン',
+    size: '約 160 × 40 × 100 mm'
   }
 };
 // ポーチの電卓・タイマー（形ごとに 1 つの GLB。色は GLB のまま）。note はショップの札の一言
 const gadget = (id, type, name, model, note) => ({id, type, name, model, note, price: 0, art: 'model'});
+// パステルの品（v0.27.7）：3D モデルを持たない 2D の絵の品（art: 'cute'）。toolArt・caseArt・cuteTimerArt が SVG で描く。
+// motif は飾りの形（heart・star・cat・bunny・bear・cloud・ribbon・chick）。色はすべてパステル（CUTE_PASTEL のテスト）。
+// ペンのインクの色は、紙の上で読めるように同じ色みを少し濃くしたもの（くすみパステル）
+export const CUTE_MOTIFS = ['heart', 'star', 'cat', 'bunny', 'bear', 'cloud', 'ribbon', 'chick'];
+const cutePen = (id, name, color, body, accent, motif) => ({
+  id,
+  type: 'pen',
+  name,
+  color,
+  width: PEN_WIDTH['0.5'],
+  mm: '0.5',
+  body,
+  accent,
+  motif,
+  price: 0,
+  series: 'pen-cute',
+  art: 'cute'
+});
+const cuteCase = (id, name, base, trim, motif) => ({
+  id,
+  type: 'case',
+  name,
+  style: 'cute',
+  base,
+  trim,
+  motif,
+  price: 0,
+  series: 'case-cute',
+  art: 'cute'
+});
+const cuteBag = (id, name, base, trim, motif) => ({
+  id,
+  type: 'pouch',
+  name,
+  style: 'cute',
+  base,
+  trim,
+  motif,
+  price: 0,
+  series: 'pouch-cute',
+  art: 'cute'
+});
+const cuteTimer = (id, name, base, trim, motif, note) => ({
+  id,
+  type: 'timer',
+  name,
+  base,
+  trim,
+  motif,
+  note,
+  price: 0,
+  series: 'timer-cute',
+  art: 'cute'
+});
 /** 品の種類の名前 */
 export const typeLabel = (item) => TYPE_LABEL[kindOf(item)];
 /** 道具の種類 → 編集画面の注釈の種類（shared/annotation.js） */
@@ -199,6 +259,12 @@ export const CASE_INFO = {
     material: '透明の樹脂',
     build: '平たいポーチ。色の付いた樹脂のファスナー。中のペンが外から見える',
     size: '約 205 × 34 × 84 mm'
+  },
+  cute: {
+    short: 'パステル・どうぶつの耳',
+    material: 'やわらかいフェルト',
+    build: '丸みのある袋。上に耳、正面に顔の刺しゅう、パステルのファスナー',
+    size: '約 200 × 60 × 80 mm'
   }
 };
 /**
@@ -333,6 +399,24 @@ export const CATALOG = [
   gadget('calc-card', 'calc', 'カード電卓', 'tool-calc-card', '薄いパステル・丸いキー'),
   gadget('timer-stopwatch', 'timer', 'ストップウォッチ', 'tool-timer', '金属のケース・針'),
   gadget('timer-digital', 'timer', 'デジタルタイマー', 'tool-timer-digital', 'ミントの本体・液晶'),
+  // パステルの品（2D の絵。v0.27.7）
+  cutePen('pen-cute-heart', 'パステルペン ハート（いちごミルク）', '#cf6a90', '#f9cfe0', '#f4a9c4', 'heart'),
+  cutePen('pen-cute-star', 'パステルペン ほし（レモン）', '#b5862e', '#fbefb0', '#f6d77c', 'star'),
+  cutePen('pen-cute-cat', 'パステルペン ねこ（ラベンダー）', '#9579c9', '#e0d3f5', '#c3aeea', 'cat'),
+  cutePen('pen-cute-bunny', 'パステルペン うさぎ（ミント）', '#3f9a7c', '#cdeee0', '#9ddbc3', 'bunny'),
+  cutePen('pen-cute-cloud', 'パステルペン くも（そらいろ）', '#5590c9', '#cfe4f7', '#a6cbee', 'cloud'),
+  cuteCase('case-cute-cat', 'ねこの筆箱（さくら）', '#f8cfdc', '#fff5f8', 'cat'),
+  cuteCase('case-cute-bunny', 'うさぎの筆箱（ラベンダー）', '#ddd0f3', '#fbf8ff', 'bunny'),
+  cuteCase('case-cute-bear', 'くまの筆箱（ピーチ）', '#fcd9c4', '#fff7f1', 'bear'),
+  cuteCase('case-cute-chick', 'ひよこの筆箱（レモン）', '#fbeeb0', '#fffdf0', 'chick'),
+  cuteBag('pouch-cute-heart', 'まるポーチ ハート（さくら）', '#f9d2df', '#fff4f7', 'heart'),
+  cuteBag('pouch-cute-star', 'まるポーチ ほし（そらいろ）', '#cde3f6', '#f5faff', 'star'),
+  cuteBag('pouch-cute-ribbon', 'まるポーチ リボン（ミント）', '#cbeedf', '#f3fcf8', 'ribbon'),
+  cuteBag('pouch-cute-cloud', 'まるポーチ くも（ラベンダー）', '#e0d5f4', '#faf7ff', 'cloud'),
+  cuteTimer('timer-cute-cat', 'ねこタイマー（さくら）', '#f8cfdc', '#fff8fa', 'cat', 'パステル・ねこの耳'),
+  cuteTimer('timer-cute-bunny', 'うさぎタイマー（ミント）', '#cbeedf', '#f6fffb', 'bunny', 'パステル・うさぎの耳'),
+  cuteTimer('timer-cute-bear', 'くまタイマー（ピーチ）', '#fcd9c4', '#fffaf6', 'bear', 'パステル・くまの耳'),
+  cuteTimer('timer-cute-chick', 'ひよこタイマー（レモン）', '#fbeeb0', '#fffef4', 'chick', 'パステル・ひよこ'),
   // 有料の棚：アトリエ（オリジナルの形の、こだわりの軸。発売前。値段は仮）。書く線は、ふだん使いの 2 つは 0.5、
   // ほかは黒・中字相当の 1.0 にそろえる。クリップにインクの色の小さな粒（シリーズの印）
   atelier(
@@ -513,7 +597,25 @@ const POINTS = {
   'pouch-drum-red': 400,
   'pouch-drum-white': 400,
   'calc-card': 250,
-  'timer-digital': 250
+  'timer-digital': 250,
+  // パステルの品（v0.27.7）
+  'pen-cute-heart': 250,
+  'pen-cute-star': 250,
+  'pen-cute-cat': 250,
+  'pen-cute-bunny': 250,
+  'pen-cute-cloud': 250,
+  'case-cute-cat': 450,
+  'case-cute-bunny': 450,
+  'case-cute-bear': 450,
+  'case-cute-chick': 450,
+  'pouch-cute-heart': 350,
+  'pouch-cute-star': 350,
+  'pouch-cute-ribbon': 350,
+  'pouch-cute-cloud': 350,
+  'timer-cute-cat': 300,
+  'timer-cute-bunny': 300,
+  'timer-cute-bear': 300,
+  'timer-cute-chick': 300
 };
 for (const it of CATALOG) it.points = POINTS[it.id] ?? 0;
 // ノート（docs/SPEC-NOTEBOOK.md。品と値段は shared/notebooks.js）。ポイントは notebooks.js で決めてあるので、上の POINTS のあとに足す
@@ -564,6 +666,8 @@ export const FEELS = {
   'pen-even': {name: '硬い', note: '筆圧で太さが変わらない', th: 0, ts: 0, te: 0, st: 0.3, w: 1},
   'pen-05': {name: '普通', note: '筆圧にほどよく応える', th: 0.35, ts: 1.2, te: 1.5, st: 0.2, w: 1},
   'pen-art': {name: '滑らか', note: '筆圧によく応え、なめらかに続く', th: 0.45, ts: 1.2, te: 1.5, st: 0.4, w: 1},
+  // パステルペン：やわらかい書き味（筆圧に応えるが DN-3 より少し穏やかで、手ぶれ補正をやや強く）
+  'pen-cute': {name: 'やわらか', note: 'ふんわり軽く、線がまるくまとまる', th: 0.38, ts: 1, te: 1.3, st: 0.45, w: 1},
   'pencil-05': {
     name: '鉛筆らしい',
     note: '筆圧で太さがよく変わる',
@@ -658,8 +762,8 @@ export function penFeel(item, refill = null) {
     w: 1
   };
 }
-/** 公式のボールペンの書き味（3 段階）の名前：硬い・普通・滑らか。ほかの品は null（ショップに出すのは公式のボールペンだけ） */
-const OFFICIAL_FEEL = ['pen-even', 'pen-05', 'pen-art'];
+/** 公式のボールペンの書き味の名前：硬い・普通・滑らか（パステルペンはやわらか）。ほかの品は null（ショップに出すのは公式のボールペンだけ） */
+const OFFICIAL_FEEL = ['pen-even', 'pen-05', 'pen-art', 'pen-cute'];
 export const feelLabel = (item) => (OFFICIAL_FEEL.includes(item?.series) ? FEELS[item.series].name : null);
 /** 線の太さ（pt）：選んだ太さ × 書き味の濃さ */
 export const sizeWidth = (size, feel) =>
@@ -996,7 +1100,11 @@ const SERIES_INFO = {
   'pouch-flat': {name: 'フラットポーチ'},
   'pouch-box': {name: 'マチ付きポーチ'},
   'pouch-gama': {name: 'がま口ポーチ'},
-  'pouch-drum': {name: '筒形ポーチ'}
+  'pouch-drum': {name: '筒形ポーチ'},
+  'pen-cute': {name: 'パステルペン'},
+  'case-cute': {name: 'どうぶつの筆箱'},
+  'pouch-cute': {name: 'まるポーチ'},
+  'timer-cute': {name: 'どうぶつタイマー'}
 };
 /** 品のシリーズの id（series がなければ品の id） */
 export const seriesIdOf = (item) => item.series ?? item.id;
@@ -1064,6 +1172,7 @@ export function toolArt(item, {label = true, shot = false, flat = false} = {}) {
     return `${open.replace('<svg ', `<svg data-model="${esc(item.model)}" data-item="${esc(item.id)}" data-flat-art="all" `)}${SHOT_IMG}</svg>`;
   if (item.art === 'model')
     return `${open.replace('<svg ', `<svg data-model="${esc(item.model)}" data-item="${esc(item.id)}"${shot ? ' data-model-shot="1"' : ''} `)}${shot ? SHOT_IMG : modelArt()}</svg>`;
+  if (item.art === 'cute') return `${open}${cutePenArt(item, {flat: flat || shot})}</svg>`;
   if (item.type === 'pen') {
     const ridges = Array.from(
       {length: 12},
@@ -1131,6 +1240,15 @@ export function caseArt(item, {flat = false} = {}) {
   if (item.art === 'model')
     return `<svg class="st-art st-art--case" viewBox="0 0 200 80" role="img" data-model="${esc(item.model)}" data-item="${esc(item.id)}">${title}
       <ellipse cx="100" cy="74" rx="90" ry="4" fill="#000" opacity="0.10"/><image data-model-img x="0" y="0" width="200" height="80" preserveAspectRatio="xMidYMid meet"/></svg>`;
+  if (item.art === 'cute') {
+    const body =
+      item.type === 'timer'
+        ? `<g transform="translate(44 0) scale(2)">${cuteTimerBody(item)}</g>`
+        : item.type === 'pouch'
+          ? cuteBagBody(item)
+          : cuteCaseBody(item);
+    return `<svg class="st-art st-art--case st-art--cute" viewBox="0 0 200 80" role="img">${title}${flat ? '' : '<ellipse cx="100" cy="76" rx="84" ry="3.5" fill="#000" opacity="0.08"/>'}${body}</svg>`;
+  }
   if (style === 'tin')
     return `<svg class="st-art st-art--case" viewBox="0 0 200 80" role="img">${title}
       <rect x="4" y="8" width="192" height="66" rx="10" fill="${base}" stroke="${trim}" stroke-width="3"/>
@@ -1154,3 +1272,163 @@ export function caseArt(item, {flat = false} = {}) {
 }
 
 /** 品の絵（種類で分ける） */
+
+// ---- パステルの品の絵（art: 'cute'。v0.27.7）----
+// 3D モデルを持たず、ここで SVG に描く。顔の目・ほおだけは読めるように濃い色・ピンクにする
+const EYE = '#5b4b57';
+const CHEEK = '#f5a3b8';
+const n1 = (v) => Math.round(v * 100) / 100;
+
+/** 飾りの形（中心 cx・cy、半径 r）。fill で塗り、line で縁どる */
+export function motifSvg(motif, cx, cy, r, fill, line = shade(fill, -0.25)) {
+  const sw = n1(Math.max(0.5, r * 0.09));
+  const g = (body) =>
+    `<g transform="translate(${n1(cx)} ${n1(cy)}) scale(${n1(r)})" stroke="${line}" stroke-width="${n1(sw / r)}" stroke-linejoin="round">${body}</g>`;
+  const eyes = (y = 0.05, dx = 0.32, er = 0.1) =>
+    `<circle cx="${-dx}" cy="${y}" r="${er}" fill="${EYE}" stroke="none"/><circle cx="${dx}" cy="${y}" r="${er}" fill="${EYE}" stroke="none"/>` +
+    `<ellipse cx="${-dx - 0.18}" cy="${y + 0.28}" rx="0.16" ry="0.1" fill="${CHEEK}" stroke="none" opacity="0.8"/><ellipse cx="${dx + 0.18}" cy="${y + 0.28}" rx="0.16" ry="0.1" fill="${CHEEK}" stroke="none" opacity="0.8"/>`;
+  switch (motif) {
+    case 'heart':
+      return g(
+        `<path d="M0 0.82 C-0.95 0.18 -1.02 -0.55 -0.52 -0.78 C-0.22 -0.9 0 -0.68 0 -0.45 C0 -0.68 0.22 -0.9 0.52 -0.78 C1.02 -0.55 0.95 0.18 0 0.82Z" fill="${fill}"/>`
+      );
+    case 'star': {
+      const pts = Array.from({length: 10}, (_, i) => {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const k = i % 2 ? 0.45 : 1;
+        return `${n1(Math.cos(a) * k)},${n1(Math.sin(a) * k + 0.08)}`;
+      }).join(' ');
+      return g(`<polygon points="${pts}" fill="${fill}"/>`);
+    }
+    case 'cloud':
+      return g(
+        `<path d="M-0.62 0.5 C-1.05 0.5 -1.05 -0.08 -0.62 -0.1 C-0.6 -0.58 0.02 -0.72 0.22 -0.32 C0.6 -0.5 1.02 -0.2 0.86 0.14 C1.08 0.3 0.98 0.5 0.7 0.5 Z" fill="${fill}"/>`
+      );
+    case 'ribbon':
+      return g(
+        `<path d="M0 0 L-0.95 -0.55 Q-1.05 0 -0.95 0.55 Z" fill="${fill}"/><path d="M0 0 L0.95 -0.55 Q1.05 0 0.95 0.55 Z" fill="${fill}"/>` +
+          `<path d="M-0.12 0.1 L-0.4 0.9 L-0.15 0.8 Z M0.12 0.1 L0.4 0.9 L0.15 0.8 Z" fill="${fill}"/><circle r="0.24" fill="${shade(fill, -0.08)}"/>`
+      );
+    case 'cat':
+      return g(
+        `<path d="M-0.82 -0.2 L-0.7 -1 L-0.18 -0.66 Z M0.82 -0.2 L0.7 -1 L0.18 -0.66 Z" fill="${fill}"/><circle cy="0.08" r="0.82" fill="${fill}"/>` +
+          eyes() +
+          `<path d="M-0.14 0.36 Q-0.07 0.46 0 0.36 Q0.07 0.46 0.14 0.36" fill="none" stroke="${EYE}"/>`
+      );
+    case 'bunny':
+      return g(
+        `<ellipse cx="-0.32" cy="-0.9" rx="0.2" ry="0.55" fill="${fill}"/><ellipse cx="0.32" cy="-0.9" rx="0.2" ry="0.55" fill="${fill}"/>` +
+          `<ellipse cx="-0.32" cy="-0.9" rx="0.08" ry="0.36" fill="${CHEEK}" stroke="none" opacity="0.6"/><ellipse cx="0.32" cy="-0.9" rx="0.08" ry="0.36" fill="${CHEEK}" stroke="none" opacity="0.6"/>` +
+          `<circle cy="0.12" r="0.78" fill="${fill}"/>` +
+          eyes(0.12) +
+          `<path d="M-0.08 0.42 L0 0.48 L0.08 0.42" fill="none" stroke="${EYE}"/>`
+      );
+    case 'bear':
+      return g(
+        `<circle cx="-0.62" cy="-0.6" r="0.32" fill="${fill}"/><circle cx="0.62" cy="-0.6" r="0.32" fill="${fill}"/><circle cy="0.08" r="0.82" fill="${fill}"/>` +
+          `<ellipse cy="0.36" rx="0.3" ry="0.22" fill="#fffaf4"/>` +
+          eyes(0) +
+          `<ellipse cy="0.3" rx="0.09" ry="0.06" fill="${EYE}" stroke="none"/>`
+      );
+    case 'chick':
+      return g(
+        `<path d="M-0.08 -0.78 Q0 -1.1 0.12 -0.85 Q0.2 -1.08 0.24 -0.76" fill="none"/><circle cy="0.05" r="0.84" fill="${fill}"/>` +
+          eyes(0) +
+          `<path d="M-0.14 0.22 L0.14 0.22 L0 0.42 Z" fill="#f7b98c"/>`
+      );
+    default:
+      return g(`<circle r="0.8" fill="${fill}"/>`);
+  }
+}
+
+/** パステルペン（viewBox 0 0 200 28。左がペン先、右の頭に飾り） */
+function cutePenArt(item, {flat = false} = {}) {
+  const {body, accent, color} = item;
+  const edge = shade(body, -0.18);
+  const dots = Array.from(
+    {length: 6},
+    (_, i) => `<circle cx="${62 + i * 18}" cy="${i % 2 ? 17.2 : 11}" r="1.5" fill="${accent}" opacity="0.9"/>`
+  ).join('');
+  return `${flat ? '' : '<ellipse cx="100" cy="24.5" rx="88" ry="2" fill="#000" opacity="0.1"/>'}
+    <path d="M2 14 L12 11.4 L12 16.6 Z" fill="#e4e1ea" stroke="${shade('#e4e1ea', -0.25)}" stroke-width="0.4"/><circle cx="2.4" cy="14" r="1" fill="${color}"/>
+    <rect x="11" y="8.4" width="36" height="11.2" rx="5.6" fill="${accent}" stroke="${shade(accent, -0.18)}" stroke-width="0.5"/>
+    <g fill="#fff" opacity="0.7">${[17, 25, 33, 41].map((x) => `<circle cx="${x}" cy="14" r="1.3"/>`).join('')}</g>
+    <rect x="44" y="6.5" width="124" height="15" rx="7.5" fill="${body}" stroke="${edge}" stroke-width="0.6"/>
+    <rect x="52" y="8.6" width="104" height="1.8" rx="0.9" fill="#fff" opacity="0.7"/>${dots}
+    <path d="M118 6.8 H158 Q162 6.8 162 4.6 V3.6 Q162 2.2 160.6 2.2 H124 Q119.5 2.2 118 4.4 Z" fill="${accent}" stroke="${shade(accent, -0.2)}" stroke-width="0.5"/>
+    <rect x="166" y="7.6" width="6" height="12.8" rx="2" fill="${accent}"/>
+    ${motifSvg(item.motif, 184, 14, 10.5, body, edge)}`;
+}
+
+/** どうぶつの筆箱（viewBox 0 0 200 80。上に耳、正面に顔） */
+function cuteCaseBody(item) {
+  const {base, trim, motif} = item;
+  const line = shade(base, -0.2);
+  const sw = `stroke="${line}" stroke-width="1.4" stroke-linejoin="round"`;
+  const ears = {
+    cat: `<path d="M36 28 L44 4 L68 22 Z M164 28 L156 4 L132 22 Z" fill="${base}" ${sw}/><path d="M44 22 L46 11 L58 20 Z M156 22 L154 11 L142 20 Z" fill="${CHEEK}" opacity="0.6"/>`,
+    bunny: `<ellipse cx="74" cy="16" rx="9" ry="16" fill="${base}" ${sw} transform="rotate(-10 74 16)"/><ellipse cx="126" cy="16" rx="9" ry="16" fill="${base}" ${sw} transform="rotate(10 126 16)"/><ellipse cx="74" cy="16" rx="3.5" ry="10" fill="${CHEEK}" opacity="0.55" transform="rotate(-10 74 16)"/><ellipse cx="126" cy="16" rx="3.5" ry="10" fill="${CHEEK}" opacity="0.55" transform="rotate(10 126 16)"/>`,
+    bear: `<circle cx="50" cy="20" r="12" fill="${base}" ${sw}/><circle cx="150" cy="20" r="12" fill="${base}" ${sw}/><circle cx="50" cy="20" r="6" fill="${trim}"/><circle cx="150" cy="20" r="6" fill="${trim}"/>`,
+    chick: `<path d="M94 20 Q96 6 102 14 Q106 4 108 18" fill="none" ${sw}/>`
+  };
+  const mouth =
+    motif === 'chick'
+      ? `<path d="M95 54 L105 54 L100 61 Z" fill="#f7b98c" stroke="${shade('#f7b98c', -0.2)}" stroke-width="0.8"/>`
+      : motif === 'bear'
+        ? `<ellipse cx="100" cy="57" rx="11" ry="7.5" fill="${trim}" stroke="${line}" stroke-width="1"/><ellipse cx="100" cy="54.5" rx="3" ry="2" fill="${EYE}"/>`
+        : `<path d="M95 55 Q97.5 58.5 100 55 Q102.5 58.5 105 55" fill="none" stroke="${EYE}" stroke-width="1.4" stroke-linecap="round"/>`;
+  return `${ears[motif] ?? ''}
+    <rect x="8" y="18" width="184" height="58" rx="28" fill="${base}" ${sw}/>
+    <path d="M30 28 H170" stroke="${trim}" stroke-width="4" stroke-linecap="round"/><path d="M30 28 H170" stroke="${line}" stroke-width="1.2" stroke-dasharray="2 2.4"/>
+    ${motifSvg('heart', 174, 34, 5, trim, line)}
+    <circle cx="86" cy="48" r="3.4" fill="${EYE}"/><circle cx="114" cy="48" r="3.4" fill="${EYE}"/>
+    <circle cx="87.2" cy="46.8" r="1" fill="#fff"/><circle cx="115.2" cy="46.8" r="1" fill="#fff"/>
+    <ellipse cx="74" cy="56" rx="7" ry="4" fill="${CHEEK}" opacity="0.75"/><ellipse cx="126" cy="56" rx="7" ry="4" fill="${CHEEK}" opacity="0.75"/>
+    ${mouth}`;
+}
+
+/** まるポーチ（viewBox 0 0 200 80。キルティングの袋・ファスナーのチャーム・正面のワッペン） */
+function cuteBagBody(item) {
+  const {base, trim, motif} = item;
+  const line = shade(base, -0.2);
+  const quilt = [40, 70, 100, 130, 160]
+    .map((x) => `<path d="M${x - 22} 74 L${x + 22} 20 M${x + 22} 74 L${x - 22} 20" />`)
+    .join('');
+  return `<clipPath id="cb-${esc(item.id)}"><path d="M14 32 Q14 16 32 16 H168 Q186 16 186 32 V58 Q186 76 166 76 H34 Q14 76 14 58 Z"/></clipPath>
+    <path d="M14 32 Q14 16 32 16 H168 Q186 16 186 32 V58 Q186 76 166 76 H34 Q14 76 14 58 Z" fill="${base}" stroke="${line}" stroke-width="1.4"/>
+    <g clip-path="url(#cb-${esc(item.id)})" stroke="${trim}" stroke-width="1.1" opacity="0.8" stroke-dasharray="3 2.5" fill="none">${quilt}</g>
+    <path d="M24 24 H176" stroke="${trim}" stroke-width="4.5" stroke-linecap="round"/><path d="M24 24 H176" stroke="${line}" stroke-width="1.2" stroke-dasharray="2 2.4"/>
+    <rect x="160" y="20" width="7" height="10" rx="2.5" fill="${trim}" stroke="${line}" stroke-width="1"/>
+    <path d="M163.5 30 V38" stroke="${line}" stroke-width="1"/>
+    ${motifSvg(motif, 163.5, 44, 7, trim, line)}
+    <circle cx="100" cy="50" r="17" fill="${trim}" stroke="${line}" stroke-width="1.2" stroke-dasharray="2.5 2"/>
+    ${motifSvg(motif, 100, 50, 11, shade(base, -0.06), line)}`;
+}
+
+/** どうぶつタイマーの本体（56 × 40 の座標。ポーチの絵の大きさ） */
+function cuteTimerBody(item) {
+  const {base, trim, motif} = item;
+  const line = shade(base, -0.22);
+  const sw = `stroke="${line}" stroke-width="1" stroke-linejoin="round"`;
+  const ears = {
+    cat: `<path d="M15 16 L16 3 L26 9 Z M41 16 L40 3 L30 9 Z" fill="${base}" ${sw}/>`,
+    bunny: `<ellipse cx="22" cy="8" rx="3.4" ry="7.5" fill="${base}" ${sw} transform="rotate(-12 22 8)"/><ellipse cx="34" cy="8" rx="3.4" ry="7.5" fill="${base}" ${sw} transform="rotate(12 34 8)"/>`,
+    bear: `<circle cx="16" cy="11" r="4.6" fill="${base}" ${sw}/><circle cx="40" cy="11" r="4.6" fill="${base}" ${sw}/>`,
+    chick: `<path d="M26.5 8.5 Q27.5 3 30 6.5 Q31 3 32 7.5" fill="none" ${sw}/>`
+  };
+  const ticks = Array.from({length: 12}, (_, i) => {
+    const a = (i * Math.PI) / 6;
+    return `<circle cx="${n1(28 + Math.sin(a) * 13)}" cy="${n1(23 - Math.cos(a) * 13)}" r="0.75" fill="${trim}"/>`;
+  }).join('');
+  return `${ears[motif] ?? ''}
+    <circle cx="28" cy="23" r="15.5" fill="${base}" ${sw}/>${ticks}
+    <circle cx="28" cy="23" r="10.5" fill="${trim}" stroke="${line}" stroke-width="0.8"/>
+    <circle cx="24.2" cy="22" r="1.15" fill="${EYE}"/><circle cx="31.8" cy="22" r="1.15" fill="${EYE}"/>
+    <ellipse cx="21.6" cy="25.4" rx="1.9" ry="1.1" fill="${CHEEK}" opacity="0.8"/><ellipse cx="34.4" cy="25.4" rx="1.9" ry="1.1" fill="${CHEEK}" opacity="0.8"/>
+    ${motif === 'chick' ? '<path d="M26.6 24.6 H29.4 L28 26.6 Z" fill="#f7b98c"/>' : `<path d="M26.6 25.4 Q27.3 26.4 28 25.4 Q28.7 26.4 29.4 25.4" fill="none" stroke="${EYE}" stroke-width="0.6" stroke-linecap="round"/>`}
+    <path d="M28 14.5 V17.5" stroke="${line}" stroke-width="1.1" stroke-linecap="round"/>
+    <rect x="25.5" y="5.6" width="5" height="2.6" rx="1.2" fill="${trim}" stroke="${line}" stroke-width="0.7"/>`;
+}
+
+/** どうぶつタイマーの絵（ポーチの隅。viewBox 0 0 56 40） */
+export const cuteTimerArt = (item) => `<svg viewBox="0 0 56 40" aria-hidden="true">${cuteTimerBody(item)}</svg>`;

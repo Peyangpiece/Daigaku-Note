@@ -17,7 +17,7 @@ import {
 } from '../shared/figures.js';
 import {growFigure, renderFigure} from './figure-view.js';
 import {dressRuler} from './model3d.js';
-import {caseArt, itemOf, stationeryState} from '../shared/stationery.js';
+import {caseArt, cuteTimerArt, itemOf, stationeryState} from '../shared/stationery.js';
 import {evaluate, formatNumber} from '../shared/calc.js';
 import {
   TIMER_PRESETS,
@@ -134,7 +134,9 @@ export const POUCH_ART = Object.fromEntries(
 function pouchGear() {
   const st = stationeryState(state.data?.stationery);
   const art = (k, id) => {
-    const model = itemOf(id)?.model;
+    const item = itemOf(id);
+    if (k === 'timer' && item?.art === 'cute') return cuteTimerArt(item); // パステルの品は 2D の絵だけ
+    const model = item?.model;
     return model && model !== `tool-${k}` ? pouchArt(model, POUCH_FLAT[k]) : POUCH_ART[k];
   };
   return {bag: itemOf(st.pouchId), calc: art('calc', st.calcId), timer: art('timer', st.timerId)};
