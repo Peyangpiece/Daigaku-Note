@@ -1445,3 +1445,21 @@ button.fb-card {
 .shop-hero--premium .shop-card__state {
   color: #cfc6ad;
 }
+
+/* シークレットコード（ポイントのページ） */
+.pts-code {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+.pts-code .input {
+  flex: 1 1 14rem;
+  max-width: 22rem;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.pts-code__note {
+  margin: 4px 0 0;
+}

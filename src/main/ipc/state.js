@@ -7,8 +7,9 @@ import {currentTerm} from '../../shared/term.js';
 import {PERIOD_PRESETS, todayJst} from '../../shared/schedule.js';
 import {annoKey} from '../pdf-save.js';
 import {stationeryState} from '../../shared/stationery.js';
-import {claimLogin, pointsState} from '../../shared/points.js';
-import {loginItem, reviewSummary} from './common.js';
+import {claimLogin, pointsState, redeemCode} from '../../shared/points.js';
+import {findCode} from '../../shared/secret-codes.js';
+import {bad, loginItem, reviewSummary} from './common.js';
 import {autoLoginStopped} from '../login-strikes.js';
 
 /**
@@ -42,6 +43,22 @@ export function register({handle, ctx, repo}) {
     const login = claimLogin(repo.getSetting('points', null));
     if (login.gained) repo.setSetting('points', login.points);
     return {gained: login.gained, points: pointsState(login.points)};
+  });
+
+  // シークレットコード（shared/secret-codes.js）：管理者が配ったコードを入れるとポイントがもらえる。続けて間違えたら少し待たせる
+  let tries = [];
+  handle('points.redeem', ({code} = {}) => {
+    const t = Date.now();
+    tries = tries.filter((x) => t - x < 10 * 60 * 1000);
+    if (tries.length >= 10) bad('間違いが続いたので、10 分ほどしてからもう一度入れてください');
+    const entry = findCode(typeof code === 'string' ? code.slice(0, 60) : '');
+    if (!entry) {
+      tries.push(t);
+      bad('コードが違います');
+    }
+    const r = redeemCode(repo.getSetting('points', null), entry);
+    repo.setSetting('points', r.points);
+    return {gained: r.gained, label: entry.label, points: pointsState(r.points)};
   });
 
   handle('state.get', async () => {
