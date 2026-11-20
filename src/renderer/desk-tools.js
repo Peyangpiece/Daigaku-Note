@@ -17,11 +17,21 @@ import {
 } from '../shared/figures.js';
 import {growFigure, renderFigure} from './figure-view.js';
 import {dressRuler} from './model3d.js';
-import {caseArt, cuteTimerArt, itemOf, stationeryState} from '../shared/stationery.js';
+import {
+  TIMER_BOX,
+  TIMER_PARTS,
+  caseArt,
+  cuteTimerArt,
+  cuteTimerDevice,
+  itemOf,
+  stationeryState
+} from '../shared/stationery.js';
 import {evaluate, formatNumber} from '../shared/calc.js';
 import {
   TIMER_PRESETS,
+  addTime,
   clampMinutes,
+  clearTimer,
   formatClock,
   isDone,
   isRunning,
@@ -868,6 +878,8 @@ export class DeskTools {
         this.stopTick();
         this.timer = null;
       }
+    } else if (!this.timerEl && this.cuteTimerItem()) {
+      this.openCuteTimer(this.cuteTimerItem());
     } else if (!this.timerEl) {
       this.timer ??= newTimer(TIMER_PRESETS[2] * 60000);
       const presets = TIMER_PRESETS.map(
@@ -909,6 +921,81 @@ export class DeskTools {
     this.timer = newTimer(min * 60000);
   }
 
+  /** 持ち物の「ポーチ」で選んだタイマーが、どうぶつタイマー（2D の品）ならその品。ほかは null */
+  cuteTimerItem() {
+    const item = itemOf(stationeryState(state.data?.stationery).timerId);
+    return item?.type === 'timer' && item.art === 'cute' ? item : null;
+  }
+
+  /**
+   * どうぶつタイマー（v0.27.10）：ショップの絵（shared/stationery.js の cuteTimerDevice）を 2D のまま大きく出し、
+   * 絵のボタンの上に押せるボタンを重ねる。「分」で 1 分・「秒」で 10 秒足し（止めているとき）、「▶」で開始・一時停止。
+   * 「▶」の長押しで、足した時間に戻す。「分」と「秒」を同時に押すと 0:00
+   */
+  openCuteTimer(item) {
+    this.timer ??= newTimer(25 * 60000);
+    const [, , vw, vh] = TIMER_BOX.split(' ').map(Number);
+    const pct = (v, of) => `${((v / of) * 100).toFixed(3)}%`;
+    const btn = (k, label, title) => {
+      const {cx, cy, r} = TIMER_PARTS.buttons[k];
+      return `<button type="button" class="ctimer__btn" data-ct="${k}" aria-label="${label}" title="${title}" style="left:${pct(cx - r, vw)};top:${pct(cy - r, vh)};width:${pct(2 * r, vw)};height:${pct(2 * r, vh)}"></button>`;
+    };
+    const el = this.floatTool(
+      'timer timer--cute',
+      esc(item.name.replace(/（.*）$/, '')),
+      `<div class="ctimer"><svg class="ctimer__art" viewBox="${TIMER_BOX}" aria-hidden="true">${cuteTimerDevice(item)}</svg>
+        ${btn('min', '1 分足す', '1 分足す（止めているとき。「秒」と同時に押すと 0:00）')}
+        ${btn('sec', '10 秒足す', '10 秒足す（止めているとき。「分」と同時に押すと 0:00）')}
+        ${btn('go', '開始・一時停止', '開始・一時停止（長押しで、足した時間に戻す）')}
+        <output class="sr-only" data-timer-clock aria-live="off"></output></div>`,
+      {right: 580, bottom: 16},
+      () => this.toggleTimer(false)
+    );
+    const down = new Set();
+    let ignoreUntil = 0;
+    let hold = 0;
+    const act = (k) => {
+      if (Date.now() < ignoreUntil) return;
+      const t = this.timer;
+      if (k === 'min') this.timer = addTime(t, 60000);
+      else if (k === 'sec') this.timer = addTime(t, 10000);
+      else if (k === 'go') {
+        if (isRunning(t)) this.timer = pauseTimer(t, Date.now());
+        else if (t.total > 0) this.timer = startTimer(t, Date.now());
+      }
+      this.tickTimer();
+    };
+    el.addEventListener('pointerdown', (e) => {
+      const k = e.target.closest('[data-ct]')?.dataset.ct;
+      if (!k) return;
+      down.add(k);
+      if (down.has('min') && down.has('sec')) {
+        this.timer = clearTimer();
+        ignoreUntil = Date.now() + 600; // 離したときの「押した」で足さない
+        this.tickTimer();
+      }
+      if (k === 'go')
+        hold = setTimeout(() => {
+          this.timer = newTimer(this.timer.total);
+          ignoreUntil = Date.now() + 600;
+          this.tickTimer();
+        }, 700);
+    });
+    const up = (e) => {
+      const k = e.target.closest?.('[data-ct]')?.dataset.ct;
+      if (k) down.delete(k);
+      if (k === 'go') clearTimeout(hold);
+    };
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, up, true);
+    el.addEventListener('click', (e) => {
+      const k = e.target.closest('[data-ct]')?.dataset.ct;
+      if (k) act(k);
+    });
+    el.dataset.item = item.id;
+    this.timerEl = el;
+    this.tickTimer();
+  }
+
   stopTick() {
     clearInterval(this.timerTick);
     this.timerTick = 0;
@@ -944,6 +1031,17 @@ export class DeskTools {
     const el = this.timerEl;
     if (!el) return;
     el.querySelector('[data-timer-clock]').textContent = formatClock(left);
+    if (el.classList.contains('timer--cute')) {
+      // どうぶつタイマー：絵の液晶の字と ▶（動いている間は一時停止の印）を描き直す。変わったときだけ
+      const item = itemOf(el.dataset.item);
+      const key = `${formatClock(left)}|${running}`;
+      if (item && el.dataset.drawn !== key) {
+        el.dataset.drawn = key;
+        el.querySelector('.ctimer__art').innerHTML = cuteTimerDevice(item, {clock: formatClock(left), running});
+      }
+      el.classList.toggle('is-running', running);
+      return;
+    }
     el.querySelector('[data-timer-ring]').style.strokeDashoffset = String(1 - left / cur.total);
     el.querySelector('[data-timer-go]').textContent = running
       ? '一時停止'

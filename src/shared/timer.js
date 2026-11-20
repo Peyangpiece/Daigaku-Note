@@ -31,3 +31,15 @@ export const timerLeft = (t, now) => (t.endAt == null ? t.left : Math.max(0, t.e
 export const isRunning = (t) => t.endAt != null;
 /** 動いていて、残りが 0 になったか */
 export const isDone = (t, now) => t.endAt != null && now >= t.endAt;
+
+/**
+ * どうぶつタイマーの「分」「秒」：止めているときに時間を足す（v0.27.10）。足した時間が次の「▶」で数える時間になる。
+ * 時間になって 0:00 のときは 0 から足す。上限は TIMER_MAX_MIN 分。動いている間は変えない
+ */
+export function addTime(t, ms) {
+  if (t.endAt != null) return t;
+  const left = Math.min(TIMER_MAX_MIN * 60000, Math.max(0, t.left) + ms);
+  return newTimer(left);
+}
+/** 0:00 にする（「分」と「秒」を同時に押したとき） */
+export const clearTimer = () => newTimer(0);
