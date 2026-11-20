@@ -416,7 +416,7 @@ export const CATALOG = [
   // どうぶつタイマー（v0.27.10）：角の丸い四角の本体に耳と顔、液晶と「分」「秒」「▶」のボタン。編集画面のタイマーもこの形（desk-tools.js）
   cuteTimer('timer-cute-bear', 'くまタイマー（ピーチ）', '#fde6c9', '#fff3e4', 'bear', 'デジタル・くまの丸い耳'),
   cuteTimer('timer-cute-cat', 'ねこタイマー（さくら）', '#fcdcf0', '#fff0f9', 'cat', 'デジタル・ねこの耳とウインク'),
-  cuteTimer('timer-cute-bunny', 'うさぎタイマー（ミント）', '#d0f6e4', '#ecfdf5', 'bunny', 'デジタル・うさぎの折れ耳'),
+  cuteTimer('timer-cute-bunny', 'うさぎタイマー（ミント）', '#d0f6e4', '#ecfdf5', 'bunny', 'デジタル・うさぎの垂れ耳'),
   cuteTimer(
     'timer-cute-chick',
     'ひよこタイマー（レモン）',
@@ -1442,17 +1442,25 @@ const TIMER_EARS = {
   cat: (f, l) =>
     `<path d="M16 22 L22 4 L38 15 Z M124 22 L118 4 L102 15 Z" fill="${f}" stroke="${l}" stroke-width="1" stroke-linejoin="round"/>` +
     `<path d="M22 15 L23.5 9 L30 13.5 Z M118 15 L116.5 9 L110 13.5 Z" fill="${shade(CHEEK, 0.2)}" opacity="0.8"/>`,
-  // うさぎ：左の耳は立ち、右の耳は折れて頭にかかる
-  bunny: (f, l) =>
-    `<ellipse cx="48" cy="13.5" rx="6" ry="12.5" fill="${f}" stroke="${l}" stroke-width="1" transform="rotate(-8 48 13.5)"/>` +
-    `<ellipse cx="48" cy="13" rx="2.4" ry="7.5" fill="${CHEEK}" opacity="0.4" transform="rotate(-8 48 13)"/>`,
+  bunny: () => '', // うさぎの垂れた耳は本体の上に重ねて描く（TIMER_OVER）
   chick: () => ''
 };
-/** 頭の上にかかる部品（本体の上に描く）：うさぎの折れた耳 */
+/**
+ * 本体の上に重ねる部品：うさぎの垂れた耳（左右）。耳は本体と同じ色で塗り、輪郭は外側だけに引く。
+ * 根元は本体の上の縁から生え、塗りが本体とつながるので、生え際に線が出ない（根元の輪郭は本体の輪郭へそのまま続く）
+ */
+const lopEar = (f, l) => {
+  // 根元（x 52 の 2 点）は本体の上の縁（面より外の、本体と同じ色の所）にある。上の輪郭は本体の縁からなだらかに立ち上がる
+  const top = 'M52 14.2 C46 13.7 40 8 30 7.6 C18 7.2 7 15 4.4 28 C2.6 38 4 50 8.6 53.6 C13 56.6 17.2 50.4 18.2 42.4';
+  const inner = 'C19.4 33 23.4 24.6 33.6 18.8';
+  return (
+    `<path d="${top} ${inner} C40 16.4 46 16.2 52 16.6 Z" fill="${f}"/>` +
+    `<path d="M22 14.6 C13.6 18.6 9.6 27 8.9 36 C8.4 43 9.4 48.4 11.2 50.4 C13.6 48.8 14.6 43.6 15.2 37.6 C16 29.6 19.2 22.6 26.4 17.6 Z" fill="#f7c3d3" opacity="0.6"/>` +
+    `<path d="${top} ${inner}" fill="none" stroke="${l}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>`
+  );
+};
 const TIMER_OVER = {
-  bunny: (f, l) =>
-    `<path d="M62 18 C64 7 76 3 84 6 C89 8 86 13 80 14 C74 15 68 17 66 22 Z" fill="${f}" stroke="${l}" stroke-width="1" stroke-linejoin="round"/>` +
-    `<path d="M67 15 C70 9 77 7 81 8.5" fill="none" stroke="${CHEEK}" stroke-width="2" stroke-linecap="round" opacity="0.45"/>`
+  bunny: (f, l) => `${lopEar(f, l)}<g transform="translate(140 0) scale(-1 1)">${lopEar(f, l)}</g>`
 };
 /**
  * どうぶつタイマーの絵（<svg> の中身。viewBox は TIMER_BOX）。clock は液晶の字、running なら ▶ の代わりに一時停止の印。
