@@ -937,7 +937,8 @@ export class DeskTools {
     const [, , vw, vh] = TIMER_BOX.split(' ').map(Number);
     const pct = (v, of) => `${((v / of) * 100).toFixed(3)}%`;
     const btn = (k, label, title) => {
-      const {cx, cy, r} = TIMER_PARTS.buttons[k];
+      const {cx, cy} = TIMER_PARTS.buttons[k];
+      const r = TIMER_PARTS.buttons[k].r * 1.5; // 押せる範囲は絵のボタンより一回り広く（指でも押しやすく）
       return `<button type="button" class="ctimer__btn" data-ct="${k}" aria-label="${label}" title="${title}" style="left:${pct(cx - r, vw)};top:${pct(cy - r, vh)};width:${pct(2 * r, vw)};height:${pct(2 * r, vh)}"></button>`;
     };
     const el = this.floatTool(
