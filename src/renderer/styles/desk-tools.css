@@ -842,3 +842,38 @@
   height: auto;
   display: block;
 }
+
+/* どうぶつタイマー（v0.27.10）：ショップの絵を 2D のまま大きく出し、絵のボタンの上に押せるボタンを重ねる */
+.timer--cute {
+  width: 260px;
+}
+.ctimer {
+  position: relative;
+  width: 100%;
+  margin-top: 2px;
+}
+.ctimer__art {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.ctimer__btn {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ctimer__btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+.ctimer__btn:active {
+  background: rgba(0, 0, 0, 0.1);
+  transform: translateY(1px);
+}
+.ctimer__btn:focus-visible {
+  outline: 2px solid var(--focus, #3d7bc4);
+  outline-offset: 2px;
+}

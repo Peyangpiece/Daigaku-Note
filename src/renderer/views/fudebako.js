@@ -107,8 +107,8 @@ const art = (item, {big = false, foot = true} = {}) =>
     ? coverArt(item, {width: big ? 200 : 120})
     : isGear(item) && !big
       ? caseArt(item, {flat: true})
-      : item.art === 'model'
-        ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.model)}" data-item="${esc(item.id)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
+      : item.art === 'model' || (big && item.model3d) // パステルの品（2D の絵）も、詳細ページでは 3D で回して見られる
+        ? `<div class="model-view${big ? ' model-view--big' : ''}" data-model="${esc(item.art === 'model' ? item.model : item.model3d)}" data-item="${esc(item.id)}"${big ? ' data-model-zoom="1"' : ''} role="img" aria-label="${esc(item.name)}の 3D モデル"></div>
         ${
           foot
             ? `<div class="${big ? 'fb-detail__foot' : 'model-view__foot'}">${

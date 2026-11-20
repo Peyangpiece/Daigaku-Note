@@ -103,7 +103,8 @@ const cutePen = (id, name, color, body, accent, motif) => ({
   motif,
   price: 0,
   series: 'pen-cute',
-  art: 'cute'
+  art: 'cute',
+  model3d: 'pen-ballpoint' // 詳細ページの 3D 表示：ほかのボールペンと同じ形を、パステルの色で塗る
 });
 const cuteCase = (id, name, base, trim, motif) => ({
   id,
@@ -115,7 +116,8 @@ const cuteCase = (id, name, base, trim, motif) => ({
   motif,
   price: 0,
   series: 'case-cute',
-  art: 'cute'
+  art: 'cute',
+  model3d: 'case-cute' // 詳細ページの 3D 表示：その場で組み立てる形（renderer/model3d-cute.js）
 });
 const cuteBag = (id, name, base, trim, motif) => ({
   id,
@@ -127,7 +129,8 @@ const cuteBag = (id, name, base, trim, motif) => ({
   motif,
   price: 0,
   series: 'pouch-cute',
-  art: 'cute'
+  art: 'cute',
+  model3d: 'pouch-cute'
 });
 const cuteTimer = (id, name, base, trim, motif, note) => ({
   id,
@@ -139,7 +142,8 @@ const cuteTimer = (id, name, base, trim, motif, note) => ({
   note,
   price: 0,
   series: 'timer-cute',
-  art: 'cute'
+  art: 'cute',
+  model3d: 'tool-timer-cute'
 });
 /** 品の種類の名前 */
 export const typeLabel = (item) => TYPE_LABEL[kindOf(item)];
@@ -413,10 +417,18 @@ export const CATALOG = [
   cuteBag('pouch-cute-star', 'まるポーチ ほし（そらいろ）', '#cde3f6', '#f5faff', 'star'),
   cuteBag('pouch-cute-ribbon', 'まるポーチ リボン（ミント）', '#cbeedf', '#f3fcf8', 'ribbon'),
   cuteBag('pouch-cute-cloud', 'まるポーチ くも（ラベンダー）', '#e0d5f4', '#faf7ff', 'cloud'),
-  cuteTimer('timer-cute-cat', 'ねこタイマー（さくら）', '#f8cfdc', '#fff8fa', 'cat', 'パステル・ねこの耳'),
-  cuteTimer('timer-cute-bunny', 'うさぎタイマー（ミント）', '#cbeedf', '#f6fffb', 'bunny', 'パステル・うさぎの耳'),
-  cuteTimer('timer-cute-bear', 'くまタイマー（ピーチ）', '#fcd9c4', '#fffaf6', 'bear', 'パステル・くまの耳'),
-  cuteTimer('timer-cute-chick', 'ひよこタイマー（レモン）', '#fbeeb0', '#fffef4', 'chick', 'パステル・ひよこ'),
+  // どうぶつタイマー（v0.27.10）：角の丸い四角の本体に耳と顔、液晶と「分」「秒」「▶」のボタン。編集画面のタイマーもこの形（desk-tools.js）
+  cuteTimer('timer-cute-bear', 'くまタイマー（ピーチ）', '#fde6c9', '#fff3e4', 'bear', 'デジタル・くまの丸い耳'),
+  cuteTimer('timer-cute-cat', 'ねこタイマー（さくら）', '#fcdcf0', '#fff0f9', 'cat', 'デジタル・ねこの耳とウインク'),
+  cuteTimer('timer-cute-bunny', 'うさぎタイマー（ミント）', '#d0f6e4', '#ecfdf5', 'bunny', 'デジタル・うさぎの垂れ耳'),
+  cuteTimer(
+    'timer-cute-chick',
+    'ひよこタイマー（レモン）',
+    '#fcf6c8',
+    '#fffce6',
+    'chick',
+    'デジタル・ひよこのくちばし'
+  ),
   // 有料の棚：アトリエ（オリジナルの形の、こだわりの軸。発売前。値段は仮）。書く線は、ふだん使いの 2 つは 0.5、
   // ほかは黒・中字相当の 1.0 にそろえる。クリップにインクの色の小さな粒（シリーズの印）
   atelier(
@@ -1243,7 +1255,7 @@ export function caseArt(item, {flat = false} = {}) {
   if (item.art === 'cute') {
     const body =
       item.type === 'timer'
-        ? `<g transform="translate(44 0) scale(2)">${cuteTimerBody(item)}</g>`
+        ? `<svg x="46" y="0" width="108" height="80" viewBox="${TIMER_BOX}">${cuteTimerDevice(item)}</svg>`
         : item.type === 'pouch'
           ? cuteBagBody(item)
           : cuteCaseBody(item);
@@ -1277,6 +1289,9 @@ export function caseArt(item, {flat = false} = {}) {
 // 3D モデルを持たず、ここで SVG に描く。顔の目・ほおだけは読めるように濃い色・ピンクにする
 const EYE = '#5b4b57';
 const CHEEK = '#f5a3b8';
+/** 顔の目・ほおの色（3D の形を組み立てるときも同じ色。renderer/model3d-cute.js） */
+export const EYE_COLOR = EYE;
+export const CHEEK_COLOR = CHEEK;
 const n1 = (v) => Math.round(v * 100) / 100;
 
 /** 飾りの形（中心 cx・cy、半径 r）。fill で塗り、line で縁どる */
@@ -1419,30 +1434,81 @@ function cuteBagBody(item) {
     ${motifSvg(motif, 100, 50, 11, shade(base, -0.06), line)}`;
 }
 
-/** どうぶつタイマーの本体（56 × 40 の座標。ポーチの絵の大きさ） */
-function cuteTimerBody(item) {
+// ---- どうぶつタイマー（v0.27.10）----
+// 正面から見た 2D の絵（viewBox 0 0 140 104）。横長の角の丸い四角の本体（一段高い面つき）に、上の角の小さな耳・目と口、
+// 白っぽい大きな液晶、下に「分」「秒」「▶」の小さな丸いボタン。ショップ・ポーチの絵と、編集画面で動くタイマー（desk-tools.js）は同じ絵
+export const TIMER_BOX = '0 0 140 104';
+/** 液晶とボタンの場所（編集画面のタイマーが、絵の上に押せるボタンを重ねるのに使う） */
+export const TIMER_PARTS = {
+  lcd: {x: 29, y: 38, w: 82, h: 36},
+  buttons: {min: {cx: 42, cy: 88, r: 7.5}, sec: {cx: 70, cy: 88, r: 7.5}, go: {cx: 102, cy: 88, r: 7.5}}
+};
+const TIMER_EARS = {
+  bear: (f, l) =>
+    `<circle cx="26" cy="16" r="7.5" fill="${f}" stroke="${l}" stroke-width="1"/><circle cx="114" cy="16" r="7.5" fill="${f}" stroke="${l}" stroke-width="1"/>`,
+  cat: (f, l) =>
+    `<path d="M16 22 L22 4 L38 15 Z M124 22 L118 4 L102 15 Z" fill="${f}" stroke="${l}" stroke-width="1" stroke-linejoin="round"/>` +
+    `<path d="M22 15 L23.5 9 L30 13.5 Z M118 15 L116.5 9 L110 13.5 Z" fill="${shade(CHEEK, 0.2)}" opacity="0.8"/>`,
+  bunny: () => '', // うさぎの垂れた耳は本体の上に重ねて描く（TIMER_OVER）
+  chick: () => ''
+};
+/**
+ * 本体の上に重ねる部品：うさぎの垂れた耳（左右）。耳は本体と同じ色で塗り、輪郭は外側だけに引く。
+ * 根元は本体の上の縁から生え、塗りが本体とつながるので、生え際に線が出ない（根元の輪郭は本体の輪郭へそのまま続く）
+ */
+const lopEar = (f, l) => {
+  // 根元（x 52 の 2 点）は本体の上の縁（面より外の、本体と同じ色の所）にある。上の輪郭は本体の縁からなだらかに立ち上がる
+  const top = 'M52 14.2 C46 13.7 40 8 30 7.6 C18 7.2 7 15 4.4 28 C2.6 38 4 50 8.6 53.6 C13 56.6 17.2 50.4 18.2 42.4';
+  const inner = 'C19.4 33 23.4 24.6 33.6 18.8';
+  return (
+    `<path d="${top} ${inner} C40 16.4 46 16.2 52 16.6 Z" fill="${f}"/>` +
+    `<path d="M22 14.6 C13.6 18.6 9.6 27 8.9 36 C8.4 43 9.4 48.4 11.2 50.4 C13.6 48.8 14.6 43.6 15.2 37.6 C16 29.6 19.2 22.6 26.4 17.6 Z" fill="#f7c3d3" opacity="0.6"/>` +
+    `<path d="${top} ${inner}" fill="none" stroke="${l}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>`
+  );
+};
+const TIMER_OVER = {
+  bunny: (f, l) => `${lopEar(f, l)}<g transform="translate(140 0) scale(-1 1)">${lopEar(f, l)}</g>`
+};
+/**
+ * どうぶつタイマーの絵（<svg> の中身。viewBox は TIMER_BOX）。clock は液晶の字、running なら ▶ の代わりに一時停止の印。
+ * 液晶の字（data-timer-lcd）と ▶ の印（data-timer-go-icon）は、編集画面のタイマーが書き換える
+ */
+export function cuteTimerDevice(item, {clock = '25:00', running = false} = {}) {
   const {base, trim, motif} = item;
-  const line = shade(base, -0.22);
-  const sw = `stroke="${line}" stroke-width="1" stroke-linejoin="round"`;
-  const ears = {
-    cat: `<path d="M15 16 L16 3 L26 9 Z M41 16 L40 3 L30 9 Z" fill="${base}" ${sw}/>`,
-    bunny: `<ellipse cx="22" cy="8" rx="3.4" ry="7.5" fill="${base}" ${sw} transform="rotate(-12 22 8)"/><ellipse cx="34" cy="8" rx="3.4" ry="7.5" fill="${base}" ${sw} transform="rotate(12 34 8)"/>`,
-    bear: `<circle cx="16" cy="11" r="4.6" fill="${base}" ${sw}/><circle cx="40" cy="11" r="4.6" fill="${base}" ${sw}/>`,
-    chick: `<path d="M26.5 8.5 Q27.5 3 30 6.5 Q31 3 32 7.5" fill="none" ${sw}/>`
+  const line = shade(base, -0.45);
+  const plate = trim ?? shade(base, 0.35);
+  const btn = '#ffffff';
+  const btnLine = '#6d6a70';
+  const ink = '#3c3b40';
+  const {lcd, buttons: b} = TIMER_PARTS;
+  const button = ({cx, cy, r}, label) =>
+    `<circle cx="${cx}" cy="${cy + 0.9}" r="${r}" fill="${shade(base, -0.18)}"/>` +
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${btn}" stroke="${btnLine}" stroke-width="0.8"/>${label}`;
+  const text = (x, y, t) =>
+    `<text x="${x}" y="${y}" text-anchor="middle" font-size="6.5" fill="${ink}" font-family="'Hiragino Sans','Noto Sans JP','Yu Gothic',sans-serif">${t}</text>`;
+  const goIcon = running
+    ? `<g data-timer-go-icon fill="${ink}"><rect x="${b.go.cx - 2.6}" y="${b.go.cy - 2.8}" width="1.9" height="5.6" rx="0.5"/><rect x="${b.go.cx + 0.7}" y="${b.go.cy - 2.8}" width="1.9" height="5.6" rx="0.5"/></g>`
+    : `<g data-timer-go-icon fill="${ink}"><path d="M${b.go.cx - 1.9} ${b.go.cy - 3} L${b.go.cx + 3} ${b.go.cy} L${b.go.cx - 1.9} ${b.go.cy + 3} Z"/></g>`;
+  const dot = (x) => `<circle cx="${x}" cy="27" r="1.9" fill="${ink}"/>`;
+  const omega = `<path d="M66.6 27.4 Q68.3 30.4 70 27.8 Q71.7 30.4 73.4 27.4" fill="none" stroke="${ink}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const face = {
+    // ねこ：左目をつぶってウインク
+    cat: `<path d="M48 27.2 H54 M51.5 25 L54 27.2" fill="none" stroke="${ink}" stroke-width="1.1" stroke-linecap="round"/>${dot(89)}${omega}`,
+    chick: `${dot(55)}${dot(85)}<path d="M70 24.6 L74 27.6 L70 30.6 L66 27.6 Z M66 27.6 H74" fill="#ffc9a3" stroke="${ink}" stroke-width="0.8" stroke-linejoin="round"/>`
   };
-  const ticks = Array.from({length: 12}, (_, i) => {
-    const a = (i * Math.PI) / 6;
-    return `<circle cx="${n1(28 + Math.sin(a) * 13)}" cy="${n1(23 - Math.cos(a) * 13)}" r="0.75" fill="${trim}"/>`;
-  }).join('');
-  return `${ears[motif] ?? ''}
-    <circle cx="28" cy="23" r="15.5" fill="${base}" ${sw}/>${ticks}
-    <circle cx="28" cy="23" r="10.5" fill="${trim}" stroke="${line}" stroke-width="0.8"/>
-    <circle cx="24.2" cy="22" r="1.15" fill="${EYE}"/><circle cx="31.8" cy="22" r="1.15" fill="${EYE}"/>
-    <ellipse cx="21.6" cy="25.4" rx="1.9" ry="1.1" fill="${CHEEK}" opacity="0.8"/><ellipse cx="34.4" cy="25.4" rx="1.9" ry="1.1" fill="${CHEEK}" opacity="0.8"/>
-    ${motif === 'chick' ? '<path d="M26.6 24.6 H29.4 L28 26.6 Z" fill="#f7b98c"/>' : `<path d="M26.6 25.4 Q27.3 26.4 28 25.4 Q28.7 26.4 29.4 25.4" fill="none" stroke="${EYE}" stroke-width="0.6" stroke-linecap="round"/>`}
-    <path d="M28 14.5 V17.5" stroke="${line}" stroke-width="1.1" stroke-linecap="round"/>
-    <rect x="25.5" y="5.6" width="5" height="2.6" rx="1.2" fill="${trim}" stroke="${line}" stroke-width="0.7"/>`;
+  return `${(TIMER_EARS[motif] ?? TIMER_EARS.bear)(base, line)}
+    <rect x="4" y="14" width="132" height="86" rx="22" fill="${shade(base, -0.07)}" stroke="${line}" stroke-width="1"/>
+    <rect x="4.5" y="14.5" width="131" height="82" rx="21.5" fill="${base}"/>
+    <rect x="9" y="18.5" width="122" height="74" rx="18" fill="${plate}" opacity="0.55"/>
+    ${(TIMER_OVER[motif] ?? (() => ''))(base, line)}
+    ${face[motif] ?? `${dot(52)}${dot(88)}${omega}`}
+    <rect x="${lcd.x}" y="${lcd.y}" width="${lcd.w}" height="${lcd.h}" rx="9" fill="#fbfbf8" stroke="#a5a3a8" stroke-width="1"/>
+    <text data-timer-lcd x="70" y="${lcd.y + 25}" text-anchor="middle" font-size="22" font-weight="700" fill="#2c2d30" font-family="'SF Pro Rounded','Hiragino Maru Gothic ProN','Arial Rounded MT Bold','Helvetica Neue',Arial,sans-serif">${esc(clock)}</text>
+    ${button(b.min, text(b.min.cx, b.min.cy + 2.3, '分'))}
+    ${button(b.sec, text(b.sec.cx, b.sec.cy + 2.3, '秒'))}
+    ${button(b.go, goIcon)}`;
 }
 
 /** どうぶつタイマーの絵（ポーチの隅。viewBox 0 0 56 40） */
-export const cuteTimerArt = (item) => `<svg viewBox="0 0 56 40" aria-hidden="true">${cuteTimerBody(item)}</svg>`;
+export const cuteTimerArt = (item) =>
+  `<svg viewBox="0 0 56 40" aria-hidden="true"><svg x="1" y="0" width="54" height="40" viewBox="${TIMER_BOX}">${cuteTimerDevice(item)}</svg></svg>`;

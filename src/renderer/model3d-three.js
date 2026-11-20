@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {CUTE_MODELS, buildCute} from './model3d-cute.js';
 
 const api = window.daigaku;
 let renderer = null;
@@ -44,8 +45,12 @@ function tint(obj, item) {
         m.roughness = 0.22;
       }
     } else if (name === 'Grip') {
-      // ゴムのグリップは差し色を暗くした色。金の飾りの品は金のゴムにならないよう、軸の色から作る
-      m.color = color(item.trim === 'gold' ? item.body : item.accent).lerp(new THREE.Color('#1b1b1d'), 0.62);
+      // ゴムのグリップは差し色を暗くした色。金の飾りの品は金のゴムにならないよう、軸の色から作る。
+      // パステルペン（art: 'cute'）は 2D の絵と同じく、パステルのまま少しだけ濃く
+      m.color = color(item.trim === 'gold' ? item.body : item.accent).lerp(
+        new THREE.Color('#1b1b1d'),
+        item.art === 'cute' ? 0.14 : 0.62
+      );
     } else if (name === 'Print') m.color = color(lum(item.body) > 0.35 ? '#3a3b3f' : '#f2f2ee');
     else if (['Cap', 'Felt', 'Plug', 'Ink'].includes(name)) m.color = color(item.color);
     // ペンケース（scripts/pens3d/build.py の case_*）：本体は base、縁・タブ・ステッチ・テープは trim、織りネームの字は base を暗く
@@ -234,7 +239,8 @@ async function useLookMaterials(gltf) {
   });
 }
 
-async function loadNow(id, item) {
+/** GLB を読んで、品の色で塗る */
+async function loadGlb(id, item) {
   const r = await api['stationery.model']({model: id});
   if (r?.error) throw new Error(r.error);
   const b = r.bytes;
@@ -245,6 +251,16 @@ async function loadNow(id, item) {
   await useLookMaterials(gltf);
   tint(obj, item);
   glassify(obj);
+  return obj;
+}
+
+async function loadNow(id, item) {
+  // パステルの品の筆箱・ポーチ・タイマー（v0.27.10）は GLB がなく、その場で組み立てる
+  let obj;
+  if (CUTE_MODELS.includes(id)) {
+    gl();
+    obj = buildCute(id, item);
+  } else obj = await loadGlb(id, item);
   obj.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = !o.material.transparent; // 透明の品は濃い影を落とさない

@@ -579,6 +579,8 @@ test('パステルの品（2D の絵）：ペン・筆箱・ポーチ・タイ�
     CUTE_MOTIFS,
     POUCH_INFO,
     cuteTimerArt,
+    cuteTimerDevice,
+    TIMER_BOX,
     isGear,
     stationeryState: state
   } = await import('../src/shared/stationery.js');
@@ -614,7 +616,17 @@ test('パステルの品（2D の絵）：ペン・筆箱・ポーチ・タイ�
   }
   for (const it of byType('case')) assert.ok(CASE_INFO[it.style]?.short, it.id);
   for (const it of byType('pouch')) assert.ok(POUCH_INFO[it.style]?.short, it.id);
-  for (const it of byType('timer')) assert.match(cuteTimerArt(it), /viewBox="0 0 56 40"/);
+  for (const it of byType('timer')) {
+    assert.match(cuteTimerArt(it), /viewBox="0 0 56 40"/);
+    // 正面の 2D の絵：液晶（書き換える字）・「分」「秒」・▶。動いている間は一時停止の印
+    const dev = cuteTimerDevice(it, {clock: '3:05'});
+    assert.match(dev, /data-timer-lcd[^>]*>3:05</);
+    assert.match(dev, />分</);
+    assert.match(dev, />秒</);
+    assert.match(dev, /data-timer-go-icon[^>]*><path/);
+    assert.match(cuteTimerDevice(it, {running: true}), /data-timer-go-icon[^>]*><rect/);
+    assert.match(caseArt(it, {flat: true}), new RegExp(`viewBox="${TIMER_BOX}"`));
+  }
   // 種類ごとに 1 枚の札（シリーズ）
   for (const id of ['pen-cute', 'case-cute', 'pouch-cute', 'timer-cute']) {
     const s = shopSeries().find((x) => x.id === id);
@@ -626,4 +638,16 @@ test('パステルの品（2D の絵）：ペン・筆箱・ポーチ・タイ�
   const next = arrange(st, {caseId: 'case-cute-bear', pouchId: 'pouch-cute-star', timerId: 'timer-cute-bunny'});
   assert.equal(next.caseId, 'case-cute-bear');
   assert.equal(next.timerId, 'timer-cute-bunny');
+});
+
+test('パステルの品は、詳細ページで 3D で見られる：ペンはボールペンの GLB、筆箱・ポーチ・タイマーはその場で組み立てる形', async () => {
+  const {existsSync} = await import('node:fs');
+  const {CUTE_MODELS} = await import('../src/renderer/model3d-cute.js');
+  for (const it of CATALOG.filter((x) => x.art === 'cute')) {
+    assert.ok(it.model3d, `${it.id} の 3D の形`);
+    if (it.type === 'pen') {
+      assert.equal(it.model3d, 'pen-ballpoint');
+      assert.ok(existsSync(new URL(`../src/renderer/assets/stationery/${it.model3d}.glb`, import.meta.url)));
+    } else assert.ok(CUTE_MODELS.includes(it.model3d), `${it.id}：${it.model3d}`);
+  }
 });

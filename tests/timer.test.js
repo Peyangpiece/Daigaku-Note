@@ -47,3 +47,16 @@ test('タイマー：動かす・一時停止・続きから・終わり（時�
   t = startTimer(pauseTimer(t, 150000), 200000);
   assert.equal(timerLeft(t, 200000), 60000, '0 になったあとに動かすと最初から');
 });
+
+test('どうぶつタイマーの「分」「秒」：止めているときだけ足す。足した時間が次に数える時間。上限 180 分・同時押しで 0:00', async () => {
+  const {addTime, clearTimer, newTimer, startTimer, TIMER_MAX_MIN} = await import('../src/shared/timer.js');
+  let t = newTimer(25 * 60000);
+  t = addTime(addTime(t, 60000), 10000);
+  assert.deepEqual(t, {total: 26 * 60000 + 10000, left: 26 * 60000 + 10000, endAt: null});
+  const run = startTimer(t, 1000);
+  assert.equal(addTime(run, 60000), run, '動いている間は変えない');
+  assert.equal(addTime(newTimer(TIMER_MAX_MIN * 60000), 60000).left, TIMER_MAX_MIN * 60000);
+  // 時間になったあと（left 0）は 0 から足す
+  assert.equal(addTime({total: 5 * 60000, left: 0, endAt: null}, 10000).left, 10000);
+  assert.deepEqual(clearTimer(), {total: 0, left: 0, endAt: null});
+});
