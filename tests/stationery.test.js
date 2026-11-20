@@ -639,3 +639,15 @@ test('パステルの品（2D の絵）：ペン・筆箱・ポーチ・タイ�
   assert.equal(next.caseId, 'case-cute-bear');
   assert.equal(next.timerId, 'timer-cute-bunny');
 });
+
+test('パステルの品は、詳細ページで 3D で見られる：ペンはボールペンの GLB、筆箱・ポーチ・タイマーはその場で組み立てる形', async () => {
+  const {existsSync} = await import('node:fs');
+  const {CUTE_MODELS} = await import('../src/renderer/model3d-cute.js');
+  for (const it of CATALOG.filter((x) => x.art === 'cute')) {
+    assert.ok(it.model3d, `${it.id} の 3D の形`);
+    if (it.type === 'pen') {
+      assert.equal(it.model3d, 'pen-ballpoint');
+      assert.ok(existsSync(new URL(`../src/renderer/assets/stationery/${it.model3d}.glb`, import.meta.url)));
+    } else assert.ok(CUTE_MODELS.includes(it.model3d), `${it.id}：${it.model3d}`);
+  }
+});

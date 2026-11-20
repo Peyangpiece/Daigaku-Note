@@ -103,7 +103,8 @@ const cutePen = (id, name, color, body, accent, motif) => ({
   motif,
   price: 0,
   series: 'pen-cute',
-  art: 'cute'
+  art: 'cute',
+  model3d: 'pen-ballpoint' // 詳細ページの 3D 表示：ほかのボールペンと同じ形を、パステルの色で塗る
 });
 const cuteCase = (id, name, base, trim, motif) => ({
   id,
@@ -115,7 +116,8 @@ const cuteCase = (id, name, base, trim, motif) => ({
   motif,
   price: 0,
   series: 'case-cute',
-  art: 'cute'
+  art: 'cute',
+  model3d: 'case-cute' // 詳細ページの 3D 表示：その場で組み立てる形（renderer/model3d-cute.js）
 });
 const cuteBag = (id, name, base, trim, motif) => ({
   id,
@@ -127,7 +129,8 @@ const cuteBag = (id, name, base, trim, motif) => ({
   motif,
   price: 0,
   series: 'pouch-cute',
-  art: 'cute'
+  art: 'cute',
+  model3d: 'pouch-cute'
 });
 const cuteTimer = (id, name, base, trim, motif, note) => ({
   id,
@@ -139,7 +142,8 @@ const cuteTimer = (id, name, base, trim, motif, note) => ({
   note,
   price: 0,
   series: 'timer-cute',
-  art: 'cute'
+  art: 'cute',
+  model3d: 'tool-timer-cute'
 });
 /** 品の種類の名前 */
 export const typeLabel = (item) => TYPE_LABEL[kindOf(item)];
@@ -1285,6 +1289,9 @@ export function caseArt(item, {flat = false} = {}) {
 // 3D モデルを持たず、ここで SVG に描く。顔の目・ほおだけは読めるように濃い色・ピンクにする
 const EYE = '#5b4b57';
 const CHEEK = '#f5a3b8';
+/** 顔の目・ほおの色（3D の形を組み立てるときも同じ色。renderer/model3d-cute.js） */
+export const EYE_COLOR = EYE;
+export const CHEEK_COLOR = CHEEK;
 const n1 = (v) => Math.round(v * 100) / 100;
 
 /** 飾りの形（中心 cx・cy、半径 r）。fill で塗り、line で縁どる */
