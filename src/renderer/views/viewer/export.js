@@ -6,6 +6,15 @@ import {figureUrl} from '../../../shared/figures.js';
 import {MEMO_DEPTH, MEMO_LINE, MEMO_PAD, MEMO_TOOTH, MEMO_TOP, tearEdge} from '../../desk-tools.js';
 import {api, FILE_SAVE_DELAY, FONT, LINE_HEIGHT, EXPORT_PX_PER_PT, INDEX_OVER} from './shared.js';
 
+/** iPad のアプリ（Capacitor）の印刷の機能。パソコン・ブラウザでは null */
+const nativePrint = () => (window.Capacitor?.isNativePlatform?.() ? (window.Capacitor.Plugins?.Print ?? null) : null);
+/** バイト列 → base64（Capacitor の機能へは base64 で渡す） */
+function toB64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
 /** 印刷の画像の細かさ（dpi）。300 は文字がくっきりするが、ページが多いとメモリを食うので 200 に */
 const PRINT_DPI = 200;
 
@@ -69,8 +78,8 @@ export async function printBytes(bytes, loadDoc) {
 export const methods = {
   // ---- 印刷（v0.27.11。それまでの「書き出す…」の代わり）----
   // 押したらすぐ印刷する：注釈を描き込んだ PDF をパソコンで作り、ページを画像にして隠した枠に並べ、OS の印刷の窓を出す。
-  // 文字隠しのマーカーは水色のまま（赤シートで隠れる）。iPad（パソコンの画面を使うとき）は印刷の窓を出せないので、
-  // 注釈付きの PDF を開き、共有から「プリント」を選んでもらう（src/pad/bridge.js）
+  // 文字隠しのマーカーは水色のまま（赤シートで隠れる）。iPad だけで使うときは iOS の印刷の画面（PrintPlugin.swift）。
+  // iPad でパソコンの画面を使うときは印刷の窓を出せないので、注釈付きの PDF を開き、共有から「プリント」を選んでもらう（src/pad/bridge.js）
   async printPdf() {
     if (this.printing) return;
     this.finishEdit();
@@ -84,6 +93,14 @@ export const methods = {
       if (r?.error) return toast(r.error);
       if (r?.opened) return toast('開いた PDF の共有から「プリント」を選んでください');
       if (!r?.bytes) return;
+      // iPad だけで使うとき：アプリの中の画面では印刷の窓を出せないので、iOS の印刷の画面に PDF のまま渡す
+      // （ipad/ios/App/App/PrintPlugin.swift）
+      const ios = nativePrint();
+      if (ios)
+        return void (await ios.printPdf({
+          data: toB64(r.bytes),
+          name: String(r.name ?? '').replace(/_注釈\.pdf$|\.pdf$/i, '')
+        }));
       toast('印刷の準備をしています…');
       await printBytes(r.bytes, (bytes) => this.loadDoc(bytes));
     } catch (e) {
