@@ -1,7 +1,7 @@
 import UIKit
 import Capacitor
 
-// 印刷（v0.27.11）：iPad だけで使うときの「印刷…」（src/renderer/views/viewer/export.js の printPdf）。
+// 印刷（v0.27.11）：iPad のアプリの「印刷…」（src/pad/bridge.js の pdf.printData が呼ぶ）。iPad だけで使うときも、パソコンの画面を使うときも。
 // アプリの中の画面（WKWebView）では window.print() が何もしないので、注釈を描き込んだ PDF を受け取り、
 // iOS の印刷の画面（UIPrintInteractionController）で刷る。PDF のまま渡すので、文字は画像にせずにくっきり出る
 @objc(PrintPlugin)

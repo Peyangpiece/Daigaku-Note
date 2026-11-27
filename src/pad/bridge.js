@@ -135,6 +135,12 @@ async function offerFile({name, bytes, mime}, mode) {
 }
 
 const readFile = async (f) => new Uint8Array(await f.arrayBuffer());
+/** バイト列 → base64（Capacitor の機能へは base64 で渡す） */
+function toB64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
 const tooBig = (f) => f.size > PAD_FILE_MAX;
 
 // ---- パソコンとのやりとり ----
@@ -227,10 +233,18 @@ const LOCAL = {
     if (r?.error) return r;
     return (await offerFile({...r, mime: 'application/pdf'}, 'save')) ? {ok: true, name: r.name} : {canceled: true};
   },
-  // 印刷（v0.27.11）：iPad のアプリの中からは印刷の窓を出せないので、注釈付きの PDF を開き、共有から「プリント」を選んでもらう
+  // 印刷（v0.27.11）：注釈付きの PDF を作り、iPad のアプリの中なら iOS の印刷の画面（ipad/ios/App/App/PrintPlugin.swift）へ
+  // PDF のまま渡す（iPad だけで使うときも、パソコンの画面を使うときも）。アプリの外（Safari）では印刷の窓を出せないので、
+  // PDF を開き、共有から「プリント」を選んでもらう
   async 'pdf.printData'({materialId, texts}, send) {
     const r = await send('pdf.exportData', {materialId, options: {markers: 'blue', notes: false}, texts});
     if (r?.error) return r;
+    const ios = window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins?.Print : null;
+    if (ios) {
+      const name = String(r.name ?? '').replace(/_注釈\.pdf$|\.pdf$/i, '');
+      await ios.printPdf({data: toB64(r.bytes), name});
+      return {printed: true};
+    }
     return (await offerFile({...r, mime: 'application/pdf'}, 'open')) ? {opened: true, name: r.name} : {canceled: true};
   },
   async 'term.readCalendar'({year}, send) {
