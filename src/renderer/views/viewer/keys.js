@@ -10,7 +10,6 @@ export const methods = {
   onKey(e) {
     this.inputAt = performance.now(); // 打っている間はファイルに上書き保存しない（export.js）
     const t = e.target;
-    if (this.$('export-dialog')?.open) return; // 書き出しの窓が開いている間は効かせない
     if (isTyping(e)) {
       if (e.key === 'Escape' && t.tagName === 'TEXTAREA') {
         const a = this.annoOf(t);
@@ -27,7 +26,8 @@ export const methods = {
       // 並べたとき：最後に触った側がもう片方なら、そちらで取り消す・やり直す（もう片方へ貼ったシールなど）
       if (k === 'z' && !shift) this.routeUndo('undo') || this.undo();
       else if ((k === 'z' && shift) || (k === 'y' && !shift)) this.routeUndo('redo') || this.redo();
-      else if (k === 'e' && shift) this.openExport();
+      else if (k === 'p' && !shift)
+        this.printPdf(); // 印刷（v0.27.11。それまでの ⇧⌘E の書き出しの代わり）
       else if (k === 'e') this.setTool('eraser');
       else if (k === 's' && !shift) this.saveFile({manual: true});
       else if (k === 't' && !shift) this.setTool('text');

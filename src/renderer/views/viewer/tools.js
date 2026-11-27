@@ -413,7 +413,7 @@ export const methods = {
         this.toggleSheet();
         this.tuckSoon();
       } else if (t.dataset.v === 'status') this.failed && this.retrySaves();
-      else if (t.dataset.v === 'export') this.openExport();
+      else if (t.dataset.v === 'export') this.printPdf();
       else if (t.dataset.v === 'help') this.openHelp(this.$('help-panel').hidden);
       // 筆箱からペン（消しゴム）を持ったら、少し見せてから画面の外へしまう
       if (fromSide && (t.dataset.slot !== undefined || t.dataset.tool === 'eraser')) this.tuckSoon();
@@ -470,13 +470,6 @@ export const methods = {
     });
     this.on(this.$('text-custom'), 'change', pickEnd);
     this.on(this.$('note-custom'), 'change', pickEnd);
-    const dialog = this.$('export-dialog');
-    this.on(dialog, 'close', () => {
-      if (dialog.returnValue === 'ok') {
-        const f = dialog.querySelector('form');
-        this.exportPdf({markers: f.markers.value, notes: f.notes.checked});
-      }
-    });
   },
 
   bindPages() {

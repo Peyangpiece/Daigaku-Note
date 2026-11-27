@@ -227,6 +227,12 @@ const LOCAL = {
     if (r?.error) return r;
     return (await offerFile({...r, mime: 'application/pdf'}, 'save')) ? {ok: true, name: r.name} : {canceled: true};
   },
+  // 印刷（v0.27.11）：iPad のアプリの中からは印刷の窓を出せないので、注釈付きの PDF を開き、共有から「プリント」を選んでもらう
+  async 'pdf.printData'({materialId, texts}, send) {
+    const r = await send('pdf.exportData', {materialId, options: {markers: 'blue', notes: false}, texts});
+    if (r?.error) return r;
+    return (await offerFile({...r, mime: 'application/pdf'}, 'open')) ? {opened: true, name: r.name} : {canceled: true};
+  },
   async 'term.readCalendar'({year}, send) {
     const [f] = await pickFiles('学年暦のファイル（PDF・Word・テキスト）を選んでください', {
       accept: '.pdf,.docx,.txt,.md,application/pdf,text/plain'

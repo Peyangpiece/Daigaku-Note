@@ -240,6 +240,11 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
     const out = await exportBytes(m, options, texts);
     return {ok: true, name: `${m.name.replace(/\.pdf$/i, '')}_注釈.pdf`, bytes: out};
   };
+  // 印刷（v0.27.11）：注釈を描き込んだ PDF の中身を返す。画面がそのまま OS の印刷の窓を出す（viewer/export.js の printPdf）。
+  // 文字隠しのマーカーは水色のまま（印刷して赤シートをかぶせると隠れる）。コメントは紙に出ないので PDF の注釈にしない
+  handle('pdf.printData', async ({materialId, texts}) =>
+    ctx.pdfExportData({materialId, options: {markers: 'blue', notes: false}, texts})
+  );
   handle('pdf.export', async ({materialId, options, texts}) => {
     if (trial.isTrial(materialId)) return exportTrial(options, texts);
     const m = pdfMaterial(materialId);

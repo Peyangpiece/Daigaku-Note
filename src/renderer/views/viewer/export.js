@@ -6,27 +6,90 @@ import {figureUrl} from '../../../shared/figures.js';
 import {MEMO_DEPTH, MEMO_LINE, MEMO_PAD, MEMO_TOOTH, MEMO_TOP, tearEdge} from '../../desk-tools.js';
 import {api, FILE_SAVE_DELAY, FONT, LINE_HEIGHT, EXPORT_PX_PER_PT, INDEX_OVER} from './shared.js';
 
-export const methods = {
-  // ---- 書き出し（§9.7）----
-  openExport() {
-    this.finishEdit();
-    const dialog = this.$('export-dialog');
-    dialog.returnValue = ''; // Esc で閉じたときに前回の「書き出す」が残らないように
-    if (!dialog.open) dialog.showModal();
-  },
+/** 印刷の画像の細かさ（dpi）。300 は文字がくっきりするが、ページが多いとメモリを食うので 200 に */
+const PRINT_DPI = 200;
 
-  async exportPdf(options) {
+/**
+ * PDF のバイト列を印刷する：pdf.js でページを画像にし、画面に出さない枠（iframe）に 1 ページずつ並べて、その枠の印刷を呼ぶ
+ * （Electron は OS の印刷の窓を出す）。用紙の大きさは 1 ページ目に合わせ、余白は 0（PDF の余白のまま刷る）
+ */
+export async function printBytes(bytes, loadDoc) {
+  const task = loadDoc(bytes);
+  const doc = await task.promise;
+  const urls = [];
+  let size = null;
+  try {
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const vp1 = page.getViewport({scale: 1});
+      size ??= {w: vp1.width, h: vp1.height};
+      const vp = page.getViewport({scale: PRINT_DPI / 72});
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(vp.width);
+      canvas.height = Math.round(vp.height);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({canvasContext: ctx, viewport: vp}).promise;
+      const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/png'));
+      urls.push({url: URL.createObjectURL(blob), w: vp1.width, h: vp1.height});
+      page.cleanup();
+    }
+  } finally {
+    await task.destroy(); // 読み込みの task ごと片付ける（PDFDocumentProxy に destroy がない版がある）
+  }
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  frame.className = 'print-frame';
+  Object.assign(frame.style, {position: 'fixed', width: '0', height: '0', border: '0', right: '0', bottom: '0'});
+  document.body.append(frame);
+  const w = frame.contentWindow;
+  const d = w.document;
+  d.open();
+  d.write(`<!doctype html><html><head><meta charset="utf-8"><title>印刷</title><style>
+    @page { size: ${size.w}pt ${size.h}pt; margin: 0; }
+    html, body { margin: 0; padding: 0; }
+    img { display: block; width: 100%; height: auto; break-after: page; page-break-after: always; }
+    img:last-child { break-after: auto; page-break-after: auto; }
+  </style></head><body>${urls.map((u) => `<img src="${u.url}" alt="">`).join('')}</body></html>`);
+  d.close();
+  await Promise.all(
+    [...d.images].map((img) => (img.complete ? null : new Promise((ok) => (img.onload = img.onerror = ok))))
+  );
+  const done = () => {
+    frame.remove();
+    for (const u of urls) URL.revokeObjectURL(u.url);
+  };
+  w.addEventListener('afterprint', () => setTimeout(done, 500), {once: true});
+  setTimeout(done, 10 * 60_000); // afterprint が来ないときの片付け
+  w.focus();
+  w.print();
+}
+
+export const methods = {
+  // ---- 印刷（v0.27.11。それまでの「書き出す…」の代わり）----
+  // 押したらすぐ印刷する：注釈を描き込んだ PDF をパソコンで作り、ページを画像にして隠した枠に並べ、OS の印刷の窓を出す。
+  // 文字隠しのマーカーは水色のまま（赤シートで隠れる）。iPad（パソコンの画面を使うとき）は印刷の窓を出せないので、
+  // 注釈付きの PDF を開き、共有から「プリント」を選んでもらう（src/pad/bridge.js）
+  async printPdf() {
+    if (this.printing) return;
+    this.finishEdit();
     const btn = this.$('export');
+    this.printing = true;
     btn.disabled = true;
     try {
       const snaps = this.textSnaps();
-      if (!(await this.settle())) return toast('保存できていない注釈があるため書き出せません');
-      const r = await api['pdf.export']({materialId: this.materialId, options, texts: await this.textImages(snaps)});
-      if (r?.error) toast(r.error);
-      else if (r?.ok) toast(`書き出しました：${r.name}`);
+      if (!(await this.settle())) return toast('保存できていない注釈があるため印刷できません');
+      const r = await api['pdf.printData']({materialId: this.materialId, texts: await this.textImages(snaps)});
+      if (r?.error) return toast(r.error);
+      if (r?.opened) return toast('開いた PDF の共有から「プリント」を選んでください');
+      if (!r?.bytes) return;
+      toast('印刷の準備をしています…');
+      await printBytes(r.bytes, (bytes) => this.loadDoc(bytes));
     } catch (e) {
-      toast(`書き出せませんでした（${e.message}）`);
+      toast(`印刷できませんでした（${e.message}）`);
     } finally {
+      this.printing = false;
       btn.disabled = false;
     }
   },
@@ -78,7 +141,7 @@ export const methods = {
           return void (await api['pdf.markStale']({materialId: this.materialId}));
         const r = await api['pdf.save']({materialId: this.materialId, texts: await this.textImages(snaps)});
         if (r?.error) {
-          // ほかのアプリで変更された・元の写しがないときは、何度も試さず止める（「書き出す…」は使える）
+          // ほかのアプリで変更された・元の写しがないときは、何度も試さず止める（「印刷…」は使える）
           this.fileBlocked = true;
           throw new Error(r.error);
         }

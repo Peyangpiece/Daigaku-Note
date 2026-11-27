@@ -57,6 +57,7 @@ const INVOKE = [
   'pdf.open',
   'pdf.asset',
   'pdf.export',
+  'pdf.printData',
   'pdf.save',
   'pdf.textStyle',
   'note.open',
