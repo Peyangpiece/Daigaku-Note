@@ -32,7 +32,15 @@ function capacitorStub() {
   const mem = JSON.parse(sessionStorage.getItem('__fs') ?? '{}');
   const persist = () => sessionStorage.setItem('__fs', JSON.stringify(mem));
   window.Capacitor = {
+    isNativePlatform: () => true,
     Plugins: {
+      // 印刷（ipad/ios/App/App/PrintPlugin.swift の代わり）：渡された PDF を覚える
+      Print: {
+        printPdf: async ({data, name}) => {
+          window.__printed = {name, bytes: atob(data).length, head: atob(data).slice(0, 5)};
+          return {printed: true};
+        }
+      },
       App: {
         addListener: (ev, cb) => {
           (listeners[ev] ??= []).push(cb);
@@ -253,6 +261,13 @@ test(
       // PDF を開く
       await pg.evaluate((id) => (location.hash = `#/viewer/${id}`), mat.id);
       await pg.waitForSelector('.pdf-page canvas', {timeout: 60000});
+      // 印刷：iPad のアプリでは、注釈付きの PDF を iOS の印刷の画面（PrintPlugin）へ PDF のまま渡す（すぐ出る。確かめの窓をはさまない）
+      await pg.click('[data-v="export"]');
+      await pg.waitForFunction(() => window.__printed, null, {timeout: 30000});
+      const printed = await pg.evaluate(() => window.__printed);
+      assert.equal(printed.head, '%PDF-');
+      assert.ok(printed.bytes > 500, `PDF の大きさ ${printed.bytes}`);
+      assert.equal(printed.name, 'a');
       // iPad で変えたもの（文字入れの書式）は、開き直しても残る
       const saved = await pg.evaluate(
         (id) =>

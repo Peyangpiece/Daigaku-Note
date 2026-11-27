@@ -178,7 +178,7 @@ export const BAR = `
     </div>
     </div>
     <button type="button" class="muted viewer-bar__status" data-v="status" aria-live="polite" title="変更は自動で上書き保存します（${key(MOD, 'S')} ですぐに保存）"></button>
-    <button type="button" class="viewer-bar__export" data-v="export" title="注釈を描き込んだ PDF を別の名前で書き出す（${key(SHIFT, MOD, 'E')}）">書き出す…</button>
+    <button type="button" class="viewer-bar__export" data-v="export" title="注釈を描き込んで印刷する（${key(MOD, 'P')}）。文字隠しのマーカーは水色のまま刷るので、赤シートで隠れます">印刷…</button>
     <div class="viewer-bar__help">
       <button type="button" data-v="help" aria-expanded="false" aria-haspopup="true" title="キーボードの操作（${key(MOD, '/')}）" aria-label="キーボードの操作">? 操作</button>
       <div class="help-panel" data-v="help-panel" hidden>
@@ -198,7 +198,7 @@ export const BAR = `
           <dt>${key(MOD, 'F')}</dt><dd>PDF の中の文字を探す（Enter で次、Shift＋Enter で前）</dd>
           <dt>暗記モード</dt><dd>Space で答えを見る、→ で「覚えた」、← で「まだ」、Esc でおわる</dd>
           <dt>${key(MOD, 'Z')}・${key(SHIFT, MOD, 'Z')}</dt><dd>取り消す・やり直す</dd>
-          <dt>${key(MOD, 'S')}・${key(SHIFT, MOD, 'E')}</dt><dd>すぐに保存（ふだんは自動）・書き出す</dd>
+          <dt>${key(MOD, 'S')}・${key(MOD, 'P')}</dt><dd>すぐに保存（ふだんは自動）・印刷</dd>
           <dt>${key(MOD, '/')}</dt><dd>この一覧を出す・しまう</dd>
           <dt>ピンチ・${MOD}＋ホイール</dt><dd>拡大・縮小</dd>
           <dt class="muted">文字を打っている間</dt><dd class="muted">ショートカットは効きません（1 文字のショートカットはありません）</dd>
@@ -246,22 +246,6 @@ export const BAR = `
       <button type="button" data-v="anki-end" title="暗記モードをやめる（Esc）">おわる</button>
     </div>
   </div>
-  <dialog class="export-dialog" data-v="export-dialog">
-    <form method="dialog">
-      <h3>注釈付きで書き出す</h3>
-      <p class="muted">元の PDF はそのまま残し、注釈を描き込んだ別の PDF を作ります。</p>
-      <fieldset>
-        <legend>文字隠しのマーカー</legend>
-        <label><input type="radio" name="markers" value="blue" checked /> 水色のまま（印刷して赤シートをかぶせると隠れます）</label>
-        <label><input type="radio" name="markers" value="black" /> 黒く塗りつぶす</label>
-      </fieldset>
-      <label><input type="checkbox" name="notes" checked /> コメントを PDF の注釈として入れる（ほかの PDF アプリでも読めます）</label>
-      <div class="export-dialog__foot">
-        <button type="submit" class="btn" value="cancel">やめる</button>
-        <button type="submit" class="btn btn--primary" value="ok">書き出す…</button>
-      </div>
-    </form>
-  </dialog>
   <aside class="fude-side is-tucked" data-v="side" data-corner="fude" aria-label="筆箱">
     <button type="button" class="fude-side__tab" data-corner-tab="fude" aria-expanded="false" title="筆箱を出す" aria-label="筆箱を出す"><span>筆箱</span></button>
     <div class="fude-side__head"><strong>筆箱</strong><span class="muted" data-v="case-name"></span><button type="button" class="fude-side__pin" data-v="pin" aria-pressed="false" title="開いたままにする（窓が広いときだけ。PDF は左に寄せて小さくします）">開いたまま</button></div>
