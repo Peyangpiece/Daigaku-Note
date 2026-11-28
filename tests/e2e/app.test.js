@@ -225,6 +225,33 @@ test(
       await win.waitForFunction(() => document.querySelectorAll('.anno-text').length === 2, null, {timeout: 5000});
       assert.deepEqual(await texts(), ['Alpha', 'Beta'], '切り取ったものを貼り戻せる');
       await win.keyboard.press('Escape');
+      // 印刷の窓（v0.27.14）：⌘P でプレビュー付きの窓。A4 縦の 2 ページは、1 枚に 1 ページなら縦 2 面、2 ページなら横 1 面
+      await win.keyboard.press('Control+P');
+      await win.waitForSelector('.print-dialog[open]', {timeout: 30000});
+      await win.waitForFunction(
+        () => [...document.querySelectorAll('.print-dialog__sheet img')].every((i) => i.src && i.complete),
+        null,
+        {timeout: 30000}
+      );
+      const sum = () => win.evaluate(() => document.querySelector('.print-dialog__sum').textContent);
+      assert.match(await sum(), /2 ページ → A4・縦 2 面/);
+      await win.selectOption('.print-dialog select[name="nup"]', '2');
+      assert.match(await sum(), /2 ページ → A4・横 1 面/);
+      assert.equal(await win.evaluate(() => document.querySelectorAll('.print-dialog__sheet').length), 1);
+      await win.fill('.print-dialog input[name="pages"]', '2');
+      assert.match(await sum(), /1 ページ → A4・横 1 面/, 'ページを指定すると「指定」になる');
+      await win.fill('.print-dialog input[name="pages"]', 'x');
+      assert.equal(await win.evaluate(() => document.querySelector('[data-print="go"]').disabled), true);
+      await win.click('[data-print="cancel"]');
+      await win.waitForFunction(() => !document.querySelector('.print-dialog'));
+      // 刷る窓口：プリンタのない所でも止まらずに答える（刷れた・刷れなかった）
+      const printed = await win.evaluate(async () => {
+        const c = Object.assign(document.createElement('canvas'), {width: 20, height: 20});
+        const blob = await new Promise((ok) => c.toBlob(ok, 'image/png'));
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        return window.daigaku['print.run']({pages: [{num: 1, w: 595, h: 842, bytes}], paper: 'A4', nup: 1});
+      });
+      assert.ok(printed?.ok || printed?.error, JSON.stringify(printed));
       // 筆箱：画面の右の端から内側へなでると出るのは指だけ。ペンで右の端の近くから書いても出さない（v0.27.4）。
       // ペンを使った直後の指（書いている手）も出さない
       const swipe = (pointerType, {width = 1} = {}) =>

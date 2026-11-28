@@ -276,3 +276,126 @@ a,
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* ---- 印刷の窓（viewer/print-dialog.js。v0.27.14）：左にプレビュー（紙の上の並び）、右に設定 ---- */
+.print-dialog {
+  width: min(1000px, 94vw);
+  height: min(720px, 92vh);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--paper-ink);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.print-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.print-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+.print-dialog__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  flex: 1;
+  min-height: 0;
+}
+.print-dialog__preview {
+  overflow: auto;
+  padding: 20px 28px;
+  background: color-mix(in srgb, var(--paper-ink) 8%, var(--card));
+}
+.print-dialog__preview.is-gray img {
+  filter: grayscale(1);
+}
+.print-dialog__fig {
+  margin: 0 auto 18px;
+  max-width: 560px;
+  text-align: center;
+}
+.print-dialog__sheet {
+  position: relative;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.print-dialog__sheet img {
+  position: absolute;
+  display: block;
+  background: #f3f3f3; /* 画像になるまで */
+  outline: 1px solid rgba(0, 0, 0, 0.06);
+}
+.print-dialog__no {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  opacity: 0.6;
+}
+.print-dialog__side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding: 16px;
+}
+.print-dialog__title {
+  margin: 0;
+  font-size: var(--fs-h3, 1.1rem);
+}
+.print-dialog__name {
+  margin: -6px 0 0;
+  font-size: 13px;
+  opacity: 0.65;
+  overflow-wrap: anywhere;
+}
+.print-dialog__side > label,
+.print-dialog__side fieldset {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+}
+.print-dialog__side legend {
+  margin-bottom: 4px;
+  padding: 0;
+}
+.print-dialog__radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.print-dialog__radio .input {
+  flex: 1;
+  min-width: 0;
+}
+.print-dialog__sum {
+  margin: auto 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.print-dialog__sum.is-error {
+  color: var(--danger, #c0392b);
+}
+.print-dialog__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--paper-ink) 10%, transparent);
+}
+.print-dialog__spacer {
+  flex: 1;
+}
+.print-dialog.is-busy .print-dialog__side {
+  pointer-events: none;
+  opacity: 0.6;
+}
+@media (max-width: 700px) {
+  .print-dialog__body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(200px, 1fr) auto;
+  }
+}

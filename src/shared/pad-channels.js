@@ -19,7 +19,9 @@ export const PAD_DENY = {
   'cloud.keyQr': 'iPad に鍵を渡す QR は、パソコンの画面で出してください',
   'cloud.setPassphrase': '合言葉は、パソコンの画面で決めてください',
   'cloud.unlock': '合言葉は、パソコンの画面で入れてください',
-  'cloud.adoptIpad': 'ドライブのデータの取り込みは、パソコンの画面でしてください'
+  'cloud.adoptIpad': 'ドライブのデータの取り込みは、パソコンの画面でしてください',
+  'print.printers': '印刷は、iPad の印刷の画面からしてください',
+  'print.run': '印刷は、iPad の印刷の画面からしてください'
 };
 
 /**

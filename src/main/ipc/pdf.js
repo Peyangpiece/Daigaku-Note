@@ -1,7 +1,9 @@
 // IPC の窓口：PDF の編集（pdf.*・annotation.*・bookmark.*）。index.js が register を呼ぶ（SPEC §12・DESIGN-M0 §4）
-import {dialog, app} from 'electron';
+import {dialog, app, BrowserWindow} from 'electron';
 import {promises as fsp} from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import {layoutSheets, sheetsHtml, PAPERS} from '../../shared/print-layout.js';
 import {sha256} from '../sync/files.js';
 import {isPng} from '../pdf-export.js';
 import {exportAnnotatedPdfOffThread, warmPdfWorker} from '../pdf-worker.js';
@@ -245,6 +247,71 @@ export function register({handle, ctx, repo, log, getWindow, notifyOthers = () =
   handle('pdf.printData', async ({materialId, texts}) =>
     ctx.pdfExportData({materialId, options: {markers: 'blue', notes: false}, texts})
   );
+  // 印刷の窓（v0.27.14。viewer/print-dialog.js）：プリンタの一覧。name は OS の名前（刷るときに渡す）、label は見せる名前
+  handle('print.printers', async () => {
+    const win = getWindow();
+    if (!win) return [];
+    const list = await win.webContents.getPrintersAsync().catch(() => []);
+    return list.map((p) => ({name: p.name, label: p.displayName || p.name}));
+  });
+  // 印刷の窓の「プリント」：画面が描いたページの画像（JPEG・PNG）を、プレビューと同じ割り付け（shared/print-layout.js）で
+  // 隠した窓に並べ、OS の印刷の窓を出さずにそのまま刷る。画像は一時フォルダに置き、刷り終えたら消す
+  handle('print.run', async ({pages, paper, nup, orient, deviceName, copies, color, duplex}) => {
+    if (!Array.isArray(pages) || !pages.length || pages.length > 2000) bad('印刷するページがありません');
+    if (!PAPERS[paper]) bad('用紙が不正です');
+    const list = pages.map((p) => ({
+      num: Number(p?.num),
+      w: Number(p?.w),
+      h: Number(p?.h),
+      bytes: p?.bytes instanceof Uint8Array ? p.bytes : bad('ページの画像が不正です')
+    }));
+    if (list.some((p) => !(p.num > 0 && p.w > 0 && p.h > 0))) bad('ページの大きさが不正です');
+    const layout = layoutSheets(list, {paper, nup, orient});
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'palette-print-'));
+    let win = null;
+    try {
+      const names = new Map();
+      for (const p of list) {
+        const name = `p${p.num}.${isPng(p.bytes) ? 'png' : 'jpg'}`;
+        names.set(p.num, name);
+        await fsp.writeFile(path.join(dir, name), p.bytes);
+      }
+      const file = path.join(dir, 'print.html');
+      await fsp.writeFile(
+        file,
+        sheetsHtml(layout, (num) => encodeURIComponent(names.get(num)))
+      );
+      win = new BrowserWindow({
+        show: false,
+        webPreferences: {javascript: false, sandbox: true, contextIsolation: true, nodeIntegration: false}
+      });
+      await win.loadFile(file); // 画像を読み終えてから戻る（did-finish-load）
+      const p = PAPERS[paper];
+      const opts = {
+        silent: true,
+        printBackground: true,
+        color: color !== false,
+        copies: Math.min(Math.max(Math.round(Number(copies) || 1), 1), 99),
+        collate: true,
+        margins: {marginType: 'none'},
+        pageSize: {width: Math.round(p.w * 1000), height: Math.round(p.h * 1000)}, // 縦置きの大きさ（µm）。横は landscape
+        landscape: layout.landscape,
+        duplexMode: ['simplex', 'longEdge', 'shortEdge'].includes(duplex) ? duplex : 'simplex'
+      };
+      if (typeof deviceName === 'string' && deviceName) opts.deviceName = deviceName;
+      const r = await new Promise((ok) => win.webContents.print(opts, (success, reason) => ok({success, reason})));
+      if (!r.success) {
+        log.warn?.(`印刷できませんでした: ${r.reason}`);
+        return {
+          error: r.reason === 'cancelled' ? '印刷をやめました' : '印刷できませんでした（プリンタを確かめてください）'
+        };
+      }
+      return {ok: true, sheets: layout.sheets.length};
+    } finally {
+      win?.destroy();
+      await fsp.rm(dir, {recursive: true, force: true}).catch(() => {});
+    }
+  });
   handle('pdf.export', async ({materialId, options, texts}) => {
     if (trial.isTrial(materialId)) return exportTrial(options, texts);
     const m = pdfMaterial(materialId);
