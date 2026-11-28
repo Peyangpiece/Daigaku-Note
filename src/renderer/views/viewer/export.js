@@ -4,71 +4,12 @@ import {inkOn} from '../../../shared/skin.js';
 import {MEMO_COLOR, MEMO_SIZE} from '../../../shared/annotation.js';
 import {figureUrl} from '../../../shared/figures.js';
 import {MEMO_DEPTH, MEMO_LINE, MEMO_PAD, MEMO_TOOTH, MEMO_TOP, tearEdge} from '../../desk-tools.js';
+import {openPrintDialog} from './print-dialog.js';
 import {api, FILE_SAVE_DELAY, FONT, LINE_HEIGHT, EXPORT_PX_PER_PT, INDEX_OVER} from './shared.js';
-
-/** 印刷の画像の細かさ（dpi）。300 は文字がくっきりするが、ページが多いとメモリを食うので 200 に */
-const PRINT_DPI = 200;
-
-/**
- * PDF のバイト列を印刷する：pdf.js でページを画像にし、画面に出さない枠（iframe）に 1 ページずつ並べて、その枠の印刷を呼ぶ
- * （Electron は OS の印刷の窓を出す）。用紙の大きさは 1 ページ目に合わせ、余白は 0（PDF の余白のまま刷る）
- */
-export async function printBytes(bytes, loadDoc) {
-  const task = loadDoc(bytes);
-  const doc = await task.promise;
-  const urls = [];
-  let size = null;
-  try {
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i);
-      const vp1 = page.getViewport({scale: 1});
-      size ??= {w: vp1.width, h: vp1.height};
-      const vp = page.getViewport({scale: PRINT_DPI / 72});
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(vp.width);
-      canvas.height = Math.round(vp.height);
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({canvasContext: ctx, viewport: vp}).promise;
-      const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/png'));
-      urls.push({url: URL.createObjectURL(blob), w: vp1.width, h: vp1.height});
-      page.cleanup();
-    }
-  } finally {
-    await task.destroy(); // 読み込みの task ごと片付ける（PDFDocumentProxy に destroy がない版がある）
-  }
-  const frame = document.createElement('iframe');
-  frame.setAttribute('aria-hidden', 'true');
-  frame.className = 'print-frame';
-  Object.assign(frame.style, {position: 'fixed', width: '0', height: '0', border: '0', right: '0', bottom: '0'});
-  document.body.append(frame);
-  const w = frame.contentWindow;
-  const d = w.document;
-  d.open();
-  d.write(`<!doctype html><html><head><meta charset="utf-8"><title>印刷</title><style>
-    @page { size: ${size.w}pt ${size.h}pt; margin: 0; }
-    html, body { margin: 0; padding: 0; }
-    img { display: block; width: 100%; height: auto; break-after: page; page-break-after: always; }
-    img:last-child { break-after: auto; page-break-after: auto; }
-  </style></head><body>${urls.map((u) => `<img src="${u.url}" alt="">`).join('')}</body></html>`);
-  d.close();
-  await Promise.all(
-    [...d.images].map((img) => (img.complete ? null : new Promise((ok) => (img.onload = img.onerror = ok))))
-  );
-  const done = () => {
-    frame.remove();
-    for (const u of urls) URL.revokeObjectURL(u.url);
-  };
-  w.addEventListener('afterprint', () => setTimeout(done, 500), {once: true});
-  setTimeout(done, 10 * 60_000); // afterprint が来ないときの片付け
-  w.focus();
-  w.print();
-}
 
 export const methods = {
   // ---- 印刷（v0.27.11。それまでの「書き出す…」の代わり）----
-  // 押したらすぐ印刷する：注釈を描き込んだ PDF をパソコンで作り、ページを画像にして隠した枠に並べ、OS の印刷の窓を出す。
+  // 押したら印刷の窓：注釈を描き込んだ PDF をパソコンで作り、プレビューを見てプリンタ・ページ・用紙などを選んで刷る（v0.27.14）。
   // 文字隠しのマーカーは水色のまま（赤シートで隠れる）。iPad は窓口（src/pad/bridge.js）が iOS の印刷の画面
   // （ipad/ios/App/App/PrintPlugin.swift）へ PDF のまま渡す。アプリの外（Safari）では PDF を開き、共有から「プリント」を選んでもらう
   async printPdf() {
@@ -84,8 +25,15 @@ export const methods = {
       if (r?.error) return toast(r.error);
       if (r?.opened) return toast('開いた PDF の共有から「プリント」を選んでください');
       if (r?.printed || !r?.bytes) return; // iPad：窓口（src/pad/bridge.js）が iOS の印刷の画面へ渡した
-      toast('印刷の準備をしています…');
-      await printBytes(r.bytes, (bytes) => this.loadDoc(bytes));
+      // 印刷の窓（プレビューを見て、プリンタ・ページ・用紙などを選ぶ。viewer/print-dialog.js）
+      const task = this.loadDoc(r.bytes);
+      const doc = await task.promise;
+      btn.disabled = false;
+      await openPrintDialog({
+        doc,
+        name: r.name?.replace(/_注釈\.pdf$/, '') ?? '',
+        close: () => task.destroy() // 読み込みの task ごと片付ける（PDFDocumentProxy に destroy がない版がある）
+      });
     } catch (e) {
       toast(`印刷できませんでした（${e.message}）`);
     } finally {
