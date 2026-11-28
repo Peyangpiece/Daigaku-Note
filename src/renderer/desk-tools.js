@@ -23,6 +23,7 @@ import {
   caseArt,
   cuteTimerArt,
   cuteTimerDevice,
+  isLightColor,
   itemOf,
   stationeryState
 } from '../shared/stationery.js';
@@ -155,10 +156,20 @@ function pouchGear() {
 /** ペンを使ったあと、端からなでて四隅を出せるようになるまでの時間（書いている手が端に触れても出さない） */
 const PEN_QUIET_MS = 1500;
 
+/**
+ * ポーチの隅の色：持ち物の「ポーチ」で選んでいるポーチ（マイポーチ）の本体の色（base）を背景に、縁の色（trim）を中の布に。
+ * 明るいポーチ（パステル・白など）は、見出しの字を濃くする（is-light）。ポーチがなければ CSS の帆布の色のまま
+ */
+const HEX = /^#[0-9a-f]{6}$/i;
+const pouchStyle = (bag) =>
+  HEX.test(bag?.base ?? '')
+    ? ` style="--pouch-base: ${bag.base}; --pouch-trim: ${HEX.test(bag.trim ?? '') ? bag.trim : bag.base}"`
+    : '';
+
 export const cornersHtml = () => {
   const gear = pouchGear();
   return `
-  <aside class="corner corner--pouch is-tucked" data-corner="pouch" aria-label="ポーチ">
+  <aside class="corner corner--pouch is-tucked${isLightColor(gear.bag?.base) ? ' is-light' : ''}" data-corner="pouch" aria-label="ポーチ"${pouchStyle(gear.bag)}>
     <button type="button" class="corner__tab" data-corner-tab="pouch" aria-expanded="false" title="ポーチを出す（マウスを画面の右下の端へ・右端から左へなでる）" aria-label="ポーチを出す"><span>ポーチ</span></button>
     <div class="corner__head"><strong>ポーチ</strong>${gear.bag ? `<span class="pouch__bag" title="${esc(gear.bag.name)}">${caseArt(gear.bag)}</span>` : ''}</div>
     <div class="pouch__items">

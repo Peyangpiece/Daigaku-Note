@@ -143,12 +143,31 @@ export const methods = {
       e.preventDefault();
       return this.grabText(e, a);
     }
+    // Shift か ⌘（Ctrl）を押しながら押した（選択の道具）：選ぶものを足す・外す。動かさない
+    if (a && this.tool === 'select' && (e.shiftKey || e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      return this.togglePick(a);
+    }
     if (a) {
       e.preventDefault();
       const wasSelected = this.selected === a;
-      this.select(a);
+      const grip = a.kind === 'stamp' && !!e.target.closest('.anno-stamp__grip');
+      // いくつか選んでいて、そのうちの 1 つをつかんだ：同じページの選んだもの全部をまとめて動かす（大きさを変えるときは 1 つだけ）
+      const many = !grip && this.picked?.has(a) && this.picked.size > 1;
+      const group = many
+        ? this.pickedList()
+            .filter((x) => x.page === a.page)
+            .map((x) => ({
+              a: x,
+              before: this.snap(x),
+              left: parseFloat(x.el.style.left),
+              top: parseFloat(x.el.style.top)
+            }))
+        : null;
+      if (!many) this.select(a);
       this.drag = {
         a,
+        group,
         wasSelected, // 選んであった図をもう一度押したら、書き換える
         curve: !!e.target.closest('[data-curve]'), // グラフの曲線を押したら、式を入れる
         before: this.snap(a),
@@ -171,7 +190,12 @@ export const methods = {
     if (!pageEl) return this.select(null);
     const p = this.pages[Number(pageEl.dataset.page) - 1];
     const box = pageEl.getBoundingClientRect();
-    if (this.tool === 'select') return this.select(null);
+    // 選択の道具で空いた所：マウス・ペンでなぞると四角で囲んで選ぶ（押しただけなら選ぶのをやめる）。指はページを動かす
+    // PDF の文字の上は、ふつうの文字の選択（コピー）のまま
+    if (this.tool === 'select') {
+      if (e.pointerType === 'touch' || e.target.closest('.pdf-page__text :is(span, br)')) return this.select(null);
+      return this.startMarquee(e, p);
+    }
     e.preventDefault();
     if (this.tool === 'mask') return this.startMask(e, p, box);
     // 指では、離したときに置く（2 本指のピンチやスクロールの始まりで文字入れ・付箋ができないように）
@@ -499,6 +523,7 @@ export const methods = {
       this.drawing.y1 = Math.min(Math.max(e.clientY - box.top, 0), box.height);
       return this.drawDraft();
     }
+    if (this.marquee?.pointer === e.pointerId) return this.moveMarquee(e);
     const d = this.drag;
     if (!d || d.pointer !== e.pointerId) return;
     const dx = e.clientX - d.x,
@@ -506,6 +531,16 @@ export const methods = {
     if (!d.moved && Math.hypot(dx, dy) < 3) return;
     d.moved = true;
     d.a.el.classList.add('is-dragging');
+    if (d.group) {
+      // まとめて動かす（付箋〔インデックス〕はページの端に沿って上下にだけ）
+      for (const g of d.group) {
+        g.a.el.classList.add('is-dragging');
+        if (!(g.a.kind === 'stamp' && g.a.style.type === 'index')) g.a.el.style.left = `${g.left + dx}px`;
+        g.a.el.style.top = `${g.top + dy}px`;
+      }
+      if (d.group.some((g) => g.a.kind === 'mask')) this.syncCovers();
+      return;
+    }
     if (d.resize && d.a.style.type === 'figure' && growsWithSize(d.a.style.ref)) {
       // 表・数直線・座標平面：縦に伸ばすと縦の、横に伸ばすと横のます・目盛りが増える（1 ますの大きさは変えない）
       const unit = d.width / figureSize(d.style.ref, d.style.params).w;
@@ -553,12 +588,30 @@ export const methods = {
       const box = t.p.el.getBoundingClientRect();
       return void this.createAt(this.tool, t.p, e.clientX - box.left, e.clientY - box.top);
     }
+    if (this.marquee?.pointer === e.pointerId) return void this.endMarquee();
     const d = this.drag;
     if (!d || d.pointer !== e.pointerId) return;
     this.drag = null;
     const a = d.a;
     a.el.classList.remove('is-dragging', 'is-lifted');
     this.showGrowTip(null);
+    if (d.group) {
+      for (const g of d.group) g.a.el.classList.remove('is-dragging');
+      if (!d.moved) return void this.select(a); // 動かさずに離した：押した 1 つだけを選ぶ
+      const p = this.pages[a.page - 1];
+      const steps = d.group.map((g) => {
+        const s = this.toScreen(g.a.page, g.a.rect);
+        const left = Math.min(Math.max(parseFloat(g.a.el.style.left), 0), p.viewport.width - 8);
+        const top = Math.min(Math.max(parseFloat(g.a.el.style.top), 0), p.viewport.height - 8);
+        g.a.rect = this.fromScreen(g.a.page, {left, top, width: s.width, height: s.height});
+        this.place(g.a);
+        this.scheduleSave(g.a, 0);
+        return {key: g.a.key, before: g.before, after: this.snap(g.a)};
+      });
+      this.recordGroup(steps);
+      if (d.group.some((g) => g.a.kind === 'mask')) this.syncCovers();
+      return;
+    }
     if (d.moved) {
       const p = this.pages[a.page - 1];
       // ページの外へは出さない

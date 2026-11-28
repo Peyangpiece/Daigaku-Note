@@ -21,8 +21,16 @@
   top: 50vh; /* 画面を四つに分けた右下の四角の上から（つまみはその右上） */
   max-height: calc(50vh - 16px);
   width: 260px;
-  background: #8a5a44; /* 帆布のポーチ */
+  /* 持ち物の「ポーチ」で選んでいるポーチ（マイポーチ）の本体の色（desk-tools.js の pouchStyle）。なければ帆布の茶色 */
+  background: var(--pouch-base, #8a5a44);
   color: #fff;
+}
+/* 明るいポーチ（パステル・白など）：見出しの字とつまみの字を濃くし、白い縫い目も濃い色に */
+.corner--pouch.is-light {
+  color: #3b3a36;
+}
+.corner--pouch.is-light .pouch__items {
+  border-color: color-mix(in srgb, #3b3a36 35%, transparent);
 }
 .corner--seal {
   left: 16px;
@@ -183,7 +191,8 @@
   padding: 8px 6px;
   border: 1.5px dashed rgba(255, 255, 255, 0.55); /* 縫い目 */
   border-radius: 12px;
-  background: #f4ede4;
+  /* 中の布：ポーチの縁の色を少し混ぜた生成り（道具の絵が見やすいよう、明るいまま） */
+  background: color-mix(in srgb, var(--pouch-trim, #f4ede4) 30%, #f4ede4);
   box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.18);
 }
 .pouch__item {

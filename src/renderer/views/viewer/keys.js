@@ -28,6 +28,8 @@ export const methods = {
       else if ((k === 'z' && shift) || (k === 'y' && !shift)) this.routeUndo('redo') || this.redo();
       else if (k === 'p' && !shift)
         this.printPdf(); // 印刷（v0.27.11。それまでの ⇧⌘E の書き出しの代わり）
+      else if (k === 'a' && !shift)
+        this.pickAll(); // 注釈を全部選ぶ（ペンの線を除く）
       else if (k === 'e') this.setTool('eraser');
       else if (k === 's' && !shift) this.saveFile({manual: true});
       else if (k === 't' && !shift) this.setTool('text');
@@ -61,7 +63,12 @@ export const methods = {
       this.setTool('select');
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && this.selected) {
       e.preventDefault();
-      this.removeAnno(this.selected);
+      // いくつか選んでいれば全部を消す（取り消しは 1 手で全部戻る）
+      const list = this.pickedList();
+      if (list.length > 1) {
+        this.recordGroup(list.map((a) => ({key: a.key, before: this.snap(a), after: null})));
+        for (const a of list) this.removeAnno(a, false);
+      } else this.removeAnno(this.selected);
     } else if (e.key === 'Enter' && this.selected && this.annoOf(t) === this.selected) {
       // フォーカスのある注釈で Enter：文字入れは直す、メモは開く（マウスで押したときと同じ）
       const a = this.selected;

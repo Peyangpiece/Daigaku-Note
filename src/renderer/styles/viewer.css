@@ -1699,3 +1699,12 @@ svg[data-flat] > ellipse {
     font-size: var(--fs-small);
   }
 }
+
+/* 四角で囲んで選ぶ（選択の道具でページの空いた所をなぞる。viewer/clipboard.js） */
+.pick-marquee {
+  position: absolute;
+  z-index: 30;
+  border: 1.5px dashed var(--focus, #3d7bc4);
+  background: color-mix(in srgb, var(--focus, #3d7bc4) 10%, transparent);
+  pointer-events: none;
+}
