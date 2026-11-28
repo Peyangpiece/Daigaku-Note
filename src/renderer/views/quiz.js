@@ -654,7 +654,6 @@ export async function quizEditAction(action, el) {
   if (!editing) return false;
   if (action === 'qe-save-all') {
     const ids = Object.keys(editing.drafts);
-    let saved = 0;
     for (const id of ids) {
       const q = editing.questions.find((x) => x.id === id);
       const patch = q ? patchOf(q, editing.drafts[id]) : {};
@@ -670,9 +669,7 @@ export async function quizEditAction(action, el) {
       }
       editing.questions = editing.questions.map((x) => (x.id === id ? {...x, ...r} : x));
       delete editing.drafts[id];
-      saved++;
     }
-    toast(saved ? `${saved} 問を保存しました` : '変更はありません');
     refresh();
     return true;
   }
@@ -691,7 +688,6 @@ export async function quizEditAction(action, el) {
   editing.questions = patch.deleted
     ? editing.questions.filter((q) => q.id !== id)
     : editing.questions.map((q) => (q.id === id ? {...q, ...r} : q));
-  toast(patch.deleted ? '削除しました' : '保存しました');
   refresh();
   return true;
 }

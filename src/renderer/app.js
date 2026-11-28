@@ -77,18 +77,6 @@ setHooks({
     applyTheme();
     render();
     await claimLoginBonus();
-    // 着せ替えを入れた版に更新したあと 1 回だけ知らせる（SPEC-KISEKAE §4.4）
-    if (!EMBED && state.data.skin && !state.data.skin.introduced && !location.hash.startsWith('#/setup')) {
-      state.data.skin.introduced = true;
-      api['skin.introduced']();
-      toast(
-        '着せ替えができるようになりました。上の「着せ替え」から選べます。フォルダごとの色は、フォルダの「⋯」か右クリックから',
-        {
-          action: {label: '見てみる', run: () => navigate('/kisekae')},
-          untilNavigate: true
-        }
-      );
-    }
   }
 });
 
@@ -661,15 +649,6 @@ function mountSplit(view, left, right) {
   };
   window.addEventListener('message', s.onMessage);
   document.title = 'PDF とノート — パレットノート';
-  // 窓が狭いと、左右それぞれのツールバーが 1 段に収まらない（片側 560 px）。この窓のあいだに 1 回だけ知らせる
-  try {
-    if (window.innerWidth < 1128 && !sessionStorage.getItem('split.narrowHinted')) {
-      sessionStorage.setItem('split.narrowHinted', '1');
-      toast('窓を広げると（横 1128 px 以上）、左右のツールバーが 1 段に収まって使いやすくなります');
-    }
-  } catch {
-    // 覚えられなくても並べられる
-  }
 }
 
 /** 左右の画面に、書きかけ（打っている文字・保存待ち）を保存してもらう。両方の返事か 5 秒で終わる */
@@ -733,7 +712,7 @@ document.addEventListener('click', async (e) => {
         full: el.dataset.full === '1' || undefined
       });
       if (r?.error) toast(r.error, {error: true});
-      else toast(el.dataset.full === '1' ? '過去の回も含めて全部確かめます（数分かかります）' : '同期を始めます');
+      else if (el.dataset.full === '1') toast('過去の回も含めて全部確かめます（数分かかります）'); // ふだんの同期は「同期中 n/m」で分かる
     } else if (action === 'open-pdf') navigate(`/viewer/${el.dataset.id}`);
     else if (action === 'round-notebook') {
       // 紙を選んで作る（前に選んだ紙に ✓。選んだ紙は次の初期値になる）
@@ -772,7 +751,6 @@ document.addEventListener('click', async (e) => {
     } else if (action === 'login') {
       // 要確認の「ログイン窓を開く」。自動ログインがオンなら ID とパスワードは窓に入れてある。ログインできたらそのまま同期する
       el.disabled = true;
-      toast('ログインの窓を開きます。窓でログインしてください');
       const r = await api['connection.login']({connectionId: el.dataset.id, mode: 'visible'});
       toast(r?.ok ? 'ログインしました。同期を始めます' : r?.message || r?.error || 'ログインできませんでした', {
         error: !r?.ok
@@ -1150,7 +1128,6 @@ function beginSort(container, grab = null) {
       if (changed) {
         const r = await api['settings.update']({patch: {order: {scope, keys}}});
         if (r?.error) toast(r.error, {error: true});
-        else toast('並びを覚えました');
       }
       await reload();
     },

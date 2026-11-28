@@ -995,6 +995,6 @@ document.addEventListener('click', (e) => {
   } else if (what === 'case') save('stationery.arrange', {caseId: id});
   else if (what === 'gear') {
     const it = itemOf(id);
-    if (it && GEAR[it.type]) save('stationery.arrange', {[GEAR[it.type]]: id}, `${it.name} を使います`);
+    if (it && GEAR[it.type]) save('stationery.arrange', {[GEAR[it.type]]: id});
   }
 });

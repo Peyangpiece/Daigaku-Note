@@ -28,7 +28,6 @@ import {openScan} from '../../scan-dialog.js';
 const api = window.daigaku;
 const PHOTO_PX = 2400; // 写真の長い辺（px）。これより大きければ縮める
 const PHOTO_SHARE = 0.6; // 貼ったときの大きさ：ページの幅の 6 割（高さは半分）まで
-const HINT_KEY = 'note.hinted';
 const AUTO_KEY = 'note.autoPage'; // 最後のページの下のほうまで書いたら自動でページを足す（このパソコンに覚える。はじめは足す）
 const autoPageOn = () => {
   try {
@@ -100,23 +99,11 @@ export const methods = {
     }
   },
 
-  /** ページを並べたあと：ノートなら、最初のペンを持つ・初めてなら使い方を知らせる */
+  /** ページを並べたあと：ノートなら、最初のペンを持つ（使い方は「? 操作」に。前は初めてのときに下に知らせていた） */
   startNote() {
     if (!this.isNote) return;
     const i = (this.st?.slots ?? []).findIndex((id) => KIND_OF[itemOf(id)?.type] === 'ink');
     if (i >= 0) this.useSlot(i);
-    let seen = true;
-    try {
-      seen = localStorage.getItem(HINT_KEY) === '1';
-      localStorage.setItem(HINT_KEY, '1');
-    } catch {
-      // 覚えられなければ毎回は出さない
-    }
-    if (!seen)
-      toast(
-        `ページは ${key(SHIFT, MOD, 'N')} でも足せます（最後のページの下のほうまで書くと自動でも足します）。写真は貼り付け（${key(MOD, 'V')}）やドラッグでも貼れます`,
-        {action: {label: 'わかった', run: () => {}}} // 読めるように少し長く出す
-      );
   },
 
   /** 同じ回に置いた PDF（ノート・書き出したものは除く） */
@@ -309,7 +296,7 @@ export const methods = {
    * ノートにページを足す：書きかけを保存してから、メインで足し、足したページだけ画面に並べる（開き直さない）。
    * record：取り消しの履歴に積む（↶ で消せる）。取り消し・やり直しから呼ぶときは false。戻り：足せたか
    */
-  async addNotePage({record = true, auto = false} = {}) {
+  async addNotePage({record = true} = {}) {
     if (this.pageBusy) return false;
     this.pageBusy = true;
     this.busyAddPage(true);
@@ -324,10 +311,8 @@ export const methods = {
       if (!last) return false;
       if (record) this.pushStep({notePage: 'add'});
       // 書いている途中に足したとき（auto）は、見ている場所を動かさない
-      if (auto) toast(`ページを足しました（${this.pages.length} ページ）`);
       else {
         last.el.scrollIntoView({block: 'center', behavior: 'smooth'});
-        toast(`ページを足しました（${this.pages.length} ページ）`);
       }
       return true;
     } catch (e) {
@@ -362,7 +347,7 @@ export const methods = {
   autoNotePage(a) {
     if (!this.isNote || this.pageBusy || a?.page !== this.pages.length || !a.rect || !autoPageOn()) return;
     const h = this.pages.at(-1).page.getViewport({scale: 1}).height;
-    if (a.rect.y <= h * 0.12) this.addNotePage({auto: true});
+    if (a.rect.y <= h * 0.12) this.addNotePage();
   },
 
   /** 「紙を変える…」：横罫・方眼、行の間 6・7 mm から選ぶ（今の紙に ✓）。書いたものはそのまま */
@@ -407,7 +392,6 @@ export const methods = {
       if (r?.error) return toast(r.error, {error: true});
       await this.replaceNoteDoc(r.bytes, r.pages);
       this.notePaperNow = r.paper;
-      toast(`紙を「${paper.label}」に変えました`);
     } catch (e) {
       toast(`紙を変えられませんでした（${e.message}）`, {error: true});
     } finally {
@@ -498,7 +482,6 @@ export const methods = {
         this.pushStep({notePage: 'remove'});
       }
       this.markDirty();
-      toast(`最後のページを消しました（${this.pages.length} ページ）`);
       return true;
     } finally {
       this.pageBusy = false;

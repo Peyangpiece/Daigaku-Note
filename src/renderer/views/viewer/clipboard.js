@@ -5,7 +5,7 @@
 // - コピーした中身は OS のクリップボードに入れる（独自の形式と、文字入れ・コメントの本文の文字）。別の PDF・ノート、
 //   並べたもう片方の画面にも貼れる。ほかのアプリでコピーした文字を貼ると、新しい文字入れになる
 // - 文字を打っている間・PDF の文字を選んでいる間は、ふつうのコピー・貼り付けのまま（横取りしない）
-import {isTyping, toast} from '../../ui-kit.js';
+import {isTyping} from '../../ui-kit.js';
 import {LINE_HEIGHT} from './shared.js';
 
 /** クリップボードの独自の形式（同じアプリの中だけで読める） */
@@ -165,8 +165,8 @@ export const methods = {
     if (cut) {
       this.recordGroup(list.map((a) => ({key: a.key, before: this.snap(a), after: null})));
       for (const a of list) this.removeAnno(a, false);
-      toast(`${list.length} 個を切り取りました`);
-    } else toast(`${list.length} 個をコピーしました`);
+      this.announce?.(`${list.length} 個を切り取りました`);
+    } else this.announce?.(`${list.length} 個をコピーしました`);
   },
 
   onPaste(e) {
@@ -252,7 +252,7 @@ export const methods = {
     if (made.some((a) => a.kind === 'mask')) this.syncCovers?.();
     this.setTool?.('select');
     this.pickMany(made);
-    toast(`${made.length} 個を貼り付けました`);
+    this.announce?.(`${made.length} 個を貼り付けました`);
   },
 
   /** ほかのアプリでコピーした文字：見ているページの真ん中に、新しい文字入れとして置く */

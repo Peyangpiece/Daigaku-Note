@@ -252,7 +252,7 @@ function bind(term) {
       cal = null; // 次に開いたときは保存した値から
       // 画面の学期の一覧・上の学期名を読み直してから戻る（読み直さないと、前の名前のまま見える）
       await reload();
-      toast(r.redated ? `学期を保存しました。回の日付を ${r.redated} 件計算し直しました` : '学期を保存しました');
+      if (r.redated) toast(`回の日付を ${r.redated} 件計算し直しました`);
       navigate('/settings?tab=lms');
     };
   if ($('tm-remove'))
@@ -267,7 +267,6 @@ function bind(term) {
       const r = await api['term.remove']({termId: term.id});
       if (r.error) return toast(r.error, {error: true});
       editingId = undefined;
-      toast('学期を消しました');
       reload();
     };
 }

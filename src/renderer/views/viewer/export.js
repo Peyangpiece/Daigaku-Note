@@ -93,7 +93,6 @@ export const methods = {
           this.fileBlocked = true;
           throw new Error(r.error);
         }
-        if (manual) toast(r.changed ? `${r.name} を上書き保存しました` : `${r.name} は保存済みです`);
       } catch (e) {
         toast(`ファイルに保存できませんでした：${e.message}`, {error: true});
       } finally {

@@ -712,7 +712,6 @@ function bind() {
       qset.textContent = '確かめて保存';
       if (r?.error) return toast(r.error, {error: true});
       $('qz-key').value = '';
-      toast('API キーを保存しました');
       reload();
     };
   // クイズを作る AI：選ぶと、API キーの欄（API キーを選んだときだけ）と「使う」を出し分ける
@@ -746,7 +745,6 @@ function bind() {
         return toast('「送る内容に同意する」にチェックを入れてください', {error: true});
       const r = await api['quiz.setEngine']({engine, consent: true});
       if (r?.error) return toast(r.error, {error: true});
-      toast('切り替えました');
       reload();
     };
   const qdet = document.querySelector('[data-quiz-detect]');
@@ -794,7 +792,6 @@ function bind() {
         }
       });
       if (r?.error) return toast(r.error, {error: true});
-      toast('保存しました');
       reload();
     };
   const save = async (patch) => {
@@ -884,7 +881,6 @@ function bind() {
       });
       if (r?.error) return toast(r.error, {error: true});
       $(`st-pass-${cid}`).value = '';
-      toast('自動ログインをオンにしました');
       reload();
     })
   );
@@ -899,7 +895,6 @@ function bind() {
         return;
       const r = await api['connection.forgetPassword']({connectionId: b.dataset.forgetPass});
       if (r?.error) return toast(r.error, {error: true});
-      toast('自動ログインをやめ、保存した ID とパスワードを消しました');
       reload();
     })
   );

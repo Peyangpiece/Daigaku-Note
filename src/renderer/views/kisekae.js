@@ -735,7 +735,6 @@ async function save({asNew = false} = {}) {
   ui.draft = null;
   navigate(galleryRoute());
   await reload();
-  toast(`「${r.template.name}」を保存して使い始めました`);
 }
 
 /** 画像をシールの素にする：長辺 512px 以内の PNG に描き直す（画像の中の付加情報を落とす）。透明な所があれば形どおり、なければ白いふち付き */
@@ -763,7 +762,6 @@ async function importSticker(file) {
   });
   if (r?.error) return toast(r.error, {error: true});
   await reload();
-  toast('シール帳に入れました');
 }
 
 // 貼る場所ごとの、はじめに置く位置（見本の真ん中を避ける）
@@ -813,8 +811,7 @@ document.addEventListener('click', async (e) => {
       const t = allTemplates(data).find((x) => x.id === el.dataset.id);
       const r = await api['skin.save']({template: {...t, id: undefined, name: `${t.name} のコピー`}});
       if (r?.error) return toast(r.error, {error: true});
-      await reload();
-      return toast(`「${r.template.name}」を作りました`);
+      return void (await reload());
     }
     if (ks === 'remove') {
       const t = allTemplates(data).find((x) => x.id === el.dataset.id);
@@ -829,8 +826,7 @@ document.addEventListener('click', async (e) => {
       const r = await api['skin.remove']({id: t.id});
       if (r?.error) return toast(r.error, {error: true});
       if (ui.draft?.baseId === t.id) ui.draft = null;
-      await reload();
-      return toast(`「${t.name}」を消しました`);
+      return void (await reload());
     }
     if (!ui.draft) return;
     if (ks === 'back' || ks === 'discard') {
@@ -882,7 +878,6 @@ document.addEventListener('click', async (e) => {
         file[k] = file[ui.fileKind];
         fileBody[k] = fileBody[ui.fileKind];
       }
-      toast('すべての種類に同じ色を当てました');
     } else if (ks === 'undo') travel(ui.history, ui.future);
     else if (ks === 'redo') travel(ui.future, ui.history);
     else if (ks === 'color' || ks === 'set') {
