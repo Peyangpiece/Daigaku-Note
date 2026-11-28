@@ -255,7 +255,6 @@ async function save(asNew) {
   });
   if (r?.error) return toast(r.error, {error: true});
   state.data.stationery = r.stationery;
-  toast(`マイノート「${draft.name.trim() || itemOf(draft.base).name}」を保存しました`);
   draft.key = `edit:${r.id}`;
   draft.id = r.id;
   navigate(`${NOTES}&edit=${encodeURIComponent(r.id)}`);
@@ -306,13 +305,13 @@ document.addEventListener('click', (e) => {
   else if (what === 'reset') {
     draft.design = cleanDesign({format: itemOf(draft.base).format});
     redraw();
-  } else if (what === 'default') call('stationery.noteDefault', {key: b.dataset.key}, '最初に選ぶ紙にしました');
+  } else if (what === 'default') call('stationery.noteDefault', {key: b.dataset.key});
   else if (what === 'remove') {
     const n = st().myNotes.find((x) => x.id === b.dataset.id);
     if (!n) return;
     confirmDialog(`マイノート「${n.name}」を消しますか？（作ったノートの紙はそのままです）`, {
       ok: '消す',
       danger: true
-    }).then((ok) => ok && call('stationery.myNoteRemove', {id: n.id}, `「${n.name}」を消しました`));
+    }).then((ok) => ok && call('stationery.myNoteRemove', {id: n.id}));
   }
 });

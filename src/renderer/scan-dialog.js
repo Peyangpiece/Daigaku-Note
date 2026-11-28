@@ -310,10 +310,8 @@ export async function openScan({courseId, roundId, sub = '', materialId = null, 
       try {
         const done = await importPages({courseId, roundId, sub, materialId}, pages);
         if (done) {
-          const n = pages.length;
           close();
           await reload();
-          toast(`アナログノートを ${n} ページ取り込みました`);
           // 開いているノートから取り込んだときは、その画面にページと線を足す（onDone）。ほかはノートを開く
           if (onDone) await onDone(done.added);
           else navigate(`/viewer/${done.materialId}`);

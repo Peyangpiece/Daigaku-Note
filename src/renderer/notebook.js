@@ -121,7 +121,6 @@ async function ensureNote(courseId, roundId, paper = notePaper(), sub = '') {
   }
   if (r.created) {
     await reload(); // 編集画面が授業を見つけられるように、新しいノートを読み直してから開く
-    toast(`ノートを作りました（${paper.label}）`);
   }
   return r;
 }

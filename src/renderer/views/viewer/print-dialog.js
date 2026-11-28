@@ -266,7 +266,6 @@ export async function openPrintDialog({doc, name = '印刷', close: cleanup = ()
         duplex: o.duplex
       });
       if (r?.error) throw new Error(r.error);
-      toast(`プリンタへ送りました（${r?.sheets ?? layout.sheets.length} 面）`);
       busy = false;
       d.close();
     } catch (e) {
