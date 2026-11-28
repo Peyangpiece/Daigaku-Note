@@ -94,6 +94,7 @@ export const methods = {
     if (!step) return;
     if (step.notePage) return this.replayPage(step, 'undo');
     for (const st of step.group ? [...step.group].reverse() : [step]) this.restore(st.key, st.before);
+    if (step.group) this.pickKeys(step.group.map((st) => st.key));
     this.redoStack.push(step);
     this.updateHistory();
   },
@@ -106,6 +107,7 @@ export const methods = {
     if (!step) return;
     if (step.notePage) return this.replayPage(step, 'redo');
     for (const st of step.group ?? [step]) this.restore(st.key, st.after);
+    if (step.group) this.pickKeys(step.group.map((st) => st.key));
     this.undoStack.push(step);
     this.updateHistory();
   },
@@ -136,6 +138,12 @@ export const methods = {
     }
     if (a.kind !== 'ink') this.select(a); // ペンの線は選ばない（押しても選べないので）
     this.scheduleSave(a, 0);
+  },
+
+  /** まとめた手を戻した・やり直したあと、残っている注釈を全部選ぶ（ペンの線を除く） */
+  pickKeys(keys) {
+    const list = keys.map((k) => this.annos.get(k)).filter((a) => a && a.kind !== 'ink');
+    if (list.length > 1) this.pickMany(list);
   },
 
   updateHistory() {

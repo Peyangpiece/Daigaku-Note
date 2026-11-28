@@ -45,6 +45,7 @@ import {methods as keysMethods} from './viewer/keys.js';
 import {methods as findMethods} from './viewer/find.js';
 import {methods as memorizeMethods} from './viewer/memorize.js';
 import {methods as splitMethods} from './viewer/split.js';
+import {methods as clipboardMethods} from './viewer/clipboard.js';
 import {
   api,
   FONT,
@@ -389,6 +390,7 @@ const MIXINS = [
   maskMethods,
   notesMethods,
   exportMethods,
+  clipboardMethods,
   keysMethods,
   findMethods,
   memorizeMethods,

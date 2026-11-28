@@ -166,6 +166,65 @@ test(
         null,
         {timeout: 30000}
       );
+      // 複数選択とコピー・貼り付け（v0.27.13）：文字入れを 2 つ作り、囲んで選ぶ → コピー → 貼る（ずらして 2 つ増える）
+      // → 取り消し（1 手で 2 つ消える）→ Shift＋クリックで 1 つ外す → 切り取り → 貼る
+      const texts = () =>
+        win.evaluate(() => [...document.querySelectorAll('.anno-text')].map((el) => el.textContent.trim()).sort());
+      const picked = () => win.evaluate(() => document.querySelectorAll('.anno-text.is-selected').length);
+      const pg = await win.evaluate(() => {
+        const r = document.querySelector('.pdf-page').getBoundingClientRect();
+        return {x: r.left, y: r.top};
+      });
+      for (const [dy, word] of [
+        [300, 'Alpha'],
+        [400, 'Beta']
+      ]) {
+        await win.keyboard.press('Control+T');
+        await win.mouse.click(pg.x + 120, pg.y + dy);
+        await win.keyboard.type(word);
+        await win.keyboard.press('Escape');
+      }
+      await win.keyboard.press('Escape'); // 選択の道具へ
+      assert.deepEqual(await texts(), ['Alpha', 'Beta']);
+      await win.mouse.move(pg.x + 60, pg.y + 260);
+      await win.mouse.down();
+      await win.mouse.move(pg.x + 400, pg.y + 460, {steps: 8});
+      await win.mouse.up();
+      assert.equal(await picked(), 2, '四角で囲むと 2 つとも選ぶ');
+      await win.keyboard.press('Control+C');
+      await win.keyboard.press('Control+V');
+      await win.waitForFunction(() => document.querySelectorAll('.anno-text').length === 4, null, {timeout: 5000});
+      assert.deepEqual(await texts(), ['Alpha', 'Alpha', 'Beta', 'Beta'], '貼るとコピーが増える');
+      assert.equal(await picked(), 2, '貼ったものが選ばれる');
+      const shifted = await win.evaluate(() => {
+        const tops = [...document.querySelectorAll('.anno-text')]
+          .filter((el) => el.textContent.includes('Alpha'))
+          .map((el) => el.getBoundingClientRect().top);
+        return Math.abs(tops[0] - tops[1]);
+      });
+      assert.ok(shifted > 5, '元と重ならないようにずらして貼る');
+      await win.keyboard.press('Control+Z');
+      await win.waitForFunction(() => document.querySelectorAll('.anno-text').length === 2, null, {timeout: 5000});
+      // ⌘A で全部 → Shift＋クリックで Beta を外す → 切り取り → 貼る
+      await win.keyboard.press('Control+A');
+      assert.equal(await picked(), 2, '⌘A で全部を選ぶ');
+      const beta = await win.evaluate(() => {
+        const r = [...document.querySelectorAll('.anno-text')]
+          .find((el) => el.textContent.includes('Beta'))
+          .getBoundingClientRect();
+        return {x: r.left + r.width / 2, y: r.top + r.height / 2};
+      });
+      await win.keyboard.down('Shift');
+      await win.mouse.click(beta.x, beta.y);
+      await win.keyboard.up('Shift');
+      assert.equal(await picked(), 1, 'Shift＋クリックで外す');
+      await win.keyboard.press('Control+X');
+      await win.waitForFunction(() => document.querySelectorAll('.anno-text').length === 1, null, {timeout: 5000});
+      assert.deepEqual(await texts(), ['Beta'], '切り取ると消える');
+      await win.keyboard.press('Control+V');
+      await win.waitForFunction(() => document.querySelectorAll('.anno-text').length === 2, null, {timeout: 5000});
+      assert.deepEqual(await texts(), ['Alpha', 'Beta'], '切り取ったものを貼り戻せる');
+      await win.keyboard.press('Escape');
       // 筆箱：画面の右の端から内側へなでると出るのは指だけ。ペンで右の端の近くから書いても出さない（v0.27.4）。
       // ペンを使った直後の指（書いている手）も出さない
       const swipe = (pointerType, {width = 1} = {}) =>

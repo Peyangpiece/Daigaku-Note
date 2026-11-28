@@ -222,21 +222,26 @@ export const methods = {
     const a = this.selected;
     if (a?.kind === 'text' && 'color' in patch && this.editing === a && this.paintSelection(a, patch.color))
       return this.updateBar();
-    if (a?.kind === 'text') {
-      const before = this.snap(a);
-      a.style = {...a.style, ...patch};
-      if ('color' in patch && this.editing !== a && a.style.runs) {
-        delete a.style.runs;
-        this.renderText(a);
+    // 文字入れをいくつか選んでいるとき（打っていない）は、選んだ文字入れ全部の書式を変える（取り消しは 1 手で全部戻る）
+    const many = !this.editing ? this.pickedList().filter((x) => x.kind === 'text') : [];
+    const targets = many.length > 1 ? many : a?.kind === 'text' ? [a] : [];
+    const steps = [];
+    for (const t of targets) {
+      const before = this.snap(t);
+      t.style = {...t.style, ...patch};
+      if ('color' in patch && this.editing !== t && t.style.runs) {
+        delete t.style.runs;
+        this.renderText(t);
       }
-      this.applyStyle(a);
-      this.place(a);
-      if (this.editing !== a) {
-        this.measure(a);
-        if (record) this.record(a.key, before, this.snap(a));
-        this.scheduleSave(a);
+      this.applyStyle(t);
+      this.place(t);
+      if (this.editing !== t) {
+        this.measure(t);
+        steps.push({key: t.key, before, after: this.snap(t)});
+        this.scheduleSave(t);
       }
     }
+    if (record && steps.length) this.recordGroup(steps);
     Object.assign(this.textStyle, patch);
     this.rememberTextStyle();
     this.updateBar();
@@ -526,6 +531,10 @@ export const methods = {
       else this.openNote(a, false);
     });
     this.on(document, 'keydown', (e) => this.onKey(e));
+    // コピー・切り取り・貼り付け（⌘C・⌘X・⌘V、メニューの「編集」とも。viewer/clipboard.js）
+    this.on(document, 'copy', (e) => this.onCopy(e));
+    this.on(document, 'cut', (e) => this.onCopy(e, true));
+    this.on(document, 'paste', (e) => this.onPaste(e));
     // Tab で注釈にフォーカスが来たら、押したときと同じく選ぶ（メモは中のアイコンのボタンに来る）
     this.on(el, 'focusin', (e) => {
       const a = this.annoOf(e.target);

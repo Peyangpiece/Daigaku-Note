@@ -427,11 +427,21 @@ export const methods = {
     }
   },
 
+  /**
+   * 1 つだけ選ぶ（null で選ぶのをやめる）。いくつも選んでいたら、それも外す。複数選択は viewer/clipboard.js
+   * （picked が選んでいる全部、selected がそのうち最後に選んだもの＝書式の欄が見る主）
+   */
   select(a) {
-    if (this.selected === a) return;
+    this.picked ??= new Set();
+    if (this.selected === a && this.picked.size === (a ? 1 : 0)) return;
+    for (const x of this.picked) x.el.classList.remove('is-selected');
     this.selected?.el.classList.remove('is-selected');
+    this.picked.clear();
     this.selected = a;
-    a?.el.classList.add('is-selected');
+    if (a) {
+      this.picked.add(a);
+      a.el.classList.add('is-selected');
+    }
     this.updateBar();
   },
 
@@ -522,7 +532,9 @@ export const methods = {
     clearTimeout(a.timer);
     a.el.remove();
     this.annos.delete(a.key);
-    if (this.selected === a) this.select(null);
+    // いくつか選んでいるときは、残りを選んだままにする（まとめて消すときに 1 つずつ外れていく）
+    this.picked?.delete(a);
+    if (this.selected === a) this.selected = [...(this.picked ?? [])].at(-1) ?? null;
     if (this.editing === a) this.editing = null;
     if (a.kind === 'stamp' && a.style.type === 'index') this.renderBookmarks();
     // 同じ注釈の保存と消去は 1 本の鎖で順に行う。保存中に消されたときは flush の末尾が先に消すので、removedOnServer で 2 回送らない

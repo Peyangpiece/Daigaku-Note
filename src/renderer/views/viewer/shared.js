@@ -199,6 +199,8 @@ export const BAR = `
           <dt>暗記モード</dt><dd>Space で答えを見る、→ で「覚えた」、← で「まだ」、Esc でおわる</dd>
           <dt>${key(MOD, 'Z')}・${key(SHIFT, MOD, 'Z')}</dt><dd>取り消す・やり直す</dd>
           <dt>${key(MOD, 'S')}・${key(MOD, 'P')}</dt><dd>すぐに保存（ふだんは自動）・印刷</dd>
+          <dt>${key(MOD, 'C')}・${key(MOD, 'X')}・${key(MOD, 'V')}</dt><dd>選んだ注釈のコピー・切り取り・貼り付け（ほかの PDF・ノートにも貼れる）</dd>
+          <dt>${key(MOD, 'A')}・Shift＋クリック</dt><dd>注釈を全部選ぶ・選ぶものを足す（選択の道具で空いた所をなぞっても囲んで選べる）</dd>
           <dt>${key(MOD, '/')}</dt><dd>この一覧を出す・しまう</dd>
           <dt>ピンチ・${MOD}＋ホイール</dt><dd>拡大・縮小</dd>
           <dt class="muted">文字を打っている間</dt><dd class="muted">ショートカットは効きません（1 文字のショートカットはありません）</dd>
