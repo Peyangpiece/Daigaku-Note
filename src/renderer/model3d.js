@@ -8,7 +8,7 @@
 //     文房具の詳細ページの大きな表示：ホイールやピンチで近づけて細部を見られる）
 //   - [data-model-reset]：同じ [data-model-box] の中の 3D 表示の向きと距離を戻す
 // 描けないとき（WebGL が使えない・読み込めない）は、ふつうのペン（ペンケース）の絵に置き換える
-import {CATALOG, caseArt, isGear, tierOf, toolArt} from '../shared/stationery.js';
+import {CATALOG, caseArt, isGear, isLightColor, tierOf, toolArt} from '../shared/stationery.js';
 
 const handles = new WeakMap(); // .model-view → mount() の戻り（reset）
 
@@ -126,17 +126,6 @@ function hydrate(root) {
   for (const el of views) if (!el.dataset.modelReady) hydrateView(el);
 }
 
-/** 明るい色か（相対輝度が 0.4 より上。白い字が読みにくくなる明るさ） */
-function lightColor(hex) {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex ?? '');
-  if (!m) return false;
-  const [r, g, b] = [0, 2, 4].map((i) => {
-    const c = parseInt(m[1].slice(i, i + 2), 16) / 255;
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4;
-}
-
 const trays = new WeakMap(); // 筆箱の要素 → {draw, ro}
 
 /**
@@ -158,7 +147,7 @@ export function dressCase(side, box, item) {
     trays.set(side, t);
   }
   // 明るいケース（缶・クリア・パステル）では、上の見出しを濃い字にする（白い字が読めないため）
-  side.classList.toggle('is-light', lightColor(item?.base));
+  side.classList.toggle('is-light', isLightColor(item?.base));
   t.draw = () => {
     if (!item || item.art !== 'model' || !side.isConnected) {
       side.classList.remove('has-3d');

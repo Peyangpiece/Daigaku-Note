@@ -1158,6 +1158,20 @@ export function shade(hex, amt) {
   return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
+/**
+ * 明るい色か（相対輝度が 0.4 より上。白い字が読みにくくなる明るさ）。筆箱・ポーチの隅の見出しの字の色を決める
+ * （renderer/model3d.js・renderer/desk-tools.js）
+ */
+export function isLightColor(hex) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex ?? '');
+  if (!m) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const c = parseInt(m[1].slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4;
+}
+
 /** 円筒の陰影（上が明るく、下が暗い）のグラデーション */
 const tube = (id, color) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
   <stop offset="0" stop-color="${shade(color, -0.25)}"/><stop offset="0.18" stop-color="${shade(color, 0.55)}"/>
